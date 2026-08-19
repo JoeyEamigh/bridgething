@@ -2,6 +2,8 @@ import type { HybridObject } from 'react-native-nitro-modules';
 
 export type BridgethingPeerLinkStatus = 'connected' | 'linkFailed';
 
+export type BridgethingResumeTarget = 'phoneOnly' | 'anySpeaker';
+
 export type BridgethingSessionPeer = {
   id: string;
   name: string;
@@ -419,6 +421,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
 
   setDeviceAutoResume(deviceId: string, enabled: boolean): Promise<void>;
   isDeviceAutoResumeEnabled(deviceId: string): Promise<boolean>;
+  setDeviceResumeTarget(deviceId: string, target: BridgethingResumeTarget): Promise<void>;
+  deviceResumeTarget(deviceId: string): Promise<BridgethingResumeTarget>;
 
   setOtaPollConfig(config: BridgethingOtaPollConfig | null): Promise<void>;
   checkForOtaUpdate(rootUrl: string): Promise<void>;

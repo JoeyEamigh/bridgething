@@ -37,6 +37,14 @@ pub struct PlaybackTargets {
 pub struct PlayerSnapshotAck {}
 
 #[serde_with::skip_serializing_none]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct SpotifyWakeRequest {
+  pub allow_play_tap: bool,
+}
+
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
@@ -51,7 +59,7 @@ pub enum GatewayToBridgePlayerMsg {
   #[bridge_event]
   ErrorEvent(PlayerErrorReply),
   #[bridge_command]
-  RequestSpotifyWake,
+  RequestSpotifyWake(SpotifyWakeRequest),
   #[bridge_response]
   SnapshotAck(PlayerSnapshotAck),
   #[bridge_response]

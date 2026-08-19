@@ -36,9 +36,9 @@ use uuid::Uuid;
 use crate::{
   api::{
     AuthKind, AuthState, CapabilityFlags, CompanionBackends, CompanionConfig, CompanionDebug, CompanionError,
-    DeviceAutoResume, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderInfo, ProviderTokens, ServiceHealth,
-    ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceDebug,
-    VoiceModelPaths, VoiceModelState, VoiceModelStatus,
+    DeviceAutoResume, DeviceResumeTarget, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderInfo, ProviderTokens,
+    ServiceHealth, ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer, SessionSnapshot,
+    VoiceDebug, VoiceModelPaths, VoiceModelState, VoiceModelStatus,
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
@@ -51,7 +51,7 @@ use crate::{
   },
   hub::Hub,
   provider::{
-    Provider, ProviderAuthState, ProviderError, ProviderRegistry,
+    Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
     catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry},
   },
   session::{handlers::Peer, link::LinkConnector, models::VoiceModels, observer::SessionObserver, ota::OtaLink},
@@ -1010,6 +1010,7 @@ impl Session {
   async fn release(&self, device_id: &str, link: Option<Link>) {
     self.log_stream.lock().unwrap().tokens.remove(device_id);
     self.broadcast.release(device_id);
+    self.hub.peer_disconnected(device_id);
     let Some(link) = link else { return };
     tracing::info!(%device_id, "a peer link is being torn down");
     self.ota.release(device_id).await;
@@ -1047,6 +1048,10 @@ impl Session {
 
   pub fn set_device_auto_resume(&self, device_id: &str, enabled: bool) {
     self.hub.set_device_auto_resume(device_id, enabled);
+  }
+
+  pub fn set_device_resume_target(&self, device_id: &str, target: ResumeTarget) {
+    self.hub.set_device_resume_target(device_id, target);
   }
 
   pub async fn set_ota_poll_config(&self, config: Option<OtaPollConfig>) {
@@ -1178,6 +1183,13 @@ impl Session {
       .map(|(device_id, enabled)| DeviceAutoResume { device_id, enabled })
       .collect();
     auto_resume.sort_by(|left, right| left.device_id.cmp(&right.device_id));
+    let mut resume_targets: Vec<DeviceResumeTarget> = self
+      .hub
+      .resume_target_prefs()
+      .into_iter()
+      .map(|(device_id, target)| DeviceResumeTarget { device_id, target })
+      .collect();
+    resume_targets.sort_by(|left, right| left.device_id.cmp(&right.device_id));
     let mut attached_providers = self.hub.attached_ids();
     attached_providers.sort();
     let mut linked_devices = self.linked_ids();
@@ -1195,6 +1207,7 @@ impl Session {
       attached_schemes: self.hub.attached_schemes(),
       linked_devices,
       auto_resume,
+      resume_targets,
       voice: VoiceDebug {
         has_model: self.voice.has_model(),
         armed_bundle: self.voice.armed_bundle(),

@@ -619,20 +619,21 @@ pub fn active_device(cluster: &Cluster, me: &str, last_active: Option<&str>) -> 
   {
     return Some(la.to_string());
   }
-  let mut speaker = None;
-  let mut any = None;
-  for (id, info) in &cluster.device {
-    if id == me {
-      continue;
-    }
-    if info.device_type.enum_value_or_default() == DeviceType::SPEAKER && speaker.is_none() {
-      speaker = Some(id.clone());
-    }
-    if any.is_none() {
-      any = Some(id.clone());
-    }
+  None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Placement {
+  #[default]
+  Car,
+  Desk,
+}
+
+pub fn start_device(cluster: &Cluster, me: &str, last_active: Option<&str>, placement: Placement) -> Option<String> {
+  match placement {
+    Placement::Car => phone_device(cluster, me),
+    Placement::Desk => active_device(cluster, me, last_active).or_else(|| phone_device(cluster, me)),
   }
-  speaker.or(any)
 }
 
 #[cfg(test)]
@@ -671,17 +672,52 @@ mod tests {
   fn active_device_falls_back_to_last_active_still_in_the_cluster() {
     let c = cluster("", false, &[("avr-1", DeviceType::AUDIO_DONGLE)]);
     assert_eq!(active_device(&c, "me", Some("avr-1")), Some("avr-1".to_string()));
-    assert_eq!(active_device(&c, "me", Some("gone")), Some("avr-1".to_string()));
+    assert_eq!(active_device(&c, "me", Some("gone")), None);
   }
 
   #[test]
-  fn active_device_prefers_a_speaker_when_nothing_is_active() {
+  fn active_device_never_guesses_when_nothing_is_or_was_active() {
     let c = cluster(
       "",
       false,
       &[("phone-1", DeviceType::SMARTPHONE), ("spk-1", DeviceType::SPEAKER)],
     );
-    assert_eq!(active_device(&c, "me", None), Some("spk-1".to_string()));
+    assert_eq!(active_device(&c, "me", None), None);
+  }
+
+  #[test]
+  fn start_device_in_a_car_targets_the_phone_even_when_a_speaker_is_active() {
+    let c = cluster(
+      "spk-1",
+      false,
+      &[("spk-1", DeviceType::SPEAKER), ("phone-1", DeviceType::SMARTPHONE)],
+    );
+    assert_eq!(
+      start_device(&c, "me", None, Placement::Car),
+      Some("phone-1".to_string())
+    );
+    let speakers_only = cluster("spk-1", false, &[("spk-1", DeviceType::SPEAKER)]);
+    assert_eq!(start_device(&speakers_only, "me", None, Placement::Car), None);
+  }
+
+  #[test]
+  fn start_device_at_a_desk_follows_the_active_session_then_the_phone() {
+    let c = cluster(
+      "spk-1",
+      false,
+      &[("spk-1", DeviceType::SPEAKER), ("phone-1", DeviceType::SMARTPHONE)],
+    );
+    assert_eq!(start_device(&c, "me", None, Placement::Desk), Some("spk-1".to_string()));
+    let idle = cluster(
+      "",
+      false,
+      &[("spk-1", DeviceType::SPEAKER), ("phone-1", DeviceType::SMARTPHONE)],
+    );
+    assert_eq!(
+      start_device(&idle, "me", None, Placement::Desk),
+      Some("phone-1".to_string()),
+      "no guessed speaker when nothing is active"
+    );
   }
 
   #[test]

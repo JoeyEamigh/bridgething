@@ -791,7 +791,7 @@ typedef void (*UniffiCallbackInterfaceSpeechRecognizerMethod1)(uint64_t, RustBuf
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_WAKER_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_WAKER_METHOD0
-typedef void (*UniffiCallbackInterfaceDeviceWakerMethod0)(uint64_t, RustBuffer, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceDeviceWakerMethod0)(uint64_t, RustBuffer, int8_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -1206,6 +1206,11 @@ uint64_t uniffi_bridgething_companion_fn_method_companionsession_set_device_auto
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_SET_DEVICE_LOG_STREAMING
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_SET_DEVICE_LOG_STREAMING
 uint64_t uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(uint64_t ptr, int8_t enabled
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_SET_DEVICE_RESUME_TARGET
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_SET_DEVICE_RESUME_TARGET
+uint64_t uniffi_bridgething_companion_fn_method_companionsession_set_device_resume_target(uint64_t ptr, RustBuffer device_id, RustBuffer target
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_SET_OTA_POLL_CONFIG
@@ -2731,7 +2736,7 @@ void uniffi_bridgething_companion_fn_init_callback_vtable_devicewaker(const Unif
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_DEVICEWAKER_WAKE_DEVICE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_DEVICEWAKER_WAKE_DEVICE
-void uniffi_bridgething_companion_fn_method_devicewaker_wake_device(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_devicewaker_wake_device(uint64_t ptr, RustBuffer reason, int8_t allow_play_tap, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FUNC_PARSE_LRC
@@ -3316,6 +3321,12 @@ uint16_t uniffi_bridgething_companion_checksum_method_companionsession_set_devic
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_SET_DEVICE_LOG_STREAMING
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_SET_DEVICE_LOG_STREAMING
 uint16_t uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_SET_DEVICE_RESUME_TARGET
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_SET_DEVICE_RESUME_TARGET
+uint16_t uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target(void
     
 );
 #endif

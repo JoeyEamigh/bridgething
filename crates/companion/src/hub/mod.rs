@@ -1,7 +1,7 @@
 mod arbiter;
 
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   sync::{Arc, Mutex},
   time::Duration,
 };
@@ -18,7 +18,8 @@ use crate::{
   api::{CapabilityFlags, HostInfo},
   dispatch::audio::VolumeAuthority,
   provider::{
-    PlayerTransport, Provider, ProviderError, ProviderLink, ProviderRegistry, system_media::SystemMediaProvider,
+    PlayerTransport, Provider, ProviderError, ProviderLink, ProviderRegistry, ResumeTarget,
+    system_media::SystemMediaProvider,
   },
   voice::dispatcher::{CatalogError, VoiceCatalogResolver},
 };
@@ -35,6 +36,8 @@ struct ResumeGate {
   cooldown: Duration,
   enabled: HashMap<String, bool>,
   last_resume_at: HashMap<String, Instant>,
+  targets: HashMap<String, ResumeTarget>,
+  connected: HashSet<String>,
 }
 
 struct Announced {
@@ -67,6 +70,8 @@ impl Hub {
         cooldown: AUTO_RESUME_COOLDOWN,
         enabled: HashMap::new(),
         last_resume_at: HashMap::new(),
+        targets: HashMap::new(),
+        connected: HashSet::new(),
       }),
       announced: Mutex::new(Announced {
         host,
@@ -105,6 +110,7 @@ impl Hub {
       .unwrap()
       .providers
       .insert(id.clone(), provider.clone());
+    provider.set_resume_target(self.effective_resume_target());
     self.now_playing.register(&id, provider as Arc<dyn PlayerTransport>);
     self.announce().await;
     Ok(())
@@ -313,6 +319,43 @@ impl Hub {
     self.resume.lock().unwrap().enabled.clone()
   }
 
+  pub fn set_device_resume_target(&self, device_id: &str, target: ResumeTarget) {
+    self.resume.lock().unwrap().targets.insert(device_id.to_owned(), target);
+    self.push_resume_target();
+  }
+
+  pub fn resume_target_prefs(&self) -> HashMap<String, ResumeTarget> {
+    self.resume.lock().unwrap().targets.clone()
+  }
+
+  fn effective_resume_target(&self) -> ResumeTarget {
+    let resume = self.resume.lock().unwrap();
+    let all_any_speaker = !resume.connected.is_empty()
+      && resume
+        .connected
+        .iter()
+        .all(|id| resume.targets.get(id).copied().unwrap_or_default() == ResumeTarget::AnySpeaker);
+    if all_any_speaker {
+      ResumeTarget::AnySpeaker
+    } else {
+      ResumeTarget::PhoneOnly
+    }
+  }
+
+  fn push_resume_target(&self) {
+    let target = self.effective_resume_target();
+    for id in self.ordered_ids() {
+      if let Some(provider) = self.provider(&id) {
+        provider.set_resume_target(target);
+      }
+    }
+  }
+
+  pub fn peer_disconnected(&self, device_id: &str) {
+    self.resume.lock().unwrap().connected.remove(device_id);
+    self.push_resume_target();
+  }
+
   fn allow_auto_resume(&self, device_id: &str) -> bool {
     let mut resume = self.resume.lock().unwrap();
     if !resume.enabled.get(device_id).copied().unwrap_or(true) {
@@ -348,6 +391,8 @@ impl Hub {
   pub async fn peer_connected(&self, device_id: &str) {
     self.announce().await;
     self.now_playing.on_connect();
+    self.resume.lock().unwrap().connected.insert(device_id.to_owned());
+    self.push_resume_target();
     let allow = self.allow_auto_resume(device_id);
     let winner = self.resume_winner();
     for id in self.ordered_ids() {

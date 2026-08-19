@@ -6,5 +6,5 @@ pub enum WakeReason {
 
 #[uniffi::export(with_foreign)]
 pub trait DeviceWaker: Send + Sync {
-  fn wake_device(&self, reason: WakeReason);
+  fn wake_device(&self, reason: WakeReason, allow_play_tap: bool);
 }

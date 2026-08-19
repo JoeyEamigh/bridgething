@@ -20,9 +20,13 @@ use libbridgething::{
   client::{GeoGetOnce, GeoWatch, SetShuffle},
   gateway::{
     AuthorityClaim, BridgeToGatewayGeoMsg, BridgeToGatewayMsg, BridgeToGatewayMsgData,
-    GeoErrorReply as GatewayGeoErrorReply,
+    GeoErrorReply as GatewayGeoErrorReply, SpotifyWakeRequest,
   },
 };
+
+fn tap_wake() -> SpotifyWakeRequest {
+  SpotifyWakeRequest { allow_play_tap: true }
+}
 
 const SNAPSHOT_BARRIER: Duration = Duration::from_secs(10);
 
@@ -344,7 +348,7 @@ where
   gateway.capabilities().announce(caps()).await.expect("announce");
   let source = tier.iap2_source().await?;
 
-  gateway.player().request_spotify_wake().await.expect("wake");
+  gateway.player().request_spotify_wake(tap_wake()).await.expect("wake");
 
   let launch = outbound
     .wait_for(Duration::from_secs(5), |c| {
@@ -387,8 +391,8 @@ where
   gateway.capabilities().announce(caps()).await.expect("announce");
   let source = tier.iap2_source().await?;
 
-  gateway.player().request_spotify_wake().await.expect("wake 1");
-  gateway.player().request_spotify_wake().await.expect("wake 2");
+  gateway.player().request_spotify_wake(tap_wake()).await.expect("wake 1");
+  gateway.player().request_spotify_wake(tap_wake()).await.expect("wake 2");
   let launch = outbound
     .wait_for(Duration::from_secs(5), |c| {
       matches!(c, Iap2TransportCommand::RequestAppLaunch(_))
@@ -429,7 +433,7 @@ where
   gateway.capabilities().announce(caps()).await.expect("announce");
   let source = tier.iap2_source().await?;
 
-  gateway.player().request_spotify_wake().await.expect("wake");
+  gateway.player().request_spotify_wake(tap_wake()).await.expect("wake");
   let launch = outbound
     .wait_for(Duration::from_secs(5), |c| {
       matches!(c, Iap2TransportCommand::RequestAppLaunch(_))
@@ -452,6 +456,98 @@ where
   anyhow::ensure!(
     !pulses.iter().any(is_pulse),
     "play tapped after a non-spotify app claimed now-playing: {pulses:?}"
+  );
+  Ok(())
+}
+
+async fn launch_only_spotify_wake_never_taps_play<T>(tier: &T) -> anyhow::Result<()>
+where
+  T: GatewayDriver + Iap2SourceDriver + Iap2OutboundObserve,
+{
+  const PLAY_PAUSE: u8 = 0x01;
+  let is_pulse = |c: &Iap2TransportCommand| matches!(c, Iap2TransportCommand::Hid(HidCommand::Pulse(mask)) if mask & PLAY_PAUSE != 0);
+
+  let mut outbound = tier.iap2_outbound().await?;
+  let gateway = tier.gateway().await?;
+  gateway.capabilities().announce(caps()).await.expect("announce");
+  let source = tier.iap2_source().await?;
+
+  gateway
+    .player()
+    .request_spotify_wake(SpotifyWakeRequest { allow_play_tap: false })
+    .await
+    .expect("wake");
+  let launch = outbound
+    .wait_for(Duration::from_secs(5), |c| {
+      matches!(c, Iap2TransportCommand::RequestAppLaunch(_))
+    })
+    .await;
+  anyhow::ensure!(
+    launch.is_some(),
+    "launch-only wake never requested the spotify app launch"
+  );
+
+  source
+    .push_now_playing(Iap2NowPlaying {
+      media_item: None,
+      playback: Some(Iap2Playback {
+        state: Some(Iap2PlaybackState::Paused),
+        app_bundle: Some("com.spotify.client".into()),
+        ..Default::default()
+      }),
+    })
+    .await?;
+
+  let pulses = outbound.collect_for(Duration::from_millis(2500)).await;
+  anyhow::ensure!(
+    !pulses.iter().any(is_pulse),
+    "a launch-only wake tapped play; the parked session could be a remote speaker: {pulses:?}"
+  );
+  Ok(())
+}
+
+async fn launch_only_wake_launches_instead_of_tapping_a_paused_spotify<T>(tier: &T) -> anyhow::Result<()>
+where
+  T: GatewayDriver + Iap2SourceDriver + Iap2OutboundObserve,
+{
+  const PLAY_PAUSE: u8 = 0x01;
+  let is_pulse = |c: &Iap2TransportCommand| matches!(c, Iap2TransportCommand::Hid(HidCommand::Pulse(mask)) if mask & PLAY_PAUSE != 0);
+
+  let mut outbound = tier.iap2_outbound().await?;
+  let gateway = tier.gateway().await?;
+  gateway.capabilities().announce(caps()).await.expect("announce");
+  let source = tier.iap2_source().await?;
+
+  source
+    .push_now_playing(Iap2NowPlaying {
+      media_item: None,
+      playback: Some(Iap2Playback {
+        state: Some(Iap2PlaybackState::Paused),
+        app_bundle: Some("com.spotify.client".into()),
+        ..Default::default()
+      }),
+    })
+    .await?;
+
+  gateway
+    .player()
+    .request_spotify_wake(SpotifyWakeRequest { allow_play_tap: false })
+    .await
+    .expect("wake");
+
+  let launch = outbound
+    .wait_for(Duration::from_secs(5), |c| {
+      matches!(c, Iap2TransportCommand::RequestAppLaunch(_))
+    })
+    .await;
+  anyhow::ensure!(
+    launch.is_some(),
+    "a launch-only wake of a paused spotify must launch, not tap"
+  );
+  let pulses = outbound.collect_for(Duration::from_millis(2500)).await;
+  anyhow::ensure!(
+    !pulses.iter().any(is_pulse),
+    "a launch-only wake tapped a paused spotify; that resumes wherever the session is parked: {pulses:?}"
   );
   Ok(())
 }
@@ -540,6 +636,8 @@ lift!(transport_routes_to_iap2_and_refuses_unknown_shuffle, [t1]);
 lift!(cold_spotify_wake_holds_play_until_spotify_claims, [t1]);
 lift!(cold_spotify_wake_withholds_play_when_another_app_claims, [t1]);
 lift!(duplicate_spotify_wakes_tap_play_exactly_once, [t1]);
+lift!(launch_only_spotify_wake_never_taps_play, [t1]);
+lift!(launch_only_wake_launches_instead_of_tapping_a_paused_spotify, [t1]);
 
 lift!(geo_position_reaches_watching_webapp, [t1]);
 

@@ -29,6 +29,13 @@ fn looks_stranded(uri: &str, serving: bool) -> bool {
   uri.starts_with(ERROR_URL_PREFIX) || (serving && uri.starts_with(BLANK_URL_PREFIX))
 }
 
+fn is_web_page(url: &str) -> bool {
+  !(url.starts_with("chrome://")
+    || url.starts_with("chrome-extension://")
+    || url.starts_with("chrome-untrusted://")
+    || url.starts_with("devtools://"))
+}
+
 #[cfg(not(debug_assertions))]
 const DEFAULT_CHROME_PORT: u16 = 9223;
 #[cfg(debug_assertions)]
@@ -399,7 +406,7 @@ impl ChromeWorker {
     let (browser, registered, tab) = tokio::task::spawn_blocking(move || {
       let registered = catch_panic("register_missing_tabs", || browser.register_missing_tabs());
       let tab = match browser.get_tabs().lock() {
-        Ok(guard) => Ok(guard.first().cloned()),
+        Ok(guard) => Ok(guard.iter().find(|t| is_web_page(&t.get_url())).cloned()),
         Err(e) => Err(format!("tabs mutex poisoned: {e:?}")),
       };
       (browser, registered, tab)
@@ -519,5 +526,15 @@ mod tests {
   fn a_loaded_page_is_never_stranded() {
     assert!(!looks_stranded("http://127.0.0.1:8891/", false));
     assert!(!looks_stranded("http://127.0.0.1:8891/", true));
+  }
+
+  #[test]
+  fn browser_internal_targets_are_never_the_kiosk_tab() {
+    assert!(!is_web_page("chrome://omnibox-popup.top-chrome/"));
+    assert!(!is_web_page("chrome-extension://abc/_generated_background_page.html"));
+    assert!(!is_web_page("chrome-untrusted://new-tab-page/"));
+    assert!(!is_web_page("devtools://devtools/bundled/inspector.html"));
+    assert!(is_web_page("http://127.0.0.1:8891/"));
+    assert!(is_web_page("about:blank"));
   }
 }

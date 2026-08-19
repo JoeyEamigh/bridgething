@@ -553,6 +553,22 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         defaults.dictionary(forKey: PrefKey.autoResume) as? [String: Bool] ?? [:]
     }
 
+    public func setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) async {
+        var map = Self.loadResumeTargetMap()
+        map[deviceId] = target.stringValue
+        Self.defaults.set(map, forKey: PrefKey.resumeTarget)
+        guard let session = try? requireSession() else { return }
+        await session.setDeviceResumeTarget(deviceId: deviceId, target: toCoreResumeTarget(target))
+    }
+
+    public func deviceResumeTarget(deviceId: String) async -> BridgethingResumeTarget {
+        Self.loadResumeTargetMap()[deviceId].flatMap { BridgethingResumeTarget(fromString: $0) } ?? .phoneonly
+    }
+
+    private static func loadResumeTargetMap() -> [String: String] {
+        defaults.dictionary(forKey: PrefKey.resumeTarget) as? [String: String] ?? [:]
+    }
+
     public func setOtaPollConfig(config: BridgethingOtaPollConfig?) async {
         Self.saveOtaPollConfig(config)
         guard let session = try? requireSession() else { return }
@@ -706,6 +722,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         for (deviceId, enabled) in Self.loadAutoResumeMap() {
             await session.setDeviceAutoResume(deviceId: deviceId, enabled: enabled)
         }
+        for (deviceId, raw) in Self.loadResumeTargetMap() {
+            guard let target = BridgethingResumeTarget(fromString: raw) else { continue }
+            await session.setDeviceResumeTarget(deviceId: deviceId, target: toCoreResumeTarget(target))
+        }
         let priority = Self.defaults.stringArray(forKey: PrefKey.providerPriority) ?? []
         await session.setProviderPriority(ids: priority)
     }
@@ -721,6 +741,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         static let capsAudioTts = "bridgething.caps.audioTts"
         static let capsVoiceModel = "bridgething.caps.voiceModel"
         static let autoResume = "bridgething.autoresume"
+        static let resumeTarget = "bridgething.resumeTarget"
         static let otaConfigured = "bridgething.ota.configured"
         static let otaInterval = "bridgething.ota.intervalSeconds"
         static let otaAutoPush = "bridgething.ota.autoPush"
@@ -1249,6 +1270,13 @@ private func toCoreOtaPollConfig(_ config: BridgethingOtaPollConfig) -> OtaPollC
         autoPush: config.autoPush,
         rootUrl: config.rootUrl
     )
+}
+
+private func toCoreResumeTarget(_ target: BridgethingResumeTarget) -> ResumeTarget {
+    switch target {
+    case .phoneonly: .phoneOnly
+    case .anyspeaker: .anySpeaker
+    }
 }
 
 private let daemonLabel = "daemon"

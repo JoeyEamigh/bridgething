@@ -1,4 +1,7 @@
-use crate::api::ota::{OtaAvailable, OtaPollStatus, OtaRun};
+use crate::{
+  api::ota::{OtaAvailable, OtaPollStatus, OtaRun},
+  provider::ResumeTarget,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
@@ -405,6 +408,14 @@ pub struct DeviceAutoResume {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
+pub struct DeviceResumeTarget {
+  pub device_id: String,
+  pub target: ResumeTarget,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
 pub struct VoiceDebug {
   pub has_model: bool,
   pub armed_bundle: Option<String>,
@@ -427,6 +438,7 @@ pub struct CompanionDebug {
   pub attached_schemes: Vec<String>,
   pub linked_devices: Vec<String>,
   pub auto_resume: Vec<DeviceAutoResume>,
+  pub resume_targets: Vec<DeviceResumeTarget>,
   pub voice: VoiceDebug,
 }
 

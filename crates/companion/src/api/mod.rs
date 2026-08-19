@@ -17,6 +17,7 @@ use crate::{
     MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend, SecretStore,
     SpeechRecognizer, TransferPolicy, VolumeMonitor, WsTransport,
   },
+  provider::ResumeTarget,
   session::Session,
 };
 
@@ -310,6 +311,10 @@ impl CompanionSession {
 
   pub async fn set_device_auto_resume(&self, device_id: String, enabled: bool) {
     self.session.set_device_auto_resume(&device_id, enabled);
+  }
+
+  pub async fn set_device_resume_target(&self, device_id: String, target: ResumeTarget) {
+    self.session.set_device_resume_target(&device_id, target);
   }
 
   pub async fn set_device_log_streaming(&self, enabled: bool) {

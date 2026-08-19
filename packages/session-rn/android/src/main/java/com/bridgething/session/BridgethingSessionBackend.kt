@@ -21,6 +21,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
+import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealth
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
@@ -81,6 +82,8 @@ public interface BridgethingSessionBackend {
 
     public suspend fun setDeviceAutoResume(deviceId: String, enabled: Boolean)
     public suspend fun isDeviceAutoResumeEnabled(deviceId: String): Boolean
+    public suspend fun setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget)
+    public suspend fun deviceResumeTarget(deviceId: String): BridgethingResumeTarget
 
     public suspend fun setOtaPollConfig(config: BridgethingOtaPollConfig?)
     public suspend fun checkForOtaUpdate(rootUrl: String)

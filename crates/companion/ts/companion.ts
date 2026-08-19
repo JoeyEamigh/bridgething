@@ -48,6 +48,7 @@ export type CompanionDebug = {
   attachedSchemes: Array<string>;
   linkedDevices: Array<string>;
   autoResume: Array<DeviceAutoResume>;
+  resumeTargets: Array<DeviceResumeTarget>;
   voice: VoiceDebug;
 };
 
@@ -94,6 +95,8 @@ export type DeviceMeta = {
 };
 
 export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };
+
+export type DeviceResumeTarget = { deviceId: string; target: ResumeTarget };
 
 export type DeviceWebappsEntry = { deviceId: string; webapps: Array<WebappInfo>; active: ActiveWebapp | null };
 
@@ -332,6 +335,8 @@ export type ProviderInfo = {
 export type ProviderTokens = { accessToken: string; refreshToken: string };
 
 export type RepeatMode = 'off' | 'one' | 'all';
+
+export type ResumeTarget = 'phoneOnly' | 'anySpeaker';
 
 export type ServiceHealth = { kind: ServiceHealthKind; retryAfterSeconds: number | null };
 

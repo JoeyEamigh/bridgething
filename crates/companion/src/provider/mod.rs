@@ -104,6 +104,15 @@ pub struct ProviderLink {
   pub outbound: Arc<dyn OutboundLink>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub enum ResumeTarget {
+  #[default]
+  PhoneOnly,
+  AnySpeaker,
+}
+
 #[async_trait::async_trait]
 pub trait Provider: PlayerTransport {
   fn name(&self) -> &str;
@@ -122,6 +131,7 @@ pub trait Provider: PlayerTransport {
   async fn handle_peer_connected(&self, _allow_auto_resume: bool) {}
   async fn resumed(&self) {}
   async fn connectivity_changed(&self, _online: bool) {}
+  fn set_resume_target(&self, _target: ResumeTarget) {}
 
   fn set_now_playing_observer(&self, _observer: Option<Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>>) {}
   fn set_auth_observer(&self, _observer: Option<Arc<dyn Fn(ProviderAuthState) + Send + Sync>>) {}

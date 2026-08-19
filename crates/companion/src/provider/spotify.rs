@@ -15,12 +15,12 @@ use libbridgething::{
     ContextResolveReply, FavoritesSet, GatewayToBridgeAudioMsgEvent, GatewayToBridgeLibraryMsgEvent,
     GatewayToBridgePlayerMsgCommand, LibraryBrowseRequest, LibraryChanged, LibraryFavoritesContainsRequest,
     LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibrarySearchRequest, PlayUri, QueueSnapshot, QueueUri,
-    TrackIdentity, VolumeChanged,
+    SpotifyWakeRequest, TrackIdentity, VolumeChanged,
   },
 };
 use spotify::{
   auth::{Auth, TokenStore as SpTokenStore},
-  client::{DeviceWaker, Observer as SpObserver, SpotifyClient, WakeReason},
+  client::{DeviceWaker, Observer as SpObserver, Placement, SpotifyClient, WakeReason},
   model::{
     AuthState as SpAuthState, BrowseItem as SpBrowseItem, Device as SpDevice, DeviceKind as SpDeviceKind,
     LibraryScope as SpLibraryScope, PlayerState as SpPlayerState, Queue as SpQueue, QueuePosition as SpQueuePosition,
@@ -34,6 +34,7 @@ use crate::{
   backend::{DeviceWaker as PlatformWaker, ImageScaler, SecretStore, WakeReason as PlatformWakeReason},
   provider::{
     AssetBytes, PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderLink, ProviderNowPlaying,
+    ResumeTarget,
     art::{ArtCache, ImageAssetCodec},
     none_if_empty,
   },
@@ -150,6 +151,14 @@ struct Core {
   art_cache: ArtCache,
   np_observer: Mutex<Option<NowPlayingObserver>>,
   auth_observer: Mutex<Option<AuthObserver>>,
+  resume_target: Mutex<ResumeTarget>,
+}
+
+fn placement_of(target: ResumeTarget) -> Placement {
+  match target {
+    ResumeTarget::PhoneOnly => Placement::Car,
+    ResumeTarget::AnySpeaker => Placement::Desk,
+  }
 }
 
 pub struct SpotifyProvider {
@@ -189,6 +198,7 @@ impl SpotifyProvider {
         }),
         np_observer: Mutex::new(None),
         auth_observer: Mutex::new(None),
+        resume_target: Mutex::new(ResumeTarget::default()),
       }),
     })
   }
@@ -653,13 +663,15 @@ impl SpObserver for ObserverBridge {
 struct GatewayWaker(Weak<Core>);
 
 impl DeviceWaker for GatewayWaker {
-  fn wake_device(&self, _reason: WakeReason) {
+  fn wake_device(&self, _reason: WakeReason, allow_play_tap: bool) {
     let Some(core) = self.0.upgrade() else { return };
     let Some(link) = core.link() else { return };
     tokio::spawn(async move {
       let _ = link
         .outbound
-        .command(GatewayToBridgePlayerMsgCommand::RequestSpotifyWake)
+        .command(GatewayToBridgePlayerMsgCommand::RequestSpotifyWake(
+          SpotifyWakeRequest { allow_play_tap },
+        ))
         .await;
     });
   }
@@ -668,13 +680,13 @@ impl DeviceWaker for GatewayWaker {
 struct LocalWaker(Arc<dyn PlatformWaker>);
 
 impl DeviceWaker for LocalWaker {
-  fn wake_device(&self, reason: WakeReason) {
+  fn wake_device(&self, reason: WakeReason, allow_play_tap: bool) {
     let waker = self.0.clone();
     let reason = match reason {
       WakeReason::UserPlay => PlatformWakeReason::UserPlay,
       WakeReason::ConnectResume => PlatformWakeReason::ConnectResume,
     };
-    tokio::task::spawn_blocking(move || waker.wake_device(reason));
+    tokio::task::spawn_blocking(move || waker.wake_device(reason, allow_play_tap));
   }
 }
 
@@ -1201,6 +1213,7 @@ impl Provider for SpotifyProvider {
       Arc::new(ObserverBridge(Arc::downgrade(&self.core))),
     ));
     client.set_ws_transport(self.core.ws.clone());
+    client.set_placement(placement_of(*self.core.resume_target.lock().unwrap()));
     client.set_device_waker(match &self.core.waker {
       Some(waker) => Arc::new(LocalWaker(waker.clone())),
       None => Arc::new(GatewayWaker(Arc::downgrade(&self.core))) as Arc<dyn DeviceWaker>,
@@ -1263,6 +1276,13 @@ impl Provider for SpotifyProvider {
     shared.last_had_item = false;
     shared.last_emitted_remote_volume = None;
     shared.connectivity_available = None;
+  }
+
+  fn set_resume_target(&self, target: ResumeTarget) {
+    *self.core.resume_target.lock().unwrap() = target;
+    if let Some(client) = self.core.client() {
+      client.set_placement(placement_of(target));
+    }
   }
 
   async fn handle_peer_connected(&self, allow_auto_resume: bool) {

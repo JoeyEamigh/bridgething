@@ -30,6 +30,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
+import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelState
@@ -79,6 +80,7 @@ public class HybridBridgethingSessionImpl(
         private const val VOICE_MODEL_KEY = "caps.voiceModel"
         private const val REQUEST_DIALER_ROLE = 0xBA02
         private const val AUTO_RESUME_PREFIX = "autoresume."
+        private const val RESUME_TARGET_PREFIX = "resumetarget."
         private const val PROVIDER_PRIORITY_KEY = "providerPriority"
         private const val DEV_LANE_DEVICE_ID = "dev-gateway"
 
@@ -467,6 +469,16 @@ public class HybridBridgethingSessionImpl(
     override suspend fun isDeviceAutoResumeEnabled(deviceId: String): Boolean =
         prefs.getBoolean("$AUTO_RESUME_PREFIX$deviceId", true)
 
+    override suspend fun setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) {
+        prefs.edit().putString("$RESUME_TARGET_PREFIX$deviceId", target.name).apply()
+        requireSession().setDeviceResumeTarget(deviceId, toCoreResumeTarget(target))
+    }
+
+    override suspend fun deviceResumeTarget(deviceId: String): BridgethingResumeTarget =
+        prefs.getString("$RESUME_TARGET_PREFIX$deviceId", null)
+            ?.let { raw -> BridgethingResumeTarget.entries.firstOrNull { it.name == raw } }
+            ?: BridgethingResumeTarget.PHONEONLY
+
     override suspend fun setOtaPollConfig(config: BridgethingOtaPollConfig?) {
         saveOtaPollConfig(config)
         requireSession().setOtaPollConfig(config?.let(::toCoreOtaPollConfig))
@@ -684,6 +696,11 @@ public class HybridBridgethingSessionImpl(
         for ((key, value) in prefs.all) {
             if (key.startsWith(AUTO_RESUME_PREFIX) && value is Boolean) {
                 runCatching { session.setDeviceAutoResume(key.removePrefix(AUTO_RESUME_PREFIX), value) }
+            }
+            if (key.startsWith(RESUME_TARGET_PREFIX) && value is String) {
+                BridgethingResumeTarget.entries.firstOrNull { it.name == value }?.let { target ->
+                    runCatching { session.setDeviceResumeTarget(key.removePrefix(RESUME_TARGET_PREFIX), toCoreResumeTarget(target)) }
+                }
             }
         }
         val priority = prefs.getString(PROVIDER_PRIORITY_KEY, null)

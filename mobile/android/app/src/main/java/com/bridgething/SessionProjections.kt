@@ -24,6 +24,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaOutcome
 import com.margelo.nitro.bridgething.session.BridgethingOtaPhase
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
+import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRelease
@@ -75,6 +76,7 @@ import uniffi.bridgething_companion.OtaStepKind
 import uniffi.bridgething_companion.PeerLinkStatus
 import uniffi.bridgething_companion.ProviderInfo
 import uniffi.bridgething_companion.RepeatMode
+import uniffi.bridgething_companion.ResumeTarget
 import uniffi.bridgething_companion.ServiceHealthKind
 import uniffi.bridgething_companion.SessionPeer
 import uniffi.bridgething_companion.SessionSnapshot
@@ -427,6 +429,11 @@ internal fun toCoreOtaPollConfig(config: BridgethingOtaPollConfig): OtaPollConfi
     autoPush = config.autoPush,
     rootUrl = config.rootUrl,
 )
+
+internal fun toCoreResumeTarget(target: BridgethingResumeTarget): ResumeTarget = when (target) {
+    BridgethingResumeTarget.PHONEONLY -> ResumeTarget.PHONE_ONLY
+    BridgethingResumeTarget.ANYSPEAKER -> ResumeTarget.ANY_SPEAKER
+}
 
 internal const val DAEMON_LABEL: String = "daemon"
 

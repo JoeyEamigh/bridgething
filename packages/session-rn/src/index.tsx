@@ -19,6 +19,7 @@ import type {
   BridgethingOtaProgress,
   BridgethingOtaRun,
   BridgethingProviderInfo,
+  BridgethingResumeTarget,
   BridgethingSessionPeer,
   BridgethingSessionSnapshot,
   BridgethingVoiceModelState,
@@ -69,6 +70,7 @@ export type {
   BridgethingPeerLinkStatus,
   BridgethingProviderInfo,
   BridgethingRepeatMode,
+  BridgethingResumeTarget,
   BridgethingServiceHealth,
   BridgethingServiceHealthKind,
   BridgethingSessionPeer,
@@ -295,6 +297,14 @@ export class BridgethingSession {
 
   async isDeviceAutoResumeEnabled(deviceId: string): Promise<boolean> {
     return this.native.isDeviceAutoResumeEnabled(deviceId);
+  }
+
+  async setDeviceResumeTarget(deviceId: string, target: BridgethingResumeTarget): Promise<void> {
+    await this.native.setDeviceResumeTarget(deviceId, target);
+  }
+
+  async deviceResumeTarget(deviceId: string): Promise<BridgethingResumeTarget> {
+    return this.native.deviceResumeTarget(deviceId);
   }
 
   async setOtaPollConfig(config: BridgethingOtaPollConfig | null): Promise<void> {

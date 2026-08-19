@@ -154,6 +154,10 @@ async fn main() -> Result<(), Boxed> {
           info.volume,
           active
         );
+        println!(
+          "    id={} client_id={} brand={} model={} sw={} public_ip={} can_play={}",
+          id, info.client_id, info.brand, info.model, info.device_software_version, info.public_ip, info.can_play
+        );
       }
     }
     "watch" => {

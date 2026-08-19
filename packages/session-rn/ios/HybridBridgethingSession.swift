@@ -51,6 +51,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
 
     func setDeviceAutoResume(deviceId: String, enabled: Bool) async
     func isDeviceAutoResumeEnabled(deviceId: String) async -> Bool
+    func setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) async
+    func deviceResumeTarget(deviceId: String) async -> BridgethingResumeTarget
 
     func setOtaPollConfig(config: BridgethingOtaPollConfig?) async
     func checkForOtaUpdate(rootUrl: String) async
@@ -459,6 +461,18 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     public func isDeviceAutoResumeEnabled(deviceId: String) throws -> Promise<Bool> {
         Promise.async {
             await (try Self.backend()).isDeviceAutoResumeEnabled(deviceId: deviceId)
+        }
+    }
+
+    public func setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) throws -> Promise<Void> {
+        Promise.async {
+            await (try Self.backend()).setDeviceResumeTarget(deviceId: deviceId, target: target)
+        }
+    }
+
+    public func deviceResumeTarget(deviceId: String) throws -> Promise<BridgethingResumeTarget> {
+        Promise.async {
+            await (try Self.backend()).deviceResumeTarget(deviceId: deviceId)
         }
     }
 

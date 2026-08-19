@@ -251,10 +251,10 @@ impl<'a> PlayerSurface<'a> {
   pub async fn error_event(&self, payload: PlayerErrorReply) -> Result<(), SdkError> {
     self.0.event(GatewayToBridgePlayerMsgEvent::ErrorEvent(payload)).await
   }
-  pub async fn request_spotify_wake(&self) -> Result<(), SdkError> {
+  pub async fn request_spotify_wake(&self, payload: SpotifyWakeRequest) -> Result<(), SdkError> {
     self
       .0
-      .command(GatewayToBridgePlayerMsgCommand::RequestSpotifyWake)
+      .command(GatewayToBridgePlayerMsgCommand::RequestSpotifyWake(payload))
       .await
   }
 }

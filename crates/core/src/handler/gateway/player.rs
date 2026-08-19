@@ -12,7 +12,7 @@ use libbridgething::{
   client::{BridgeToClientPlayerMsgEvent, PlayerErrorReply as ClientPlayerErrorReply},
   gateway::{
     GatewayToBridgePlayerMsgCommandDispatch, GatewayToBridgePlayerMsgEventDispatch, PlaybackTargets, PlayerErrorReply,
-    QueueSnapshot,
+    QueueSnapshot, SpotifyWakeRequest,
   },
 };
 
@@ -105,11 +105,12 @@ impl GatewayToBridgePlayerMsgEventDispatch for PlayerHandler {
 impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
   type Output = HandlerResult;
 
-  async fn request_spotify_wake(&self) -> HandlerResult {
+  async fn request_spotify_wake(&self, payload: SpotifyWakeRequest) -> HandlerResult {
     let Some(_wake) = self.handle.state.spotify_wake_gate.try_acquire() else {
       tracing::debug!("spotify wake already in progress; dropping duplicate request");
       return Ok(());
     };
+    let allow_play_tap = payload.allow_play_tap;
     let transport = &self.handle.bluetooth.iap2.transport;
     let bundle = self.handle.state.player.iap2_app_bundle();
     let playing = self.handle.state.player.iap2_playing().unwrap_or(false);
@@ -117,9 +118,13 @@ impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
       Some(SPOTIFY_BUNDLE_ID) if playing => {
         tracing::debug!("spotify wake requested but spotify is already playing; ignoring");
       }
-      Some(SPOTIFY_BUNDLE_ID) => {
+      Some(SPOTIFY_BUNDLE_ID) if allow_play_tap => {
         tracing::info!("spotify wake: spotify owns now-playing but is paused; tapping play");
         transport.send_hid(HidCommand::Pulse(hid_bit::PLAY_PAUSE)).await;
+      }
+      Some(SPOTIFY_BUNDLE_ID) => {
+        tracing::info!("spotify wake: launch-only wake while paused; a tap could resume a remotely parked session");
+        transport.wake_spotify().await;
       }
       Some(other) => {
         tracing::info!(bundle = %other, "spotify wake requested while another app owns now-playing; ignoring");
@@ -148,9 +153,12 @@ impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
         })
         .await;
         match claimed {
-          Ok(Some(false)) => {
+          Ok(Some(false)) if allow_play_tap => {
             tracing::info!("spotify wake: spotify claimed now-playing; tapping play");
             transport.send_hid(HidCommand::Pulse(hid_bit::PLAY_PAUSE)).await;
+          }
+          Ok(Some(false)) => {
+            tracing::info!("spotify wake: spotify claimed now-playing; launch-only wake skips the play tap");
           }
           Ok(Some(true)) => tracing::debug!("spotify wake: spotify resumed on its own; play tap not needed"),
           Ok(None) => {}

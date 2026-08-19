@@ -1,3 +1,4 @@
+import { type BridgethingResumeTarget } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -14,6 +15,7 @@ import { RowNote, type RowNotice } from '../components/RowNote';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionHeader } from '../components/SectionHeader';
+import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/ui/switch';
 import { linkSummary } from '../lib/devices';
 import { rootUrlOf } from '../lib/ota';
@@ -121,6 +123,7 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
             onPress={() => setRenameOpen(true)}
           />
           <AutoResumeRow deviceId={deviceId} />
+          <ResumeTargetRow deviceId={deviceId} />
         </ListGroup>
         {renameError ? (
           <Note className="mt-2" tone="err">
@@ -253,3 +256,61 @@ function AutoResumeRow({ deviceId }: { deviceId: string }) {
     </View>
   );
 }
+
+function ResumeTargetRow({ deviceId }: { deviceId: string }) {
+  const session = getSession();
+  const [target, setTarget] = useState<BridgethingResumeTarget | null>(null);
+  const [failure, setFailure] = useState<RowNotice | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const value = await session.deviceResumeTarget(deviceId);
+        if (!cancelled) setTarget(value);
+      } catch {
+        if (!cancelled) setTarget('phoneOnly');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, deviceId]);
+
+  const pick = (next: BridgethingResumeTarget) => {
+    const prior = target;
+    setTarget(next);
+    setFailure(null);
+    void session.setDeviceResumeTarget(deviceId, next).catch((err: unknown) => {
+      setTarget(prior);
+      setFailure({ text: describeError(err) });
+    });
+  };
+
+  return (
+    <View>
+      <ListRow
+        icon="Smartphone"
+        title="resume on"
+        subtitle="any speaker lets playback start on whatever spotify last used"
+        trailing={
+          <Segmented
+            size="sm"
+            options={RESUME_TARGET_OPTIONS}
+            value={target ?? 'phoneOnly'}
+            onChange={pick}
+          />
+        }
+      />
+      <RowNote notice={failure} />
+    </View>
+  );
+}
+
+const RESUME_TARGET_OPTIONS: ReadonlyArray<{
+  value: BridgethingResumeTarget;
+  label: string;
+}> = [
+  { value: 'phoneOnly', label: 'phone only' },
+  { value: 'anySpeaker', label: 'any speaker' },
+];

@@ -1498,6 +1498,7 @@ internal interface UniffiCallbackInterfaceDeviceWakerMethod0 : com.sun.jna.Callb
     fun callback(
         `uniffiHandle`: Long,
         `reason`: RustBuffer.ByValue,
+        `allowPlayTap`: Byte,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
@@ -2310,6 +2311,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_provider_priority(): Int
@@ -2881,6 +2884,12 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(
         `ptr`: Long,
         `enabled`: Byte,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_resume_target(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `target`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_ota_poll_config(
@@ -4553,6 +4562,7 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_devicewaker_wake_device(
         `ptr`: Long,
         `reason`: RustBuffer.ByValue,
+        `allowPlayTap`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -4970,6 +4980,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming() != 49632) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config() != 63985) {
@@ -5497,7 +5510,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_transcriptionsink_fail() != 11687) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 36074) {
+    if (lib.uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_constructor_companionsession_create() != 21535) {
@@ -10709,6 +10722,11 @@ public interface CompanionSessionInterface {
 
     suspend fun `setDeviceLogStreaming`(`enabled`: kotlin.Boolean)
 
+    suspend fun `setDeviceResumeTarget`(
+        `deviceId`: kotlin.String,
+        `target`: ResumeTarget,
+    )
+
     suspend fun `setOtaPollConfig`(`config`: OtaPollConfig?)
 
     suspend fun `setProviderPriority`(`ids`: List<kotlin.String>)
@@ -11511,6 +11529,27 @@ open class CompanionSession :
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `setDeviceResumeTarget`(
+        `deviceId`: kotlin.String,
+        `target`: ResumeTarget,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_device_resume_target(
+                uniffiHandle,
+                FfiConverterString.lower(`deviceId`),
+                FfiConverterTypeResumeTarget.lower(`target`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        UniffiNullRustCallStatusErrorHandler,
+    )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `setOtaPollConfig`(`config`: OtaPollConfig?) =
@@ -12522,7 +12561,10 @@ public object FfiConverterTypeConnectivityMonitor : FfiConverter<ConnectivityMon
 //
 
 public interface DeviceWaker {
-    fun `wakeDevice`(`reason`: WakeReason)
+    fun `wakeDevice`(
+        `reason`: WakeReason,
+        `allowPlayTap`: kotlin.Boolean,
+    )
 
     companion object
 }
@@ -12631,16 +12673,19 @@ open class DeviceWakerImpl :
         }
     }
 
-    override fun `wakeDevice`(`reason`: WakeReason) =
-        callWithHandle {
-            uniffiRustCall { _status ->
-                UniffiLib.uniffi_bridgething_companion_fn_method_devicewaker_wake_device(
-                    it,
-                    FfiConverterTypeWakeReason.lower(`reason`),
-                    _status,
-                )
-            }
+    override fun `wakeDevice`(
+        `reason`: WakeReason,
+        `allowPlayTap`: kotlin.Boolean,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_devicewaker_wake_device(
+                it,
+                FfiConverterTypeWakeReason.lower(`reason`),
+                FfiConverterBoolean.lower(`allowPlayTap`),
+                _status,
+            )
         }
+    }
 
     /**
      * @suppress
@@ -12654,12 +12699,14 @@ internal object uniffiCallbackInterfaceDeviceWaker {
         override fun callback(
             `uniffiHandle`: Long,
             `reason`: RustBuffer.ByValue,
+            `allowPlayTap`: Byte,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeDeviceWaker.handleMap.get(uniffiHandle)
             val makeCall = {  uniffiObj.`wakeDevice`(
                 FfiConverterTypeWakeReason.lift(`reason`),
+                FfiConverterBoolean.lift(`allowPlayTap`),
             )
             }
             val writeReturn = { _: Unit -> Unit }
@@ -25023,6 +25070,7 @@ data class CompanionDebug(
     var `attachedSchemes`: List<kotlin.String>,
     var `linkedDevices`: List<kotlin.String>,
     var `autoResume`: List<DeviceAutoResume>,
+    var `resumeTargets`: List<DeviceResumeTarget>,
     var `voice`: VoiceDebug,
 ) {
     companion object
@@ -25045,6 +25093,7 @@ public object FfiConverterTypeCompanionDebug : FfiConverterRustBuffer<CompanionD
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceTypeDeviceAutoResume.read(buf),
+            FfiConverterSequenceTypeDeviceResumeTarget.read(buf),
             FfiConverterTypeVoiceDebug.read(buf),
         )
 
@@ -25061,6 +25110,7 @@ public object FfiConverterTypeCompanionDebug : FfiConverterRustBuffer<CompanionD
                 FfiConverterSequenceString.allocationSize(value.`attachedSchemes`) +
                 FfiConverterSequenceString.allocationSize(value.`linkedDevices`) +
                 FfiConverterSequenceTypeDeviceAutoResume.allocationSize(value.`autoResume`) +
+                FfiConverterSequenceTypeDeviceResumeTarget.allocationSize(value.`resumeTargets`) +
                 FfiConverterTypeVoiceDebug.allocationSize(value.`voice`)
         )
 
@@ -25079,6 +25129,7 @@ public object FfiConverterTypeCompanionDebug : FfiConverterRustBuffer<CompanionD
         FfiConverterSequenceString.write(value.`attachedSchemes`, buf)
         FfiConverterSequenceString.write(value.`linkedDevices`, buf)
         FfiConverterSequenceTypeDeviceAutoResume.write(value.`autoResume`, buf)
+        FfiConverterSequenceTypeDeviceResumeTarget.write(value.`resumeTargets`, buf)
         FfiConverterTypeVoiceDebug.write(value.`voice`, buf)
     }
 }
@@ -25356,6 +25407,38 @@ public object FfiConverterTypeDeviceMetaEntry : FfiConverterRustBuffer<DeviceMet
     ) {
         FfiConverterString.write(value.`deviceId`, buf)
         FfiConverterTypeDeviceMeta.write(value.`meta`, buf)
+    }
+}
+
+data class DeviceResumeTarget(
+    var `deviceId`: kotlin.String,
+    var `target`: ResumeTarget,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDeviceResumeTarget : FfiConverterRustBuffer<DeviceResumeTarget> {
+    override fun read(buf: ByteBuffer): DeviceResumeTarget =
+        DeviceResumeTarget(
+            FfiConverterString.read(buf),
+            FfiConverterTypeResumeTarget.read(buf),
+        )
+
+    override fun allocationSize(value: DeviceResumeTarget) =
+        (
+            FfiConverterString.allocationSize(value.`deviceId`) +
+                FfiConverterTypeResumeTarget.allocationSize(value.`target`)
+        )
+
+    override fun write(
+        value: DeviceResumeTarget,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`deviceId`, buf)
+        FfiConverterTypeResumeTarget.write(value.`target`, buf)
     }
 }
 
@@ -31318,6 +31401,35 @@ public object FfiConverterTypeRepeatMode : FfiConverterRustBuffer<RepeatMode> {
     }
 }
 
+enum class ResumeTarget {
+    PHONE_ONLY,
+    ANY_SPEAKER,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeResumeTarget : FfiConverterRustBuffer<ResumeTarget> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            ResumeTarget.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: ResumeTarget) = 4UL
+
+    override fun write(
+        value: ResumeTarget,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 enum class ServiceHealthKind {
     OK,
     RATE_LIMITED,
@@ -34121,6 +34233,34 @@ public object FfiConverterSequenceTypeDeviceMetaEntry : FfiConverterRustBuffer<L
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeDeviceMetaEntry.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeDeviceResumeTarget : FfiConverterRustBuffer<List<DeviceResumeTarget>> {
+    override fun read(buf: ByteBuffer): List<DeviceResumeTarget> {
+        val len = buf.getInt()
+        return List<DeviceResumeTarget>(len) {
+            FfiConverterTypeDeviceResumeTarget.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<DeviceResumeTarget>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeDeviceResumeTarget.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<DeviceResumeTarget>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeDeviceResumeTarget.write(it, buf)
         }
     }
 }

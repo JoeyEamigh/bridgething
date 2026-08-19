@@ -266,6 +266,14 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         backend?.isDeviceAutoResumeEnabled(deviceId) ?: true
     }
 
+    override fun setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget): Promise<Unit> = Promise.async {
+        backend?.setDeviceResumeTarget(deviceId, target)
+    }
+
+    override fun deviceResumeTarget(deviceId: String): Promise<BridgethingResumeTarget> = Promise.async {
+        backend?.deviceResumeTarget(deviceId) ?: BridgethingResumeTarget.PHONEONLY
+    }
+
     override fun setOtaPollConfig(config: Variant_NullType_BridgethingOtaPollConfig?): Promise<Unit> = Promise.async {
         val unwrapped: BridgethingOtaPollConfig? = config?.let { variant ->
             when (variant) {

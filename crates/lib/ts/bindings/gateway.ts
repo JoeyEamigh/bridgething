@@ -369,7 +369,7 @@ export type GatewayToBridgePlayerMsg =
   | { event: 'queueChanged'; data: QueueSnapshot }
   | { event: 'targetsChanged'; data: PlaybackTargets }
   | { event: 'errorEvent'; data: PlayerErrorReply }
-  | { event: 'requestSpotifyWake' }
+  | { event: 'requestSpotifyWake'; data: SpotifyWakeRequest }
   | { event: 'snapshotAck'; data: PlayerSnapshotAck }
   | { event: 'errorReply'; data: PlayerErrorReply };
 
@@ -608,6 +608,8 @@ export type SetSpeed = { speed: number };
 export type SetVolume = { level: number };
 
 export type SkipToIndex = { index: number };
+
+export type SpotifyWakeRequest = { allowPlayTap: boolean };
 
 export type TrackIdentity = {
   artist: string;

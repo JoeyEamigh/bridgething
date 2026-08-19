@@ -11,17 +11,21 @@ public class IntentDeviceWaker(
 ) : DeviceWaker {
     private val appContext = context.applicationContext
 
-    override fun wakeDevice(reason: WakeReason) {
+    override fun wakeDevice(reason: WakeReason, allowPlayTap: Boolean) {
+        val keyCode = keyCodeFor(allowPlayTap)
         for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
             val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
                 setPackage(SPOTIFY_ANDROID_PACKAGE)
-                putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, KeyEvent.KEYCODE_MEDIA_PLAY))
+                putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(action, keyCode))
             }
             runCatching { appContext.sendBroadcast(intent) }
         }
     }
 
-    private companion object {
+    internal companion object {
         const val SPOTIFY_ANDROID_PACKAGE = "com.spotify.music"
+
+        internal fun keyCodeFor(allowPlayTap: Boolean): Int =
+            if (allowPlayTap) KeyEvent.KEYCODE_MEDIA_PLAY else KeyEvent.KEYCODE_MEDIA_PAUSE
     }
 }

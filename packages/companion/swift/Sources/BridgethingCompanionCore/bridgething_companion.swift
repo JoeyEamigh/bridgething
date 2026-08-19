@@ -3540,6 +3540,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func setDeviceLogStreaming(enabled: Bool) async 
     
+    func setDeviceResumeTarget(deviceId: String, target: ResumeTarget) async 
+    
     func setOtaPollConfig(config: OtaPollConfig?) async 
     
     func setProviderPriority(ids: [String]) async 
@@ -4089,6 +4091,23 @@ open func setDeviceLogStreaming(enabled: Bool)async   {
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(
                         self.uniffiCloneHandle(),FfiConverterBool.lower(enabled)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: nil
+            
+        )
+}
+    
+open func setDeviceResumeTarget(deviceId: String, target: ResumeTarget)async   {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_set_device_resume_target(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterTypeResumeTarget_lower(target)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_void,
@@ -4721,7 +4740,7 @@ public func FfiConverterTypeConnectivityMonitor_lower(_ value: ConnectivityMonit
 
 public protocol DeviceWaker: AnyObject, Sendable {
     
-    func wakeDevice(reason: WakeReason) 
+    func wakeDevice(reason: WakeReason, allowPlayTap: Bool) 
     
 }
 open class DeviceWakerImpl: DeviceWaker, @unchecked Sendable {
@@ -4777,11 +4796,12 @@ open class DeviceWakerImpl: DeviceWaker, @unchecked Sendable {
     
 
     
-open func wakeDevice(reason: WakeReason)  {try! rustCall() {
+open func wakeDevice(reason: WakeReason, allowPlayTap: Bool)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_devicewaker_wake_device(
             self.uniffiCloneHandle(),
-        FfiConverterTypeWakeReason_lower(reason),uniffiCallStatus
+        FfiConverterTypeWakeReason_lower(reason),
+        FfiConverterBool.lower(allowPlayTap),uniffiCallStatus
     )
 }
 }
@@ -4817,6 +4837,7 @@ fileprivate struct UniffiCallbackInterfaceDeviceWaker {
         wakeDevice: { (
             uniffiHandle: UInt64,
             reason: RustBuffer,
+            allowPlayTap: Int8,
             uniffiOutReturn: UnsafeMutableRawPointer,
             uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
         ) in
@@ -4826,7 +4847,8 @@ fileprivate struct UniffiCallbackInterfaceDeviceWaker {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return uniffiObj.wakeDevice(
-                     reason: try FfiConverterTypeWakeReason_lift(reason)
+                     reason: try FfiConverterTypeWakeReason_lift(reason),
+                     allowPlayTap: try FfiConverterBool.lift(allowPlayTap)
                 )
             }
 
@@ -13228,11 +13250,12 @@ public struct CompanionDebug: Equatable, Hashable {
     public var attachedSchemes: [String]
     public var linkedDevices: [String]
     public var autoResume: [DeviceAutoResume]
+    public var resumeTargets: [DeviceResumeTarget]
     public var voice: VoiceDebug
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(authorityPlaybackHeld: Bool, authorityMetadataHeld: Bool, authorityVolumeHeld: Bool, authorityAppBundle: String?, arbitratedSource: String?, librarySource: String?, lastPlayedFrom: String?, attachedProviders: [String], attachedSchemes: [String], linkedDevices: [String], autoResume: [DeviceAutoResume], voice: VoiceDebug) {
+    public init(authorityPlaybackHeld: Bool, authorityMetadataHeld: Bool, authorityVolumeHeld: Bool, authorityAppBundle: String?, arbitratedSource: String?, librarySource: String?, lastPlayedFrom: String?, attachedProviders: [String], attachedSchemes: [String], linkedDevices: [String], autoResume: [DeviceAutoResume], resumeTargets: [DeviceResumeTarget], voice: VoiceDebug) {
         self.authorityPlaybackHeld = authorityPlaybackHeld
         self.authorityMetadataHeld = authorityMetadataHeld
         self.authorityVolumeHeld = authorityVolumeHeld
@@ -13244,6 +13267,7 @@ public struct CompanionDebug: Equatable, Hashable {
         self.attachedSchemes = attachedSchemes
         self.linkedDevices = linkedDevices
         self.autoResume = autoResume
+        self.resumeTargets = resumeTargets
         self.voice = voice
     }
 
@@ -13274,6 +13298,7 @@ public struct FfiConverterTypeCompanionDebug: FfiConverterRustBuffer {
                 attachedSchemes: FfiConverterSequenceString.read(from: &buf), 
                 linkedDevices: FfiConverterSequenceString.read(from: &buf), 
                 autoResume: FfiConverterSequenceTypeDeviceAutoResume.read(from: &buf), 
+                resumeTargets: FfiConverterSequenceTypeDeviceResumeTarget.read(from: &buf), 
                 voice: FfiConverterTypeVoiceDebug.read(from: &buf)
         )
     }
@@ -13290,6 +13315,7 @@ public struct FfiConverterTypeCompanionDebug: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.attachedSchemes, into: &buf)
         FfiConverterSequenceString.write(value.linkedDevices, into: &buf)
         FfiConverterSequenceTypeDeviceAutoResume.write(value.autoResume, into: &buf)
+        FfiConverterSequenceTypeDeviceResumeTarget.write(value.resumeTargets, into: &buf)
         FfiConverterTypeVoiceDebug.write(value.voice, into: &buf)
     }
 }
@@ -13715,6 +13741,60 @@ public func FfiConverterTypeDeviceMetaEntry_lift(_ buf: RustBuffer) throws -> De
 #endif
 public func FfiConverterTypeDeviceMetaEntry_lower(_ value: DeviceMetaEntry) -> RustBuffer {
     return FfiConverterTypeDeviceMetaEntry.lower(value)
+}
+
+
+public struct DeviceResumeTarget: Equatable, Hashable {
+    public var deviceId: String
+    public var target: ResumeTarget
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, target: ResumeTarget) {
+        self.deviceId = deviceId
+        self.target = target
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DeviceResumeTarget: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceResumeTarget: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceResumeTarget {
+        return
+            try DeviceResumeTarget(
+                deviceId: FfiConverterString.read(from: &buf), 
+                target: FfiConverterTypeResumeTarget.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceResumeTarget, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterTypeResumeTarget.write(value.target, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceResumeTarget_lift(_ buf: RustBuffer) throws -> DeviceResumeTarget {
+    return try FfiConverterTypeDeviceResumeTarget.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceResumeTarget_lower(_ value: DeviceResumeTarget) -> RustBuffer {
+    return FfiConverterTypeDeviceResumeTarget.lower(value)
 }
 
 
@@ -22444,6 +22524,72 @@ public func FfiConverterTypeRepeatMode_lower(_ value: RepeatMode) -> RustBuffer 
 
 
 
+public enum ResumeTarget: Equatable, Hashable {
+    
+    case phoneOnly
+    case anySpeaker
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ResumeTarget: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeResumeTarget: FfiConverterRustBuffer {
+    typealias SwiftType = ResumeTarget
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ResumeTarget {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .phoneOnly
+        
+        case 2: return .anySpeaker
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ResumeTarget, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .phoneOnly:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .anySpeaker:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeResumeTarget_lift(_ buf: RustBuffer) throws -> ResumeTarget {
+    return try FfiConverterTypeResumeTarget.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeResumeTarget_lower(_ value: ResumeTarget) -> RustBuffer {
+    return FfiConverterTypeResumeTarget.lower(value)
+}
+
+
+
+
 public enum ServiceHealthKind: Equatable, Hashable {
     
     case ok
@@ -24919,6 +25065,31 @@ fileprivate struct FfiConverterSequenceTypeDeviceMetaEntry: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDeviceResumeTarget: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceResumeTarget]
+
+    public static func write(_ value: [DeviceResumeTarget], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceResumeTarget.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceResumeTarget] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceResumeTarget]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceResumeTarget.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDeviceWebappsEntry: FfiConverterRustBuffer {
     typealias SwiftType = [DeviceWebappsEntry]
 
@@ -25804,6 +25975,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming() != 49632) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config() != 63985) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -26329,7 +26503,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_transcriptionsink_fail() != 11687) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 36074) {
+    if (uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_constructor_companionsession_create() != 21535) {
