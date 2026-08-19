@@ -13,6 +13,7 @@ const ALTERNATIVES: usize = 4;
 const NEW_RELEASES_TAG: &str = "tag:new";
 const CHART_QUERY: &str = "top hits";
 const DISCOGRAPHY_DEPTH: usize = 8;
+const DISCOGRAPHY_LOOKUP_DEPTH: usize = 24;
 const RECENT_POOL: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,7 +99,14 @@ async fn resolve_search(client: &SpotifyClient, req: &VoiceResolveRequest, query
     return Err(VoiceResolveError::NoMatch);
   }
   let items = client.search_flat(query, SEARCH_LIMIT).await?;
-  head_of(ranked_search(&items, req), None)
+  let mut ranked = ranked_search(&items, req);
+  if let Some(want) = want_of(req, &items) {
+    ranked = scored(ranked, &want);
+    if req.target_type == Some(VoiceTargetKind::Album) && needs_discography(&ranked, &want) {
+      ranked = scored(with_discography(client, ranked, &want, &items).await, &want);
+    }
+  }
+  head_of(ranked, None)
 }
 
 async fn resolve_random(client: &SpotifyClient, req: &VoiceResolveRequest, query: &str) -> VoiceResult<VoiceResolved> {
@@ -238,10 +246,11 @@ async fn resolve_station(client: &SpotifyClient, query: &str, target: Option<&st
 }
 
 fn station_seeds(items: &[FlatItem], named: &str) -> Vec<Candidate> {
+  let named = norm(named);
   let mut seeds = rank(items, Pick::Seed);
   let named_artist = seeds
     .iter()
-    .position(|c| c.kind == VoiceTargetKind::Artist && c.display.eq_ignore_ascii_case(named));
+    .position(|c| c.kind == VoiceTargetKind::Artist && norm(&c.display) == named);
   if let Some(idx) = named_artist {
     seeds[..=idx].rotate_right(1);
   }
@@ -257,6 +266,8 @@ fn as_station(seed: &Candidate) -> Candidate {
     uri: station_uri(&seed.uri),
     display: seed.display.clone(),
     kind: VoiceTargetKind::Station,
+    artist: seed.artist.clone(),
+    year: None,
   }
 }
 
@@ -325,7 +336,11 @@ async fn target_container(
     None => Pick::Container,
   };
   let items = client.search_flat(query, SEARCH_LIMIT).await?;
-  Ok(rank(&items, pick).into_iter().next().map(|c| c.uri))
+  let mut ranked = rank(&items, pick);
+  if let Some(want) = want_of(req, &items) {
+    ranked = scored(ranked, &want);
+  }
+  Ok(ranked.into_iter().next().map(|c| c.uri))
 }
 
 async fn fresh_pick(client: &SpotifyClient) -> VoiceResult<VoiceResolved> {
@@ -354,6 +369,201 @@ struct Candidate {
   uri: String,
   display: String,
   kind: VoiceTargetKind,
+  artist: Option<String>,
+  year: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Want {
+  title: String,
+  artist: Option<String>,
+  years: Option<(i32, i32)>,
+  artist_shaped: bool,
+}
+
+fn want_of(req: &VoiceResolveRequest, items: &[FlatItem]) -> Option<Want> {
+  let target = req.target.as_deref().map(str::trim).filter(|t| !t.is_empty())?;
+  let whole = norm(target);
+  let artists = returned_artists(items);
+  let (title, artist) = match whole.rsplit_once(" by ") {
+    Some((head, tail)) if !head.is_empty() && artists.contains(tail) => (head.to_string(), Some(tail.to_string())),
+    _ => (whole.clone(), None),
+  };
+  let artist_shaped = artists.contains(&title);
+  Some(Want {
+    title,
+    artist,
+    years: req.era.as_deref().and_then(era_years),
+    artist_shaped,
+  })
+}
+
+fn returned_artists(items: &[FlatItem]) -> HashSet<String> {
+  items
+    .iter()
+    .flat_map(|i| {
+      let named = (kind_of_uri(&i.uri) == Some(VoiceTargetKind::Artist)).then(|| norm(&i.name));
+      let credited = i.artist.as_deref().map(norm);
+      [named, credited]
+    })
+    .flatten()
+    .collect()
+}
+
+fn norm(s: &str) -> String {
+  let lowered = s.to_lowercase().replace('&', " and ");
+  let tokens = lowered
+    .split(|c: char| !c.is_alphanumeric())
+    .filter(|t| !t.is_empty());
+  merge_number_words(tokens).join(" ")
+}
+
+fn number_word(token: &str) -> Option<u32> {
+  let units = [
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+    "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+  ];
+  let tens = [
+    "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+  ];
+  if let Some(n) = units.iter().position(|u| *u == token) {
+    return Some(n as u32);
+  }
+  tens.iter().position(|t| *t == token).map(|n| (n as u32 + 2) * 10)
+}
+
+fn merge_number_words<'a>(tokens: impl Iterator<Item = &'a str>) -> Vec<String> {
+  let mut out: Vec<String> = Vec::new();
+  let mut pending_tens: Option<u32> = None;
+  for token in tokens {
+    match (pending_tens.take(), number_word(token)) {
+      (Some(tens), Some(unit)) if (1..=9).contains(&unit) => out.push((tens + unit).to_string()),
+      (carried, spoken) => {
+        if let Some(tens) = carried {
+          out.push(tens.to_string());
+        }
+        match spoken {
+          Some(n) if n >= 20 && n % 10 == 0 => pending_tens = Some(n),
+          Some(n) => out.push(n.to_string()),
+          None => out.push(token.to_string()),
+        }
+      }
+    }
+  }
+  if let Some(tens) = pending_tens {
+    out.push(tens.to_string());
+  }
+  out
+}
+
+fn era_years(era: &str) -> Option<(i32, i32)> {
+  let normalized = norm(era);
+  let e = normalized.strip_prefix("the ").unwrap_or(&normalized);
+  let e = match e {
+    "sixties" => "60s",
+    "seventies" => "70s",
+    "eighties" => "80s",
+    "nineties" => "90s",
+    other => other,
+  };
+  if let Ok(year) = e.parse::<i32>() {
+    return (1900..=2099).contains(&year).then_some((year, year));
+  }
+  let decade = e.strip_suffix('s')?.parse::<i32>().ok()?;
+  let base = match decade {
+    0..=29 => 2000 + decade,
+    30..=99 => 1900 + decade,
+    1900..=2090 => decade,
+    _ => return None,
+  };
+  (base % 10 == 0).then_some((base, base + 9))
+}
+
+fn title_tier(display: &str, want: &Want) -> u8 {
+  let name = norm(display);
+  if name == want.title {
+    return 4;
+  }
+  let padded = |s: &str| format!(" {s} ");
+  if padded(&name).contains(&padded(&want.title)) {
+    return 3;
+  }
+  if padded(&want.title).contains(&padded(&name)) {
+    return 2;
+  }
+  let words: HashSet<&str> = name.split(' ').collect();
+  u8::from(want.title.split(' ').all(|t| words.contains(t)))
+}
+
+fn artist_hit(c: &Candidate, want: &Want) -> bool {
+  match (&want.artist, &c.artist) {
+    (Some(w), Some(a)) => norm(a) == *w,
+    _ => false,
+  }
+}
+
+fn year_hit(c: &Candidate, want: &Want) -> bool {
+  match (want.years, c.year) {
+    (Some((lo, hi)), Some(y)) => (lo..=hi).contains(&y),
+    _ => false,
+  }
+}
+
+fn scored(mut ranked: Vec<Candidate>, want: &Want) -> Vec<Candidate> {
+  ranked.sort_by_key(|c| std::cmp::Reverse((year_hit(c, want), title_tier(&c.display, want), artist_hit(c, want))));
+  ranked
+}
+
+fn needs_discography(ranked: &[Candidate], want: &Want) -> bool {
+  if want.years.is_some() && !ranked.iter().any(|c| year_hit(c, want)) {
+    return true;
+  }
+  let best = ranked.first().map(|c| title_tier(&c.display, want)).unwrap_or(0);
+  best < 4 && (want.artist.is_some() || want.artist_shaped)
+}
+
+async fn with_discography(
+  client: &SpotifyClient,
+  ranked: Vec<Candidate>,
+  want: &Want,
+  items: &[FlatItem],
+) -> Vec<Candidate> {
+  let artists = rank(items, Pick::Kind(VoiceTargetKind::Artist));
+  let named = want.artist.as_deref().or(want.artist_shaped.then_some(want.title.as_str()));
+  let anchor = named
+    .and_then(|name| artists.iter().find(|c| norm(&c.display) == name))
+    .or(artists.first());
+  let Some(anchor) = anchor.cloned() else {
+    return ranked;
+  };
+  let Ok(releases) = client
+    .artist_releases(&anchor.uri, true, DISCOGRAPHY_LOOKUP_DEPTH)
+    .await
+  else {
+    return ranked;
+  };
+  merge_releases(ranked, releases, &anchor.display)
+}
+
+fn merge_releases(mut ranked: Vec<Candidate>, releases: Vec<Release>, artist: &str) -> Vec<Candidate> {
+  let mut fresh: Vec<Candidate> = Vec::new();
+  for r in releases {
+    match ranked.iter_mut().find(|c| c.uri == r.uri) {
+      Some(held) => {
+        held.artist.get_or_insert_with(|| artist.to_string());
+        held.year.get_or_insert(r.released.0);
+      }
+      None => fresh.push(Candidate {
+        uri: r.uri,
+        display: r.name,
+        kind: VoiceTargetKind::Album,
+        artist: Some(artist.to_string()),
+        year: Some(r.released.0),
+      }),
+    }
+  }
+  ranked.extend(fresh);
+  ranked
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -417,21 +627,23 @@ fn candidates_of(items: Vec<BrowseItem>) -> Vec<Candidate> {
     .into_iter()
     .filter_map(|i| {
       kind_of_uri(&i.uri).map(|kind| Candidate {
+        artist: i.artists.first().map(|a| a.name.clone()),
         uri: i.uri,
         display: i.title,
         kind,
+        year: None,
       })
     })
     .collect()
 }
 
 fn narrow(candidates: Vec<Candidate>, pick: Pick, query: &str) -> Vec<Candidate> {
-  let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+  let words: Vec<String> = norm(query).split(' ').map(str::to_string).collect();
   candidates
     .into_iter()
     .filter(|c| pick.keeps(c.kind))
     .filter(|c| {
-      let display = c.display.to_lowercase();
+      let display = norm(&c.display);
       words.iter().all(|w| display.contains(w.as_str()))
     })
     .collect()
@@ -439,10 +651,11 @@ fn narrow(candidates: Vec<Candidate>, pick: Pick, query: &str) -> Vec<Candidate>
 
 fn artist_anchor(items: &[FlatItem], req: &VoiceResolveRequest) -> Option<Candidate> {
   let target = req.target.as_deref().map(str::trim).filter(|t| !t.is_empty())?;
+  let named = norm(target);
   let artists = rank(items, Pick::Kind(VoiceTargetKind::Artist));
   artists
     .iter()
-    .find(|c| c.display.eq_ignore_ascii_case(target))
+    .find(|c| norm(&c.display) == named)
     .or_else(|| {
       matches!(req.target_type, Some(VoiceTargetKind::Artist | VoiceTargetKind::Album))
         .then(|| artists.first())
@@ -460,6 +673,8 @@ fn latest_first(releases: Vec<Release>) -> Vec<Candidate> {
       uri: r.uri,
       display: r.name,
       kind: VoiceTargetKind::Album,
+      artist: None,
+      year: Some(r.released.0),
     })
     .collect()
 }
@@ -535,6 +750,8 @@ fn rank(items: &[FlatItem], pick: Pick) -> Vec<Candidate> {
         uri: i.uri.clone(),
         display: i.name.clone(),
         kind,
+        artist: i.artist.clone(),
+        year: i.year,
       })
     })
     .collect()
@@ -580,7 +797,10 @@ mod tests {
   use super::*;
   use crate::client::{
     flatten_search,
-    tests::{NullObserver, Playing, playing_client, search_response, searching_client, test_client},
+    tests::{
+      NullObserver, Playing, album_hit, named_hit, playing_client, search_response, searching_client,
+      searching_client_items, test_client, track_hit,
+    },
   };
 
   fn flat(loose: &[&str]) -> Vec<FlatItem> {
@@ -607,6 +827,8 @@ mod tests {
       uri: uri.to_string(),
       display: display.to_string(),
       kind: kind_of_uri(uri).expect("a test candidate is playable"),
+      artist: None,
+      year: None,
     }
   }
 
@@ -1149,6 +1371,184 @@ mod tests {
     );
   }
 
+  // ---- the pick reads the evidence, not just relevance order ---------------
+
+  #[test]
+  fn normalization_speaks_asr_digits_and_catalog_words_alike() {
+    assert_eq!(norm("Twenty One Pilots"), "21 pilots");
+    assert_eq!(norm("21 Pilots"), "21 pilots");
+    assert_eq!(norm("Blink-182"), "blink 182");
+    assert_eq!(norm("Thirty Seconds To Mars"), "30 seconds to mars");
+    assert_eq!(norm("Florence & The Machine"), "florence and the machine");
+    assert_eq!(norm("Seventy"), "70", "a bare tens word is not swallowed");
+    assert_eq!(norm("Twenty Twenty"), "20 20", "tens never merge with tens");
+    assert_eq!(norm("One Direction"), "1 direction");
+    assert_eq!(norm("  Trench  "), "trench");
+  }
+
+  #[test]
+  fn eras_parse_as_year_ranges_or_not_at_all() {
+    assert_eq!(era_years("2009"), Some((2009, 2009)));
+    assert_eq!(era_years("80s"), Some((1980, 1989)));
+    assert_eq!(era_years("the 80s"), Some((1980, 1989)));
+    assert_eq!(era_years("eighties"), Some((1980, 1989)));
+    assert_eq!(era_years("1980s"), Some((1980, 1989)));
+    assert_eq!(era_years("20s"), Some((2020, 2029)), "a bare 20s is this century");
+    assert_eq!(era_years("2000s"), Some((2000, 2009)));
+    assert_eq!(era_years("chill"), None);
+    assert_eq!(era_years("85s"), None, "not a decade");
+    assert_eq!(era_years("1850"), None, "outside the catalog era");
+  }
+
+  #[test]
+  fn discography_releases_fill_gaps_and_extend_without_displacing_search_order() {
+    let ranked = vec![cand("spotify:album:a1", "Breach")];
+    let merged = merge_releases(
+      ranked,
+      vec![
+        release("spotify:album:a1", (2025, 9, 12), 90),
+        release("spotify:album:a2", (2009, 12, 29), 40),
+      ],
+      "Twenty One Pilots",
+    );
+    assert_eq!(
+      merged.iter().map(|c| c.uri.as_str()).collect::<Vec<_>>(),
+      ["spotify:album:a1", "spotify:album:a2"],
+      "search hits keep their slot; unseen releases append"
+    );
+    assert_eq!(merged[0].year, Some(2025), "a search hit gains the year it lacked");
+    assert_eq!(merged[0].artist.as_deref(), Some("Twenty One Pilots"));
+    assert_eq!(merged[1].year, Some(2009));
+  }
+
+  fn top_catalog() -> Vec<crate::proto::custom::searchview::SearchItem> {
+    vec![
+      named_hit("spotify:artist:top", "Twenty One Pilots"),
+      album_hit("spotify:album:breach", "Breach", "Twenty One Pilots", 2025),
+      album_hit("spotify:album:clancy", "Clancy", "Twenty One Pilots", 2024),
+      album_hit(
+        "spotify:album:live",
+        "More Than We Ever Imagined (Live in Mexico City)",
+        "Twenty One Pilots",
+        2025,
+      ),
+      album_hit("spotify:album:selftitled", "Twenty One Pilots", "Twenty One Pilots", 2009),
+      album_hit("spotify:album:vessel", "Vessel", "Twenty One Pilots", 2013),
+    ]
+  }
+
+  async fn resolved_uri(items: Vec<crate::proto::custom::searchview::SearchItem>, req: VoiceResolveRequest) -> String {
+    let (client, _) = searching_client_items(Arc::new(NullObserver), items);
+    resolve(&client, req).await.expect("a pick").uri
+  }
+
+  #[tokio::test]
+  async fn an_exact_title_outranks_the_recency_relevance_order() {
+    for target in ["twenty one pilots", "21 pilots"] {
+      let uri = resolved_uri(top_catalog(), req(Some(target), Some(VoiceTargetKind::Album))).await;
+      assert_eq!(
+        uri, "spotify:album:selftitled",
+        "{target:?} names the self-titled album; relevance floats the newest release first"
+      );
+    }
+  }
+
+  #[tokio::test]
+  async fn a_by_phrase_confirmed_against_a_returned_artist_matches_on_its_title_half() {
+    for target in ["twenty one pilots by twenty one pilots", "21 pilots by 21 pilots"] {
+      let uri = resolved_uri(top_catalog(), req(Some(target), Some(VoiceTargetKind::Album))).await;
+      assert_eq!(uri, "spotify:album:selftitled", "{target:?} splits at the last by");
+    }
+  }
+
+  #[tokio::test]
+  async fn a_by_phrase_matching_no_returned_artist_stays_whole() {
+    let items = vec![
+      track_hit("spotify:track:decoy", "Stand", "Somebody Else"),
+      track_hit("spotify:track:standbyme", "Stand By Me", "Ben E. King"),
+    ];
+    let uri = resolved_uri(items, req(Some("stand by me"), Some(VoiceTargetKind::Track))).await;
+    assert_eq!(
+      uri, "spotify:track:standbyme",
+      "no artist named 'me' came back, so the by is part of the title"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_year_qualified_request_reads_the_year_over_the_title() {
+    let vessel = resolved_uri(
+      top_catalog(),
+      VoiceResolveRequest {
+        target: Some("twenty one pilots".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: Some("2013".into()),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(
+      vessel, "spotify:album:vessel",
+      "the year is the discriminator; the artist-named self-titled album must not shadow it"
+    );
+  }
+
+  #[tokio::test]
+  async fn an_era_decade_bounds_the_years() {
+    let items = vec![
+      album_hit("spotify:album:innuendo", "Innuendo", "Queen", 1991),
+      album_hit("spotify:album:thegame", "The Game", "Queen", 1980),
+    ];
+    let uri = resolved_uri(
+      items,
+      VoiceResolveRequest {
+        target: Some("queen".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: Some("80s".into()),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(uri, "spotify:album:thegame");
+  }
+
+  #[tokio::test]
+  async fn an_edition_suffix_still_matches_its_title() {
+    let items = vec![
+      album_hit("spotify:album:trench", "Trench", "Twenty One Pilots", 2018),
+      album_hit("spotify:album:blurryface", "Blurryface (Deluxe)", "Twenty One Pilots", 2015),
+    ];
+    let uri = resolved_uri(items, req(Some("blurryface"), Some(VoiceTargetKind::Album))).await;
+    assert_eq!(uri, "spotify:album:blurryface", "a parenthetical edition is the same album");
+  }
+
+  #[tokio::test]
+  async fn a_title_tie_breaks_on_the_by_phrase_artist() {
+    let items = vec![
+      album_hit("spotify:album:xhits", "Greatest Hits", "Xylo", 2001),
+      album_hit("spotify:album:yhits", "Greatest Hits", "Yodel", 2003),
+    ];
+    let uri = resolved_uri(items, req(Some("greatest hits by yodel"), Some(VoiceTargetKind::Album))).await;
+    assert_eq!(uri, "spotify:album:yhits");
+  }
+
+  #[tokio::test]
+  async fn requests_without_a_target_keep_the_relevance_order() {
+    let items = vec![
+      album_hit("spotify:album:first", "Jazz Classics", "Various", 2001),
+      album_hit("spotify:album:second", "Smooth Jazz", "Various", 2020),
+    ];
+    let uri = resolved_uri(
+      items,
+      VoiceResolveRequest {
+        genre: Some("jazz".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(uri, "spotify:album:first", "nothing named means relevance decides");
+  }
+
   // ---- bare kinds anchored to now playing ----------------------------------
 
   fn bare(kind: VoiceTargetKind) -> VoiceResolveRequest {
@@ -1403,6 +1803,69 @@ mod live {
       out.display,
       out.alternatives.len()
     );
+  }
+
+  const TOP_SELF_TITLED: &str = "spotify:album:6rgWZP4QFBjEFF0n6JWEOa";
+  const TOP_VESSEL: &str = "spotify:album:2r2r78NE05YjyHyVbVgqFn";
+  const TOP_TRENCH: &str = "spotify:album:621cXqrTSSJi1WqDMSLmbL";
+
+  async fn live_album(client: &SpotifyClient, target: &str, era: Option<&str>) -> VoiceResolved {
+    resolve(
+      client,
+      VoiceResolveRequest {
+        target: Some(target.into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: era.map(str::to_string),
+        ..Default::default()
+      },
+    )
+    .await
+    .unwrap_or_else(|e| panic!("album resolve for {target:?} era {era:?}: {e:?}"))
+  }
+
+  #[tokio::test]
+  async fn live_a_self_titled_album_beats_the_recency_ranking_even_as_asr_digits() {
+    if !enabled() {
+      return;
+    }
+    let client = client().await;
+    for target in [
+      "twenty one pilots",
+      "21 pilots",
+      "twenty one pilots by twenty one pilots",
+      "21 pilots by 21 pilots",
+    ] {
+      let out = live_album(&client, target, None).await;
+      show(&format!("self-titled {target}"), &out);
+      assert_eq!(out.uri, TOP_SELF_TITLED, "{target:?} names the 2009 self-titled album");
+    }
+    client.disconnect().await;
+  }
+
+  #[tokio::test]
+  async fn live_a_year_qualified_album_resolves_through_the_discography() {
+    if !enabled() {
+      return;
+    }
+    let client = client().await;
+    for (era, want) in [("2009", TOP_SELF_TITLED), ("2013", TOP_VESSEL)] {
+      let out = live_album(&client, "twenty one pilots", Some(era)).await;
+      show(&format!("year {era}"), &out);
+      assert_eq!(out.uri, want, "era {era} discriminates the release");
+    }
+    client.disconnect().await;
+  }
+
+  #[tokio::test]
+  async fn live_a_named_album_title_still_resolves_directly() {
+    if !enabled() {
+      return;
+    }
+    let client = client().await;
+    let out = live_album(&client, "trench by twenty one pilots", None).await;
+    show("trench", &out);
+    assert_eq!(out.uri, TOP_TRENCH);
+    client.disconnect().await;
   }
 
   #[tokio::test]

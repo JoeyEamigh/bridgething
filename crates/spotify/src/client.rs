@@ -1490,6 +1490,8 @@ pub(crate) struct FlatItem {
   pub(crate) uri: String,
   pub(crate) name: String,
   image: String,
+  pub(crate) artist: Option<String>,
+  pub(crate) year: Option<i32>,
 }
 
 pub(crate) struct Release {
@@ -1511,25 +1513,40 @@ pub(crate) struct PlaybackAnchor {
 }
 
 pub(crate) fn flatten_search(resp: &crate::proto::custom::searchview::SearchResponse) -> Vec<FlatItem> {
+  fn named(name: &str) -> Option<String> {
+    (!name.is_empty()).then(|| name.to_string())
+  }
+  fn meta_of(it: &crate::proto::custom::searchview::SearchItem) -> (Option<String>, Option<i32>) {
+    if let Some(album) = it.album.as_ref() {
+      let artist = named(&album.artist_name).or_else(|| album.artists.first().and_then(|a| named(&a.name)));
+      (artist, (album.year > 0).then_some(album.year))
+    } else if let Some(track) = it.track.as_ref() {
+      (track.artists.first().and_then(|a| named(&a.name)), None)
+    } else {
+      (None, None)
+    }
+  }
   let mut out = Vec::new();
   let mut seen = std::collections::HashSet::new();
-  let mut push = |uri: &str, name: &str, image: &str, out: &mut Vec<FlatItem>| {
-    if !uri.is_empty() && seen.insert(uri.to_string()) {
+  let mut push = |it: &crate::proto::custom::searchview::SearchItem, out: &mut Vec<FlatItem>| {
+    if !it.uri.is_empty() && seen.insert(it.uri.clone()) {
+      let (artist, year) = meta_of(it);
       out.push(FlatItem {
-        uri: uri.to_string(),
-        name: name.to_string(),
-        image: image.to_string(),
+        uri: it.uri.clone(),
+        name: it.name.clone(),
+        image: it.image.clone(),
+        artist,
+        year,
       });
     }
   };
   for it in &resp.items {
     if let Some(section) = it.section.as_ref() {
       for entry in &section.entries {
-        let e = &entry.item.entity;
-        push(&e.uri, &e.name, &e.image, &mut out);
+        push(&entry.item.entity, &mut out);
       }
-    } else if !it.uri.is_empty() {
-      push(&it.uri, &it.name, &it.image, &mut out);
+    } else {
+      push(it, &mut out);
     }
   }
   out
@@ -2771,6 +2788,50 @@ pub(crate) mod tests {
     it.name = id.to_uppercase();
     it.image = format!("https://i.scdn.co/image/{id}");
     it
+  }
+
+  pub(crate) fn named_hit(uri: &str, name: &str) -> crate::proto::custom::searchview::SearchItem {
+    let mut it = search_item(uri);
+    it.name = name.to_string();
+    it
+  }
+
+  pub(crate) fn album_hit(
+    uri: &str,
+    name: &str,
+    artist: &str,
+    year: i32,
+  ) -> crate::proto::custom::searchview::SearchItem {
+    let mut it = named_hit(uri, name);
+    let mut meta = crate::proto::custom::searchview::AlbumMeta::new();
+    meta.artist_name = artist.to_string();
+    meta.year = year;
+    it.album = protobuf::MessageField::some(meta);
+    it
+  }
+
+  pub(crate) fn track_hit(uri: &str, name: &str, artist: &str) -> crate::proto::custom::searchview::SearchItem {
+    let mut it = named_hit(uri, name);
+    let mut meta = crate::proto::custom::searchview::TrackMeta::new();
+    let mut by = crate::proto::custom::searchview::EntityRef::new();
+    by.name = artist.to_string();
+    meta.artists.push(by);
+    it.track = protobuf::MessageField::some(meta);
+    it
+  }
+
+  pub(crate) fn searching_client_items(
+    observer: Arc<dyn Observer>,
+    items: Vec<crate::proto::custom::searchview::SearchItem>,
+  ) -> (SpotifyClient, SearchLog) {
+    let mut resp = crate::proto::custom::searchview::SearchResponse::new();
+    resp.items.extend(items);
+    let transport = RouteTransport {
+      search_bytes: Arc::new(StdMutex::new(Some(resp.write_to_bytes().unwrap()))),
+      ..Default::default()
+    };
+    let hits = transport.hits.clone();
+    (client_over(transport, observer), SearchLog(hits))
   }
 
   pub(crate) fn search_response(
