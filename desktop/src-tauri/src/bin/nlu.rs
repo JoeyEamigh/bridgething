@@ -81,10 +81,9 @@ fn parse(args: Vec<String>) -> Result<(Option<PathBuf>, Vec<String>), Boxed> {
 }
 
 fn installed_bundle() -> Result<PathBuf, Boxed> {
-  let root = DesktopPaths::xdg()?.state_dir.join("bridgething-nlu");
-  let current = std::fs::read_to_string(root.join("current"))
-    .map_err(|_| "no installed nlu bundle; open the desktop app to download one, or pass --bundle")?;
-  Ok(root.join(current.trim()))
+  DesktopPaths::xdg()?
+    .installed_nlu_bundle()
+    .ok_or_else(|| "no installed nlu bundle; open the desktop app to download one, or pass --bundle".into())
 }
 
 fn slots_json(slots: &NluSlots) -> Result<String, Boxed> {

@@ -33,9 +33,10 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 directories = "6.0.0"
 iana-time-zone = "0.1.65"
 libbridgething = { path = "../../crates/lib" }
+rustls = { version = "0.23.43", features = ["ring"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
-spotify = { path = "../../crates/spotify" }
+spotify = { path = "../../crates/spotify", features = ["native-io"] }
 tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-clipboard-manager = "2.3.2"

@@ -61,6 +61,12 @@ impl DesktopPaths {
       config_dir: root.join("config"),
     }
   }
+
+  pub fn installed_nlu_bundle(&self) -> Option<PathBuf> {
+    let root = self.state_dir.join("bridgething-nlu");
+    let current = std::fs::read_to_string(root.join("current")).ok()?;
+    Some(root.join(current.trim()))
+  }
 }
 
 pub struct ShellConfig {

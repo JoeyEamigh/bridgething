@@ -32,7 +32,7 @@ commands:
   page <url>       follow a context page url
   autoplay <uri>   what spotify would autoplay after a context
   resolve <query...> [--type kind] [--position n] [--mood m] [--genre g] [--era e]
-                     [--filter top5|top10|popular|recent|new|random] [--random]
+                     [--filter top5|top10|popular|recent|new|first|random] [--random]
                    voice slot resolution to a playable uri (read-only)
   pause | resume | next | prev | seek <ms> | play <uri>
   queue [show]     print queue_revision and the upcoming tracks
@@ -456,6 +456,13 @@ async fn probe(spc: &SpClient, dealer: &Dealer, username: Option<&str>) -> Resul
   Ok(())
 }
 
+fn tags_of(it: &spotify::proto::custom::searchview::SearchItem) -> String {
+  match it.playlist.as_ref().map(|p| p.tags.join(",")) {
+    Some(tags) if !tags.is_empty() => format!(" tags={tags}"),
+    _ => String::new(),
+  }
+}
+
 async fn print_search(spc: &SpClient, q: &str) -> Result<(), Boxed> {
   let res = spc.search(q, 6).await?;
   let mut shown = 0;
@@ -466,11 +473,17 @@ async fn print_search(spc: &SpClient, q: &str) -> Result<(), Boxed> {
     if !it.section.entries.is_empty() {
       for e in &it.section.entries {
         let ent = &e.item.entity;
-        println!("  [section] {} {} {}", kind_of(&ent.uri), ent.name, ent.uri);
+        println!(
+          "  [section] {} {} {}{}",
+          kind_of(&ent.uri),
+          ent.name,
+          ent.uri,
+          tags_of(ent)
+        );
         shown += 1;
       }
     } else if !it.uri.is_empty() {
-      println!("  {} {} {}", kind_of(&it.uri), it.name, it.uri);
+      println!("  {} {} {}{}", kind_of(&it.uri), it.name, it.uri, tags_of(it));
       shown += 1;
     }
   }
@@ -655,6 +668,7 @@ fn popularity(name: &str) -> Result<VoicePopularity, Boxed> {
     "popular" => Ok(VoicePopularity::Popular),
     "recent" => Ok(VoicePopularity::Recent),
     "new" => Ok(VoicePopularity::New),
+    "first" => Ok(VoicePopularity::First),
     "random" => Ok(VoicePopularity::Random),
     other => Err(format!("unknown popularity filter: {other}").into()),
   }

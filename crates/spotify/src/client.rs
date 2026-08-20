@@ -1494,6 +1494,7 @@ pub(crate) struct FlatItem {
   pub(crate) year: Option<i32>,
 }
 
+#[derive(Clone)]
 pub(crate) struct Release {
   pub(crate) uri: String,
   pub(crate) name: String,

@@ -7,7 +7,7 @@ use bridgething_gateway::OutboundLinkExt;
 use bridgething_io::{HttpExecutor, HttpTransport as IoHttpTransport, WsTransport as IoWsTransport};
 use libbridgething::{
   Album as WireAlbum, Artist as WireArtist, BrowseEntry, BrowseFolder, BrowseResult, FavoritesPage, ItemKind, ItemRef,
-  LibraryItem, Lyrics, MediaItem, MediaItemUpdate, MusicProvider, NluPopularityFilter, NluResolvedIntent,
+  LibraryItem, Lyrics, MediaItem, MediaItemUpdate, MusicProvider, NluPopularityFilter, NluResolvedIntent, NluSlots,
   NluTargetType, NowPlayingUpdate, Playback, PlaybackContext, PlaybackState, PlaybackTarget, PlaybackTargetKind,
   PlaybackUpdate, PlayerOptions, PlayerState, Playlist, PodcastEpisode, QueueItem, RecommendationsResult, RepeatMode,
   SearchResult, Show, ShuffleMode, Station, Track as WireTrack,
@@ -694,7 +694,7 @@ pub struct SpotifyVoiceResolver {
   client: Arc<SpotifyClient>,
 }
 
-fn catalog_intent(intent: &str) -> bool {
+pub fn catalog_intent(intent: &str) -> bool {
   matches!(
     intent,
     "PLAY" | "ADD_TO_QUEUE" | "ADD_TO_PLAYLIST" | "SEARCH" | "THUMBS_UP"
@@ -720,7 +720,19 @@ fn voice_kind(kind: NluTargetType) -> VoiceTargetKind {
   }
 }
 
-fn names_nothing(req: &VoiceResolveRequest) -> bool {
+pub fn voice_request(slots: &NluSlots) -> VoiceResolveRequest {
+  VoiceResolveRequest {
+    target: clean(&slots.target),
+    target_type: slots.target_type.map(voice_kind),
+    mood: clean(&slots.mood),
+    genre: clean(&slots.genre),
+    era: clean(&slots.era),
+    popularity_filter: slots.popularity_filter.map(voice_popularity),
+    position: slots.position,
+  }
+}
+
+pub fn names_nothing(req: &VoiceResolveRequest) -> bool {
   req.target.is_none()
     && req.target_type.is_none()
     && req.mood.is_none()
@@ -737,6 +749,7 @@ fn voice_popularity(filter: NluPopularityFilter) -> VoicePopularity {
     NluPopularityFilter::Popular => VoicePopularity::Popular,
     NluPopularityFilter::Recent => VoicePopularity::Recent,
     NluPopularityFilter::New => VoicePopularity::New,
+    NluPopularityFilter::First => VoicePopularity::First,
     NluPopularityFilter::Random => VoicePopularity::Random,
   }
 }
@@ -747,16 +760,7 @@ impl VoiceCatalogResolver for SpotifyVoiceResolver {
     if !catalog_intent(&resolved.intent) {
       return Ok(resolved);
     }
-    let slots = &resolved.slots;
-    let request = VoiceResolveRequest {
-      target: clean(&slots.target),
-      target_type: slots.target_type.map(voice_kind),
-      mood: clean(&slots.mood),
-      genre: clean(&slots.genre),
-      era: clean(&slots.era),
-      popularity_filter: slots.popularity_filter.map(voice_popularity),
-      position: slots.position,
-    };
+    let request = voice_request(&resolved.slots);
     if names_nothing(&request) {
       return Ok(resolved);
     }
@@ -1580,6 +1584,7 @@ mod tests {
       NluPopularityFilter::Popular,
       NluPopularityFilter::Recent,
       NluPopularityFilter::New,
+      NluPopularityFilter::First,
       NluPopularityFilter::Random,
     ] {
       let request = VoiceResolveRequest {

@@ -487,7 +487,7 @@ export type NluPhoneAction = 'answer' | 'decline' | 'end' | 'hold' | 'unhold' | 
 
 export type NluPlaybackSpeed = '1' | '1.2' | '1.5' | '2';
 
-export type NluPopularityFilter = 'top5' | 'top10' | 'popular' | 'recent' | 'new' | 'random';
+export type NluPopularityFilter = 'top5' | 'top10' | 'popular' | 'recent' | 'new' | 'first' | 'random';
 
 export type NluRepeatMode = 'off' | 'all' | 'one';
 

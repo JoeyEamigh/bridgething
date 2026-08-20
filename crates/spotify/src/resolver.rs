@@ -14,6 +14,7 @@ const NEW_RELEASES_TAG: &str = "tag:new";
 const CHART_QUERY: &str = "top hits";
 const DISCOGRAPHY_DEPTH: usize = 8;
 const DISCOGRAPHY_LOOKUP_DEPTH: usize = 24;
+const DISCOGRAPHY_FULL_DEPTH: usize = 60;
 const RECENT_POOL: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub enum VoicePopularity {
   Popular,
   Recent,
   New,
+  First,
   Random,
 }
 
@@ -61,6 +63,8 @@ pub struct VoiceResolved {
   pub context_uri: Option<String>,
   pub display: String,
   pub kind: VoiceTargetKind,
+  pub artist: Option<String>,
+  pub year: Option<i32>,
   pub alternatives: Vec<VoiceAlternative>,
 }
 
@@ -77,6 +81,11 @@ pub enum VoiceResolveError {
 pub(crate) async fn resolve(client: &SpotifyClient, req: VoiceResolveRequest) -> VoiceResult<VoiceResolved> {
   let query = compose_query(&req);
   if req.target_type == Some(VoiceTargetKind::Station) && !query.is_empty() {
+    if wants_personal_mix(&req)
+      && let Some(mixes) = personal_mix(client, &query).await
+    {
+      return head_of(mixes, None);
+    }
     return resolve_station(client, &query, req.target.as_deref()).await;
   }
   if let Some(position) = req.position {
@@ -89,14 +98,73 @@ pub(crate) async fn resolve(client: &SpotifyClient, req: VoiceResolveRequest) ->
     Some(VoicePopularity::Random) => resolve_random(client, &req, &query).await,
     Some(VoicePopularity::Recent) => resolve_recent(client, &req, &query).await,
     Some(VoicePopularity::New) => resolve_new(client, &req, &query).await,
+    Some(VoicePopularity::First) => resolve_first(client, &req, &query).await,
     Some(filter) => resolve_popular(client, &req, &query, filter.depth()).await,
     None => resolve_search(client, &req, &query).await,
   }
 }
 
+async fn resolve_first(client: &SpotifyClient, req: &VoiceResolveRequest, query: &str) -> VoiceResult<VoiceResolved> {
+  if query.is_empty() {
+    let anchor = client
+      .playback_anchor()
+      .await
+      .ok_or(VoiceResolveError::NoAnchorContext)?;
+    let artist_uri = anchor.artist_uri.ok_or(VoiceResolveError::NoAnchorContext)?;
+    let named = candidates_of(client.hydrate_uris(std::slice::from_ref(&artist_uri)).await);
+    let display = named.first().map(|c| c.display.clone()).unwrap_or_default();
+    return first_of_discography(client, &artist_uri, &display, req).await;
+  }
+  let items = client.search_flat(query, SEARCH_LIMIT).await?;
+  if let Some(artist) = artist_anchor(&items, req)
+    && let Ok(out) = first_of_discography(client, &artist.uri, &artist.display, req).await
+  {
+    return Ok(out);
+  }
+  resolve_search(client, req, query).await
+}
+
+async fn first_of_discography(
+  client: &SpotifyClient,
+  artist_uri: &str,
+  display: &str,
+  req: &VoiceResolveRequest,
+) -> VoiceResult<VoiceResolved> {
+  let albums_only = req.target_type == Some(VoiceTargetKind::Album);
+  let releases = client
+    .artist_releases(artist_uri, albums_only, DISCOGRAPHY_FULL_DEPTH)
+    .await?;
+  let first = earliest_first(releases, display);
+  match first.first().cloned() {
+    Some(head) => Ok(resolved(head, &first[1..], Some(artist_uri.to_string()))),
+    None => Err(VoiceResolveError::NoMatch),
+  }
+}
+
+fn earliest_first(releases: Vec<Release>, artist: &str) -> Vec<Candidate> {
+  let mut releases = releases;
+  releases.sort_by_key(|r| (live_recording(&r.name), r.released, std::cmp::Reverse(r.popularity)));
+  releases
+    .into_iter()
+    .map(|r| Candidate {
+      uri: r.uri,
+      display: r.name,
+      kind: VoiceTargetKind::Album,
+      artist: Some(artist.to_string()),
+      year: Some(r.released.0),
+    })
+    .collect()
+}
+
 async fn resolve_search(client: &SpotifyClient, req: &VoiceResolveRequest, query: &str) -> VoiceResult<VoiceResolved> {
   if query.is_empty() {
     return Err(VoiceResolveError::NoMatch);
+  }
+  if wants_personal_mix(req)
+    && matches!(req.target_type, None | Some(VoiceTargetKind::Playlist))
+    && let Some(mixes) = personal_mix(client, query).await
+  {
+    return head_of(mixes, None);
   }
   let items = client.search_flat(query, SEARCH_LIMIT).await?;
   let mut ranked = ranked_search(&items, req);
@@ -146,7 +214,7 @@ async fn resolve_new(client: &SpotifyClient, req: &VoiceResolveRequest, query: &
       let releases = client
         .artist_releases(&artist.uri, albums_only, DISCOGRAPHY_DEPTH)
         .await?;
-      let latest = latest_first(releases);
+      let latest = latest_first(releases, &artist.display);
       if let Some(head) = latest.first().cloned() {
         return Ok(resolved(head, &latest[1..], Some(artist.uri)));
       }
@@ -269,6 +337,27 @@ fn as_station(seed: &Candidate) -> Candidate {
     artist: seed.artist.clone(),
     year: None,
   }
+}
+
+const MADE_FOR_YOU_PREFIX: &str = "spotify:playlist:37i9dQZF1E";
+
+pub fn made_for_you(uri: &str) -> bool {
+  uri.starts_with(MADE_FOR_YOU_PREFIX)
+}
+
+fn wants_personal_mix(req: &VoiceResolveRequest) -> bool {
+  req.target.is_none() && req.popularity_filter.is_none() && (req.genre.is_some() || req.mood.is_some())
+}
+
+async fn personal_mix(client: &SpotifyClient, label: &str) -> Option<Vec<Candidate>> {
+  let want = format!("{} mix", norm(label));
+  let items = client.search_flat(&format!("{label} mix"), SEARCH_LIMIT).await.ok()?;
+  let mut ranked = rank(&items, Pick::Playlist);
+  let mine = ranked
+    .iter()
+    .position(|c| made_for_you(&c.uri) && norm(&c.display) == want)?;
+  ranked[..=mine].rotate_right(1);
+  Some(ranked)
 }
 
 fn anchored_kind(req: &VoiceResolveRequest, query: &str) -> Option<VoiceTargetKind> {
@@ -410,18 +499,34 @@ fn returned_artists(items: &[FlatItem]) -> HashSet<String> {
     .collect()
 }
 
-fn norm(s: &str) -> String {
+pub fn norm(s: &str) -> String {
   let lowered = s.to_lowercase().replace('&', " and ");
-  let tokens = lowered
-    .split(|c: char| !c.is_alphanumeric())
-    .filter(|t| !t.is_empty());
+  let tokens = lowered.split(|c: char| !c.is_alphanumeric()).filter(|t| !t.is_empty());
   merge_number_words(tokens).join(" ")
 }
 
 fn number_word(token: &str) -> Option<u32> {
   let units = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
-    "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
   ];
   let tens = [
     "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
@@ -495,6 +600,13 @@ fn title_tier(display: &str, want: &Want) -> u8 {
   u8::from(want.title.split(' ').all(|t| words.contains(t)))
 }
 
+fn artist_hint(want: &Want) -> Option<&str> {
+  want
+    .artist
+    .as_deref()
+    .or(want.artist_shaped.then_some(want.title.as_str()))
+}
+
 fn artist_hit(c: &Candidate, want: &Want) -> bool {
   match (&want.artist, &c.artist) {
     (Some(w), Some(a)) => norm(a) == *w,
@@ -502,15 +614,30 @@ fn artist_hit(c: &Candidate, want: &Want) -> bool {
   }
 }
 
+fn artist_conflict(c: &Candidate, want: &Want) -> bool {
+  match (artist_hint(want), &c.artist) {
+    (Some(w), Some(a)) => norm(a) != w,
+    _ => false,
+  }
+}
+
 fn year_hit(c: &Candidate, want: &Want) -> bool {
   match (want.years, c.year) {
-    (Some((lo, hi)), Some(y)) => (lo..=hi).contains(&y),
+    (Some((lo, hi)), Some(y)) => (lo..=hi).contains(&y) && !artist_conflict(c, want),
     _ => false,
   }
 }
 
 fn scored(mut ranked: Vec<Candidate>, want: &Want) -> Vec<Candidate> {
-  ranked.sort_by_key(|c| std::cmp::Reverse((year_hit(c, want), title_tier(&c.display, want), artist_hit(c, want))));
+  ranked.sort_by_key(|c| {
+    std::cmp::Reverse((
+      year_hit(c, want),
+      title_tier(&c.display, want),
+      want.artist.is_some() && c.kind != VoiceTargetKind::Artist,
+      artist_hit(c, want),
+      !live_recording(&c.display),
+    ))
+  });
   ranked
 }
 
@@ -529,7 +656,10 @@ async fn with_discography(
   items: &[FlatItem],
 ) -> Vec<Candidate> {
   let artists = rank(items, Pick::Kind(VoiceTargetKind::Artist));
-  let named = want.artist.as_deref().or(want.artist_shaped.then_some(want.title.as_str()));
+  let named = want
+    .artist
+    .as_deref()
+    .or(want.artist_shaped.then_some(want.title.as_str()));
   let anchor = named
     .and_then(|name| artists.iter().find(|c| norm(&c.display) == name))
     .or(artists.first());
@@ -664,16 +794,32 @@ fn artist_anchor(items: &[FlatItem], req: &VoiceResolveRequest) -> Option<Candid
     .cloned()
 }
 
-fn latest_first(releases: Vec<Release>) -> Vec<Candidate> {
+fn live_recording(name: &str) -> bool {
+  let n = norm(name);
+  let padded = format!(" {n} ");
+  ["live at", "live in", "live from"]
+    .iter()
+    .any(|p| padded.contains(&format!(" {p} ")))
+    || n.ends_with(" live")
+    || padded.contains(" unplugged ")
+}
+
+fn latest_first(releases: Vec<Release>, artist: &str) -> Vec<Candidate> {
   let mut releases = releases;
-  releases.sort_by_key(|r| (std::cmp::Reverse(r.released), std::cmp::Reverse(r.popularity)));
+  releases.sort_by_key(|r| {
+    (
+      live_recording(&r.name),
+      std::cmp::Reverse(r.released),
+      std::cmp::Reverse(r.popularity),
+    )
+  });
   releases
     .into_iter()
     .map(|r| Candidate {
       uri: r.uri,
       display: r.name,
       kind: VoiceTargetKind::Album,
-      artist: None,
+      artist: Some(artist.to_string()),
       year: Some(r.released.0),
     })
     .collect()
@@ -778,6 +924,8 @@ fn resolved(head: Candidate, rest: &[Candidate], context_uri: Option<String>) ->
     context_uri,
     display: head.display,
     kind: head.kind,
+    artist: head.artist,
+    year: head.year,
     alternatives: rest
       .iter()
       .take(ALTERNATIVES)
@@ -1211,18 +1359,149 @@ mod tests {
   }
 
   #[test]
+  fn the_first_release_is_the_oldest_date_and_the_canonical_cut_of_it() {
+    let first = earliest_first(
+      vec![
+        release("spotify:album:newer", (2015, 5, 17), 90),
+        release("spotify:album:debut", (2009, 12, 29), 55),
+        release("spotify:album:debutlive", (2009, 12, 29), 12),
+      ],
+      "Some Artist",
+    );
+    assert_eq!(
+      first.iter().map(|c| c.uri.as_str()).collect::<Vec<_>>(),
+      ["spotify:album:debut", "spotify:album:debutlive", "spotify:album:newer"],
+      "a same-day sibling is a cut of one release; popularity picks the canonical one"
+    );
+    assert_eq!(first[0].kind, VoiceTargetKind::Album);
+    assert_eq!(first[0].artist.as_deref(), Some("Some Artist"));
+    assert_eq!(first[0].year, Some(2009));
+  }
+
+  #[tokio::test]
+  async fn a_first_request_with_no_discography_degrades_to_the_plain_search() {
+    let (client, _log) = searching_client(Arc::new(NullObserver), &["spotify:album:a1"]);
+    let out = resolve(
+      &client,
+      VoiceResolveRequest {
+        target: Some("some band".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        popularity_filter: Some(VoicePopularity::First),
+        ..Default::default()
+      },
+    )
+    .await
+    .expect("an unreachable discography degrades rather than failing");
+    assert_eq!(out.uri, "spotify:album:a1");
+  }
+
+  #[tokio::test]
+  async fn a_bare_first_request_with_nothing_playing_is_a_typed_error() {
+    let client = test_client(Arc::new(NullObserver));
+    let err = resolve(&client, filtered(VoicePopularity::First)).await.unwrap_err();
+    assert!(
+      matches!(err, VoiceResolveError::NoAnchorContext),
+      "a debut of nothing named and nothing playing has no anchor: {err:?}"
+    );
+  }
+
+  #[test]
   fn the_latest_release_is_the_newest_date_and_the_canonical_cut_of_it() {
-    let latest = latest_first(vec![
-      release("spotify:album:deluxe", (2026, 5, 15), 84),
-      release("spotify:album:flagship", (2026, 5, 15), 96),
-      release("spotify:album:older", (2025, 2, 14), 99),
-    ]);
+    let latest = latest_first(
+      vec![
+        release("spotify:album:deluxe", (2026, 5, 15), 84),
+        release("spotify:album:flagship", (2026, 5, 15), 96),
+        release("spotify:album:older", (2025, 2, 14), 99),
+      ],
+      "Some Artist",
+    );
     assert_eq!(
       latest.iter().map(|c| c.uri.as_str()).collect::<Vec<_>>(),
       ["spotify:album:flagship", "spotify:album:deluxe", "spotify:album:older"],
       "a same-day sibling is a cut of one release; popularity picks the canonical one"
     );
     assert_eq!(latest[0].kind, VoiceTargetKind::Album);
+  }
+
+  fn named_release(uri: &str, name: &str, released: (i32, i32, i32)) -> Release {
+    Release {
+      uri: uri.to_string(),
+      name: name.to_string(),
+      released,
+      popularity: 50,
+    }
+  }
+
+  #[test]
+  fn a_live_recording_never_outranks_a_studio_release_by_date_alone() {
+    let releases = vec![
+      named_release("spotify:album:live", "More Than We Ever Imagined (Live in Mexico City)", (2026, 3, 1)),
+      named_release("spotify:album:studio", "Breach", (2025, 9, 12)),
+      named_release("spotify:album:debutlive", "Early Days Live", (2008, 1, 1)),
+      named_release("spotify:album:debut", "Twenty One Pilots", (2009, 12, 29)),
+    ];
+    assert_eq!(
+      latest_first(releases.clone(), "A").iter().map(|c| c.uri.as_str()).collect::<Vec<_>>(),
+      [
+        "spotify:album:studio",
+        "spotify:album:debut",
+        "spotify:album:live",
+        "spotify:album:debutlive"
+      ],
+      "the newest album is the newest studio album; live cuts sit after every studio release"
+    );
+    assert_eq!(
+      earliest_first(releases, "A").first().map(|c| c.uri.as_str()),
+      Some("spotify:album:debut"),
+      "the debut is the earliest studio release, not an earlier live tape"
+    );
+  }
+
+  #[test]
+  fn live_detection_reads_recording_shapes_not_the_word_alone() {
+    for name in [
+      "More Than We Ever Imagined (Live in Mexico City)",
+      "Live at Wembley",
+      "MTV Unplugged (Live)",
+      "Alchemy Live",
+      "Live From the Fillmore",
+    ] {
+      assert!(live_recording(name), "{name:?} is a live recording");
+    }
+    for name in ["Live Through This", "Alive", "Living Things", "Breach", "Lively"] {
+      assert!(!live_recording(name), "{name:?} is not a live recording");
+    }
+  }
+
+  #[tokio::test]
+  async fn a_year_tie_prefers_the_studio_cut_but_a_named_live_album_still_wins() {
+    let items = vec![
+      named_hit("spotify:artist:top", "Twenty One Pilots"),
+      album_hit(
+        "spotify:album:live",
+        "More Than We Ever Imagined (Live in Mexico City)",
+        "Twenty One Pilots",
+        2025,
+      ),
+      album_hit("spotify:album:breach", "Breach", "Twenty One Pilots", 2025),
+    ];
+    let uri = resolved_uri(
+      items.clone(),
+      VoiceResolveRequest {
+        target: Some("twenty one pilots".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: Some("2025".into()),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(uri, "spotify:album:breach", "same year, the studio cut wins");
+    let named = resolved_uri(
+      items,
+      req(Some("more than we ever imagined live in mexico city"), Some(VoiceTargetKind::Album)),
+    )
+    .await;
+    assert_eq!(named, "spotify:album:live", "naming the live album is the explicit request");
   }
 
   #[test]
@@ -1432,7 +1711,12 @@ mod tests {
         "Twenty One Pilots",
         2025,
       ),
-      album_hit("spotify:album:selftitled", "Twenty One Pilots", "Twenty One Pilots", 2009),
+      album_hit(
+        "spotify:album:selftitled",
+        "Twenty One Pilots",
+        "Twenty One Pilots",
+        2009,
+      ),
       album_hit("spotify:album:vessel", "Vessel", "Twenty One Pilots", 2013),
     ]
   }
@@ -1459,6 +1743,15 @@ mod tests {
       let uri = resolved_uri(top_catalog(), req(Some(target), Some(VoiceTargetKind::Album))).await;
       assert_eq!(uri, "spotify:album:selftitled", "{target:?} splits at the last by");
     }
+  }
+
+  #[tokio::test]
+  async fn an_untyped_confirmed_by_phrase_names_a_work_never_the_artist() {
+    let uri = resolved_uri(top_catalog(), req(Some("twenty one pilots by twenty one pilots"), None)).await;
+    assert_eq!(
+      uri, "spotify:album:selftitled",
+      "nobody says 'the artist by the artist'; the head names a work"
+    );
   }
 
   #[tokio::test]
@@ -1493,6 +1786,34 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_year_match_on_the_wrong_artist_never_beats_the_named_artist() {
+    let items = vec![
+      named_hit("spotify:artist:top", "Twenty One Pilots"),
+      album_hit("spotify:album:meek", "2013", "Meek Mill", 2013),
+      album_hit(
+        "spotify:album:selftitled",
+        "Twenty One Pilots",
+        "Twenty One Pilots",
+        2009,
+      ),
+    ];
+    let uri = resolved_uri(
+      items,
+      VoiceResolveRequest {
+        target: Some("twenty one pilots".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: Some("2013".into()),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(
+      uri, "spotify:album:selftitled",
+      "a stranger's album that happens to carry the year is not the request"
+    );
+  }
+
+  #[tokio::test]
   async fn an_era_decade_bounds_the_years() {
     let items = vec![
       album_hit("spotify:album:innuendo", "Innuendo", "Queen", 1991),
@@ -1515,10 +1836,18 @@ mod tests {
   async fn an_edition_suffix_still_matches_its_title() {
     let items = vec![
       album_hit("spotify:album:trench", "Trench", "Twenty One Pilots", 2018),
-      album_hit("spotify:album:blurryface", "Blurryface (Deluxe)", "Twenty One Pilots", 2015),
+      album_hit(
+        "spotify:album:blurryface",
+        "Blurryface (Deluxe)",
+        "Twenty One Pilots",
+        2015,
+      ),
     ];
     let uri = resolved_uri(items, req(Some("blurryface"), Some(VoiceTargetKind::Album))).await;
-    assert_eq!(uri, "spotify:album:blurryface", "a parenthetical edition is the same album");
+    assert_eq!(
+      uri, "spotify:album:blurryface",
+      "a parenthetical edition is the same album"
+    );
   }
 
   #[tokio::test]
@@ -1547,6 +1876,103 @@ mod tests {
     )
     .await;
     assert_eq!(uri, "spotify:album:first", "nothing named means relevance decides");
+  }
+
+  // ---- generic vibe requests prefer the user's own mixes --------------------
+
+  fn mix_catalog() -> Vec<crate::proto::custom::searchview::SearchItem> {
+    vec![
+      named_hit("spotify:playlist:37i9dQZF1DWmarrow0000000", "MARROW"),
+      named_hit("spotify:playlist:37i9dQZF1EIgalt00000000", "Alternative Mix"),
+      named_hit("spotify:playlist:37i9dQZF1EIfeel0000000", "Feel Good Alternative Mix"),
+    ]
+  }
+
+  fn generic(kind: Option<VoiceTargetKind>, genre: &str) -> VoiceResolveRequest {
+    VoiceResolveRequest {
+      target_type: kind,
+      genre: Some(genre.into()),
+      ..Default::default()
+    }
+  }
+
+  #[tokio::test]
+  async fn a_generic_genre_station_plays_the_users_own_mix() {
+    let uri = resolved_uri(mix_catalog(), generic(Some(VoiceTargetKind::Station), "alternative")).await;
+    assert_eq!(
+      uri, "spotify:playlist:37i9dQZF1EIgalt00000000",
+      "generic means for-you; the editorial station is only for those who name it"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_generic_genre_play_lands_on_the_users_own_mix() {
+    for kind in [None, Some(VoiceTargetKind::Playlist)] {
+      let uri = resolved_uri(mix_catalog(), generic(kind, "alternative")).await;
+      assert_eq!(uri, "spotify:playlist:37i9dQZF1EIgalt00000000", "{kind:?}");
+    }
+  }
+
+  #[tokio::test]
+  async fn a_named_editorial_station_stays_name_addressable() {
+    let items = mix_catalog();
+    let uri = resolved_uri(
+      items,
+      VoiceResolveRequest {
+        target: Some("marrow".into()),
+        target_type: Some(VoiceTargetKind::Station),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert_eq!(
+      uri, "spotify:station:playlist:37i9dQZF1DWmarrow0000000",
+      "naming a station is not a generic request"
+    );
+  }
+
+  #[tokio::test]
+  async fn without_a_made_for_you_mix_a_generic_station_seeds_editorial_as_before() {
+    let items = vec![
+      named_hit("spotify:playlist:37i9dQZF1DWmarrow0000000", "MARROW"),
+      named_hit("spotify:playlist:5FJ4jarantitled0000000", "Alternative Mix"),
+    ];
+    let uri = resolved_uri(items, generic(Some(VoiceTargetKind::Station), "alternative")).await;
+    assert_eq!(
+      uri, "spotify:station:playlist:37i9dQZF1DWmarrow0000000",
+      "a stranger's playlist that happens to be named like a mix is not the user's mix"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_generic_track_request_never_answers_with_a_playlist_mix() {
+    let items = vec![
+      track_hit("spotify:track:alt1", "Some Alternative Song", "Somebody"),
+      named_hit("spotify:playlist:37i9dQZF1EIgalt00000000", "Alternative Mix"),
+    ];
+    let uri = resolved_uri(items, generic(Some(VoiceTargetKind::Track), "alternative")).await;
+    assert_eq!(uri, "spotify:track:alt1", "a song request answers with a song");
+  }
+
+  #[tokio::test]
+  async fn a_filtered_genre_request_belongs_to_its_filter_not_the_mix() {
+    let (client, log) = searching_client_items(Arc::new(NullObserver), mix_catalog());
+    let out = resolve(
+      &client,
+      VoiceResolveRequest {
+        genre: Some("alternative".into()),
+        popularity_filter: Some(VoicePopularity::New),
+        ..Default::default()
+      },
+    )
+    .await
+    .expect("the filter answers");
+    assert_eq!(
+      log.queries().first().map(String::as_str),
+      Some("alternative tag:new"),
+      "a new-releases request asks the catalog, not the mixes"
+    );
+    assert!(!out.uri.is_empty());
   }
 
   // ---- bare kinds anchored to now playing ----------------------------------
@@ -1852,6 +2278,31 @@ mod live {
       let out = live_album(&client, "twenty one pilots", Some(era)).await;
       show(&format!("year {era}"), &out);
       assert_eq!(out.uri, want, "era {era} discriminates the release");
+    }
+    client.disconnect().await;
+  }
+
+  #[tokio::test]
+  async fn live_a_first_request_reads_the_discography_from_the_oldest_end() {
+    if !enabled() {
+      return;
+    }
+    let client = client().await;
+    for (target, want_year) in [("twenty one pilots", 2009), ("taylor swift", 2006)] {
+      let out = resolve(
+        &client,
+        VoiceResolveRequest {
+          target: Some(target.into()),
+          target_type: Some(VoiceTargetKind::Album),
+          popularity_filter: Some(VoicePopularity::First),
+          ..Default::default()
+        },
+      )
+      .await
+      .unwrap_or_else(|e| panic!("first resolve for {target:?}: {e:?}"));
+      show(&format!("first {target}"), &out);
+      assert_eq!(out.kind, VoiceTargetKind::Album);
+      assert_eq!(out.year, Some(want_year), "{target:?} debut year; got {:?}", out.display);
     }
     client.disconnect().await;
   }
