@@ -1,7 +1,7 @@
 {
   "id": "019fba62-c64a-73a1-bcc0-4d2a75b34117",
   "name": "Voice Debug",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Live view of the voice pipeline: wake word, uplink, transcript, intent and dispatch.",
   "icon": "icon.svg",
   "rendersVoiceDisplay": true,
