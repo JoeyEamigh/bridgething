@@ -14,7 +14,7 @@ use bridgething_delivery::{
 };
 use libbridgething::gateway::WebappResourceKind;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
 use uuid::Uuid;
 
 use crate::{
@@ -540,6 +540,16 @@ pub async fn ota_dismiss_run(shell: State<'_, Arc<Shell>>) -> Answer<()> {
   let device_id = peer(&shell)?;
   shell.ota().dismiss_run(&device_id).await;
   Ok(())
+}
+
+#[tauri::command]
+pub fn restart<R: Runtime>(app: AppHandle<R>) {
+  crate::process::restart(&app)
+}
+
+#[tauri::command]
+pub fn quit<R: Runtime>(app: AppHandle<R>) {
+  crate::process::leave(&app)
 }
 
 fn spool(path: PathBuf) -> Answer<Arc<FileSource>> {

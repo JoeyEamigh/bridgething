@@ -5,6 +5,7 @@ pub mod commands;
 pub mod hints;
 pub mod known_device;
 pub mod logs;
+pub mod process;
 pub mod route;
 pub mod shell;
 pub mod sources;
@@ -96,6 +97,8 @@ macro_rules! desktop_commands {
       $crate::commands::known_devices,
       $crate::commands::set_device_auto_connect,
       $crate::commands::forget_known_device,
+      $crate::commands::restart,
+      $crate::commands::quit,
     ]
   };
 }
@@ -121,7 +124,6 @@ pub fn run() {
     ))
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_process::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(move |app| {
       app.manage(verbosity);
@@ -162,6 +164,11 @@ pub fn run() {
     })
     .on_window_event(tray::on_window_event)
     .invoke_handler(desktop_commands!())
-    .run(tauri::generate_context!())
-    .expect("the desktop shell runs");
+    .build(tauri::generate_context!())
+    .expect("the desktop shell runs")
+    .run(|app, event| {
+      if let tauri::RunEvent::ExitRequested { .. } = event {
+        process::leave(app);
+      }
+    });
 }

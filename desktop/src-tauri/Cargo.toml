@@ -33,6 +33,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 directories = "6.0.0"
 iana-time-zone = "0.1.65"
 libbridgething = { path = "../../crates/lib" }
+libc = "0.2.189"
 rustls = { version = "0.23.43", features = ["ring"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
@@ -41,7 +42,6 @@ tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-dialog = "2.7.2"
-tauri-plugin-process = "2.3.1"
 tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-updater = "2.10.1"
 thiserror.workspace = true

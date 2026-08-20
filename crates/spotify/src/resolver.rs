@@ -1435,13 +1435,20 @@ mod tests {
   #[test]
   fn a_live_recording_never_outranks_a_studio_release_by_date_alone() {
     let releases = vec![
-      named_release("spotify:album:live", "More Than We Ever Imagined (Live in Mexico City)", (2026, 3, 1)),
+      named_release(
+        "spotify:album:live",
+        "More Than We Ever Imagined (Live in Mexico City)",
+        (2026, 3, 1),
+      ),
       named_release("spotify:album:studio", "Breach", (2025, 9, 12)),
       named_release("spotify:album:debutlive", "Early Days Live", (2008, 1, 1)),
       named_release("spotify:album:debut", "Twenty One Pilots", (2009, 12, 29)),
     ];
     assert_eq!(
-      latest_first(releases.clone(), "A").iter().map(|c| c.uri.as_str()).collect::<Vec<_>>(),
+      latest_first(releases.clone(), "A")
+        .iter()
+        .map(|c| c.uri.as_str())
+        .collect::<Vec<_>>(),
       [
         "spotify:album:studio",
         "spotify:album:debut",
@@ -1498,10 +1505,16 @@ mod tests {
     assert_eq!(uri, "spotify:album:breach", "same year, the studio cut wins");
     let named = resolved_uri(
       items,
-      req(Some("more than we ever imagined live in mexico city"), Some(VoiceTargetKind::Album)),
+      req(
+        Some("more than we ever imagined live in mexico city"),
+        Some(VoiceTargetKind::Album),
+      ),
     )
     .await;
-    assert_eq!(named, "spotify:album:live", "naming the live album is the explicit request");
+    assert_eq!(
+      named, "spotify:album:live",
+      "naming the live album is the explicit request"
+    );
   }
 
   #[test]
@@ -2302,7 +2315,12 @@ mod live {
       .unwrap_or_else(|e| panic!("first resolve for {target:?}: {e:?}"));
       show(&format!("first {target}"), &out);
       assert_eq!(out.kind, VoiceTargetKind::Album);
-      assert_eq!(out.year, Some(want_year), "{target:?} debut year; got {:?}", out.display);
+      assert_eq!(
+        out.year,
+        Some(want_year),
+        "{target:?} debut year; got {:?}",
+        out.display
+      );
     }
     client.disconnect().await;
   }

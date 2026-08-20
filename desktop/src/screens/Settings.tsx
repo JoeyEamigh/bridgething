@@ -11,7 +11,6 @@ import {
   Switch,
   useSession,
 } from '@bridgething/ui';
-import { exit } from '@tauri-apps/plugin-process';
 import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
@@ -21,6 +20,7 @@ import { SelfUpdate } from '../components/SelfUpdate.tsx';
 import { useDesktop } from '../desktop.ts';
 import { bytes } from '../lib/format.ts';
 import { Icon, type IconName } from '../lib/icons.tsx';
+import { quit } from '../lib/lifecycle.ts';
 import { autostart, setAutostart } from '../stores/autostart.ts';
 import {
   autoResume,
@@ -161,7 +161,7 @@ export function SettingsScreen(): VNode {
             title="quit bridgething"
             subtitle="the Car Thing keeps running whatever is on its screen"
             destructive
-            onClick={() => void exit(0)}
+            onClick={() => void quit()}
           />
         </ListGroup>
       </Section>

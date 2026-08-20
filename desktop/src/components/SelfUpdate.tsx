@@ -1,11 +1,11 @@
 import { Button, ListGroup, ListRow, Pill, SectionEmpty, SectionHeader, Spinner, describeError } from '@bridgething/ui';
-import { relaunch } from '@tauri-apps/plugin-process';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
 import { bytes } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
+import { restart } from '../lib/lifecycle.ts';
 import { Progress } from './Progress.tsx';
 import { ErrorNote, Hint, Section } from './Screen.tsx';
 
@@ -99,7 +99,7 @@ export function SelfUpdate({ version }: { version: string | undefined }): VNode 
             title="the update is installed"
             subtitle="restart to run it"
             trailing={
-              <Button size="sm" variant="primary" onClick={() => void relaunch()}>
+              <Button size="sm" variant="primary" onClick={() => void restart()}>
                 restart now
               </Button>
             }
