@@ -358,6 +358,7 @@ export type SessionEvent =
   | { otaRunChanged: { run: OtaRun } }
   | { otaAvailableChanged: { available: OtaAvailable } }
   | { otaPollChanged: { status: OtaPollStatus } }
+  | { companionUpdateProgress: { received: number; total: number } }
   | 'resumed';
 
 export type SessionHostInfo = {

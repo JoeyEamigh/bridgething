@@ -6,6 +6,7 @@ type Modules = {
   storage: typeof import('../lib/storage');
   webapps: typeof import('../lib/webapps');
   ota: typeof import('../lib/ota');
+  companionUpdate: typeof import('../lib/companion-update');
   bridge: typeof import('../lib/bridge');
   catalog: typeof import('../lib/catalog');
   diagnostics: typeof import('../lib/diagnostics');
@@ -24,6 +25,7 @@ const MMKV_KEYS = [
   'setup.voiceIntro',
   'device.ledger',
   'catalog.sources',
+  'companionUpdate.dismissed',
 ];
 
 export type RigOptions = { platform?: 'ios' | 'android' };
@@ -51,6 +53,8 @@ function build(opts: RigOptions, carry?: Record<string, string>): Rig {
   const session = require('../lib/session') as Modules['session'];
   const webapps = require('../lib/webapps') as Modules['webapps'];
   const ota = require('../lib/ota') as Modules['ota'];
+  const companionUpdate =
+    require('../lib/companion-update') as Modules['companionUpdate'];
   const catalog = require('../lib/catalog') as Modules['catalog'];
   const diagnostics = require('../lib/diagnostics') as Modules['diagnostics'];
   const permissions =
@@ -60,6 +64,7 @@ function build(opts: RigOptions, carry?: Record<string, string>): Rig {
   session.registerSessionDomain();
   webapps.registerWebappsDomain();
   ota.registerOtaDomain();
+  companionUpdate.registerCompanionUpdateDomain();
   bridge.startBridge();
 
   const native = nitro.fakeNative();
@@ -70,6 +75,7 @@ function build(opts: RigOptions, carry?: Record<string, string>): Rig {
     storage,
     webapps,
     ota,
+    companionUpdate,
     bridge,
     catalog,
     diagnostics,

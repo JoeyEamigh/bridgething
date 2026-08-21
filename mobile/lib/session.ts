@@ -20,6 +20,7 @@ import {
   startBridge,
 } from './bridge';
 import { startDiagnostics } from './diagnostics';
+import { registerCompanionUpdateDomain } from './companion-update';
 import { registerOtaDomain } from './ota';
 import { requestBluetoothConnect } from './permissions';
 import type { Tone } from './theme';
@@ -204,6 +205,7 @@ export async function bootstrapSession(): Promise<void> {
   registerSessionDomain();
   registerWebappsDomain();
   registerOtaDomain();
+  registerCompanionUpdateDomain();
   startBridge();
   if (useSessionStore.getState().started) return;
   await getSession().start();

@@ -1,0 +1,29 @@
+appId: com.bridgething.gateway
+name: surfaces an app update from the held update host and can skip it
+tags:
+  - android-only
+---
+- runFlow: ../common/fresh-start.yaml
+- assertNotVisible: "app update v99.0.0"
+- tapOn: "dev gateway"
+- scrollUntilVisible:
+    element: "update host"
+    direction: DOWN
+- tapOn:
+    id: "update-host"
+- inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}"
+- pressKey: Enter
+- tapOn: "apps"
+- tapOn: "apps"
+- extendedWaitUntil:
+    visible: "app update v99.0.0"
+    timeout: 30000
+- assertVisible: ".*apk from ${FIXTURE_HOST}.*"
+- tapOn: "skip this version"
+- assertNotVisible: "app update v99.0.0"
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "dev gateway"
+    timeout: 30000
+- assertNotVisible: "app update v99.0.0"

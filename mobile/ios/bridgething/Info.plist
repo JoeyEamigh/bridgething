@@ -4,6 +4,8 @@
 <dict>
 	<key>BRIDGETHING_AUTH_PSK</key>
 	<string>$(BRIDGETHING_AUTH_PSK)</string>
+	<key>BRIDGETHING_DEV_GATEWAY</key>
+	<string>$(BRIDGETHING_DEV_GATEWAY)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

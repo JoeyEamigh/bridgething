@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.core.content.FileProvider
 import com.bridgething.companion.BridgethingCompanion
 import com.bridgething.companion.CompanionLogs
 import com.bridgething.companion.LogcatCapture
@@ -153,6 +154,9 @@ public class HybridBridgethingSessionImpl(
     private var onVoiceModelStateChanged: ((BridgethingVoiceModelState) -> Unit)? = null
 
     @Volatile
+    private var onCompanionUpdateProgress: ((Double, Double) -> Unit)? = null
+
+    @Volatile
     private var onVoiceTurnChanged: ((BridgethingVoiceTurn) -> Unit)? = null
 
     @Volatile
@@ -249,6 +253,10 @@ public class HybridBridgethingSessionImpl(
                 if (foreground) onOtaAvailableChanged?.invoke(toRnOtaAvailable(event.available))
             is SessionEvent.OtaPollChanged ->
                 if (foreground) onOtaPollChanged?.invoke(toRnOtaPollStatus(event.status))
+            is SessionEvent.CompanionUpdateProgress ->
+                if (foreground) {
+                    onCompanionUpdateProgress?.invoke(event.received.toDouble(), event.total.toDouble())
+                }
             is SessionEvent.Resumed -> {
                 val gen = foregroundGen.get()
                 scope.launch {
@@ -415,9 +423,9 @@ public class HybridBridgethingSessionImpl(
         }
     }
 
-    override suspend fun webappSettingsPage(deviceId: String, id: String): String {
+    override suspend fun webappSettingsMarkup(deviceId: String, id: String): String {
         val resolved = requireSession().webappResource(deviceId, id, WebappResourceKind.SETTINGS)
-        return Uri.fromFile(File(resolved.path)).toString()
+        return File(resolved.path).readText()
     }
 
     override suspend fun listWebappConfig(deviceId: String, id: String): Array<BridgethingConfigEntry> =
@@ -543,6 +551,20 @@ public class HybridBridgethingSessionImpl(
             val telecom = ctx.getSystemService(Context.TELECOM_SERVICE) as? android.telecom.TelecomManager
             telecom?.defaultDialerPackage == ctx.packageName
         }
+    }
+
+    override suspend fun installCompanionUpdate(url: String, filename: String, size: Double, sha256: String) {
+        val path = requireSession().downloadCompanionUpdate(
+            url,
+            filename,
+            ArtifactDigest(size = size.toLong().toULong(), sha256 = sha256.lowercase()),
+        )
+        val ctx = context.applicationContext
+        val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".fileprovider", File(path))
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        (BridgethingActivityRegistry.currentActivity ?: ctx).startActivity(intent)
     }
 
     override suspend fun requestDefaultDialer() {
@@ -674,6 +696,8 @@ public class HybridBridgethingSessionImpl(
     }
 
     override fun setOnOtaPollChanged(callback: (BridgethingOtaPollStatus) -> Unit) { onOtaPollChanged = callback }
+
+    override fun setOnCompanionUpdateProgress(callback: (Double, Double) -> Unit) { onCompanionUpdateProgress = callback }
 
     override fun setOnResumed(callback: (BridgethingSessionSnapshot) -> Unit) { onResumed = callback }
 

@@ -6,7 +6,6 @@ import { describeError } from '@bridgething/ui/errors';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import type { ShouldStartLoadRequest } from 'react-native-webview/lib/WebViewTypes';
 
 import { Note } from '../components/Note';
 import { Press } from '../components/Press';
@@ -32,7 +31,7 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
   const info = list.find(w => w.id === id) ?? null;
 
   const webviewRef = useRef<WebView<object>>(null);
-  const [pageUri, setPageUri] = useState<string | null>(null);
+  const [markup, setMarkup] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const finish = useCallback(() => navigation.goBack(), [navigation]);
@@ -56,10 +55,9 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
 
   const loadPage = useCallback(async () => {
     setError(null);
-    setPageUri(null);
+    setMarkup(null);
     try {
-      const uri = await session.webappSettingsPage(deviceId, id);
-      setPageUri(uri);
+      setMarkup(await session.webappSettingsMarkup(deviceId, id));
     } catch (err) {
       setError(describeError(err));
     }
@@ -173,7 +171,7 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
     );
   }
 
-  if (!pageUri) {
+  if (markup === null) {
     return (
       <View className="flex-1 items-center justify-center gap-3 bg-bg">
         <Spinner />
@@ -187,13 +185,9 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
   return (
     <WebView<object>
       ref={webviewRef}
-      source={{ uri: pageUri }}
-      originWhitelist={['file://*']}
-      allowFileAccess
+      source={{ html: markup }}
+      originWhitelist={[]}
       onMessage={onMessage}
-      onShouldStartLoadWithRequest={(req: ShouldStartLoadRequest) =>
-        req.url === pageUri || req.url.startsWith('file://')
-      }
       style={{ flex: 1 }}
     />
   );

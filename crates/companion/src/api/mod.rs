@@ -166,6 +166,10 @@ pub enum SessionEvent {
   OtaPollChanged {
     status: OtaPollStatus,
   },
+  CompanionUpdateProgress {
+    received: u64,
+    total: u64,
+  },
   Resumed,
 }
 
@@ -402,6 +406,46 @@ impl CompanionSession {
       .await;
     let _ = std::fs::remove_file(&path);
     installed
+  }
+
+  pub async fn download_companion_update(
+    &self,
+    url: String,
+    filename: String,
+    expected: ArtifactDigest,
+  ) -> Result<String, CompanionError> {
+    let observer = self.session.observer().clone();
+    let declared = expected.size;
+    let reported = Arc::new(std::sync::atomic::AtomicU64::new(u64::MAX));
+    let path = self
+      .session
+      .fetch()
+      .download(DownloadRequest {
+        filename,
+        dir: self.session.companion_update_dir(),
+        asset: "companion update".into(),
+        url,
+        expected: Some(bridgething_delivery::bundle::ArtifactDigest {
+          size: expected.size,
+          sha256: expected.sha256.to_lowercase(),
+        }),
+        progress: Some(Arc::new(move |received, seen| {
+          let total = if declared > 0 { declared } else { seen };
+          let step = if total > 0 { (total / 100).max(1) } else { 512 * 1024 };
+          let bucket = if received == total {
+            u64::MAX - 1
+          } else {
+            received / step
+          };
+          if reported.swap(bucket, std::sync::atomic::Ordering::Relaxed) == bucket {
+            return;
+          }
+          observer.emit(SessionEvent::CompanionUpdateProgress { received, total });
+        })),
+      })
+      .await
+      .map_err(|failure| CompanionError::Device(failure.to_string()))?;
+    Ok(path.display().to_string())
   }
 
   pub async fn uninstall_webapp(&self, device_id: String, id: String) -> Result<(), CompanionError> {

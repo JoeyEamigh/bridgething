@@ -97,6 +97,14 @@ apk:
 apk-emulator:
   bash mobile/scripts/build-apk.sh emulator
 
+# Drive the android app on the emulator against a seeded host daemon
+e2e-android *flows:
+  bash scripts/e2e-mobile.sh android {{flows}}
+
+# Drive the ios app on the simulator against a seeded host daemon
+e2e-ios *flows:
+  bash scripts/e2e-mobile.sh ios {{flows}}
+
 # Build an unsigned ipa for sideloading. Requires macos.
 ipa: companion-ios
   bash mobile/scripts/build-ipa.sh
@@ -120,6 +128,32 @@ test-all:
   set -uo pipefail
   # cheapest signal first; nothing short-circuits, so this only changes what you see soonest
   recipes=(typecheck-ts test-rust test-kotlin test-swift test-ts test-napi test-wasm)
+  declare -A result
+  failed=0
+
+  for recipe in "${recipes[@]}"; do
+    printf '\n===> %s\n' "$recipe"
+    if {{just_executable()}} --justfile {{justfile()}} "$recipe"; then
+      result[$recipe]=pass
+    else
+      result[$recipe]=FAIL
+      failed=1
+    fi
+  done
+
+  printf '\n%-13s %s\n' recipe result
+  printf '%-13s %s\n' ------------- ------
+  for recipe in "${recipes[@]}"; do
+    printf '%-13s %s\n' "$recipe" "${result[$recipe]}"
+  done
+
+  exit "$failed"
+
+# full test battery
+release-check:
+  #!/usr/bin/env bash
+  set -uo pipefail
+  recipes=(test-all e2e-android e2e-ios)
   declare -A result
   failed=0
 

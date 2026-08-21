@@ -106,6 +106,7 @@ export type SessionEvent =
   | { type: 'otaRunChanged'; run: BridgethingOtaRun }
   | { type: 'otaAvailableChanged'; available: BridgethingOtaAvailable }
   | { type: 'otaPollChanged'; status: BridgethingOtaPollStatus }
+  | { type: 'companionUpdateProgress'; received: number; total: number }
   | { type: 'resumed'; snapshot: BridgethingSessionSnapshot }
   | { type: 'log'; origin: string; level: string; message: string };
 
@@ -247,8 +248,8 @@ export class BridgethingSession {
     return this.native.webappIcon(deviceId, id);
   }
 
-  async webappSettingsPage(deviceId: string, id: string): Promise<string> {
-    return this.native.webappSettingsPage(deviceId, id);
+  async webappSettingsMarkup(deviceId: string, id: string): Promise<string> {
+    return this.native.webappSettingsMarkup(deviceId, id);
   }
 
   async listWebappConfig(deviceId: string, id: string): Promise<BridgethingConfigEntry[]> {
@@ -371,6 +372,10 @@ export class BridgethingSession {
     await this.native.requestDefaultDialer();
   }
 
+  async installCompanionUpdate(url: string, filename: string, size: number, sha256: string): Promise<void> {
+    await this.native.installCompanionUpdate(url, filename, size, sha256);
+  }
+
   async forgetCompanionDevice(mac: string): Promise<void> {
     await this.native.forgetCompanionDevice(mac);
   }
@@ -447,6 +452,9 @@ export class BridgethingSession {
     });
     this.native.setOnOtaPollChanged(status => {
       this.dispatch({ type: 'otaPollChanged', status });
+    });
+    this.native.setOnCompanionUpdateProgress((received, total) => {
+      this.dispatch({ type: 'companionUpdateProgress', received, total });
     });
     this.native.setOnResumed(snapshot => {
       this.dispatch({ type: 'resumed', snapshot });

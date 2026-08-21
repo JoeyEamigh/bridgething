@@ -27,6 +27,7 @@ node_modules
 
 # Host dev daemon state
 /.dev/
+/.e2e/
 
 # Local env files
 .env

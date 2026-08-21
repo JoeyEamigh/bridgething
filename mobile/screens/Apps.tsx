@@ -11,6 +11,7 @@ import { OtaCard } from '../components/OtaCard';
 import { PairNote } from '../components/PairNote';
 import { Pill } from '../components/Pill';
 import { Press } from '../components/Press';
+import { CompanionUpdateBanner } from '../components/CompanionUpdateBanner';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { SideloadSheet } from '../components/SideloadSheet';
@@ -43,6 +44,7 @@ export function AppsScreen({ navigation }: Props) {
   if (known.length === 0) {
     return (
       <ScrollScreen>
+        <CompanionUpdateBanner className="mb-4" />
         <NoDeviceHero onBrowseStore={() => navigation.navigate('store')} />
       </ScrollScreen>
     );
@@ -57,6 +59,8 @@ export function AppsScreen({ navigation }: Props) {
         deviceId={deviceId}
         onClose={() => setSideloadOpen(false)}
       />
+
+      <CompanionUpdateBanner className="mb-4" />
 
       <View className="mb-8">
         <ListGroup>

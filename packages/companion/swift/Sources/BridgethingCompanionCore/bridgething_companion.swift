@@ -3512,6 +3512,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func dismissOtaRun(deviceId: String) async 
     
+    func downloadCompanionUpdate(url: String, filename: String, expected: ArtifactDigest) async throws  -> String
+    
     func downloadVoiceModel() async 
     
     func fetchOtaManifest(rootUrl: String) async throws  -> OtaDiscoverManifest
@@ -3882,6 +3884,22 @@ open func dismissOtaRun(deviceId: String)async   {
             liftFunc: { $0 },
             errorHandler: nil
             
+        )
+}
+    
+open func downloadCompanionUpdate(url: String, filename: String, expected: ArtifactDigest)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_download_companion_update(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(url),FfiConverterString.lower(filename),FfiConverterTypeArtifactDigest_lower(expected)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
+            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
         )
 }
     
@@ -22695,6 +22713,8 @@ public enum SessionEvent: Equatable, Hashable {
     )
     case otaPollChanged(status: OtaPollStatus
     )
+    case companionUpdateProgress(received: UInt64, total: UInt64
+    )
     case resumed
 
 
@@ -22762,7 +22782,10 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
         case 15: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
         )
         
-        case 16: return .resumed
+        case 16: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 17: return .resumed
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -22855,8 +22878,14 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             FfiConverterTypeOtaPollStatus.write(status, into: &buf)
             
         
-        case .resumed:
+        case let .companionUpdateProgress(received,total):
             writeInt(&buf, Int32(16))
+            FfiConverterUInt64.write(received, into: &buf)
+            FfiConverterUInt64.write(total, into: &buf)
+            
+        
+        case .resumed:
+            writeInt(&buf, Int32(17))
         
         }
     }
@@ -25931,6 +25960,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_dismiss_ota_run() != 20350) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_download_companion_update() != 23445) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_download_voice_model() != 1975) {

@@ -35,7 +35,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setWebappSlot(deviceId: String, slot: BridgethingWebappSlot, id: String?) async throws
         -> BridgethingWebappSlots
     func webappIcon(deviceId: String, id: String) async throws -> BridgethingWebappIcon?
-    func webappSettingsPage(deviceId: String, id: String) async throws -> String
+    func webappSettingsMarkup(deviceId: String, id: String) async throws -> String
     func listWebappConfig(deviceId: String, id: String) async throws -> [BridgethingConfigEntry]
     func setWebappConfigField(deviceId: String, id: String, key: String, value: String) async throws
     func deleteWebappConfigField(deviceId: String, id: String, key: String) async throws
@@ -82,6 +82,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
 
     func isDefaultDialer() async -> Bool
     func requestDefaultDialer() async throws
+    func installCompanionUpdate(url: String, filename: String, size: Double, sha256: String) async throws
 
     func forgetCompanionDevice(mac: String) async throws
 
@@ -109,6 +110,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setOnOtaRunChanged(_ callback: @escaping @Sendable (BridgethingOtaRun) -> Void)
     func setOnOtaAvailableChanged(_ callback: @escaping @Sendable (BridgethingOtaAvailable) -> Void)
     func setOnOtaPollChanged(_ callback: @escaping @Sendable (BridgethingOtaPollStatus) -> Void)
+    func setOnCompanionUpdateProgress(_ callback: @escaping @Sendable (Double, Double) -> Void)
     func setOnResumed(_ callback: @escaping @Sendable (BridgethingSessionSnapshot) -> Void)
 }
 
@@ -131,6 +133,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     private static var pendingOtaRunChanged: (@Sendable (BridgethingOtaRun) -> Void)?
     private static var pendingOtaAvailableChanged: (@Sendable (BridgethingOtaAvailable) -> Void)?
     private static var pendingOtaPollChanged: (@Sendable (BridgethingOtaPollStatus) -> Void)?
+    private static var pendingCompanionUpdateProgress: (@Sendable (Double, Double) -> Void)?
     private static var pendingResumed: (@Sendable (BridgethingSessionSnapshot) -> Void)?
 
     public static func installBackend(_ backend: any BridgethingSessionBackend) {
@@ -151,6 +154,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         let otaRunCb = pendingOtaRunChanged
         let otaAvailCb = pendingOtaAvailableChanged
         let otaPollCb = pendingOtaPollChanged
+        let companionUpdateCb = pendingCompanionUpdateProgress
         let resumedCb = pendingResumed
         pendingProvidersChanged = nil
         pendingPeerConnected = nil
@@ -167,6 +171,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         pendingOtaRunChanged = nil
         pendingOtaAvailableChanged = nil
         pendingOtaPollChanged = nil
+        pendingCompanionUpdateProgress = nil
         pendingResumed = nil
         stateLock.unlock()
 
@@ -185,6 +190,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         if let otaRunCb { backend.setOnOtaRunChanged(otaRunCb) }
         if let otaAvailCb { backend.setOnOtaAvailableChanged(otaAvailCb) }
         if let otaPollCb { backend.setOnOtaPollChanged(otaPollCb) }
+        if let companionUpdateCb { backend.setOnCompanionUpdateProgress(companionUpdateCb) }
         if let resumedCb { backend.setOnResumed(resumedCb) }
     }
 
@@ -381,9 +387,9 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         }
     }
 
-    public func webappSettingsPage(deviceId: String, id: String) throws -> Promise<String> {
+    public func webappSettingsMarkup(deviceId: String, id: String) throws -> Promise<String> {
         Promise.async {
-            try await Self.backend().webappSettingsPage(deviceId: deviceId, id: id)
+            try await Self.backend().webappSettingsMarkup(deviceId: deviceId, id: id)
         }
     }
 
@@ -583,6 +589,12 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         Promise.async { try await Self.backend().requestDefaultDialer() }
     }
 
+    public func installCompanionUpdate(url: String, filename: String, size: Double, sha256: String) throws -> Promise<Void> {
+        Promise.async {
+            try await Self.backend().installCompanionUpdate(url: url, filename: filename, size: size, sha256: sha256)
+        }
+    }
+
     public func forgetCompanionDevice(mac: String) throws -> Promise<Void> {
         Promise.async { try await Self.backend().forgetCompanionDevice(mac: mac) }
     }
@@ -760,6 +772,15 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         if backend == nil { Self.pendingOtaPollChanged = wrapped }
         Self.stateLock.unlock()
         backend?.setOnOtaPollChanged(wrapped)
+    }
+
+    public func setOnCompanionUpdateProgress(callback: @escaping (Double, Double) -> Void) throws {
+        let wrapped: @Sendable (Double, Double) -> Void = { received, total in callback(received, total) }
+        Self.stateLock.lock()
+        let backend = Self._backend
+        if backend == nil { Self.pendingCompanionUpdateProgress = wrapped }
+        Self.stateLock.unlock()
+        backend?.setOnCompanionUpdateProgress(wrapped)
     }
 
     public func setOnResumed(callback: @escaping (BridgethingSessionSnapshot) -> Void) throws {

@@ -26,6 +26,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     public static var eaProtocolString: String = "com.bridgething.gateway"
 
     private static let holderLock = NSLock()
+    private static let devLaneDeviceId = "dev-gateway"
     private static var heldCompanion: BridgethingCompanion?
     private static var eventSink: (@Sendable (SessionEvent) -> Void)?
 
@@ -157,6 +158,20 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         if localDesired { CompanionLogRelay.shared.setInbox(companion.logInbox()) }
         if deviceDesired { await companion.session.setDeviceLogStreaming(enabled: true) }
         await replayHostSettings(companion.session)
+        connectDevGateway(companion.session)
+    }
+
+    private func connectDevGateway(_ session: CompanionSession) {
+        guard let url = Bundle.main.object(forInfoDictionaryKey: "BRIDGETHING_DEV_GATEWAY") as? String, !url.isEmpty else {
+            return
+        }
+        Task {
+            do {
+                try await session.connectNetwork(url: url, device: LinkDevice(id: Self.devLaneDeviceId, name: "dev gateway"))
+            } catch {
+                NSLog("bridgething.session dev gateway %@: %@", url, String(describing: error))
+            }
+        }
     }
 
     public func stop() async {
@@ -215,6 +230,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             if foreground { stateLock.withLock { onOtaAvailableChanged }?(toRNOtaAvailable(available)) }
         case let .otaPollChanged(status):
             if foreground { stateLock.withLock { onOtaPollChanged }?(toRNOtaPollStatus(status)) }
+        case .companionUpdateProgress:
+            break
         case .resumed:
             let gen = stateLock.withLock { foregroundGen }
             Task { [weak self] in
@@ -476,9 +493,9 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         return BridgethingWebappIcon(fileUri: file.absoluteString, svg: nil, mime: resolved.mime)
     }
 
-    public func webappSettingsPage(deviceId: String, id: String) async throws -> String {
+    public func webappSettingsMarkup(deviceId: String, id: String) async throws -> String {
         let resolved = try await requireSession().webappResource(deviceId: deviceId, id: id, kind: .settings)
-        return URL(fileURLWithPath: resolved.path).absoluteString
+        return try String(contentsOf: URL(fileURLWithPath: resolved.path), encoding: .utf8)
     }
 
     public func listWebappConfig(deviceId: String, id: String) async throws -> [BridgethingConfigEntry] {
@@ -629,6 +646,9 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     public func requestNotificationAccess() async throws { throw SessionError.unsupportedOnPlatform }
     public func isDefaultDialer() async -> Bool { false }
     public func requestDefaultDialer() async throws { throw SessionError.unsupportedOnPlatform }
+    public func installCompanionUpdate(url: String, filename: String, size: Double, sha256: String) async throws {
+        throw SessionError.unsupportedOnPlatform
+    }
     public func forgetCompanionDevice(mac: String) async throws {}
     public func isIgnoringBatteryOptimizations() async -> Bool { false }
     public func requestIgnoreBatteryOptimizations() async throws { throw SessionError.unsupportedOnPlatform }
@@ -698,6 +718,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     public func setOnOtaPollChanged(_ callback: @escaping @Sendable (BridgethingOtaPollStatus) -> Void) {
         stateLock.withLock { onOtaPollChanged = callback }
     }
+
+    public func setOnCompanionUpdateProgress(_ callback: @escaping @Sendable (Double, Double) -> Void) {}
 
     public func setOnResumed(_ callback: @escaping @Sendable (BridgethingSessionSnapshot) -> Void) {
         stateLock.withLock { onResumed = callback }

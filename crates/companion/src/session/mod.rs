@@ -76,6 +76,7 @@ struct LogStream {
 }
 
 const LOG_RING_CAPACITY: usize = 2000;
+const COMPANION_UPDATE_DIR: &str = "companion-update";
 const LOG_BACKFILL_LINES: u32 = 1000;
 const LOG_BACKFILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -202,6 +203,7 @@ impl Session {
         )
       });
     let cache_dir = std::path::PathBuf::from(&config.cache_dir);
+    let _ = std::fs::remove_dir_all(std::path::Path::new(&config.state_dir).join(COMPANION_UPDATE_DIR));
     let log_ring = Arc::new(DeviceLogRing::new(LOG_RING_CAPACITY, clock.clone()));
     let catalog = ProviderCatalog::new(
       config
@@ -1085,6 +1087,10 @@ impl Session {
 
   pub fn cache_dir(&self) -> std::path::PathBuf {
     std::path::PathBuf::from(&self.config.cache_dir)
+  }
+
+  pub fn companion_update_dir(&self) -> std::path::PathBuf {
+    std::path::PathBuf::from(&self.config.state_dir).join(COMPANION_UPDATE_DIR)
   }
 }
 

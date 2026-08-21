@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEV_DIR="${ROOT}/.dev"
+DEV_DIR="${BRIDGETHING_DEV_DIR:-${ROOT}/.dev}"
 PIDFILE="${DEV_DIR}/dev-daemon.pid"
 LOGFILE="${DEV_DIR}/dev-daemon.log"
 TARGET_DIR="${CARGO_TARGET_DIR:-${ROOT}/target}"
@@ -32,6 +32,10 @@ do_start() {
         exit 1
     fi
     rm -f "$PIDFILE"
+    if gateway_up; then
+        echo "[dev-daemon] something already listens on ${GATEWAY_HOST}:${GATEWAY_PORT}; stop it first" >&2
+        exit 1
+    fi
 
     mkdir -p "${DEV_DIR}/state" "${DEV_DIR}/webapps" "${DEV_DIR}/examples"
 

@@ -183,6 +183,7 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
         <Field
           label="update host"
           icon="Globe"
+          testID="update-host"
           value={hostDraft}
           onChangeText={setHostDraft}
           onCommit={commitHost}

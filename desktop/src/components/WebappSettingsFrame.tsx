@@ -125,7 +125,7 @@ export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; o
   });
 
   return (
-    <div class="flex h-full min-w-0 flex-col">
+    <div class="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <header class="flex shrink-0 items-center gap-3 border-b border-rule bg-screen px-6 py-3">
         <Button variant="ghost" size="sm" icon={<Icon name="back" size={14} />} onClick={onClose}>
           {webapp.name}

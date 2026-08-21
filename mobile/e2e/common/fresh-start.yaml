@@ -1,0 +1,50 @@
+appId: com.bridgething.gateway
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    text: "Don't show again"
+    optional: true
+- extendedWaitUntil:
+    visible: "skip for now|continue"
+    timeout: 30000
+- repeat:
+    times: 8
+    while:
+      notVisible: "open bridgething"
+    commands:
+      - runFlow:
+          when:
+            visible: "skip for now"
+          commands:
+            - tapOn:
+                text: "skip for now"
+                optional: true
+      - runFlow:
+          when:
+            visible: "continue"
+          commands:
+            - tapOn:
+                text: "continue"
+                optional: true
+      - runFlow:
+          when:
+            visible: "skip"
+          commands:
+            - tapOn:
+                text: "skip"
+                optional: true
+      - runFlow:
+          when:
+            visible: "not now"
+          commands:
+            - tapOn:
+                text: "not now"
+                optional: true
+- tapOn: "open bridgething"
+- extendedWaitUntil:
+    visible: "dev gateway"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "connected"
+    timeout: 30000

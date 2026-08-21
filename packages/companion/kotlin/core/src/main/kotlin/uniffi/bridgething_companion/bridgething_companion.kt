@@ -2283,6 +2283,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_dismiss_ota_run(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_download_companion_update(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_download_voice_model(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest(): Int
@@ -2808,6 +2810,13 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_dismiss_ota_run(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_download_companion_update(
+        `ptr`: Long,
+        `url`: RustBuffer.ByValue,
+        `filename`: RustBuffer.ByValue,
+        `expected`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_download_voice_model(`ptr`: Long): Long
@@ -4938,6 +4947,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_dismiss_ota_run() != 20350) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_download_companion_update() != 23445) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_download_voice_model() != 1975) {
@@ -10669,6 +10681,12 @@ public interface CompanionSessionInterface {
 
     suspend fun `dismissOtaRun`(`deviceId`: kotlin.String)
 
+    suspend fun `downloadCompanionUpdate`(
+        `url`: kotlin.String,
+        `filename`: kotlin.String,
+        `expected`: ArtifactDigest,
+    ): kotlin.String
+
     suspend fun `downloadVoiceModel`()
 
     suspend fun `fetchOtaManifest`(`rootUrl`: kotlin.String): OtaDiscoverManifest
@@ -11205,6 +11223,37 @@ open class CompanionSession :
             { Unit },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `downloadCompanionUpdate`(
+        `url`: kotlin.String,
+        `filename`: kotlin.String,
+        `expected`: ArtifactDigest,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_download_companion_update(
+                    uniffiHandle,
+                    FfiConverterString.lower(`url`),
+                    FfiConverterString.lower(`filename`),
+                    FfiConverterTypeArtifactDigest.lower(`expected`),
+                )
+            },
+            {
+                future,
+                callback,
+                continuation,
+                ->
+                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
+            },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -31559,6 +31608,13 @@ sealed class SessionEvent {
         companion object
     }
 
+    data class CompanionUpdateProgress(
+        val `received`: kotlin.ULong,
+        val `total`: kotlin.ULong,
+    ) : SessionEvent() {
+        companion object
+    }
+
     object Resumed : SessionEvent()
 
     companion object
@@ -31669,6 +31725,13 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
             }
 
             16 -> {
+                SessionEvent.CompanionUpdateProgress(
+                    FfiConverterULong.read(buf),
+                    FfiConverterULong.read(buf),
+                )
+            }
+
+            17 -> {
                 SessionEvent.Resumed
             }
 
@@ -31807,6 +31870,15 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 )
             }
 
+            is SessionEvent.CompanionUpdateProgress -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterULong.allocationSize(value.`received`) +
+                        FfiConverterULong.allocationSize(value.`total`)
+                )
+            }
+
             is SessionEvent.Resumed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31918,8 +31990,15 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 Unit
             }
 
-            is SessionEvent.Resumed -> {
+            is SessionEvent.CompanionUpdateProgress -> {
                 buf.putInt(16)
+                FfiConverterULong.write(value.`received`, buf)
+                FfiConverterULong.write(value.`total`, buf)
+                Unit
+            }
+
+            is SessionEvent.Resumed -> {
+                buf.putInt(17)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

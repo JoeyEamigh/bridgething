@@ -7,6 +7,7 @@ export function useAppActiveInterval(
   fn: () => void,
   intervalMs: number,
   enabled = true,
+  key: string | null = null,
 ): void {
   const appActive = useAppActive();
   const live = enabled && appActive;
@@ -20,7 +21,7 @@ export function useAppActiveInterval(
     tick();
     const id = setInterval(tick, intervalMs);
     return () => clearInterval(id);
-  }, [live, intervalMs]);
+  }, [live, intervalMs, key]);
 }
 
 export function usePoll(fn: () => void, intervalMs: number): void {

@@ -29,6 +29,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         private var pendingOtaRunChanged: ((BridgethingOtaRun) -> Unit)? = null
         private var pendingOtaAvailableChanged: ((BridgethingOtaAvailable) -> Unit)? = null
         private var pendingOtaPollChanged: ((BridgethingOtaPollStatus) -> Unit)? = null
+        private var pendingCompanionUpdateProgress: ((Double, Double) -> Unit)? = null
         private var pendingResumed: ((BridgethingSessionSnapshot) -> Unit)? = null
 
         @JvmStatic
@@ -51,6 +52,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
                     otaRun = pendingOtaRunChanged,
                     otaAvailable = pendingOtaAvailableChanged,
                     otaPoll = pendingOtaPollChanged,
+                    companionUpdateProgress = pendingCompanionUpdateProgress,
                     resumed = pendingResumed,
                 )
                 pendingProvidersChanged = null
@@ -68,6 +70,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
                 pendingOtaRunChanged = null
                 pendingOtaAvailableChanged = null
                 pendingOtaPollChanged = null
+                pendingCompanionUpdateProgress = null
                 pendingResumed = null
                 snapshot
             }
@@ -86,6 +89,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
             replay.otaRun?.let(b::setOnOtaRunChanged)
             replay.otaAvailable?.let(b::setOnOtaAvailableChanged)
             replay.otaPoll?.let(b::setOnOtaPollChanged)
+            replay.companionUpdateProgress?.let(b::setOnCompanionUpdateProgress)
             replay.resumed?.let(b::setOnResumed)
         }
 
@@ -112,6 +116,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         val otaRun: ((BridgethingOtaRun) -> Unit)?,
         val otaAvailable: ((BridgethingOtaAvailable) -> Unit)?,
         val otaPoll: ((BridgethingOtaPollStatus) -> Unit)?,
+        val companionUpdateProgress: ((Double, Double) -> Unit)?,
         val resumed: ((BridgethingSessionSnapshot) -> Unit)?,
     )
 
@@ -212,8 +217,8 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         else Variant_NullType_BridgethingWebappIcon.First(NullType.NULL)
     }
 
-    override fun webappSettingsPage(deviceId: String, id: String): Promise<String> = Promise.async {
-        require().webappSettingsPage(deviceId, id)
+    override fun webappSettingsMarkup(deviceId: String, id: String): Promise<String> = Promise.async {
+        require().webappSettingsMarkup(deviceId, id)
     }
 
     override fun listWebappConfig(deviceId: String, id: String): Promise<Array<BridgethingConfigEntry>> = Promise.async {
@@ -351,6 +356,10 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         require().requestDefaultDialer()
     }
 
+    override fun installCompanionUpdate(url: String, filename: String, size: Double, sha256: String): Promise<Unit> = Promise.async {
+        require().installCompanionUpdate(url, filename, size, sha256)
+    }
+
     override fun forgetCompanionDevice(mac: String): Promise<Unit> = Promise.async {
         require().forgetCompanionDevice(mac)
     }
@@ -452,6 +461,10 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
 
     override fun setOnOtaPollChanged(callback: (status: BridgethingOtaPollStatus) -> Unit) {
         forwardOrBuffer(callback, BridgethingSessionBackend::setOnOtaPollChanged) { pendingOtaPollChanged = it }
+    }
+
+    override fun setOnCompanionUpdateProgress(callback: (received: Double, total: Double) -> Unit) {
+        forwardOrBuffer(callback, BridgethingSessionBackend::setOnCompanionUpdateProgress) { pendingCompanionUpdateProgress = it }
     }
 
     override fun setOnResumed(callback: (snapshot: BridgethingSessionSnapshot) -> Unit) {

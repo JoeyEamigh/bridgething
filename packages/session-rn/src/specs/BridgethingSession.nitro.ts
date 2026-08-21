@@ -405,7 +405,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   getWebappSlots(deviceId: string): Promise<BridgethingWebappSlots>;
   setWebappSlot(deviceId: string, slot: BridgethingWebappSlot, id?: string): Promise<BridgethingWebappSlots>;
   webappIcon(deviceId: string, id: string): Promise<BridgethingWebappIcon | null>;
-  webappSettingsPage(deviceId: string, id: string): Promise<string>;
+  webappSettingsMarkup(deviceId: string, id: string): Promise<string>;
   listWebappConfig(deviceId: string, id: string): Promise<BridgethingConfigEntry[]>;
   setWebappConfigField(deviceId: string, id: string, key: string, value: string): Promise<void>;
   deleteWebappConfigField(deviceId: string, id: string, key: string): Promise<void>;
@@ -451,6 +451,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
 
   isDefaultDialer(): Promise<boolean>;
   requestDefaultDialer(): Promise<void>;
+  installCompanionUpdate(url: string, filename: string, size: number, sha256: string): Promise<void>;
 
   forgetCompanionDevice(mac: string): Promise<void>;
 
@@ -483,6 +484,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   setOnOtaRunChanged(callback: (run: BridgethingOtaRun) => void): void;
   setOnOtaAvailableChanged(callback: (available: BridgethingOtaAvailable) => void): void;
   setOnOtaPollChanged(callback: (status: BridgethingOtaPollStatus) => void): void;
+  setOnCompanionUpdateProgress(callback: (received: number, total: number) => void): void;
 
   setOnResumed(callback: (snapshot: BridgethingSessionSnapshot) => void): void;
 }

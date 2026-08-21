@@ -65,7 +65,7 @@ public interface BridgethingSessionBackend {
     public suspend fun getWebappSlots(deviceId: String): BridgethingWebappSlots
     public suspend fun setWebappSlot(deviceId: String, slot: BridgethingWebappSlot, id: String?): BridgethingWebappSlots
     public suspend fun webappIcon(deviceId: String, id: String): BridgethingWebappIcon?
-    public suspend fun webappSettingsPage(deviceId: String, id: String): String
+    public suspend fun webappSettingsMarkup(deviceId: String, id: String): String
     public suspend fun listWebappConfig(deviceId: String, id: String): Array<BridgethingConfigEntry>
     public suspend fun setWebappConfigField(deviceId: String, id: String, key: String, value: String)
     public suspend fun deleteWebappConfigField(deviceId: String, id: String, key: String)
@@ -114,6 +114,7 @@ public interface BridgethingSessionBackend {
 
     public suspend fun isDefaultDialer(): Boolean
     public suspend fun requestDefaultDialer()
+    public suspend fun installCompanionUpdate(url: String, filename: String, size: Double, sha256: String)
 
     public suspend fun forgetCompanionDevice(mac: String)
 
@@ -143,6 +144,7 @@ public interface BridgethingSessionBackend {
     public fun setOnOtaAvailableChanged(callback: (BridgethingOtaAvailable) -> Unit)
 
     public fun setOnOtaPollChanged(callback: (BridgethingOtaPollStatus) -> Unit)
+    public fun setOnCompanionUpdateProgress(callback: (Double, Double) -> Unit)
 
     public fun setOnResumed(callback: (BridgethingSessionSnapshot) -> Unit)
 }
