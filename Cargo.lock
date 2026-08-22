@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-desktop"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "base64 0.23.1",
  "block2",

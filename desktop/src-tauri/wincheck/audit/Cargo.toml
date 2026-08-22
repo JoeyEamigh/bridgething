@@ -10,7 +10,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-bridgething-delivery = { version = "0.10.0", path = "../../../../crates/delivery/core" }
+bridgething-delivery = { path = "../../../../crates/delivery/core" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
 tracing = "0.1.44"

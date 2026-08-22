@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "Cargo.toml"
+      - "desktop/src-tauri/Cargo.toml"
       - ".github/workflows/release-desktop.yml"
   workflow_dispatch:
     inputs:
@@ -36,8 +36,8 @@ jobs:
           FORCE: ${{ inputs.force || 'false' }}
         run: |
           set -euo pipefail
-          version=$(grep -m1 -E '^version = ' Cargo.toml | sed -E 's/^version = "([^"]+)".*/\1/')
-          [[ -n "$version" ]] || { echo "could not read the workspace version from Cargo.toml" >&2; exit 1; }
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("desktop/src-tauri/Cargo.toml", "rb"))["package"]["version"])')
+          [[ -n "$version" ]] || { echo "could not read the desktop version from desktop/src-tauri/Cargo.toml" >&2; exit 1; }
 
           run=true
           if [[ "$FORCE" != "true" ]] \
@@ -225,7 +225,7 @@ jobs:
         id: targets
         run: |
           set -euo pipefail
-          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("desktop/src-tauri/Cargo.toml", "rb"))["package"]["version"])')
           notes="see ${PUBLIC_BASE}/desktop/${CHANNEL}/${version}/"
           released_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

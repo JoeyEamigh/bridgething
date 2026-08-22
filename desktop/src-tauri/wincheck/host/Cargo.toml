@@ -10,8 +10,8 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-bridgething-companion = { version = "0.10.0", path = "../../../../crates/companion", default-features = false }
-bridgething-delivery = { version = "0.10.0", path = "../../../../crates/delivery/core" }
+bridgething-companion = { path = "../../../../crates/companion", default-features = false }
+bridgething-delivery = { path = "../../../../crates/delivery/core" }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
 tracing = "0.1.44"
 wincheck-winrt = { version = "0.0.0", path = "winrt" }
