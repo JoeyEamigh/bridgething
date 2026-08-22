@@ -19,7 +19,7 @@ export function WebappIcon({
   name,
   size,
 }: {
-  deviceId: string;
+  deviceId: string | null;
   id: string;
   iconHash?: string;
   name: string;
@@ -29,7 +29,7 @@ export function WebappIcon({
   const [icon, setIcon] = useState<IconData | null>(null);
 
   useEffect(() => {
-    if (!iconHash) {
+    if (!iconHash || !deviceId) {
       setIcon(null);
       return;
     }

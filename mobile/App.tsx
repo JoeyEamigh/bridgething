@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CrashBoundary } from './components/CrashBoundary';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
 import { Wordmark } from './components/Wordmark';
@@ -232,7 +233,10 @@ export default function App() {
       if (cancelled) return;
       console.warn('[bridgething] bootstrap failed', err);
     });
-    void refreshCatalog();
+    refreshCatalog().catch(err => {
+      if (cancelled) return;
+      console.warn('[bridgething] catalog refresh failed', err);
+    });
     return () => {
       cancelled = true;
     };
@@ -258,15 +262,17 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={barStyle} backgroundColor={palette.bg} />
-      <NavigationContainer theme={navTheme[scheme]}>
-        <RootStack.Navigator
-          initialRouteName={boot}
-          screenOptions={{ headerShown: false }}
-        >
-          <RootStack.Screen name="Setup" component={SetupScreen} />
-          <RootStack.Screen name="Tabs" component={TabsScreen} />
-        </RootStack.Navigator>
-      </NavigationContainer>
+      <CrashBoundary>
+        <NavigationContainer theme={navTheme[scheme]}>
+          <RootStack.Navigator
+            initialRouteName={boot}
+            screenOptions={{ headerShown: false }}
+          >
+            <RootStack.Screen name="Setup" component={SetupScreen} />
+            <RootStack.Screen name="Tabs" component={TabsScreen} />
+          </RootStack.Navigator>
+        </NavigationContainer>
+      </CrashBoundary>
       <PortalHost />
     </SafeAreaProvider>
   );

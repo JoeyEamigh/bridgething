@@ -39,6 +39,13 @@ do_start() {
 
     mkdir -p "${DEV_DIR}/state" "${DEV_DIR}/webapps" "${DEV_DIR}/examples"
 
+    WAKEWORD_MODEL="${BRIDGETHING_WAKEWORD_MODEL:-${DEV_DIR}/wakeword/hey_bridgething.btww}"
+    if [ ! -f "$WAKEWORD_MODEL" ]; then
+        mkdir -p "$(dirname "$WAKEWORD_MODEL")"
+        head -c 4096 /dev/zero | tr '\0' 'w' >"$WAKEWORD_MODEL"
+        printf '%s\n' "${BRIDGETHING_WAKEWORD_VERSION:-0.1.0}" >"${WAKEWORD_MODEL%.btww}.version"
+    fi
+
     echo "[dev-daemon] building"
     cargo build -p bridgething --features test-tap
 
@@ -47,6 +54,7 @@ do_start() {
     BRIDGETHING_STATE_DIR="${DEV_DIR}/state" \
         BRIDGETHING_WEBAPPS_DIR="${DEV_DIR}/webapps" \
         BRIDGETHING_EXAMPLES_DIR="${DEV_DIR}/examples" \
+        BRIDGETHING_WAKEWORD_MODEL="$WAKEWORD_MODEL" \
         RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}" \
         nohup "$BIN" --dev </dev/null >>"$LOGFILE" 2>&1 &
     pid=$!

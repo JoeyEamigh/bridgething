@@ -5,7 +5,7 @@ tags:
 ---
 - runFlow: ../common/fresh-start.yaml
 - assertNotVisible: "app update v99.0.0"
-- tapOn: "dev gateway"
+- tapOn: ".*dev gateway.*"
 - scrollUntilVisible:
     element: "update host"
     direction: DOWN
@@ -24,6 +24,6 @@ tags:
 - stopApp
 - launchApp
 - extendedWaitUntil:
-    visible: "dev gateway"
+    visible: ".*dev gateway.*"
     timeout: 30000
 - assertNotVisible: "app update v99.0.0"

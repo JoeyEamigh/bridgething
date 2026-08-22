@@ -2,6 +2,5 @@ appId: com.bridgething.gateway
 name: links to the host daemon over the dev lane
 ---
 - runFlow: ../common/fresh-start.yaml
-- assertVisible: "dev gateway"
-- assertVisible: "connected"
-- assertVisible: "Home Assistant"
+- assertVisible: ".*dev gateway, connected.*"
+- assertVisible: ".*Home Assistant.*"

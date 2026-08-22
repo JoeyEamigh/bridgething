@@ -85,24 +85,26 @@ export function appTiles(
   const updatable = new Set(updatableIds.map(id => id.toLowerCase()));
   const active = activeId?.toLowerCase() ?? null;
 
-  return listedWebapps(list).map(info => {
-    const key = info.id.toLowerCase();
-    const builtin = info.source === 'builtin';
-    const state: AppTile['state'] = updatable.has(key)
-      ? { label: 'update', tone: 'accent' }
-      : key === active
-        ? { label: 'active', tone: 'ok' }
-        : builtin
-          ? { label: 'built-in', tone: 'neutral' }
-          : null;
-    return {
-      id: info.id,
-      name: info.name,
-      iconHash: info.iconHash,
-      builtin,
-      state,
-    };
-  });
+  return listedWebapps(list)
+    .filter(info => Boolean(info.id))
+    .map(info => {
+      const key = info.id.toLowerCase();
+      const builtin = info.source === 'builtin';
+      const state: AppTile['state'] = updatable.has(key)
+        ? { label: 'update', tone: 'accent' }
+        : key === active
+          ? { label: 'active', tone: 'ok' }
+          : builtin
+            ? { label: 'built-in', tone: 'neutral' }
+            : null;
+      return {
+        id: info.id,
+        name: info.name,
+        iconHash: info.iconHash,
+        builtin,
+        state,
+      };
+    });
 }
 
 export function installedWebapps(

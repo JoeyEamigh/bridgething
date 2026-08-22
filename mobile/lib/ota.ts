@@ -7,7 +7,7 @@ import type {
   BridgethingOtaRun,
 } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
-import { useState } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -87,22 +87,31 @@ export function useOtaRun(
   return useOtaStore(s => (deviceId ? s.runs[deviceId] : undefined));
 }
 
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useAppActiveInterval(() => setNow(Date.now()), NOW_TICK_MS, active);
-  return active ? now : Date.now();
+function sampleOtaProgress(deviceId: string): BridgethingOtaProgress | null {
+  try {
+    return getSession().otaRunProgress(deviceId, Date.now()) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function useOtaProgress(
   deviceId: string | null,
 ): (BridgethingOtaProgress & { run: BridgethingOtaRun }) | null {
   const run = useOtaRun(deviceId);
-  const timed =
+  const coasting =
     run !== undefined && run.outcome === undefined && run.phase === 'reboot';
-  const now = useNow(timed);
-  if (!run || !deviceId) return null;
-  const progress = getSession().otaRunProgress(deviceId, now);
-  return progress ? { ...progress, run } : null;
+  const [progress, setProgress] = useState<BridgethingOtaProgress | null>(null);
+
+  const sample = useCallback(() => {
+    setProgress(deviceId && run ? sampleOtaProgress(deviceId) : null);
+  }, [deviceId, run]);
+
+  useLayoutEffect(sample, [sample]);
+  useAppActiveInterval(sample, NOW_TICK_MS, coasting);
+
+  if (!run || !progress) return null;
+  return { ...progress, run };
 }
 
 export function dismissOtaRun(deviceId: string): void {

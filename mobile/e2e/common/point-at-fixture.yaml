@@ -1,0 +1,17 @@
+appId: com.bridgething.gateway
+---
+- runFlow: fresh-start.yaml
+- tapOn: ".*dev gateway.*"
+- scrollUntilVisible:
+      element: ".*install updates automatically.*"
+      direction: DOWN
+- tapOn: ".*install updates automatically.*"
+- scrollUntilVisible:
+      element: ".*update host.*"
+      direction: DOWN
+- tapOn:
+      id: "update-host"
+- inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}/m/${MODE}"
+- pressKey: Enter
+- tapOn: "apps"
+- tapOn: "apps"

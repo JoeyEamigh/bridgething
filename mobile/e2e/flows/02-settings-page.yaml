@@ -2,7 +2,7 @@ appId: com.bridgething.gateway
 name: renders a webapp settings page and talks to it over the bridge
 ---
 - runFlow: ../common/fresh-start.yaml
-- tapOn: "Home Assistant"
+- tapOn: ".*Home Assistant.*"
 - tapOn: "open Home Assistant settings"
 - extendedWaitUntil:
     visible: "Long-Lived Access Token"

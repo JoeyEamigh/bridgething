@@ -7,6 +7,7 @@ type Modules = {
   webapps: typeof import('../lib/webapps');
   ota: typeof import('../lib/ota');
   companionUpdate: typeof import('../lib/companion-update');
+  crash: typeof import('../lib/crash');
   bridge: typeof import('../lib/bridge');
   catalog: typeof import('../lib/catalog');
   diagnostics: typeof import('../lib/diagnostics');
@@ -26,6 +27,7 @@ const MMKV_KEYS = [
   'device.ledger',
   'catalog.sources',
   'companionUpdate.dismissed',
+  'crash.last',
 ];
 
 export type RigOptions = { platform?: 'ios' | 'android' };
@@ -55,6 +57,7 @@ function build(opts: RigOptions, carry?: Record<string, string>): Rig {
   const ota = require('../lib/ota') as Modules['ota'];
   const companionUpdate =
     require('../lib/companion-update') as Modules['companionUpdate'];
+  const crash = require('../lib/crash') as Modules['crash'];
   const catalog = require('../lib/catalog') as Modules['catalog'];
   const diagnostics = require('../lib/diagnostics') as Modules['diagnostics'];
   const permissions =
@@ -76,6 +79,7 @@ function build(opts: RigOptions, carry?: Record<string, string>): Rig {
     webapps,
     ota,
     companionUpdate,
+    crash,
     bridge,
     catalog,
     diagnostics,

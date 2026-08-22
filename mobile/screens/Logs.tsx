@@ -20,6 +20,7 @@ import { Note } from '../components/Note';
 import { Press } from '../components/Press';
 import { Segmented } from '../components/Segmented';
 import { Spinner } from '../components/Spinner';
+import { clearLastCrash, formatCrash, useCrashStore } from '../lib/crash';
 import {
   type DeviceLogLine,
   LOG_LIMIT,
@@ -60,6 +61,7 @@ export function LogsScreen(_: Props) {
   const setDeviceStreaming = useDiagnostics(s => s.setDeviceLogStreaming);
   const setLocalStreaming = useDiagnostics(s => s.setLocalLogStreaming);
   const clearLogs = useDiagnostics(s => s.clearDeviceLogs);
+  const crash = useCrashStore(s => s.last);
   const streaming = deviceStreaming || localStreaming;
 
   const [filter, setFilter] = useState<LevelFilter>('all');
@@ -150,6 +152,7 @@ export function LogsScreen(_: Props) {
   const clearStored = useCallback(() => {
     setClearOpen(false);
     setNotice(null);
+    clearLastCrash();
     getSession()
       .clearPersistedLogs()
       .catch((err: unknown) =>
@@ -157,6 +160,11 @@ export function LogsScreen(_: Props) {
       )
       .finally(refreshStored);
   }, [refreshStored]);
+
+  const shareCrash = useCallback(() => {
+    if (!crash) return;
+    void Share.share({ message: formatCrash(crash) }).catch(() => {});
+  }, [crash]);
 
   return (
     <SafeAreaView edges={['bottom']} className="flex-1 bg-bg">
@@ -254,6 +262,19 @@ export function LogsScreen(_: Props) {
           </Press>
         ) : null}
       </View>
+
+      {crash ? (
+        <View className="px-4 pt-2.5">
+          <Note
+            tone="err"
+            title={`previous launch ${crash.fatal ? 'crashed' : 'hit an error'}`}
+            action="share the details"
+            onAction={shareCrash}
+          >
+            {crash.message}
+          </Note>
+        </View>
+      ) : null}
 
       {notice ? (
         <View className="px-4 pt-2.5">

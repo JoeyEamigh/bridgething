@@ -43,8 +43,8 @@ appId: com.bridgething.gateway
                 optional: true
 - tapOn: "open bridgething"
 - extendedWaitUntil:
-    visible: "dev gateway"
+    visible: ".*dev gateway.*"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "connected"
+    visible: ".*dev gateway, connected.*"
     timeout: 30000

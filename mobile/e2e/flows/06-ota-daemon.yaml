@@ -1,0 +1,15 @@
+appId: com.bridgething.gateway
+name: pushes a daemon-only release without touching the image
+---
+- runFlow:
+    file: ../common/point-at-fixture.yaml
+    env:
+      MODE: daemon
+- extendedWaitUntil:
+    visible: ".*99.0.0\\+image.0.1.0 available.*"
+    timeout: 30000
+- tapOn: ".*install 99.0.0\\+image.0.1.0.*"
+- extendedWaitUntil:
+    visible: ".*update installed.*"
+    timeout: 120000
+- assertNotVisible: ".*the update did not finish.*"

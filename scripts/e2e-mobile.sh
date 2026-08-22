@@ -126,7 +126,7 @@ rm -rf "${E2E_DIR}/state" "${E2E_DIR}/webapps" "${E2E_DIR}/.seeded"
 BRIDGETHING_DEV_DIR="$E2E_DIR" "${ROOT}/scripts/dev-daemon.sh" start
 
 echo "== fixture server :${FIXTURE_PORT} =="
-E2E_FIXTURE_PORT="$FIXTURE_PORT" bun "${ROOT}/scripts/e2e/fixture-server.ts" &
+E2E_FIXTURE_PORT="$FIXTURE_PORT" BRIDGETHING_DEV_DIR="$E2E_DIR" bun "${ROOT}/scripts/e2e/fixture-server.ts" &
 fixture_pid=$!
 until curl -fsS "http://127.0.0.1:${FIXTURE_PORT}/companion.json" >/dev/null 2>&1; do sleep 0.5; done
 

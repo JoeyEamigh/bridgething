@@ -20,7 +20,6 @@ import { useUpdates } from '../lib/catalog';
 import { linkSummary } from '../lib/devices';
 import { useOta, useOtaProgress } from '../lib/ota';
 import {
-  connectedPeers,
   describePairOutcome,
   knownDevices,
   type PairNotice,
@@ -37,7 +36,9 @@ export function AppsScreen({ navigation }: Props) {
   const peers = useSession(s => s.peers);
   const ledger = useSession(s => s.ledger);
   const known = knownDevices(ledger, peers);
-  const deviceId = connectedPeers(peers)[0]?.id ?? null;
+  const primary = known[0] ?? null;
+  const deviceId = primary?.id ?? null;
+  const connected = primary?.peer?.status === 'connected';
 
   const [sideloadOpen, setSideloadOpen] = useState(false);
 
@@ -89,7 +90,11 @@ export function AppsScreen({ navigation }: Props) {
 
       {deviceId ? <FirmwareAttention deviceId={deviceId} /> : null}
 
-      <InstalledApps deviceId={deviceId} navigation={navigation} />
+      <InstalledApps
+        deviceId={deviceId}
+        connected={connected}
+        navigation={navigation}
+      />
 
       <Press onPress={() => setSideloadOpen(true)} className="mt-4">
         <View className="flex-row items-center justify-between px-1 py-3">
@@ -125,9 +130,11 @@ function FirmwareAttention({ deviceId }: { deviceId: string }) {
 
 function InstalledApps({
   deviceId,
+  connected,
   navigation,
 }: {
   deviceId: string | null;
+  connected: boolean;
   navigation: Props['navigation'];
 }) {
   const { list, active } = useWebapps(deviceId);
@@ -148,9 +155,9 @@ function InstalledApps({
           deviceId && navigation.navigate('WebappSlots', { deviceId })
         }
       />
-      {!deviceId || tiles.length === 0 ? (
+      {tiles.length === 0 ? (
         <SectionEmpty>
-          {deviceId
+          {connected
             ? 'waiting for your car thing to list its apps'
             : 'connect your car thing to see what is on it'}
         </SectionEmpty>
@@ -166,7 +173,7 @@ function InstalledApps({
             >
               <View className="flex-row items-center gap-3 px-4 py-2.5">
                 <WebappIcon
-                  deviceId={deviceId ?? ''}
+                  deviceId={deviceId}
                   id={tile.id}
                   iconHash={tile.iconHash}
                   name={tile.name}

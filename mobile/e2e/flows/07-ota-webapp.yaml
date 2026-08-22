@@ -1,0 +1,11 @@
+appId: com.bridgething.gateway
+name: offers a builtin webapp bump on a device whose image and daemon are current
+---
+- runFlow:
+    file: ../common/point-at-fixture.yaml
+    env:
+      MODE: webapp
+- extendedWaitUntil:
+    visible: ".*0.10.0\\+image.0.1.0 available.*"
+    timeout: 30000
+- assertVisible: ".*install 0.10.0\\+image.0.1.0.*"
