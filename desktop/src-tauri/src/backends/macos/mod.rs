@@ -1,20 +1,23 @@
 mod connectivity;
+mod fnv;
 mod geo;
 mod image;
+mod media;
 pub mod nlu;
 mod speech;
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use bridgething_companion::api::ModelPlatform;
 
 use crate::backends::{ModelPaths, Platform, asr, geo::Locator, models};
 
-pub fn platform() -> Platform {
+pub fn platform(config_dir: &Path) -> Platform {
   let paths = ModelPaths::default();
   Platform {
     geo: Some(Arc::new(Locator::new(geo::run))),
     notifications: None,
+    media_sessions: Some(Arc::new(media::MediaRemoteSessions::new(config_dir))),
     audio: Some(Arc::new(speech::AvAudio::new())),
     connectivity: Some(Arc::new(connectivity::NwPathConnectivity::default())),
     image: Some(Arc::new(image::ImageIoScaler)),

@@ -2,6 +2,8 @@
 mod asr;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod geo;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod jpeg;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -27,7 +29,7 @@ use bridgething_companion::{
   api::{CompanionSession, ModelPlatform, VoiceModelPaths},
   backend::{
     AudioBackend, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler, LogLevel, LogSink,
-    ModelArtifactValidator, NluModelRunner, NotificationBackend, SecretStore, SpeechRecognizer,
+    MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, SecretStore, SpeechRecognizer,
   },
 };
 
@@ -37,6 +39,7 @@ use crate::store::{JsonFile, stored};
 pub struct Platform {
   pub geo: Option<Arc<dyn GeoProvider>>,
   pub notifications: Option<Arc<dyn NotificationBackend>>,
+  pub media_sessions: Option<Arc<dyn MediaSessionBackend>>,
   pub audio: Option<Arc<dyn AudioBackend>>,
   pub connectivity: Option<Arc<dyn ConnectivityMonitor>>,
   pub image: Option<Arc<dyn ImageScaler>>,
@@ -48,21 +51,22 @@ pub struct Platform {
 }
 
 impl Platform {
-  pub fn detect() -> Self {
+  pub fn detect(config_dir: &Path) -> Self {
     #[cfg(target_os = "macos")]
     {
-      macos::platform()
+      macos::platform(config_dir)
     }
     #[cfg(target_os = "linux")]
     {
-      linux::platform()
+      linux::platform(config_dir)
     }
     #[cfg(target_os = "windows")]
     {
-      windows::platform()
+      windows::platform(config_dir)
     }
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
+      let _ = config_dir;
       Self::default()
     }
   }

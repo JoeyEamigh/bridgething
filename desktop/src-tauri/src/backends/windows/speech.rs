@@ -25,19 +25,13 @@ enum Command {
   Cancel,
 }
 
+#[derive(Default)]
 pub struct WinRtAudio {
   speaking: Arc<Utterances>,
   engine: Mutex<Option<Sender<Command>>>,
 }
 
 impl WinRtAudio {
-  pub fn new() -> Self {
-    Self {
-      speaking: Arc::new(Utterances::default()),
-      engine: Mutex::new(None),
-    }
-  }
-
   fn send(&self, command: Command) {
     let mut held = self.engine.lock().unwrap();
     let command = match held.as_ref() {
@@ -119,6 +113,7 @@ fn run(speaking: Arc<Utterances>, commands: Receiver<Command>) {
 fn build(speaking: &Arc<Utterances>) -> windows::core::Result<(SpeechSynthesizer, MediaPlayer)> {
   let synth = SpeechSynthesizer::new()?;
   let player = MediaPlayer::new()?;
+  player.CommandManager()?.SetIsEnabled(false)?;
 
   let held = Arc::clone(speaking);
   player.MediaOpened(&TypedEventHandler::<MediaPlayer, IInspectable>::new(move |_, _| {
@@ -162,10 +157,9 @@ fn pick(synth: &SpeechSynthesizer, wanted: &str) {
   let Ok(voices) = SpeechSynthesizer::AllVoices() else {
     return;
   };
-  let picked = voices.into_iter().find(|voice| {
-    voice.Id().is_ok_and(|id| id.to_string() == wanted)
-      || voice.Language().is_ok_and(|language| language.to_string() == wanted)
-  });
+  let picked = voices
+    .into_iter()
+    .find(|voice| voice.Id().is_ok_and(|id| id == wanted) || voice.Language().is_ok_and(|language| language == wanted));
   if let Some(voice) = picked
     && let Err(error) = synth.SetVoice(&voice)
   {

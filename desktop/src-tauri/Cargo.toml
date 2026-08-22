@@ -16,6 +16,7 @@ name = "bridgething-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
+cc = "1.4.3"
 tauri-build = { version = "2.6.3", features = [] }
 
 [dev-dependencies]
@@ -55,6 +56,7 @@ whisper-rs = { version = "0.16.0", features = ["tracing_backend"] }
 ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+base64 = "0.23.1"
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
 objc2 = "0.6.4"
@@ -73,7 +75,10 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+base64 = "0.23.1"
+bridgething-io = { path = "../../crates/io", features = ["native-io"] }
 futures.workspace = true
+url = "2.5.8"
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -81,6 +86,7 @@ windows = { version = "0.62.2", features = [
   "Devices_Geolocation",
   "Foundation",
   "Foundation_Collections",
+  "Media_Control",
   "Media_Core",
   "Media_Playback",
   "Media_SpeechSynthesis",

@@ -1,0 +1,13 @@
+[package]
+name = "wincheck-companion"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "bridgething_companion"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1.53.1", features = ["sync"] }
+uniffi = { version = "0.32.0", features = ["tokio"] }

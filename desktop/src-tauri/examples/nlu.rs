@@ -26,7 +26,7 @@ async fn main() -> Result<(), Boxed> {
     None => installed_bundle()?,
   };
 
-  let platform = Platform::detect();
+  let platform = Platform::detect(&DesktopPaths::xdg()?.config_dir);
   let runner = platform.nlu.ok_or("this host has no nlu model runner")?;
   let armed = bundle.clone();
   platform.models.answered_by(move || VoiceModelPaths {

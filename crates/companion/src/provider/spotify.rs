@@ -51,6 +51,8 @@ const QUEUE_MAX: usize = 50;
 const QUEUE_RUNWAY_FLOOR: usize = 8;
 const SPOTIFY_APP_BUNDLE: &str = "com.spotify.client";
 const SPOTIFY_ANDROID_PACKAGE: &str = "com.spotify.music";
+const SPOTIFY_MPRIS_PLAYER: &str = "spotify";
+const SPOTIFY_WINDOWS_AUMIDS: [&str; 2] = ["Spotify.exe", "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"];
 const VOLUME_STEP_PERCENT: f64 = 6.25;
 
 const IMAGE_CODEC: ImageAssetCodec = ImageAssetCodec {
@@ -1189,7 +1191,11 @@ impl Provider for SpotifyProvider {
   }
 
   fn app_bundles(&self) -> Vec<String> {
-    vec![SPOTIFY_APP_BUNDLE.into(), SPOTIFY_ANDROID_PACKAGE.into()]
+    [SPOTIFY_APP_BUNDLE, SPOTIFY_ANDROID_PACKAGE, SPOTIFY_MPRIS_PLAYER]
+      .into_iter()
+      .chain(SPOTIFY_WINDOWS_AUMIDS)
+      .map(str::to_owned)
+      .collect()
   }
 
   fn set_now_playing_observer(&self, observer: Option<Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>>) {

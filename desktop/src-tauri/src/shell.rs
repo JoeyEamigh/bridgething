@@ -133,7 +133,7 @@ impl Shell {
       std::fs::create_dir_all(dir).map_err(|_| ShellError::NoAppDirs)?;
     }
 
-    let platform = Platform::detect();
+    let platform = Platform::detect(&config.paths.config_dir);
     let geo = platform.geo.clone();
     let models = platform.models.clone();
     let model_platform = platform.model_platform;
@@ -150,7 +150,7 @@ impl Shell {
       geo: platform.geo,
       notifications: platform.notifications,
       phone: None,
-      media_sessions: None,
+      media_sessions: platform.media_sessions,
       speech: platform.speech,
       nlu: platform.nlu,
       apple_music: None,

@@ -181,7 +181,7 @@ test-fast:
   PROPTEST_CASES=8 cargo test -p bridgething-test-harness
 
 # rust workspace plus the shipping feature set
-test-rust: test-shipping
+test-rust: test-shipping check-windows
   cargo test --workspace {{host_test_excludes}} --locked --no-fail-fast
 
 # whatever this host cannot build natively
@@ -205,6 +205,20 @@ test-cross: build-image
 # The desktop shell's headless suite
 test-desktop:
   cargo test -p bridgething-desktop --locked
+
+# The windows backend
+check-windows:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  if ! rustup target list --installed | grep -qx x86_64-pc-windows-msvc; then
+    echo 'skipping check-windows: rustup target add x86_64-pc-windows-msvc' >&2
+    exit 0
+  fi
+  lanes={{justfile_directory()}}/desktop/src-tauri/wincheck
+  export CARGO_TARGET_DIR={{justfile_directory()}}/target/wincheck
+  cargo clippy --manifest-path "$lanes/audit/Cargo.toml" --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+  cargo clippy --manifest-path "$lanes/host/Cargo.toml" --all-targets -- -D warnings
+  cargo test --manifest-path "$lanes/host/Cargo.toml"
 
 # Tray app against the vite dev server
 desktop-dev:

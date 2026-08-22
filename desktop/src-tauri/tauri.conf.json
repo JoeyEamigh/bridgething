@@ -38,7 +38,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "frameworks": ["gen/macos/libbridgething-mediaremote.dylib"]
     }
   },
   "plugins": {

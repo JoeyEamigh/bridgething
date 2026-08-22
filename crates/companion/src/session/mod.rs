@@ -53,6 +53,7 @@ use crate::{
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
     catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry},
+    system_media::SystemMediaProvider,
   },
   session::{handlers::Peer, link::LinkConnector, models::VoiceModels, observer::SessionObserver, ota::OtaLink},
   voice::{
@@ -555,6 +556,7 @@ impl Session {
 
   pub fn start(self: &Arc<Self>) {
     self.hub.start();
+    self.mirror_system_media();
     if let Some(previous) = self.arbitration.lock().unwrap().replace(self.watch_arbitration()) {
       previous.abort();
     }
@@ -605,6 +607,29 @@ impl Session {
     tokio::task::spawn_blocking(move || transport.start(inbox));
   }
 
+  fn mirror_system_media(self: &Arc<Self>) {
+    let Some(backend) = self.backends.media_sessions.clone() else {
+      return;
+    };
+    let hub = self.hub.clone();
+    let owned = Arc::downgrade(&self.hub);
+    tokio::spawn(async move {
+      let source = SystemMediaProvider::new(
+        backend,
+        Arc::new(move || {
+          owned
+            .upgrade()
+            .map(|hub| hub.provider_app_bundles())
+            .unwrap_or_default()
+        }),
+      );
+      hub.detach_system().await;
+      if let Err(error) = hub.attach_system(source).await {
+        tracing::warn!(%error, "the system media mirror did not attach");
+      }
+    });
+  }
+
   async fn pump_connectivity(self: Arc<Self>, mut edges: mpsc::UnboundedReceiver<bool>) {
     while let Some(online) = edges.recv().await {
       let providers = self.providers.lock().unwrap().clone();
@@ -636,6 +661,7 @@ impl Session {
       self.teardown(&device_id).await;
     }
     self.hub.detach_all().await;
+    self.hub.detach_system().await;
     let Some(transport) = self.backends.link.clone() else {
       return;
     };

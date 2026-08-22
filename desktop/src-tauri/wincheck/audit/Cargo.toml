@@ -1,0 +1,29 @@
+[package]
+name = "wincheck-audit"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+bridgething-delivery = { version = "0.10.0", path = "../../../../crates/delivery/core" }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tracing = "0.1.44"
+wincheck-companion = { version = "0.0.0", path = "companion" }
+windows = { version = "0.62.2", features = [
+  "Devices_Geolocation",
+  "Foundation",
+  "Foundation_Collections",
+  "Media_Control",
+  "Media_Core",
+  "Media_Playback",
+  "Media_SpeechSynthesis",
+  "Networking_Connectivity",
+  "Storage_Streams",
+  "Win32_System_Com",
+] }

@@ -8,6 +8,8 @@ mod fakes_probe;
 mod heard;
 #[path = "rig/log_sink.rs"]
 mod log_sink;
+#[path = "rig/media.rs"]
+mod media;
 #[path = "support/poll.rs"]
 mod poll;
 #[path = "rig/secrets.rs"]
@@ -34,7 +36,7 @@ use bridgething_companion::{
     AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmFavoritesSink, AmFlagSink, AmItemSink, AmLibraryScope,
     AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode, AmSearchResults, AmSearchSink,
     AmShelvesSink, AmSnapshotSink, AppleMusicBackend, ConnectivityInbox, ConnectivityMonitor, LinkDevice, LinkInbox,
-    LinkTransport, PrepareSink, SecretStore, SpeechRecognizer, Transcription, TranscriptionSink,
+    LinkTransport, MediaSessionBackend, PrepareSink, SecretStore, SpeechRecognizer, Transcription, TranscriptionSink,
   },
   provider::{Provider, ProviderAuthState},
   session::Session,
@@ -57,6 +59,7 @@ use libbridgething::{
   wire::{MsgMeta, ResponseMeta, WireError},
 };
 use log_sink::Quiet;
+use media::{FakeMediaBackend, playing};
 use poll::eventually;
 use secrets::MemorySecrets;
 use tokio_util::{
@@ -196,14 +199,21 @@ fn player_snapshots(msgs: &[GatewayToBridgeMsg]) -> usize {
 }
 
 fn session(link: Arc<HandLink>) -> (Arc<Session>, Arc<Heard>, tempfile::TempDir) {
-  session_full(link, Arc::new(MemorySecrets::default()), false, None, None)
+  session_full(link, Arc::new(MemorySecrets::default()), false, None, None, None)
 }
 
 fn session_hearing(
   link: Arc<HandLink>,
   speech: Arc<dyn SpeechRecognizer>,
 ) -> (Arc<Session>, Arc<Heard>, tempfile::TempDir) {
-  session_full(link, Arc::new(MemorySecrets::default()), false, None, Some(speech))
+  session_full(
+    link,
+    Arc::new(MemorySecrets::default()),
+    false,
+    None,
+    Some(speech),
+    None,
+  )
 }
 
 fn session_full(
@@ -212,6 +222,7 @@ fn session_full(
   spotify: bool,
   apple_music: Option<Arc<dyn AppleMusicBackend>>,
   speech: Option<Arc<dyn SpeechRecognizer>>,
+  media_sessions: Option<Arc<dyn MediaSessionBackend>>,
 ) -> (Arc<Session>, Arc<Heard>, tempfile::TempDir) {
   let spool = tempfile::tempdir().expect("a scratch directory");
   let heard = Arc::new(Heard::default());
@@ -227,7 +238,7 @@ fn session_full(
     geo: None,
     notifications: None,
     phone: None,
-    media_sessions: None,
+    media_sessions,
     speech,
     nlu: None,
     apple_music,
@@ -982,6 +993,7 @@ async fn an_unknown_provider_id_is_refused() {
     true,
     None,
     None,
+    None,
   );
   assert!(session.connect_provider("tidal").await.is_err());
   assert!(
@@ -1004,6 +1016,7 @@ async fn a_catalog_sign_in_runs_before_any_link_exists() {
     Arc::new(HandLink::default()),
     Arc::new(MemorySecrets::default()),
     true,
+    None,
     None,
     None,
   );
@@ -1037,7 +1050,7 @@ async fn a_catalog_sign_in_runs_before_any_link_exists() {
 #[tokio::test(flavor = "multi_thread")]
 async fn complete_provider_auth_persists_the_refresh_token_and_connects() {
   let secrets = Arc::new(MemorySecrets::default());
-  let (session, _heard, _spool) = session_full(Arc::new(HandLink::default()), secrets.clone(), true, None, None);
+  let (session, _heard, _spool) = session_full(Arc::new(HandLink::default()), secrets.clone(), true, None, None, None);
 
   session
     .complete_provider_auth(
@@ -1077,7 +1090,8 @@ async fn complete_provider_auth_persists_the_refresh_token_and_connects() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_catalog_provider_sits_on_the_hub_before_and_after_a_link_arrives() {
   let link = Arc::new(HandLink::default());
-  let (session, _heard, _spool) = session_full(link.clone(), Arc::new(MemorySecrets::default()), true, None, None);
+  let (session, _heard, _spool) =
+    session_full(link.clone(), Arc::new(MemorySecrets::default()), true, None, None, None);
   session.connect_provider("spotify").await.expect("came up");
   assert!(
     session.hub().attached_ids().contains(&"spotify".to_owned()),
@@ -1101,7 +1115,7 @@ async fn a_catalog_provider_sits_on_the_hub_before_and_after_a_link_arrives() {
 async fn stored_credentials_restore_the_sign_in_on_start() {
   let secrets = Arc::new(MemorySecrets::default());
   secrets.set(REFRESH_KEY.into(), "stored-refresh".into());
-  let (session, _heard, _spool) = session_full(Arc::new(HandLink::default()), secrets, true, None, None);
+  let (session, _heard, _spool) = session_full(Arc::new(HandLink::default()), secrets, true, None, None, None);
 
   session.start();
   assert!(
@@ -1383,7 +1397,7 @@ async fn a_daemon_that_will_not_serve_the_history_still_gets_a_live_stream() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_catalog_sign_in_keeps_its_auth_feed_across_link_churn() {
   let link = Arc::new(HandLink::default());
-  let (session, heard, _spool) = session_full(link.clone(), Arc::new(MemorySecrets::default()), true, None, None);
+  let (session, heard, _spool) = session_full(link.clone(), Arc::new(MemorySecrets::default()), true, None, None, None);
   session.connect_provider("spotify").await.expect("came up");
   assert!(
     eventually(|| session
@@ -1509,6 +1523,7 @@ async fn an_apple_music_backend_is_a_provider_the_settings_screen_can_offer() {
     false,
     Some(Arc::new(QuietAm)),
     None,
+    None,
   );
 
   let infos = session.provider_infos();
@@ -1542,6 +1557,7 @@ async fn an_apple_music_sign_in_comes_back_on_the_next_launch_until_it_is_signed
     false,
     Some(Arc::new(QuietAm)),
     None,
+    None,
   );
   session
     .connect_provider("apple-music")
@@ -1561,6 +1577,7 @@ async fn an_apple_music_sign_in_comes_back_on_the_next_launch_until_it_is_signed
     secrets.clone(),
     false,
     Some(Arc::new(QuietAm)),
+    None,
     None,
   );
   relaunched.start();
@@ -1583,6 +1600,7 @@ async fn an_apple_music_sign_in_comes_back_on_the_next_launch_until_it_is_signed
     false,
     Some(Arc::new(QuietAm)),
     None,
+    None,
   );
   signed_out.start();
   assert!(
@@ -1593,5 +1611,45 @@ async fn an_apple_music_sign_in_comes_back_on_the_next_launch_until_it_is_signed
     .await,
     "and a sign-out stays signed out: the restore is keyed on the user asking for the provider, not \
      on the system grant still being there"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_media_session_backend_mirrors_the_audible_player_to_every_peer() {
+  let link = Arc::new(HandLink::default());
+  let media = FakeMediaBackend::new();
+  let (session, _heard, _spool) = session_full(
+    link.clone(),
+    Arc::new(MemorySecrets::default()),
+    false,
+    None,
+    None,
+    Some(media.clone()),
+  );
+  session.start();
+  two_peers(&link, &session).await;
+
+  assert!(
+    eventually(|| media.inbox.lock().unwrap().is_some()).await,
+    "starting the session starts the media backend"
+  );
+
+  let before = (
+    player_snapshots(&link.heard_by(DEVICE)),
+    player_snapshots(&link.heard_by(OTHER)),
+  );
+  media.emit(vec![playing("Video", "Creator", "org.example.player")]);
+  assert!(
+    eventually(|| {
+      player_snapshots(&link.heard_by(DEVICE)) > before.0 && player_snapshots(&link.heard_by(OTHER)) > before.1
+    })
+    .await,
+    "whatever the host is playing reaches every peer without any provider being signed in"
+  );
+
+  session.stop().await;
+  assert!(
+    eventually(|| media.inbox.lock().unwrap().is_none()).await,
+    "stopping the session stops the media backend"
   );
 }
