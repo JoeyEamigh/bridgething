@@ -21,6 +21,7 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dev-dependencies]
 mdns-sd = "0.20.3"
+tokio-tungstenite.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = ["test"] }
 tempfile = "3.27.0"

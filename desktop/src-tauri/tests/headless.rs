@@ -694,6 +694,49 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_network_gateway_finishes_stock_onboarding_when_it_connects() {
+  use tokio_tungstenite::tungstenite::{connect, stream::MaybeTlsStream};
+
+  let daemon = Daemon::shared();
+  let gateway_url = daemon.url();
+  let stock_url = gateway_url.replace(":8892", ":8890");
+  assert_ne!(stock_url, gateway_url, "the test daemon uses the expected gateway port");
+
+  let (mut stock, _) = connect(stock_url.as_str()).expect("the stock websocket accepts a client");
+  if let MaybeTlsStream::Plain(stream) = stock.get_mut() {
+    stream
+      .set_read_timeout(Some(SETTLE))
+      .expect("the stock read has a deadline");
+  }
+  let setup_finished = std::thread::spawn(move || {
+    while let Ok(message) = stock.read() {
+      if message
+        .to_text()
+        .is_ok_and(|text| text.contains(r#""type":"setup_status""#) && text.contains(r#""payload":"finished""#))
+      {
+        return true;
+      }
+    }
+    false
+  });
+
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  let (tx, _rx) = mpsc::unbounded_channel();
+  let shell =
+    Shell::create(shell_config(gateway_url, spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
+  shell.start().await;
+  let app = mock_app(shell);
+  commands::connect(app.state(), None)
+    .await
+    .expect("the network gateway connects");
+
+  assert!(
+    setup_finished.join().expect("the stock reader exits"),
+    "a gateway that connects after the stock status read broadcasts setup completion"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_resume_target_preference_round_trips_and_invalidates_the_device_meta() {
   let daemon = Daemon::shared();
   let url = daemon.url();
