@@ -6,6 +6,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use bridgething_companion::provider::ResumeTarget;
 use bridgething_delivery::discovery::Discovery;
 use bridgething_desktop::{
   commands::{self, InstallOutcome, OtaOutcome},
@@ -689,6 +690,63 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
   assert!(
     commands::webapps(app.state()).await.is_err(),
     "a device pull with no link declines rather than waiting for one"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_resume_target_preference_round_trips_and_invalidates_the_device_meta() {
+  let daemon = Daemon::shared();
+  let url = daemon.url();
+
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  let (tx, rx) = mpsc::unbounded_channel();
+  let heard = Heard {
+    rx: Mutex::new(rx),
+    seen: Mutex::new(Vec::new()),
+  };
+  let shell =
+    Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
+  shell.start().await;
+
+  let app = mock_app(shell);
+
+  let device_id = commands::connect(app.state(), None)
+    .await
+    .expect("the daemon accepts a link");
+  assert_eq!(device_id, url, "the link is named by the daemon it reached");
+
+  assert_eq!(
+    commands::device_resume_target(app.state())
+      .await
+      .expect("a resume target"),
+    ResumeTarget::PhoneOnly,
+    "an unset preference answers the default, not an error"
+  );
+
+  commands::set_device_resume_target(app.state(), ResumeTarget::AnySpeaker)
+    .await
+    .expect("the pick lands");
+  assert!(
+    heard.wait(hints::DEVICE_META, SETTLE).await,
+    "the preference moving invalidates the device-meta query"
+  );
+  assert_eq!(
+    commands::device_resume_target(app.state())
+      .await
+      .expect("the second read"),
+    ResumeTarget::AnySpeaker,
+    "the pull answers what the command wrote, through the same device"
+  );
+
+  commands::set_device_resume_target(app.state(), ResumeTarget::PhoneOnly)
+    .await
+    .expect("back to the default");
+  assert_eq!(
+    commands::device_resume_target(app.state())
+      .await
+      .expect("the third read"),
+    ResumeTarget::PhoneOnly,
+    "the second write answers too; the preference is a value, not a sticky first one"
   );
 }
 

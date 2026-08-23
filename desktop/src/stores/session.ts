@@ -27,6 +27,7 @@ export const webappActive = resource<api.ActiveWebapp | null>(null, () => bound(
 export const webappSlots = resource<api.WebappSlots>({ launcher: null, overlay: null }, () => bound().webappSlots());
 export const autoResume = resource(true, () => bound().deviceAutoResume());
 export const logStreaming = resource(false, () => bound().deviceLogStreaming());
+export const resumeTarget = resource<api.ResumeTarget>('phoneOnly', () => bound().deviceResumeTarget());
 
 export const hostInfo: ReadonlySignal<api.SessionHostInfo | null> = computed(
   () => snapshot.data.value?.hostInfo ?? null,
@@ -88,7 +89,7 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   peers: [snapshot, webapps, webappActive, webappSlots, autoResume, logStreaming, knownDevices, selectedDevice],
   'now-playing': [snapshot],
   ancs: [snapshot],
-  'device-meta': [snapshot, autoResume],
+  'device-meta': [snapshot, autoResume, resumeTarget],
   webapps: [webapps, webappActive, webappSlots, { refresh: configs.refreshAll }],
   'webapp-doc': [{ refresh: docs.refreshAll }],
   'known-devices': [knownDevices],
@@ -118,6 +119,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     webappActive.refresh(),
     webappSlots.refresh(),
     autoResume.refresh(),
+    resumeTarget.refresh(),
     logStreaming.refresh(),
     debugLogging.refresh(),
   ]);

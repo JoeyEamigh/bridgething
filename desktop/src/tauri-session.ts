@@ -97,6 +97,8 @@ export class TauriSession implements CompanionSession {
   setDeviceNickname = (nickname: string) => invoke<void>('set_device_nickname', { nickname });
   deviceAutoResume = () => invoke<boolean>('device_auto_resume');
   setDeviceAutoResume = (enabled: boolean) => invoke<void>('set_device_auto_resume', { enabled });
+  deviceResumeTarget = () => invoke<api.ResumeTarget>('device_resume_target');
+  setDeviceResumeTarget = (target: api.ResumeTarget) => invoke<void>('set_device_resume_target', { target });
 
   webapps = () => invoke<api.WebappInfo[]>('webapps');
   webappActive = () => invoke<api.ActiveWebapp | null>('webapp_active');

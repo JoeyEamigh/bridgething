@@ -28,6 +28,8 @@ export interface DesktopSession extends CompanionSession {
   deviceAutoResume(): Promise<boolean>;
   deviceLogStreaming(): Promise<boolean>;
 
+  deviceResumeTarget(): Promise<api.ResumeTarget>;
+
   debugLogging(): Promise<boolean>;
   setDebugLogging(enabled: boolean): Promise<void>;
 
@@ -35,6 +37,8 @@ export interface DesktopSession extends CompanionSession {
 
   otaPushDaemon(artifact: string): Promise<OtaOutcome>;
   otaInstallWebapp(bundle: string, provenance?: string): Promise<InstallOutcome>;
+
+  setDeviceResumeTarget(target: api.ResumeTarget): Promise<void>;
 }
 
 export function isDesktop(session: CompanionSession): session is DesktopSession {
