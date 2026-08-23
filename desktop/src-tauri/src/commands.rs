@@ -1,10 +1,13 @@
 use std::{path::PathBuf, sync::Arc};
 
-use bridgething_companion::api::{
-  ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
-  OtaPollConfig, ProviderInfo, ProviderTokens, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
-  WebappInfo, WebappSlot, WebappSlots,
-  ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
+use bridgething_companion::{
+  api::{
+    ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
+    OtaPollConfig, ProviderInfo, ProviderTokens, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
+    WebappInfo, WebappSlot, WebappSlots,
+    ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
+  },
+  provider::ResumeTarget,
 };
 use bridgething_delivery::{
   discovery::{Discovery, Endpoint},
@@ -138,6 +141,23 @@ pub async fn device_auto_resume(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
       .find(|pref| pref.device_id == device_id)
       .map(|pref| pref.enabled)
       .unwrap_or(true),
+  )
+}
+
+#[tauri::command]
+pub async fn device_resume_target(shell: State<'_, Arc<Shell>>) -> Answer<ResumeTarget> {
+  let Some(device_id) = shell.peer() else {
+    return Ok(ResumeTarget::PhoneOnly);
+  };
+  Ok(
+    shell
+      .session()
+      .companion_debug()
+      .resume_targets
+      .into_iter()
+      .find(|pref| pref.device_id == device_id)
+      .map(|pref| pref.target)
+      .unwrap_or(ResumeTarget::PhoneOnly),
   )
 }
 
@@ -365,6 +385,17 @@ pub async fn set_capability_flags(shell: State<'_, Arc<Shell>>, flags: Capabilit
 pub async fn set_device_auto_resume(shell: State<'_, Arc<Shell>>, enabled: bool) -> Answer<()> {
   let device_id = peer(&shell)?;
   shell.session().set_device_auto_resume(device_id.clone(), enabled).await;
+  shell.announce(Hint::about(hints::DEVICE_META, device_id));
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn set_device_resume_target(shell: State<'_, Arc<Shell>>, target: ResumeTarget) -> Answer<()> {
+  let device_id = peer(&shell)?;
+  shell
+    .session()
+    .set_device_resume_target(device_id.clone(), target)
+    .await;
   shell.announce(Hint::about(hints::DEVICE_META, device_id));
   Ok(())
 }

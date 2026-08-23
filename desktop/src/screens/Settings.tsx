@@ -1,4 +1,10 @@
-import type { AuthState, CapabilityFlags, ProviderInfo, VoiceModelState } from '@bridgething/companion-types';
+import type {
+  AuthState,
+  CapabilityFlags,
+  ProviderInfo,
+  ResumeTarget,
+  VoiceModelState,
+} from '@bridgething/companion-types';
 import {
   Button,
   ListGroup,
@@ -7,6 +13,7 @@ import {
   ScreenHeader,
   SectionEmpty,
   SectionHeader,
+  Segmented,
   Spinner,
   Switch,
   useSession,
@@ -32,6 +39,7 @@ import {
   libraryProvider,
   providerPriority,
   providers,
+  resumeTarget,
   snapshot,
   voiceModel,
 } from '../stores/session.ts';
@@ -145,6 +153,7 @@ export function SettingsScreen(): VNode {
               />
             ))}
             <AutoResumeRow />
+            <ResumeTargetRow />
           </ListGroup>
         ) : (
           <SectionEmpty>connect a Car Thing to see its details</SectionEmpty>
@@ -475,6 +484,34 @@ function DebugLoggingRow(): VNode {
               await session.setDebugLogging(next);
               await debugLogging.refresh();
             })();
+          }}
+        />
+      }
+    />
+  );
+}
+
+function ResumeTargetRow(): VNode {
+  const session = useDesktop();
+  const target = resumeTarget.data.value;
+
+  return (
+    <ListRow
+      icon={<Icon name="speaker" />}
+      iconTint="default"
+      title="resume on"
+      subtitle="any speaker lets playback start on whatever the music app last used"
+      trailing={
+        <Segmented<ResumeTarget>
+          size="sm"
+          label="resume on"
+          options={[
+            { value: 'phoneOnly', label: 'phone only' },
+            { value: 'anySpeaker', label: 'any speaker' },
+          ]}
+          value={target}
+          onChange={next => {
+            void session.setDeviceResumeTarget(next);
           }}
         />
       }
