@@ -51,6 +51,11 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
+    },
+    "@bridgething/browser#typecheck": {
+      "dependsOn": ["@bridgething/browser#build"],
+      "inputs": ["src/**", "tsconfig*.json", "package.json"],
+      "outputs": []
     }
   }
 }
