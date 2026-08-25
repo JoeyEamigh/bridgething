@@ -214,8 +214,8 @@ check-windows:
     echo 'skipping check-windows: rustup target add x86_64-pc-windows-msvc' >&2
     exit 0
   fi
-  lanes={{justfile_directory()}}/desktop/src-tauri/wincheck
-  export CARGO_TARGET_DIR={{justfile_directory()}}/target/wincheck
+  lanes="{{justfile_directory()}}/desktop/src-tauri/wincheck"
+  export CARGO_TARGET_DIR="{{justfile_directory()}}/target/wincheck"
   cargo clippy --manifest-path "$lanes/audit/Cargo.toml" --target x86_64-pc-windows-msvc --all-targets -- -D warnings
   cargo clippy --manifest-path "$lanes/host/Cargo.toml" --all-targets -- -D warnings
   cargo test --manifest-path "$lanes/host/Cargo.toml"
