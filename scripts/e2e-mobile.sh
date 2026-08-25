@@ -158,13 +158,30 @@ until curl -fsS "http://127.0.0.1:${FIXTURE_PORT}/companion.json" >/dev/null 2>&
 
 echo "== maestro ($PLATFORM) =="
 attempts="${E2E_ATTEMPTS:-3}"
+report="${E2E_DIR}/maestro-report.xml"
+pending=("${FLOWS[@]}")
+
 for attempt in $(seq 1 "$attempts"); do
-  if maestro test --exclude-tags "$EXCLUDE_TAGS" -e FIXTURE_HOST="$FIXTURE_HOST" -e FIXTURE_PORT="$FIXTURE_PORT" "${FLOWS[@]}"; then
+  rm -f "$report"
+  if maestro test --format=JUNIT --output="$report" --exclude-tags "$EXCLUDE_TAGS" \
+    -e FIXTURE_HOST="$FIXTURE_HOST" -e FIXTURE_PORT="$FIXTURE_PORT" "${pending[@]}"; then
     exit 0
   fi
-  if [ "$attempt" -lt "$attempts" ]; then
-    echo "== maestro attempt ${attempt}/${attempts} failed; retrying =="
+  [ "$attempt" -lt "$attempts" ] || break
+
+  failed=()
+  while IFS= read -r flow; do failed+=("$flow"); done \
+    < <(python3 "${ROOT}/scripts/e2e/failed-flows.py" "$report" "${ROOT}/mobile/e2e/flows")
+
+  if [ "${#failed[@]}" -gt 0 ]; then
+    pending=("${failed[@]}")
+    echo "== maestro attempt ${attempt}/${attempts}: retrying ${#pending[@]} flow(s) =="
+    printf '   %s\n' "${pending[@]}"
+  else
+    pending=("${FLOWS[@]}")
+    echo "== maestro attempt ${attempt}/${attempts} failed with no per-flow verdict; retrying everything =="
   fi
 done
+
 echo "maestro failed ${attempts} attempts" >&2
 exit 1
