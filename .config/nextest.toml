@@ -1,0 +1,6 @@
+[test-groups.ts-rs-export]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = 'package(libbridgething) and test(/export_bindings_/)'
+test-group = 'ts-rs-export'
