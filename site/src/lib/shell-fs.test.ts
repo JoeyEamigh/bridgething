@@ -1,13 +1,20 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import { createImageShell, type ShellFsManifest } from './shell-fs.ts';
 
-const manifestPath = resolve(import.meta.dirname, '..', '..', 'public', 'shell-fs.json');
-const manifest = (await Bun.file(manifestPath).json()) as ShellFsManifest;
-const blobDir = resolve(import.meta.dirname, '..', '..', 'public', 'shell-fs');
-const bash = await createImageShell(manifest, hash => Bun.file(resolve(blobDir, `${hash}.txt`)).text());
+const publicDir = resolve(import.meta.dirname, '..', '..', 'public');
+const manifest = (await Bun.file(resolve(publicDir, 'shell-fs.json'))
+  .json()
+  .catch(() => null)) as ShellFsManifest | null;
 
-describe('image shell', () => {
+let bash: Awaited<ReturnType<typeof createImageShell>>;
+
+describe.skipIf(!manifest)('image shell', () => {
+  beforeAll(async () => {
+    const blobDir = resolve(publicDir, 'shell-fs');
+    bash = await createImageShell(manifest!, hash => Bun.file(resolve(blobDir, `${hash}.txt`)).text());
+  });
+
   test('root listing matches the image layout', async () => {
     const res = await bash.exec('ls /');
     expect(res.exitCode).toBe(0);
