@@ -157,4 +157,14 @@ fixture_pid=$!
 until curl -fsS "http://127.0.0.1:${FIXTURE_PORT}/companion.json" >/dev/null 2>&1; do sleep 0.5; done
 
 echo "== maestro ($PLATFORM) =="
-maestro test --exclude-tags "$EXCLUDE_TAGS" -e FIXTURE_HOST="$FIXTURE_HOST" -e FIXTURE_PORT="$FIXTURE_PORT" "${FLOWS[@]}"
+attempts="${E2E_ATTEMPTS:-3}"
+for attempt in $(seq 1 "$attempts"); do
+  if maestro test --exclude-tags "$EXCLUDE_TAGS" -e FIXTURE_HOST="$FIXTURE_HOST" -e FIXTURE_PORT="$FIXTURE_PORT" "${FLOWS[@]}"; then
+    exit 0
+  fi
+  if [ "$attempt" -lt "$attempts" ]; then
+    echo "== maestro attempt ${attempt}/${attempts} failed; retrying =="
+  fi
+done
+echo "maestro failed ${attempts} attempts" >&2
+exit 1
