@@ -20,7 +20,7 @@ exclude = ["crates/delivery"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.94"
-version = "0.10.0"
+version = "0.11.0"
 license = "MIT"
 authors = ["Joey Eamigh"]
 homepage = "https://bridgething.com"
