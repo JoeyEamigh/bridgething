@@ -93,6 +93,7 @@ jobs:
           } >>"$GITHUB_OUTPUT"
 
       - name: checkout bridgething (site + daemon notes)
+        id: checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -190,8 +191,30 @@ jobs:
             exit 1
           }
 
-      - name: fetch the image half from R2
+      - name: hold until both halves are published
+        id: gate
         if: steps.state.outputs.released == 'true'
+        env:
+          DAEMON_VERSION: ${{ steps.state.outputs.daemon_version }}
+          IMAGE_VERSION: ${{ steps.state.outputs.image_version }}
+          CHANNEL: ${{ steps.payload.outputs.channel }}
+          VARIANT: ${{ steps.payload.outputs.variant }}
+        run: |
+          set -euo pipefail
+          published() { rclone lsf "r2:${R2_BUCKET}/$1/" 2>/dev/null | grep -qxF "$2"; }
+          missing=()
+          published "images/${CHANNEL}/${IMAGE_VERSION}" \
+            "bridgething-${VARIANT}-image-superbird-flashthing.zip" || missing+=("image ${IMAGE_VERSION}")
+          published "daemon/${CHANNEL}/${DAEMON_VERSION}" bridgething || missing+=("daemon ${DAEMON_VERSION}")
+          if ((${#missing[@]})); then
+            echo "holding: ${missing[*]} not on \"${CHANNEL}\" yet; whichever release lands last will dispatch again"
+            echo "go=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "go=true" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: fetch the image half from R2
+        if: steps.gate.outputs.go == 'true'
         env:
           IMAGE_VERSION: ${{ steps.state.outputs.image_version }}
           CHANNEL: ${{ steps.payload.outputs.channel }}
@@ -209,7 +232,7 @@ jobs:
           ls -la artifacts/
 
       - name: fetch the daemon half from R2
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         env:
           DAEMON_VERSION: ${{ steps.state.outputs.daemon_version }}
           CHANNEL: ${{ steps.payload.outputs.channel }}
@@ -224,7 +247,7 @@ jobs:
             || echo "no daemon sidecar for ${CHANNEL}/${DAEMON_VERSION}; its digests stay off the bundle row"
 
       - name: compose bundle
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         id: bundle
         env:
           DAEMON_VERSION: ${{ steps.state.outputs.daemon_version }}
@@ -249,14 +272,14 @@ jobs:
           echo "version=$(jq -r '.version' ../bundle-meta.json)" >>"$GITHUB_OUTPUT"
 
       - name: upload bundle to R2
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         env:
           OUT_ZIP: ${{ steps.bundle.outputs.out_zip }}
         working-directory: site
         run: scripts/r2-put "$OUT_ZIP" "r/$(basename "$OUT_ZIP")" application/zip
 
       - name: update bundles.yaml
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         env:
           CHANNEL: ${{ steps.payload.outputs.channel }}
           DAEMON_VERSION: ${{ steps.state.outputs.daemon_version }}
@@ -326,7 +349,7 @@ jobs:
             "${args[@]}"
 
       - name: regenerate manifest.json
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         working-directory: site
         env:
           BRIDGETHING_REPO: ${{ github.workspace }}
@@ -336,7 +359,7 @@ jobs:
           bun run manifest:build
 
       - name: upload manifest.json to R2
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         working-directory: site
         run: |
           set -euo pipefail
@@ -344,7 +367,7 @@ jobs:
             "public, max-age=300, must-revalidate"
 
       - name: publish the release state to R2
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         working-directory: site
         env:
           CHANNEL: ${{ steps.payload.outputs.channel }}
@@ -379,7 +402,7 @@ jobs:
           scripts/r2-log state/releases.log "$entry"
 
       - name: purge the cloudflare edge
-        if: always()
+        if: always() && steps.checkout.outcome == 'success'
         working-directory: site
         env:
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
@@ -387,7 +410,7 @@ jobs:
         run: scripts/cf-purge
 
       - name: pull the companion + desktop + catalog pointers from R2
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         working-directory: site
         run: |
           set -euo pipefail
@@ -399,7 +422,7 @@ jobs:
             echo "no published catalog yet; the store will render its empty state"
 
       - name: deploy site
-        if: steps.state.outputs.released == 'true'
+        if: steps.gate.outputs.go == 'true'
         working-directory: site
         env:
           BRIDGETHING_REPO: ${{ github.workspace }}
