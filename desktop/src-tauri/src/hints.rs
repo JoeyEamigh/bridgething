@@ -6,10 +6,12 @@ use std::{
   time::Duration,
 };
 
-use bridgething_companion::api::{LogOrigin, SessionEvent, SessionEventSink};
+use bridgething_companion::api::{DeviceMeta, LogOrigin, SessionEvent, SessionEventSink};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Notify;
+
+use crate::known_device::KnownDevices;
 
 pub const SESSION: &str = "invalidate:session";
 pub const ENDPOINTS: &str = "invalidate:endpoints";
@@ -103,14 +105,30 @@ pub struct Relay {
   hints: Arc<dyn HintSink>,
   logs: std::sync::mpsc::Sender<()>,
   wake: Arc<Notify>,
+  known: Arc<KnownDevices>,
 }
 
 impl Relay {
-  pub fn new(hints: Arc<dyn HintSink>, wake: Arc<Notify>) -> Arc<Self> {
+  pub fn new(hints: Arc<dyn HintSink>, wake: Arc<Notify>, known: Arc<KnownDevices>) -> Arc<Self> {
     let (tx, rx) = std::sync::mpsc::channel();
     let sink = Arc::clone(&hints);
     std::thread::spawn(move || coalesce_logs(rx, sink));
-    Arc::new(Self { hints, logs: tx, wake })
+    Arc::new(Self {
+      hints,
+      logs: tx,
+      wake,
+      known,
+    })
+  }
+
+  fn adopt(&self, device_id: &str, meta: &DeviceMeta) {
+    if meta.serial_number.is_empty() {
+      return;
+    }
+    self
+      .known
+      .seen(&meta.serial_number, device_id, meta.nickname.as_deref());
+    self.hints.emit(Hint::bare(KNOWN_DEVICES));
   }
 }
 
@@ -127,6 +145,9 @@ impl SessionEventSink for Relay {
   fn on_event(&self, event: SessionEvent) {
     if matches!(event, SessionEvent::Log { .. }) {
       let _ = self.logs.send(());
+    }
+    if let SessionEvent::DeviceMetaChanged { device_id, meta } = &event {
+      self.adopt(device_id, meta);
     }
     if matches!(
       event,

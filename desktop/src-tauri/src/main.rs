@@ -1,4 +1,4 @@
 fn main() {
-  let _ = rustls::crypto::ring::default_provider().install_default();
+  bridgething_io::install_crypto_provider();
   bridgething_desktop::run();
 }

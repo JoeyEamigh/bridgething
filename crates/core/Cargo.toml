@@ -52,7 +52,7 @@ tower-http = { version = "0.6.8", features = ["fs"] }
 dirs = "6.0.0"
 dashmap = { version = "6.1.0", features = ["serde"] }
 base64 = "0.22.1"
-reqwest = { version = "0.13.3", features = ["json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tower = { version = "0.5.3", features = ["util"] }
 bridgething-iap2 = { workspace = true }
@@ -60,13 +60,13 @@ bridgething-mfi = { workspace = true }
 anyhow = "1.0.102"
 sea-orm = { version = "1.1.20", default-features = false, features = [
   "sqlx-sqlite",
-  "runtime-tokio-rustls",
+  "runtime-tokio",
   "macros",
   "with-uuid",
 ] }
 sea-orm-migration = { version = "1.1.20", default-features = false, features = [
   "sqlx-sqlite",
-  "runtime-tokio-rustls",
+  "runtime-tokio",
   "with-uuid",
 ] }
 bytes = "1.11.1"
@@ -84,6 +84,7 @@ zstd = "0.13.3"
 memmap2 = "0.9.11"
 bridgething-delivery = { path = "../delivery/core" }
 bridgething-sdk-runtime = { path = "../sdk-runtime" }
+bridgething-io = { path = "../io", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bluer = { workspace = true, features = ["bluetoothd", "l2cap", "rfcomm"] }

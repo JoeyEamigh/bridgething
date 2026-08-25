@@ -75,8 +75,7 @@ export class TauriSession implements CompanionSession {
   disconnect = () => invoke<void>('disconnect');
 
   knownDevices = () => invoke<KnownDevice[]>('known_devices');
-  setDeviceAutoConnect = (url: string, enabled: boolean) => invoke<void>('set_device_auto_connect', { url, enabled });
-  forgetKnownDevice = (url: string) => invoke<void>('forget_known_device', { url });
+  forgetKnownDevice = (id: string) => invoke<void>('forget_known_device', { id });
 
   selectedDevice = () => invoke<string | null>('selected_device');
   selectDevice = (deviceId: string | null) => invoke<void>('select_device', { deviceId });

@@ -19,7 +19,7 @@ use futures::{
   stream::{SplitSink, SplitStream},
 };
 use libbridgething::{
-  Device, DeviceType, PeerCompanionStatus, Priority,
+  Device, DeviceType, LinkKind, PeerCompanionStatus, Priority,
   gateway::{BridgeToGatewayMsg, GatewayToBridgeMsg},
   protocol::{BridgeEndec, Compress, DecodedFrame, encode_frame},
   wire::MsgMeta,
@@ -377,7 +377,8 @@ impl NetworkGateway {
     let placeholder = Device {
       name: remote.to_string(),
       device_type: DeviceType::Unknown,
-      mac: address.to_string(),
+      id: address.to_string(),
+      kind: LinkKind::Network,
       default: false,
     };
     let _ = self.peers.upsert(address, placeholder).await;

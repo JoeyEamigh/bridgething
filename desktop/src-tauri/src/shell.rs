@@ -1,4 +1,5 @@
 use std::{
+  collections::HashSet,
   path::{Path, PathBuf},
   sync::{
     Arc, Mutex,
@@ -96,7 +97,8 @@ pub struct Shell {
   selected: Mutex<Option<String>>,
   hints: Arc<dyn HintSink>,
   capabilities: Capabilities,
-  known: KnownDevices,
+  known: Arc<KnownDevices>,
+  declined: Mutex<HashSet<String>>,
   wake: Arc<Notify>,
   support: CapabilityFlags,
   geo: Option<Arc<dyn GeoProvider>>,
@@ -163,7 +165,7 @@ impl Shell {
 
     let support = capability_support(model_platform, &backends);
     let capabilities = Capabilities::open(&config.paths.config_dir, support);
-    let known = KnownDevices::open(&config.paths.config_dir);
+    let known = Arc::new(KnownDevices::open(&config.paths.config_dir));
     let wake = Arc::new(Notify::new());
 
     let session = CompanionSession::create(
@@ -182,7 +184,7 @@ impl Shell {
         spotify: spotify_provider(),
       },
       backends,
-      Relay::new(Arc::clone(&hints), Arc::clone(&wake)),
+      Relay::new(Arc::clone(&hints), Arc::clone(&wake), Arc::clone(&known)),
     );
     models.bind(&session);
 
@@ -193,6 +195,7 @@ impl Shell {
       hints,
       capabilities,
       known,
+      declined: Mutex::new(HashSet::new()),
       wake,
       support,
       geo,
@@ -289,8 +292,9 @@ impl Shell {
       id: url,
       name: label.clone().unwrap_or_else(|| "bridgething daemon".into()),
     };
+    self.declined.lock().unwrap().remove(&device.id);
     self.session.connect_direct(device.clone(), WsConnector::new(ws)).await;
-    self.known.record(&device.id, label.as_deref());
+    self.known.seen(&device.id, &device.id, label.as_deref());
     self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
     Ok(device.id)
   }
@@ -303,7 +307,7 @@ impl Shell {
     if self.selected.lock().unwrap().as_deref() == Some(device_id.as_str()) {
       *self.selected.lock().unwrap() = None;
     }
-    self.set_auto_connect(&device_id, false);
+    self.declined.lock().unwrap().insert(device_id.clone());
     self.session.disconnect_direct(&device_id).await;
   }
 
@@ -312,21 +316,17 @@ impl Shell {
   }
 
   pub fn auto_connect_targets(&self, discovered: &[String]) -> Vec<String> {
-    self.known.wanted(discovered)
+    let mut declined = self.declined.lock().unwrap();
+    declined.retain(|url| discovered.contains(url));
+    discovered
+      .iter()
+      .filter(|url| !declined.contains(*url))
+      .cloned()
+      .collect()
   }
 
-  pub fn set_auto_connect(&self, url: &str, enabled: bool) {
-    if !self.known.set_auto_connect(url, enabled) {
-      return;
-    }
-    self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
-    if enabled {
-      self.wake.notify_one();
-    }
-  }
-
-  pub fn forget_device(&self, url: &str) {
-    if self.known.forget(url) {
+  pub fn forget_device(&self, id: &str) {
+    if self.known.forget(id) {
       self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
     }
   }

@@ -1785,7 +1785,8 @@ mod tests {
       let mut p = Peer::new(Device {
         name: "test-phone".into(),
         device_type: DeviceType::default(),
-        mac: peer.to_string(),
+        id: peer.to_string(),
+        kind: libbridgething::LinkKind::Bluetooth,
         default: false,
       });
       p.companion = PeerCompanionStatus::Connected(GatewayInfo::default());
@@ -1828,7 +1829,8 @@ mod tests {
       Peer::new(Device {
         name: "test-phone".into(),
         device_type: DeviceType::default(),
-        mac: peer.to_string(),
+        id: peer.to_string(),
+        kind: libbridgething::LinkKind::Bluetooth,
         default: false,
       }),
     );
@@ -1877,7 +1879,8 @@ mod tests {
       let mut p = Peer::new(Device {
         name: "test-phone".into(),
         device_type: DeviceType::default(),
-        mac: addr.to_string(),
+        id: addr.to_string(),
+        kind: libbridgething::LinkKind::Bluetooth,
         default: false,
       });
       p.companion = PeerCompanionStatus::Connected(GatewayInfo::default());

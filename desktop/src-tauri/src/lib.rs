@@ -97,7 +97,6 @@ macro_rules! desktop_commands {
       $crate::commands::debug_logging,
       $crate::commands::set_debug_logging,
       $crate::commands::known_devices,
-      $crate::commands::set_device_auto_connect,
       $crate::commands::forget_known_device,
       $crate::commands::restart,
       $crate::commands::quit,

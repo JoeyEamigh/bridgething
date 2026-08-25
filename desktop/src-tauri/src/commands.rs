@@ -146,8 +146,9 @@ pub async fn device_auto_resume(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
 
 #[tauri::command]
 pub async fn device_resume_target(shell: State<'_, Arc<Shell>>) -> Answer<ResumeTarget> {
+  let unset = shell.session().default_resume_target();
   let Some(device_id) = shell.peer() else {
-    return Ok(ResumeTarget::PhoneOnly);
+    return Ok(unset);
   };
   Ok(
     shell
@@ -157,7 +158,7 @@ pub async fn device_resume_target(shell: State<'_, Arc<Shell>>) -> Answer<Resume
       .into_iter()
       .find(|pref| pref.device_id == device_id)
       .map(|pref| pref.target)
-      .unwrap_or(ResumeTarget::PhoneOnly),
+      .unwrap_or(unset),
   )
 }
 
@@ -324,14 +325,8 @@ pub async fn known_devices(shell: State<'_, Arc<Shell>>) -> Answer<Vec<KnownDevi
 }
 
 #[tauri::command]
-pub async fn set_device_auto_connect(shell: State<'_, Arc<Shell>>, url: String, enabled: bool) -> Answer<()> {
-  shell.set_auto_connect(&url, enabled);
-  Ok(())
-}
-
-#[tauri::command]
-pub async fn forget_known_device(shell: State<'_, Arc<Shell>>, url: String) -> Answer<()> {
-  shell.forget_device(&url);
+pub async fn forget_known_device(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
+  shell.forget_device(&id);
   Ok(())
 }
 

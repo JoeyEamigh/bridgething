@@ -199,12 +199,13 @@ impl Lsp {
     if !session_bytes.len().is_multiple_of(3) {
       return Err(FrameError::BadLspSessionList);
     }
-    let sessions = session_bytes
-      .chunks_exact(3)
-      .map(|c| SessionTriple {
-        id: c[0],
-        session_type: c[1],
-        version: c[2],
+    let (triples, _) = session_bytes.as_chunks::<3>();
+    let sessions = triples
+      .iter()
+      .map(|&[id, session_type, version]| SessionTriple {
+        id,
+        session_type,
+        version,
       })
       .collect();
     Ok(Self {

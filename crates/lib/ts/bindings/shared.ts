@@ -221,7 +221,13 @@ export type CurrentlyActiveApplication = {
   name: string;
 };
 
-export type Device = { name: string; type: DeviceType; mac: string; default: boolean };
+export type Device = {
+  name: string;
+  type: DeviceType;
+  id: string;
+  kind: LinkKind;
+  default: boolean;
+};
 
 export type DeviceType = 'android' | 'iOS' | 'windows' | 'macOS' | 'linux' | 'unknown';
 
@@ -371,6 +377,8 @@ export type LibraryItem =
   | { type: 'show'; data: Show }
   | { type: 'artist'; data: Artist }
   | { type: 'station'; data: Station };
+
+export type LinkKind = 'bluetooth' | 'network';
 
 export type LogEntry = { tsUnixS: number; level: LogLevel; target: string; message: string };
 

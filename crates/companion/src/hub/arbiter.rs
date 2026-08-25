@@ -230,7 +230,16 @@ impl Arbiter {
   }
 
   fn set_current(&self, id: Option<String>) {
-    *self.current.lock().unwrap() = id;
+    let mut held = self.current.lock().unwrap();
+    if *held != id {
+      tracing::debug!(
+        from = ?held.as_deref(),
+        to = ?id.as_deref(),
+        sources = ?self.sources.keys().collect::<Vec<_>>(),
+        "the audible source changed"
+      );
+    }
+    *held = id;
   }
 
   async fn handle(&mut self, op: Op) {
@@ -272,6 +281,7 @@ impl Arbiter {
         }
       }
       Op::Clear { source } => {
+        tracing::debug!(%source, "a source withdrew itself from arbitration");
         self.sources.remove(&source);
         if self.current().as_deref() == Some(&source) {
           self.set_current(None);
@@ -296,6 +306,20 @@ impl Arbiter {
     if self.sources.is_empty() {
       return None;
     }
+    tracing::trace!(
+      current = ?self.current().as_deref(),
+      sources = ?self
+        .sources
+        .iter()
+        .map(|(id, state)| (
+          id.as_str(),
+          state.has_item,
+          state.snapshot.as_ref().map(|snapshot| snapshot.playback.state),
+          state.seq
+        ))
+        .collect::<Vec<_>>(),
+      "arbitrating"
+    );
     let playing: Vec<(&String, &SourceState)> = self
       .sources
       .iter()
@@ -307,12 +331,15 @@ impl Arbiter {
             .is_some_and(|snapshot| snapshot.playback.state == PlaybackState::Playing)
       })
       .collect();
-    let pool: Vec<(&String, &SourceState)> = if playing.is_empty() {
-      self.sources.iter().collect()
-    } else {
-      playing
-    };
-    pool.into_iter().max_by_key(|(_, s)| s.seq).map(|(id, _)| id.clone())
+    if let Some((id, _)) = playing.into_iter().max_by_key(|(_, s)| s.seq) {
+      return Some(id.clone());
+    }
+    if let Some(held) = self.current()
+      && self.sources.get(&held).is_some_and(|state| state.has_item)
+    {
+      return Some(held);
+    }
+    self.sources.iter().max_by_key(|(_, s)| s.seq).map(|(id, _)| id.clone())
   }
 
   async fn emit_arbitrated(&mut self) {

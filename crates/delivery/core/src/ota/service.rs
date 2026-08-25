@@ -151,11 +151,15 @@ struct Feed {
   store: Mutex<OtaRunStore>,
   events: broadcast::Sender<OtaPollEvent>,
   store_changes: broadcast::Sender<OtaStoreChange>,
+  identities: Mutex<BTreeMap<String, String>>,
 }
 
 impl Feed {
   fn emit(&self, event: OtaPollEvent) {
-    for change in self.store.lock().unwrap().ingest(event.clone()) {
+    let identity = event
+      .device_id()
+      .and_then(|device_id| self.identities.lock().unwrap().get(device_id).cloned());
+    for change in self.store.lock().unwrap().ingest(event.clone(), identity.as_deref()) {
       let _ = self.store_changes.send(change);
     }
     let _ = self.events.send(event);
@@ -377,6 +381,7 @@ impl OtaService {
       store: Mutex::new(OtaRunStore::new(deps.clock.clone(), deps.data_dir.clone())),
       events: broadcast::channel(256).0,
       store_changes: broadcast::channel(256).0,
+      identities: Mutex::new(BTreeMap::new()),
     };
 
     Arc::new(Self {
@@ -413,6 +418,7 @@ impl OtaService {
       meta: None,
     };
     self.links.lock().unwrap().insert(device_id.to_owned(), link);
+    self.feed.identities.lock().unwrap().remove(device_id);
     self
       .schedules
       .lock()
@@ -440,6 +446,24 @@ impl OtaService {
   async fn resume_interrupted(self: Arc<Self>, device_id: &str) {
     rt::sleep(Duration::from_millis(MIN_RESUME_DELAY_MS)).await;
     if !self.await_drivable(device_id).await {
+      return;
+    }
+    let held = self
+      .feed
+      .store
+      .lock()
+      .unwrap()
+      .run(device_id)
+      .and_then(|run| run.identity.clone());
+    let live = self.meta(device_id).await.map(|meta| meta.serial_number);
+    if let (Some(held), Some(live)) = (held.as_deref(), live.as_deref())
+      && held != live
+    {
+      tracing::info!(
+        %device_id,
+        "a different device answers at this address than the one the interrupted update was driving; not resuming"
+      );
+      let _ = self.feed.store.lock().unwrap().take_resume(device_id);
       return;
     }
     let resume = self.feed.store.lock().unwrap().take_resume(device_id);
@@ -791,6 +815,14 @@ impl OtaService {
   }
 
   fn record_meta(&self, device_id: &str, meta: BridgeThingMeta) {
+    if !meta.serial_number.is_empty() {
+      self
+        .feed
+        .identities
+        .lock()
+        .unwrap()
+        .insert(device_id.to_owned(), meta.serial_number.clone());
+    }
     let reached = self
       .image_targets
       .lock()

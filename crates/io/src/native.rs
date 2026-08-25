@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, Once},
   time::Duration,
 };
 
@@ -27,6 +27,16 @@ use crate::{
   ws::{WsConnect, WsFrame, WsInbox, WsTransport},
 };
 
+static CRYPTO_PROVIDER: Once = Once::new();
+
+pub(crate) fn install_ring() {
+  CRYPTO_PROVIDER.call_once(|| {
+    if rustls::crypto::ring::default_provider().install_default().is_err() {
+      tracing::warn!("a rustls crypto provider was already installed; leaving it in place");
+    }
+  });
+}
+
 pub struct ReqwestConfig {
   pub user_agent: String,
   pub request_timeout: Duration,
@@ -49,6 +59,7 @@ pub struct ReqwestTransport {
 
 impl ReqwestTransport {
   pub fn new(config: ReqwestConfig) -> Self {
+    install_ring();
     let client = reqwest::Client::builder()
       .user_agent(config.user_agent)
       .timeout(config.request_timeout)
@@ -197,6 +208,7 @@ impl TungsteniteTransport {
 
 impl WsTransport for TungsteniteTransport {
   fn connect(&self, connect: WsConnect, inbox: Arc<WsInbox>) {
+    install_ring();
     tracing::debug!(id = %connect.id, "ws: connecting (native transport)");
     let id = connect.id;
     let (out, out_rx) = mpsc::unbounded_channel::<Outgoing>();

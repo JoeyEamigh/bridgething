@@ -455,6 +455,7 @@ impl From<OtaRun> for ota::run_store::OtaRun {
     Self {
       run_id: run.run_id,
       device_id: run.device_id,
+      identity: None,
       kind: run.kind.into(),
       phase: run.phase.into(),
       steps: run.steps.into_iter().map(Into::into).collect(),
@@ -642,7 +643,7 @@ impl OtaRunStore {
       .inner
       .lock()
       .unwrap()
-      .ingest(event.into())
+      .ingest(event.into(), None)
       .into_iter()
       .map(Into::into)
       .collect()

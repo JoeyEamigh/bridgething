@@ -1,6 +1,9 @@
-use libbridgething::client::{
-  ClientToBridgeBluetoothMsgDispatch, ConnectBluetooth, ForgetBluetooth, ListBluetoothDevices, PairedDevicesMap,
-  SetBluetoothAlias,
+use libbridgething::{
+  LinkKind,
+  client::{
+    ClientToBridgeBluetoothMsgDispatch, ConnectBluetooth, ForgetBluetooth, ListBluetoothDevices, PairedDevicesMap,
+    SetBluetoothAlias,
+  },
 };
 
 use super::{HandlerResult, MsgHandle};
@@ -20,7 +23,7 @@ impl ClientToBridgeBluetoothMsgDispatch for BluetoothHandler {
 
   async fn list(&self) -> HandlerResult {
     tracing::debug!("({}) sending list of paired devices", &self.handle.from);
-    let devices = self.handle.state.devices.list().await?;
+    let devices = self.handle.state.devices.list(LinkKind::Bluetooth).await?;
     tracing::trace!("({}) devices: {:?}", &self.handle.from, &devices);
     Ok(
       self
@@ -53,7 +56,7 @@ impl ClientToBridgeBluetoothMsgDispatch for BluetoothHandler {
     self.handle.bluetooth.profile_man.forget(&mac).await?;
     self.handle.state.devices.remove(mac).await?;
 
-    let devices = self.handle.state.devices.list().await?;
+    let devices = self.handle.state.devices.list(LinkKind::Bluetooth).await?;
     self
       .handle
       .respond_to::<ListBluetoothDevices>(PairedDevicesMap(devices.into_iter().collect()))

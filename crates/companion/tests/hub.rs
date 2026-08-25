@@ -16,7 +16,7 @@ use bridgething_companion::{
   api::{CapabilityFlags, HostInfo},
   dispatch::player::PlayerDispatcher,
   hub::Hub,
-  provider::{AssetBytes, PlayerTransport, Provider, ProviderError, ProviderLink, ProviderRegistry},
+  provider::{AssetBytes, PlayerTransport, Provider, ProviderError, ProviderLink, ProviderRegistry, ResumeTarget},
   voice::dispatcher::{CatalogError, VoiceCatalogResolver},
 };
 use bridgething_gateway::{Gateway, PlayerHandler};
@@ -122,6 +122,7 @@ struct HubProvider {
   schemes: Vec<String>,
   calls: Mutex<Vec<String>>,
   peer_connects: Mutex<Vec<bool>>,
+  resume_targets: Mutex<Vec<ResumeTarget>>,
   resolver: Option<Arc<dyn VoiceCatalogResolver>>,
 }
 
@@ -140,6 +141,7 @@ impl HubProvider {
       schemes: schemes.iter().map(|s| (*s).to_owned()).collect(),
       calls: Mutex::new(Vec::new()),
       peer_connects: Mutex::new(Vec::new()),
+      resume_targets: Mutex::new(Vec::new()),
       resolver,
     })
   }
@@ -150,6 +152,10 @@ impl HubProvider {
 
   fn peer_connects(&self) -> Vec<bool> {
     self.peer_connects.lock().unwrap().clone()
+  }
+
+  fn resume_targets(&self) -> Vec<ResumeTarget> {
+    self.resume_targets.lock().unwrap().clone()
   }
 }
 
@@ -186,6 +192,10 @@ impl Provider for HubProvider {
 
   fn voice_resolver(&self) -> Option<Arc<dyn VoiceCatalogResolver>> {
     self.resolver.clone()
+  }
+
+  fn set_resume_target(&self, target: ResumeTarget) {
+    self.resume_targets.lock().unwrap().push(target);
   }
 
   async fn attach(&self, _link: ProviderLink) -> Result<(), ProviderError> {
@@ -260,6 +270,19 @@ fn hub(gateway: Gateway) -> Arc<Hub> {
   hub
 }
 
+fn hub_on(gateway: Gateway, os_name: &str) -> Arc<Hub> {
+  let hub = Hub::new(
+    Arc::new(gateway),
+    HostInfo {
+      os_name: os_name.into(),
+      ..host()
+    },
+    flags(),
+  );
+  hub.start();
+  hub
+}
+
 // ---- arbitration -------------------------------------------------------------
 
 #[tokio::test]
@@ -288,7 +311,7 @@ async fn a_playing_source_wins_over_a_paused_one() {
 }
 
 #[tokio::test]
-async fn the_most_recent_source_wins_when_nothing_is_playing() {
+async fn recency_picks_when_there_is_no_incumbent() {
   let (gateway, _peer) = Peer::link();
   let hub = hub(gateway);
   let sink = hub.sink();
@@ -301,8 +324,27 @@ async fn the_most_recent_source_wins_when_nothing_is_playing() {
   );
   assert!(
     eventually(|| hub.now_playing().current_source().as_deref() == Some("applemusic")).await,
-    "apple music was current"
+    "with nothing playing and nobody holding the floor, the freshest source is the only evidence there is"
   );
+}
+
+#[tokio::test]
+async fn a_paused_incumbent_keeps_the_floor_against_a_chattering_rival() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let sink = hub.sink();
+  sink.submit_player(
+    "applemusic",
+    snapshot(PlaybackState::Paused, "applemusic:song:b"),
+    "com.apple.Music",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("applemusic")).await,
+    "apple music took the floor"
+  );
+
   sink.submit_player(
     "spotify",
     snapshot(PlaybackState::Paused, "spotify:track:a"),
@@ -310,10 +352,57 @@ async fn the_most_recent_source_wins_when_nothing_is_playing() {
     true,
     false,
   );
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || {
+      hub.now_playing().current_source().as_deref() == Some("applemusic")
+    })
+    .await,
+    "seq means most recently updated, not most recently played; letting it decide hands the transport to \
+     whichever source last said anything, which is how pause on one player starts driving another"
+  );
+}
+
+#[tokio::test]
+async fn a_playing_rival_takes_the_floor_from_a_paused_incumbent() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let sink = hub.sink();
+  sink.submit_player(
+    "applemusic",
+    snapshot(PlaybackState::Paused, "applemusic:song:b"),
+    "com.apple.Music",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("applemusic")).await,
+    "apple music took the floor"
+  );
+
+  sink.submit_player(
+    "spotify",
+    snapshot(PlaybackState::Playing, "spotify:track:a"),
+    "com.spotify.client",
+    true,
+    false,
+  );
+
   assert!(
     eventually(|| hub.now_playing().current_source().as_deref() == Some("spotify")).await,
-    "recency flipped the pick"
+    "stickiness is not a lock: something that actually starts playing is the user's intent and takes over"
   );
+}
+
+async fn quiet_for(window: Duration, holds: impl Fn() -> bool) -> bool {
+  let deadline = tokio::time::Instant::now() + window;
+  while tokio::time::Instant::now() < deadline {
+    if !holds() {
+      return false;
+    }
+    tokio::time::sleep(Duration::from_millis(10)).await;
+  }
+  holds()
 }
 
 #[tokio::test]
@@ -786,6 +875,43 @@ async fn a_second_connect_inside_the_cooldown_does_not_resume_again() {
     provider.peer_connects(),
     vec![true, false],
     "a re-dial inside the cooldown must not resume a second time"
+  );
+}
+
+#[tokio::test]
+async fn where_an_unset_device_resumes_follows_the_kind_of_host_this_is() {
+  for phone in ["ios", "android", "iOS", "Android"] {
+    let (gateway, _peer) = Peer::link();
+    assert_eq!(
+      hub_on(gateway, phone).default_resume_target(),
+      ResumeTarget::PhoneOnly,
+      "{phone} is carried around and is the speaker of last resort, so resuming onto it is what was meant"
+    );
+  }
+
+  for desk in ["macos", "windows", "linux"] {
+    let (gateway, _peer) = Peer::link();
+    assert_eq!(
+      hub_on(gateway, desk).default_resume_target(),
+      ResumeTarget::AnySpeaker,
+      "{desk} is not carried anywhere, so resuming onto it alone is the one thing the user did not ask for"
+    );
+  }
+}
+
+#[tokio::test]
+async fn a_desktop_hosts_unset_device_resumes_onto_any_speaker() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub_on(gateway, "macos");
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+
+  hub.peer_connected("carthing-1").await;
+
+  assert_eq!(
+    provider.resume_targets().last().copied(),
+    Some(ResumeTarget::AnySpeaker),
+    "the default reaches the provider that acts on it, not just the getter that reports it"
   );
 }
 

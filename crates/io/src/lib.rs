@@ -15,3 +15,8 @@ pub use native::{ReqwestConfig, ReqwestTransport, TungsteniteTransport};
 #[cfg(all(feature = "web-io", target_arch = "wasm32"))]
 pub use web::FetchTransport;
 pub use ws::{WsConnect, WsEvent, WsFrame, WsInbox, WsTransport};
+
+pub fn install_crypto_provider() {
+  #[cfg(all(feature = "native-io", not(target_arch = "wasm32")))]
+  native::install_ring();
+}

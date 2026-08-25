@@ -75,7 +75,7 @@ pub struct StockDevice {
 impl From<Device> for StockDevice {
   fn from(data: Device) -> Self {
     Self {
-      address: data.mac,
+      address: data.id,
       default: data.default,
       device_info: StockDeviceInfo {
         name: data.name,

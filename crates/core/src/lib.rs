@@ -90,6 +90,7 @@ pub async fn run_daemon(config: DaemonConfig) {
 }
 
 pub async fn init(config: DaemonConfig) -> Daemon {
+  bridgething_io::install_crypto_provider();
   let (log_tap, log_tap_layer) = state::LogTap::new();
   if config.install_logger {
     monitoring::init_logger(log_tap_layer);
@@ -135,7 +136,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     }
   };
 
-  let devices = DeviceStore::new(db.clone());
+  let devices = DeviceStore::new(db.clone(), bus.clone());
   let kv = KvStore::new(db.clone());
   let meta_store = MetaStore::new(db.clone());
 
@@ -342,7 +343,12 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   });
 
   spawn_ota_event_forwarder(bluetooth.clone(), state.client_man.clone(), ota_events_rx);
-  spawn_nickname_observer(state.meta.subscribe(), bluetooth.clone(), state.bus.clone());
+  spawn_nickname_observer(
+    state.meta.subscribe(),
+    bluetooth.clone(),
+    state.bus.clone(),
+    serial_number.clone(),
+  );
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
@@ -612,6 +618,7 @@ fn spawn_nickname_observer(
   mut rx: tokio::sync::watch::Receiver<Option<String>>,
   bluetooth: bluetooth::BluetoothMan,
   bus: net::WireEventBus,
+  serial: String,
 ) {
   use libbridgething::{
     client::{BridgeToClientSystemMsgEvent, DeviceNicknameReply as ClientNicknameReply},
@@ -621,7 +628,7 @@ fn spawn_nickname_observer(
     loop {
       let value = rx.borrow_and_update().clone();
 
-      systemd::avahi::publish_bridgething_service(value.as_deref()).await;
+      systemd::avahi::publish_bridgething_service(value.as_deref(), &serial).await;
 
       bluetooth
         .gateway_man

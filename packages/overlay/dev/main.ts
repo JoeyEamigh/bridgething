@@ -99,7 +99,7 @@ function notification(
 function peers(useful: boolean): PeerSnapshotMap {
   return {
     'aa:bb:cc:dd:ee:ff': {
-      device: { name: 'iPhone', deviceType: 'ios', mac: 'aa:bb:cc:dd:ee:ff', default: true },
+      device: { name: 'iPhone', type: 'iOS', id: 'aa:bb:cc:dd:ee:ff', kind: 'bluetooth', default: true },
       paired: true,
       iap2: useful ? 'identified' : 'none',
       companion: { type: 'none' },

@@ -3,7 +3,7 @@ use std::time::Duration;
 use bridgething::Address;
 use bridgething_test_harness::Harness;
 use libbridgething::{
-  CompanionAuthorityScope, Device, DeviceType, GatewayCapabilities, GatewayInfo, MediaItem, PeerIap2Status,
+  CompanionAuthorityScope, Device, DeviceType, GatewayCapabilities, GatewayInfo, LinkKind, MediaItem, PeerIap2Status,
   PlayerState, gateway::AuthorityClaim,
 };
 
@@ -163,7 +163,8 @@ async fn iap2_control_blip_does_not_flap_stock_connection() {
   let device = Device {
     name: "test-iphone".into(),
     device_type: DeviceType::Ios,
-    mac: mac.to_string(),
+    id: mac.to_string(),
+    kind: LinkKind::Bluetooth,
     default: false,
   };
   let peers = harness.state().peers.clone();
@@ -236,7 +237,8 @@ fn ios_device(mac: Address) -> Device {
   Device {
     name: "test-iphone".into(),
     device_type: DeviceType::Ios,
-    mac: mac.to_string(),
+    id: mac.to_string(),
+    kind: LinkKind::Bluetooth,
     default: false,
   }
 }

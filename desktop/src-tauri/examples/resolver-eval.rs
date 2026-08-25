@@ -90,9 +90,7 @@ impl Observer for Silent {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Boxed> {
-  rustls::crypto::ring::default_provider()
-    .install_default()
-    .map_err(|_| "a rustls crypto provider is already installed")?;
+  bridgething_io::install_crypto_provider();
   let args = parse(std::env::args().skip(1).collect())?;
   let mut rows = load_rows(&args.rows)?;
 

@@ -121,7 +121,7 @@ async fn a_session_owned_by_a_provider_is_never_double_emitted() {
 }
 
 #[tokio::test]
-async fn the_transition_from_playing_to_none_clears_the_source() {
+async fn pausing_the_only_session_keeps_it_rather_than_dropping_the_source() {
   let rig = boot(Vec::new()).await;
   rig
     .backend
@@ -133,8 +133,34 @@ async fn the_transition_from_playing_to_none_clears_the_source() {
   rig.backend.emit(vec![paused]);
 
   assert!(
+    eventually(|| rig
+      .peer
+      .latest(snapshot_of)
+      .is_some_and(|state| state.playback.state == PlaybackState::Paused))
+    .await,
+    "a pause is a state the source reports, not a reason to stop being a source"
+  );
+  assert_eq!(
+    rig.hub.now_playing().current_source().as_deref(),
+    Some(SOURCE_ID),
+    "a paused session with a track is exactly what resume, skip and seek are for; dropping it here hands \
+     every one of those verbs to whatever stale source is left in the table"
+  );
+}
+
+#[tokio::test]
+async fn a_session_that_leaves_the_roster_clears_the_source() {
+  let rig = boot(Vec::new()).await;
+  rig
+    .backend
+    .emit(vec![playing("Video", "Creator", "com.google.android.youtube")]);
+  rig.peer.wait("the first snapshot", snapshot_of).await;
+
+  rig.backend.emit(Vec::new());
+
+  assert!(
     eventually(|| rig.hub.now_playing().current_source().is_none()).await,
-    "the audible source cleared"
+    "the session actually going away is the one thing that does clear the source"
   );
 }
 

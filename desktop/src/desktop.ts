@@ -3,7 +3,7 @@ import { isCompanion, useSession, type CompanionSession } from '@bridgething/ui'
 
 import type { InstallOutcome, OtaOutcome } from './tauri-session.ts';
 
-export type KnownDevice = { url: string; name: string; autoConnect: boolean; lastConnectedAt: string | null };
+export type KnownDevice = { id: string; url: string; name: string; lastConnectedAt: string | null };
 
 export interface DesktopSession extends CompanionSession {
   readonly host: 'desktop';
@@ -12,8 +12,7 @@ export interface DesktopSession extends CompanionSession {
   defaultGateway(): Promise<string>;
 
   knownDevices(): Promise<KnownDevice[]>;
-  setDeviceAutoConnect(url: string, enabled: boolean): Promise<void>;
-  forgetKnownDevice(url: string): Promise<void>;
+  forgetKnownDevice(id: string): Promise<void>;
 
   selectedDevice(): Promise<string | null>;
   selectDevice(deviceId: string | null): Promise<void>;

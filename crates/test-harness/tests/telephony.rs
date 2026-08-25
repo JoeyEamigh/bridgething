@@ -3,7 +3,7 @@ use std::time::Duration;
 use bridgething::{Address, ClientMode, TappedFrame};
 use bridgething_iap2::{SessionEvent, csm::telephony::CallStateUpdate};
 use bridgething_test_harness::Harness;
-use libbridgething::{Device, DeviceType, PeerIap2Status};
+use libbridgething::{Device, DeviceType, LinkKind, PeerIap2Status};
 use serde_json::Value;
 
 const CONVERGE: Duration = Duration::from_secs(3);
@@ -27,7 +27,8 @@ async fn identify_ios_peer(harness: &Harness, mac: Address) {
       Device {
         name: "test-iphone".into(),
         device_type: DeviceType::Ios,
-        mac: mac.to_string(),
+        id: mac.to_string(),
+        kind: LinkKind::Bluetooth,
         default: false,
       },
     )

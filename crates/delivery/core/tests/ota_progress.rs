@@ -34,6 +34,7 @@ fn run() -> OtaRun {
   OtaRun {
     run_id: "run-1".into(),
     device_id: "AA:BB:CC:DD:EE:FF".into(),
+    identity: None,
     kind: OtaKind::Image,
     phase: OtaRunPhase::Downloading,
     steps: image_steps(),

@@ -6,10 +6,6 @@ use crate::{chrome::ChromeCommand, state::BROWSER_WEBAPP_ID, stock::StockSetupSe
 
 const BROWSER_NAVIGATE_KEY: &str = "@cdp/navigate";
 
-fn setup_finished(last_device: Option<&str>, gateway_connected: bool) -> bool {
-  last_device.is_some() || gateway_connected
-}
-
 #[derive(Debug)]
 pub struct StorageHandler {
   handle: MsgHandle,
@@ -42,11 +38,14 @@ impl ClientToBridgeStoreMsgRequestDispatch for StorageHandler {
         &self.handle.from
       );
 
-      let last_device = self.handle.state.devices.last().await?;
-      let finished = setup_finished(last_device.as_deref(), self.handle.state.gateway_info().is_some());
-      let payload = if finished { "finished" } else { "" }.to_owned();
+      let finished = self.handle.state.devices.last().await?.is_some();
+      let status = if finished {
+        StockSetupSend::finished()
+      } else {
+        StockSetupSend::unfinished()
+      };
 
-      self.handle.send_stock(StockSetupSend::Status { payload }).await?;
+      self.handle.send_stock(status).await?;
 
       if finished {
         value = Some("finished".to_string());
@@ -108,23 +107,5 @@ impl ClientToBridgeStoreMsgRequestDispatch for StorageHandler {
         .respond_to::<KVDelete>(StorageResponse { key, value: None })
         .await?,
     )
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::setup_finished;
-
-  #[test]
-  fn stock_setup_finishes_for_a_paired_device_or_a_live_gateway() {
-    assert!(
-      !setup_finished(None, false),
-      "nothing paired or connected stays in setup"
-    );
-    assert!(setup_finished(Some("phone"), false), "a paired device finishes setup");
-    assert!(
-      setup_finished(None, true),
-      "a network gateway finishes setup without a paired phone"
-    );
   }
 }

@@ -1078,6 +1078,10 @@ impl Session {
     self.hub.set_device_auto_resume(device_id, enabled);
   }
 
+  pub fn default_resume_target(&self) -> ResumeTarget {
+    self.hub.default_resume_target()
+  }
+
   pub fn set_device_resume_target(&self, device_id: &str, target: ResumeTarget) {
     self.hub.set_device_resume_target(device_id, target);
   }

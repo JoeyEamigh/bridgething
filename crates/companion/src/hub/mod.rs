@@ -328,13 +328,29 @@ impl Hub {
     self.resume.lock().unwrap().targets.clone()
   }
 
+  pub fn default_resume_target(&self) -> ResumeTarget {
+    match self
+      .announced
+      .lock()
+      .unwrap()
+      .host
+      .os_name
+      .to_ascii_lowercase()
+      .as_str()
+    {
+      "ios" | "android" => ResumeTarget::PhoneOnly,
+      _ => ResumeTarget::AnySpeaker,
+    }
+  }
+
   fn effective_resume_target(&self) -> ResumeTarget {
+    let fallback = self.default_resume_target();
     let resume = self.resume.lock().unwrap();
     let all_any_speaker = !resume.connected.is_empty()
       && resume
         .connected
         .iter()
-        .all(|id| resume.targets.get(id).copied().unwrap_or_default() == ResumeTarget::AnySpeaker);
+        .all(|id| resume.targets.get(id).copied().unwrap_or(fallback) == ResumeTarget::AnySpeaker);
     if all_any_speaker {
       ResumeTarget::AnySpeaker
     } else {

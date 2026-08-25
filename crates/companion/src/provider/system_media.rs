@@ -74,10 +74,16 @@ impl Core {
     let Some(sink) = self.current_sink() else { return };
     let owned = (self.owned)();
     let sessions = self.snapshots().await;
-    let picked = sessions
+    let visible: Vec<MediaSessionSnapshot> = sessions
       .into_iter()
       .filter(|snap| !owned.contains(&snap.package))
-      .find(|snap| snap.playing);
+      .collect();
+    let held = self.state.lock().unwrap().package.clone();
+    let picked = visible.iter().find(|snap| snap.playing).or_else(|| {
+      held
+        .as_deref()
+        .and_then(|package| visible.iter().find(|snap| snap.package == package))
+    });
 
     let Some(snap) = picked else {
       let cleared = {
@@ -87,12 +93,24 @@ impl Core {
         had
       };
       if cleared {
+        tracing::debug!(
+          held = ?held.as_deref(),
+          roster = ?visible.iter().map(|snap| snap.package.as_str()).collect::<Vec<_>>(),
+          "the session behind the system source is gone; dropping the source"
+        );
         sink.clear_source(SOURCE_ID);
       }
       return;
     };
+    tracing::trace!(
+      picked = %snap.package,
+      playing = snap.playing,
+      held = ?held.as_deref(),
+      roster = ?visible.iter().map(|snap| snap.package.as_str()).collect::<Vec<_>>(),
+      "the system source picked a session"
+    );
 
-    let upcoming = upcoming_window(&snap);
+    let upcoming = upcoming_window(snap);
     let package = snap.package.clone();
     let player_key = MediaSessionSnapshot {
       queue: Vec::new(),
@@ -117,7 +135,7 @@ impl Core {
     };
     if push_player {
       let has_item = snap.title.is_some() || snap.artist.is_some();
-      sink.submit_player(SOURCE_ID, to_player_state(&snap), &package, has_item, false);
+      sink.submit_player(SOURCE_ID, to_player_state(snap), &package, has_item, false);
     }
     if push_queue {
       sink.submit_queue(SOURCE_ID, to_queue_snapshot(&upcoming, &package));

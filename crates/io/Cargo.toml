@@ -9,12 +9,18 @@ homepage.workspace = true
 
 [dependencies]
 futures = { workspace = true, optional = true }
-reqwest = { version = "0.13.4", features = [
+reqwest = { version = "0.13.4", default-features = false, features = [
   "json",
   "gzip",
   "stream",
   "form",
   "query",
+  "http2",
+  "system-proxy",
+  "rustls-no-provider",
+], optional = true }
+rustls = { version = "0.23.43", default-features = false, features = [
+  "ring",
 ], optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
@@ -29,6 +35,7 @@ default = []
 native-io = [
   "dep:futures",
   "dep:reqwest",
+  "dep:rustls",
   "dep:tokio-tungstenite",
   "tokio/rt",
   "tokio/macros",

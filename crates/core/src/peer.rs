@@ -135,7 +135,7 @@ impl PeerTracker {
     self.snapshot_rx.clone()
   }
 
-  pub fn first_connected_gateway(&self) -> Option<GatewayInfo> {
+  pub fn connected_companion(&self) -> Option<GatewayInfo> {
     self
       .snapshot_rx
       .borrow()
@@ -470,7 +470,7 @@ impl PeerActor {
           addr,
           BridgeToClientBluetoothMsgEvent::ConnectedDevice(WireConnectedDevice {
             name: device.name.clone(),
-            mac: device.mac.clone(),
+            mac: device.id.clone(),
           }),
         )
         .await
@@ -508,7 +508,7 @@ impl PeerActor {
       .broadcast(
         BridgeToClientBluetoothMsg::ConnectedDevice(WireConnectedDevice {
           name: device.name.clone(),
-          mac: device.mac.clone(),
+          mac: device.id.clone(),
         }),
         MsgMeta::Event,
       )
@@ -553,7 +553,7 @@ impl PeerActor {
         .snapshot
         .values()
         .filter(|p| p.paired)
-        .map(|p| (p.device.mac.clone(), p.device.clone()))
+        .map(|p| (p.device.id.clone(), p.device.clone()))
         .collect();
       if let Err(errs) = self
         .bus
@@ -591,7 +591,7 @@ impl PeerActor {
           .broadcast(
             BridgeToClientBluetoothMsg::ConnectedDevice(WireConnectedDevice {
               name: device.name.clone(),
-              mac: device.mac.clone(),
+              mac: device.id.clone(),
             }),
             MsgMeta::Event,
           )
@@ -745,7 +745,7 @@ struct Diff {
 
 impl Diff {
   fn compute(mac: Address, prior: Option<Peer>, current: Option<Peer>, peers: &HashMap<Address, Peer>) -> Self {
-    let identity_mac = current.as_ref().or(prior.as_ref()).map(|p| p.device.mac.clone());
+    let identity = current.as_ref().or(prior.as_ref()).map(|p| p.device.id.clone());
 
     let was_paired = prior.as_ref().is_some_and(|p| p.paired);
     let is_paired = current.as_ref().is_some_and(|p| p.paired);
@@ -754,7 +754,7 @@ impl Diff {
 
     let other_useful = peers
       .values()
-      .filter(|p| identity_mac.as_deref() != Some(&p.device.mac))
+      .filter(|p| identity.as_deref() != Some(&p.device.id))
       .any(|p| p.has_useful_link());
     let any_useful_before = other_useful || was_useful_self;
     let any_useful_now = other_useful || is_useful_self;

@@ -31,12 +31,12 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 bridgething-companion = { path = "../../crates/companion", features = ["native-io"] }
 bridgething-delivery = { path = "../../crates/delivery/core" }
 bridgething-gateway = { path = "../../crates/gateway-rs", features = ["native-ws"] }
+bridgething-io = { path = "../../crates/io", features = ["native-io"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 directories = "6.0.0"
 iana-time-zone = "0.1.65"
 libbridgething = { path = "../../crates/lib" }
 libc = "0.2.189"
-rustls = { version = "0.23.43", features = ["ring"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 spotify = { path = "../../crates/spotify", features = ["native-io"] }
@@ -77,7 +77,6 @@ ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 base64 = "0.23.1"
-bridgething-io = { path = "../../crates/io", features = ["native-io"] }
 futures.workspace = true
 url = "2.5.8"
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }

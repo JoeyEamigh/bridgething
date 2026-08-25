@@ -107,7 +107,7 @@ async fn open_tunnel(harness: &Harness, companion: &Gateway) -> (TcpStream, uuid
   announce(companion).await;
   assert!(
     harness
-      .wait_for(|s| s.peers.first_connected_gateway().is_some(), SETTLE)
+      .wait_for(|s| s.peers.connected_companion().is_some(), SETTLE)
       .await,
     "companion registered before the tunnel is opened"
   );

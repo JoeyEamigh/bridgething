@@ -279,7 +279,7 @@ impl AppState {
   }
 
   pub fn gateway_info(&self) -> Option<GatewayInfo> {
-    self.peers.first_connected_gateway()
+    self.peers.connected_companion()
   }
 
   pub async fn reset(&self) -> StateResult<()> {

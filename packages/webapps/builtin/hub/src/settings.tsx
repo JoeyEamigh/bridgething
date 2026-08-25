@@ -172,11 +172,11 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
         ) : (
           <div className="flex flex-col gap-2">
             {devices.map(d => (
-              <div key={d.mac} className="flex items-center gap-3 border border-rule bg-bg px-3 py-2.5">
+              <div key={d.id} className="flex items-center gap-3 border border-rule bg-bg px-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-row font-medium text-off-white">{d.name || d.mac}</span>
-                    {connectedMac === d.mac && (
+                    <span className="truncate text-row font-medium text-off-white">{d.name || d.id}</span>
+                    {connectedMac === d.id && (
                       <span className="border border-accent/30 bg-accent-soft px-2 py-0.5 font-mono text-eyebrow tracking-[0.12em] text-accent uppercase">
                         connected
                       </span>
@@ -184,19 +184,19 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
                   </div>
                   <div className="font-mono text-hint text-dim">{deviceLabel(d)}</div>
                 </div>
-                {connectedMac !== d.mac && (
+                {connectedMac !== d.id && (
                   <button
                     type="button"
-                    onClick={() => reconnect(d.mac)}
-                    disabled={busyMac === d.mac}
+                    onClick={() => reconnect(d.id)}
+                    disabled={busyMac === d.id}
                     className="border border-edge px-3 py-1.5 font-mono text-hint text-near transition active:bg-neutral-soft disabled:opacity-50">
                     reconnect
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => forget(d.mac)}
-                  disabled={busyMac === d.mac}
+                  onClick={() => forget(d.id)}
+                  disabled={busyMac === d.id}
                   className="border border-err/40 bg-err-soft px-3 py-1.5 font-mono text-hint text-err transition active:opacity-80 disabled:opacity-50">
                   forget
                 </button>
@@ -518,7 +518,7 @@ function BackIcon() {
 
 function deviceLabel(d: Device): string {
   const type = d.type === 'unknown' ? '' : d.type;
-  return [type, d.default ? 'default' : ''].filter(Boolean).join(' • ') || d.mac;
+  return [type, d.default ? 'default' : ''].filter(Boolean).join(' • ') || d.id;
 }
 
 function fmtBytes(n: number): string {

@@ -10,6 +10,7 @@ use mdns_sd::{ServiceDaemon, ServiceEvent};
 use serde::Serialize;
 
 const NICKNAME_TXT_KEY: &str = "nickname";
+const SERIAL_TXT_KEY: &str = "serial";
 const WELL_KNOWN_HOST: &str = "bridgething.local";
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -29,6 +30,8 @@ pub struct Endpoint {
   pub url: String,
   pub host: String,
   pub nickname: Option<String>,
+  pub serial: Option<String>,
+  pub browsed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,6 +147,8 @@ fn well_known_endpoint() -> Endpoint {
     url: format!("ws://{WELL_KNOWN_HOST}:{BRIDGETHING_NETWORK_GATEWAY_PORT}/"),
     host: WELL_KNOWN_HOST.to_owned(),
     nickname: None,
+    serial: None,
+    browsed: false,
   }
 }
 
@@ -203,15 +208,20 @@ fn endpoint_for(service: &mdns_sd::ResolvedService) -> Option<Endpoint> {
     return None;
   }
   let port = service.get_port();
+  let text = |key| {
+    service
+      .txt_properties
+      .get_property_val_str(key)
+      .filter(|value| !value.is_empty())
+      .map(str::to_owned)
+  };
   Some(Endpoint {
     id: service.get_fullname().to_owned(),
     url: format!("ws://{host}:{port}/"),
     host,
-    nickname: service
-      .txt_properties
-      .get_property_val_str(NICKNAME_TXT_KEY)
-      .filter(|value| !value.is_empty())
-      .map(str::to_owned),
+    nickname: text(NICKNAME_TXT_KEY),
+    serial: text(SERIAL_TXT_KEY),
+    browsed: true,
   })
 }
 
@@ -244,7 +254,7 @@ mod tests {
       PROBE_HOST,
       "127.0.0.1",
       8892,
-      &[(NICKNAME_TXT_KEY, nickname)][..],
+      &[(NICKNAME_TXT_KEY, nickname), (SERIAL_TXT_KEY, "8558R481Q61R")][..],
     )
     .expect("the announcement is well formed");
     registrar.register(info).expect("the announcement goes out");
@@ -298,6 +308,12 @@ mod tests {
       Some("Headless Probe"),
       "the nickname txt record names the endpoint"
     );
+    assert_eq!(
+      endpoint.serial.as_deref(),
+      Some("8558R481Q61R"),
+      "and the serial txt record identifies the device behind it"
+    );
+    assert!(endpoint.browsed, "a browse hit is not the well-known probe");
     assert!(
       discovery.endpoints().iter().any(|held| held.id == endpoint.id),
       "the browse result is retained for the picker"
@@ -377,6 +393,8 @@ mod tests {
       url: "ws://bridgething.local:8892/".to_owned(),
       host: "bridgething.local".to_owned(),
       nickname: Some("UART Superbird".to_owned()),
+      serial: Some("8558R481Q61R".to_owned()),
+      browsed: true,
     };
 
     let offered = offered(vec![announced.clone()], Some(well_known_endpoint()));
@@ -395,6 +413,8 @@ mod tests {
       url: "ws://other-thing.local:8892/".to_owned(),
       host: "other-thing.local".to_owned(),
       nickname: None,
+      serial: None,
+      browsed: true,
     };
 
     let offered = offered(vec![elsewhere], Some(well_known_endpoint()));

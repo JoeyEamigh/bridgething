@@ -317,6 +317,10 @@ impl CompanionSession {
     self.session.set_device_auto_resume(&device_id, enabled);
   }
 
+  pub fn default_resume_target(&self) -> ResumeTarget {
+    self.session.default_resume_target()
+  }
+
   pub async fn set_device_resume_target(&self, device_id: String, target: ResumeTarget) {
     self.session.set_device_resume_target(&device_id, target);
   }

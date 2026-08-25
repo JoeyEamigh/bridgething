@@ -1,5 +1,5 @@
 use std::{
-  collections::{HashMap, HashSet},
+  collections::HashMap,
   net::SocketAddr,
   sync::Arc,
   time::{Duration, Instant},
@@ -94,10 +94,13 @@ async fn sweep(shell: &Arc<Shell>, found: &[Endpoint], schedule: &mut HashMap<St
     .iter()
     .map(|url| addrs.get(url).cloned().unwrap_or_default())
     .collect();
-  let known: HashSet<String> = shell.known_devices().into_iter().map(|device| device.url).collect();
+  let candidates: Vec<&Endpoint> = due
+    .iter()
+    .filter_map(|url| found.iter().find(|endpoint| &endpoint.url == url))
+    .collect();
 
   let mut dials = JoinSet::new();
-  for url in distinct(&due, &addrs, &held, &known) {
+  for url in distinct(&candidates, &addrs, &held) {
     let label = found
       .iter()
       .find(|endpoint| endpoint.url == url)
@@ -133,26 +136,26 @@ async fn sweep(shell: &Arc<Shell>, found: &[Endpoint], schedule: &mut HashMap<St
     .min()
 }
 
-fn distinct(
-  due: &[String],
-  addrs: &HashMap<String, Vec<SocketAddr>>,
-  held: &[Vec<SocketAddr>],
-  known: &HashSet<String>,
-) -> Vec<String> {
-  let of = |url: &String| addrs.get(url).map_or(&[][..], Vec::as_slice);
+fn distinct(due: &[&Endpoint], addrs: &HashMap<String, Vec<SocketAddr>>, held: &[Vec<SocketAddr>]) -> Vec<String> {
+  let of = |endpoint: &Endpoint| addrs.get(&endpoint.url).map_or(&[][..], Vec::as_slice);
   let overlaps = |a: &[SocketAddr], b: &[SocketAddr]| a.iter().any(|addr| b.contains(addr));
-  let mut picked: Vec<String> = Vec::new();
-  for url in due {
-    if held.iter().any(|line| overlaps(of(url), line)) {
+  let same = |a: &Endpoint, b: &Endpoint| match (a.serial.as_deref(), b.serial.as_deref()) {
+    (Some(left), Some(right)) => left == right,
+    _ => overlaps(of(a), of(b)),
+  };
+
+  let mut picked: Vec<&Endpoint> = Vec::new();
+  for endpoint in due {
+    if held.iter().any(|line| overlaps(of(endpoint), line)) {
       continue;
     }
-    match picked.iter().position(|winner| overlaps(of(url), of(winner))) {
-      Some(seat) if known.contains(url) && !known.contains(&picked[seat]) => picked[seat] = url.clone(),
+    match picked.iter().position(|winner| same(endpoint, winner)) {
+      Some(seat) if endpoint.browsed && !picked[seat].browsed => picked[seat] = endpoint,
       Some(_) => {}
-      None => picked.push(url.clone()),
+      None => picked.push(endpoint),
     }
   }
-  picked
+  picked.into_iter().map(|endpoint| endpoint.url.clone()).collect()
 }
 
 async fn resolved(urls: Vec<String>) -> HashMap<String, Vec<SocketAddr>> {
@@ -198,38 +201,87 @@ mod tests {
       .collect()
   }
 
+  fn browsed(host: &str, serial: Option<&str>) -> Endpoint {
+    Endpoint {
+      id: format!("{host}._bridgething._tcp.local."),
+      url: format!("ws://{host}:8892/"),
+      host: host.to_owned(),
+      nickname: None,
+      serial: serial.map(str::to_owned),
+      browsed: true,
+    }
+  }
+
+  fn well_known() -> Endpoint {
+    Endpoint {
+      id: "bridgething.local:8892".to_owned(),
+      url: "ws://bridgething.local:8892/".to_owned(),
+      host: "bridgething.local".to_owned(),
+      nickname: None,
+      serial: None,
+      browsed: false,
+    }
+  }
+
   #[test]
-  fn two_names_for_one_device_are_one_dial_and_a_remembered_name_wins_it() {
-    let due = vec![
-      "ws://bridgething-abc.local:8892/".to_owned(),
-      "ws://bridgething.local:8892/".to_owned(),
-    ];
+  fn two_names_for_one_device_are_one_dial_and_the_browsed_name_wins_it() {
+    let named = browsed("bridgething-q61r.local", None);
+    let probe = well_known();
     let addrs = table(&[
-      ("ws://bridgething-abc.local:8892/", &[addr(2)][..]),
-      ("ws://bridgething.local:8892/", &[addr(2)][..]),
+      (named.url.as_str(), &[addr(2)][..]),
+      (probe.url.as_str(), &[addr(2)][..]),
     ]);
-    let known = HashSet::from(["ws://bridgething.local:8892/".to_owned()]);
 
     assert_eq!(
-      distinct(&due, &addrs, &[], &known),
-      vec!["ws://bridgething.local:8892/".to_owned()],
-      "one device behind two names is dialed once, by the name already on file"
+      distinct(&[&probe, &named], &addrs, &[]),
+      vec![named.url.clone()],
+      "the well-known host is the one name every device answers to, so it never wins a seat"
+    );
+  }
+
+  #[test]
+  fn a_published_serial_settles_a_duplicate_no_address_would_have() {
+    let named = browsed("bridgething-q61r.local", Some("8558R481Q61R"));
+    let moved = browsed("bridgething.local", Some("8558R481Q61R"));
+    let addrs = table(&[
+      (named.url.as_str(), &[addr(2)][..]),
+      (moved.url.as_str(), &[addr(9)][..]),
+    ]);
+
+    assert_eq!(
+      distinct(&[&named, &moved], &addrs, &[]).len(),
+      1,
+      "one serial is one device however many addresses it is answering on"
+    );
+  }
+
+  #[test]
+  fn two_serials_are_two_dials_even_behind_one_address() {
+    let first = browsed("bridgething-q61r.local", Some("8558R481Q61R"));
+    let second = browsed("bridgething-a12b.local", Some("1234A56B7A12B"));
+    let addrs = table(&[
+      (first.url.as_str(), &[addr(2)][..]),
+      (second.url.as_str(), &[addr(2)][..]),
+    ]);
+
+    assert_eq!(
+      distinct(&[&first, &second], &addrs, &[]).len(),
+      2,
+      "a shared address is a guess and a serial is not, so the serial decides"
     );
   }
 
   #[test]
   fn two_devices_are_two_dials() {
-    let due = vec![
-      "ws://bridgething-abc.local:8892/".to_owned(),
-      "ws://bridgething-def.local:8892/".to_owned(),
-    ];
+    let first = browsed("bridgething-q61r.local", None);
+    let second = browsed("bridgething-a12b.local", None);
     let addrs = table(&[
-      ("ws://bridgething-abc.local:8892/", &[addr(2)][..]),
-      ("ws://bridgething-def.local:8892/", &[addr(10)][..]),
+      (first.url.as_str(), &[addr(2)][..]),
+      (second.url.as_str(), &[addr(10)][..]),
     ]);
 
     assert_eq!(
-      distinct(&due, &addrs, &[], &HashSet::new()).len(),
+      distinct(&[&first, &second], &addrs, &[]).len(),
       2,
       "every attached device gets its own dial"
     );
@@ -237,29 +289,24 @@ mod tests {
 
   #[test]
   fn a_second_name_for_a_device_already_linked_is_left_alone() {
-    let due = vec!["ws://bridgething.local:8892/".to_owned()];
-    let addrs = table(&[("ws://bridgething.local:8892/", &[addr(2)][..])]);
+    let probe = well_known();
+    let addrs = table(&[(probe.url.as_str(), &[addr(2)][..])]);
     let held = vec![vec![addr(2)]];
 
     assert!(
-      distinct(&due, &addrs, &held, &HashSet::new()).is_empty(),
+      distinct(&[&probe], &addrs, &held).is_empty(),
       "a device holding a link is not dialed again under another name"
     );
   }
 
   #[test]
   fn a_name_that_does_not_resolve_is_still_dialed() {
-    let due = vec![
-      "ws://bridgething-abc.local:8892/".to_owned(),
-      "ws://bridgething-def.local:8892/".to_owned(),
-    ];
-    let addrs = table(&[
-      ("ws://bridgething-abc.local:8892/", &[][..]),
-      ("ws://bridgething-def.local:8892/", &[][..]),
-    ]);
+    let first = browsed("bridgething-q61r.local", None);
+    let second = browsed("bridgething-a12b.local", None);
+    let addrs = table(&[(first.url.as_str(), &[][..]), (second.url.as_str(), &[][..])]);
 
     assert_eq!(
-      distinct(&due, &addrs, &[], &HashSet::new()).len(),
+      distinct(&[&first, &second], &addrs, &[]).len(),
       2,
       "an unresolvable name cannot be proven a duplicate, so the dial decides"
     );

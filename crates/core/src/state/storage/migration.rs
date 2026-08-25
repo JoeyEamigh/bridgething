@@ -1,7 +1,11 @@
 use sea_orm_migration::prelude::*;
 
 pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-  vec![Box::new(M0002CreateState), Box::new(M0003CreateWebappProvenance)]
+  vec![
+    Box::new(M0002CreateState),
+    Box::new(M0003CreateWebappProvenance),
+    Box::new(M0004DeviceIdentity),
+  ]
 }
 
 struct M0002CreateState;
@@ -93,6 +97,60 @@ impl MigrationTrait for M0003CreateWebappProvenance {
   async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
     manager
       .drop_table(Table::drop().table(WebappProvenance::Table).to_owned())
+      .await
+  }
+}
+
+struct M0004DeviceIdentity;
+
+impl MigrationName for M0004DeviceIdentity {
+  fn name(&self) -> &str {
+    "m0004_device_identity"
+  }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for M0004DeviceIdentity {
+  async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .alter_table(
+        Table::alter()
+          .table(Devices::Table)
+          .rename_column(Devices::Mac, Alias::new("id"))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .alter_table(
+        Table::alter()
+          .table(Devices::Table)
+          .add_column(
+            ColumnDef::new(Alias::new("kind"))
+              .text()
+              .not_null()
+              .default("bluetooth"),
+          )
+          .to_owned(),
+      )
+      .await
+  }
+
+  async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .alter_table(
+        Table::alter()
+          .table(Devices::Table)
+          .drop_column(Alias::new("kind"))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .alter_table(
+        Table::alter()
+          .table(Devices::Table)
+          .rename_column(Alias::new("id"), Devices::Mac)
+          .to_owned(),
+      )
       .await
   }
 }

@@ -1,4 +1,5 @@
 #![allow(non_snake_case, non_upper_case_globals)]
+#![allow(clippy::missing_safety_doc)]
 
 pub mod core {
   use std::ffi::c_void;
@@ -354,6 +355,14 @@ pub mod Media {
 
     impl GlobalSystemMediaTransportControlsSessionPlaybackControls {
       pub fn IsPlaybackPositionEnabled(&self) -> Result<bool> {
+        unimplemented!("the darwin lane never reaches a winrt call")
+      }
+
+      pub fn IsNextEnabled(&self) -> Result<bool> {
+        unimplemented!("the darwin lane never reaches a winrt call")
+      }
+
+      pub fn IsPreviousEnabled(&self) -> Result<bool> {
         unimplemented!("the darwin lane never reaches a winrt call")
       }
     }

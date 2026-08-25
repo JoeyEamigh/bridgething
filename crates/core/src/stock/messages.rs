@@ -5,7 +5,7 @@ use crate::{
   net::{WSError, WireEventBus},
   stock::{
     StockConfigurationSend, StockConnectionSend, StockConnectionType, StockDeviceType, StockInterAppSend,
-    StockInterAppSendPayload, StockSetupSend,
+    StockInterAppSendPayload,
   },
 };
 
@@ -18,14 +18,9 @@ pub async fn broadcast_stock_connection(
   bus.set_stock_phone(phone_type);
 
   bus
-    .broadcast_stock(StockSetupSend::Status {
-      payload: "finished".to_string(),
-    })
-    .await?;
-  bus
     .broadcast_stock(StockConnectionSend::RemoteStatus {
       payload: true,
-      mac: device.mac.clone(),
+      mac: device.id.clone(),
       phone_type,
     })
     .await?;

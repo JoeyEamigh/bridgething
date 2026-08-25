@@ -48,18 +48,24 @@ impl PlayerDispatcher {
     uri.split(':').next().unwrap_or(uri).to_owned()
   }
 
-  fn transport(&self) -> Option<Arc<dyn PlayerTransport>> {
-    self
-      .hub
-      .now_playing()
-      .current_transport()
-      .or_else(|| self.hub.library().map(|provider| provider as Arc<dyn PlayerTransport>))
+  fn transport(&self, verb: &str) -> Option<Arc<dyn PlayerTransport>> {
+    if let Some(audible) = self.hub.now_playing().current_transport() {
+      tracing::debug!(%verb, source = ?self.hub.now_playing().current_source(), "verb routed to the audible source");
+      return Some(audible);
+    }
+    let library = self.hub.library();
+    tracing::debug!(
+      %verb,
+      fallback = ?library.as_ref().map(|provider| provider.name().to_owned()),
+      "nothing is audible; verb falls back to the library provider"
+    );
+    library.map(|provider| provider as Arc<dyn PlayerTransport>)
   }
 }
 
 macro_rules! on_transport {
   ($self:ident, $verb:literal, $call:expr) => {{
-    let Some(transport) = $self.transport() else {
+    let Some(transport) = $self.transport($verb) else {
       $self
         .report(PlayerError::PlayFailed {
           reason: "no active transport".into(),

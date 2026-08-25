@@ -514,7 +514,25 @@ impl Tracked {
       .map(|at| at.UniversalTime)
       .unwrap_or_default();
 
-    tracing::trace!(aumid = %self.aumid, playing, position, "a windows media session snapshot was taken");
+    let controls = info.Controls().ok();
+    let can_seek = controls
+      .as_ref()
+      .and_then(|controls| controls.IsPlaybackPositionEnabled().ok())
+      .unwrap_or_default();
+    tracing::trace!(
+      aumid = %self.aumid,
+      playing,
+      can_seek,
+      can_next = ?controls.as_ref().and_then(|controls| controls.IsNextEnabled().ok()),
+      can_previous = ?controls.as_ref().and_then(|controls| controls.IsPreviousEnabled().ok()),
+      start_ticks = ?timeline.StartTime().map(|held| held.Duration).ok(),
+      position_ticks = ?timeline.Position().map(|held| held.Duration).ok(),
+      end_ticks = ?timeline.EndTime().map(|held| held.Duration).ok(),
+      updated_ticks,
+      position,
+      duration = ?duration_ms(start, span(timeline.EndTime())),
+      "a windows media session snapshot was taken"
+    );
     let snapshot = MediaSessionSnapshot {
       package: self.aumid.clone(),
       title: self.title.clone(),
@@ -523,10 +541,7 @@ impl Tracked {
       duration_ms: duration_ms(start, span(timeline.EndTime())),
       position_ms: position,
       playing,
-      can_seek: info
-        .Controls()
-        .and_then(|controls| controls.IsPlaybackPositionEnabled())
-        .unwrap_or_default(),
+      can_seek,
       art_token: self.art_token.clone(),
       queue: Vec::new(),
       active_queue_id: None,

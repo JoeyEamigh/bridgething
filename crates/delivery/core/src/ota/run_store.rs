@@ -46,6 +46,8 @@ pub enum OtaRunPhase {
 pub struct OtaRun {
   pub run_id: String,
   pub device_id: String,
+  #[serde(default)]
+  pub identity: Option<String>,
   pub kind: OtaKind,
   pub phase: OtaRunPhase,
   pub steps: Vec<OtaPlanStep>,
@@ -246,7 +248,28 @@ impl OtaRunStore {
     Some(annotated)
   }
 
-  pub fn ingest(&mut self, event: OtaPollEvent) -> Vec<OtaStoreChange> {
+  pub fn ingest(&mut self, event: OtaPollEvent, identity: Option<&str>) -> Vec<OtaStoreChange> {
+    let mut changes = self.ingest_inner(event);
+    let Some(identity) = identity else { return changes };
+    let mut moved = false;
+    for change in &mut changes {
+      let OtaStoreChange::Run(run) = change else { continue };
+      if run.identity.as_deref() == Some(identity) {
+        continue;
+      }
+      run.identity = Some(identity.to_owned());
+      if let Some(held) = self.runs.get_mut(&run.device_id) {
+        held.identity = Some(identity.to_owned());
+        moved = true;
+      }
+    }
+    if moved {
+      self.persist();
+    }
+    changes
+  }
+
+  fn ingest_inner(&mut self, event: OtaPollEvent) -> Vec<OtaStoreChange> {
     let before = self.identities();
     let changes = self.reduce(event);
     if !changes.iter().any(|change| matches!(change, OtaStoreChange::Run(_))) {
@@ -307,6 +330,7 @@ impl OtaRunStore {
         let run = OtaRun {
           run_id: Uuid::now_v7().to_string(),
           device_id: device_id.clone(),
+          identity: None,
           kind,
           phase: OtaRunPhase::Idle,
           step_id: steps.first().map_or(0, |step| step.id),
@@ -394,6 +418,7 @@ impl OtaRunStore {
         let run = self.runs.entry(device_id.clone()).or_insert_with(|| OtaRun {
           run_id: Uuid::now_v7().to_string(),
           device_id,
+          identity: None,
           kind,
           phase: OtaRunPhase::Failed,
           steps: Vec::new(),
@@ -649,8 +674,8 @@ mod tests {
   async fn a_run_survives_the_process_that_planned_it() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(streaming(8 * 1024));
+    store.ingest(planned(), None);
+    store.ingest(streaming(8 * 1024), None);
     let before = store.run(DEVICE).cloned().expect("the planned run");
 
     let reopened = home.open();
@@ -673,8 +698,8 @@ mod tests {
   async fn a_run_the_process_died_mid_drive_under_loads_interrupted_and_resumable() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(streaming(8 * 1024));
+    store.ingest(planned(), None);
+    store.ingest(streaming(8 * 1024), None);
     assert_eq!(store.run(DEVICE).expect("the run").phase, OtaRunPhase::Streaming);
 
     let reopened = home.open();
@@ -690,18 +715,21 @@ mod tests {
   async fn a_run_the_process_died_under_mid_reboot_is_left_for_the_device_to_answer() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(OtaPollEvent::Progress {
-      device_id: DEVICE.into(),
-      kind: OtaKind::Daemon,
-      step_id: 3,
-      snapshot: OtaPhaseSnapshot::Applying {
-        phase: libbridgething::OtaPhase::Reboot,
-        write_percent: 100,
-        dwl_percent: 100,
-        dwl_bytes: 0,
+    store.ingest(planned(), None);
+    store.ingest(
+      OtaPollEvent::Progress {
+        device_id: DEVICE.into(),
+        kind: OtaKind::Daemon,
+        step_id: 3,
+        snapshot: OtaPhaseSnapshot::Applying {
+          phase: libbridgething::OtaPhase::Reboot,
+          write_percent: 100,
+          dwl_percent: 100,
+          dwl_bytes: 0,
+        },
       },
-    });
+      None,
+    );
 
     let reopened = home.open();
 
@@ -717,7 +745,7 @@ mod tests {
   async fn a_resume_that_was_handed_over_is_not_handed_over_twice_across_a_restart() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
     store.interrupt(DEVICE);
     store
       .take_resume(DEVICE)
@@ -735,15 +763,18 @@ mod tests {
   async fn a_run_that_reached_a_successful_terminal_drops_its_interrupt_marker() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
     store.interrupt(DEVICE);
     assert!(store.run(DEVICE).expect("the run").resumable);
 
-    store.ingest(OtaPollEvent::Updated {
-      device_id: DEVICE.into(),
-      kind: OtaKind::Daemon,
-      version: RELEASE.into(),
-    });
+    store.ingest(
+      OtaPollEvent::Updated {
+        device_id: DEVICE.into(),
+        kind: OtaKind::Daemon,
+        version: RELEASE.into(),
+      },
+      None,
+    );
 
     assert!(
       !store.run(DEVICE).expect("the run").resumable,
@@ -760,11 +791,11 @@ mod tests {
   async fn a_moving_byte_counter_does_not_rewrite_the_file() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(streaming(8 * 1024));
+    store.ingest(planned(), None);
+    store.ingest(streaming(8 * 1024), None);
     let settled = home.raw();
 
-    store.ingest(streaming(16 * 1024));
+    store.ingest(streaming(16 * 1024), None);
 
     assert_eq!(
       home.raw(),
@@ -777,20 +808,23 @@ mod tests {
   async fn a_phase_the_run_moves_into_reaches_the_file_at_once() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(OtaPollEvent::Progress {
-      device_id: DEVICE.into(),
-      kind: OtaKind::Daemon,
-      step_id: 0,
-      snapshot: OtaPhaseSnapshot::Downloading {
-        asset: "daemon".into(),
-        received: 1_024,
-        total: 40 * 1024,
-        rate_per_sec: None,
+    store.ingest(planned(), None);
+    store.ingest(
+      OtaPollEvent::Progress {
+        device_id: DEVICE.into(),
+        kind: OtaKind::Daemon,
+        step_id: 0,
+        snapshot: OtaPhaseSnapshot::Downloading {
+          asset: "daemon".into(),
+          received: 1_024,
+          total: 40 * 1024,
+          rate_per_sec: None,
+        },
       },
-    });
+      None,
+    );
 
-    store.ingest(streaming(0));
+    store.ingest(streaming(0), None);
 
     assert_eq!(
       home.persisted_phase(),
@@ -803,7 +837,7 @@ mod tests {
   async fn a_dismissed_run_stays_dismissed() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
     store.interrupt(DEVICE);
 
     store.dismiss(DEVICE).expect("a settled run can be dismissed");
@@ -818,8 +852,8 @@ mod tests {
   async fn a_measured_rate_does_not_cross_a_restart() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
-    store.ingest(streaming(8 * 1024));
+    store.ingest(planned(), None);
+    store.ingest(streaming(8 * 1024), None);
     assert_eq!(store.run(DEVICE).expect("the run").rate_per_sec, Some(150_000.0));
 
     let reopened = home.open();
@@ -845,7 +879,7 @@ mod tests {
   async fn a_store_from_another_schema_is_ignored() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
     let body = home.raw().replace("\"version\":1", "\"version\":99");
     home.overwrite(&body);
 
@@ -868,7 +902,7 @@ mod tests {
     let home = Home::new();
     let mut store = OtaRunStore::new(TestClock::new(), None);
 
-    store.ingest(planned());
+    store.ingest(planned(), None);
 
     assert!(store.run(DEVICE).is_some(), "the reducer surface still reduces");
     assert!(!home.path().join(RUNS_FILE).exists(), "and it wrote nothing anywhere");
@@ -878,7 +912,7 @@ mod tests {
   async fn an_annotation_reaches_the_file() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
 
     store.annotate_webapp(DEVICE, Some("hub"), Some("Hub"));
 
@@ -904,10 +938,40 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_run_carries_the_device_it_was_driving_across_a_launch() {
+    let home = Home::new();
+    let mut store = home.open();
+    store.ingest(planned(), Some("8558R481Q61R"));
+
+    assert_eq!(
+      store.run(DEVICE).expect("the run").identity.as_deref(),
+      Some("8558R481Q61R"),
+      "the live run knows which device is behind the address it is driving"
+    );
+    assert_eq!(
+      home.open().run(DEVICE).expect("the run").identity.as_deref(),
+      Some("8558R481Q61R"),
+      "and it survives the relaunch, which is the only time the address can have changed hands"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_run_from_before_identities_existed_reads_as_unknown_rather_than_wrong() {
+    let home = Home::new();
+    let mut store = home.open();
+    store.ingest(planned(), None);
+
+    assert!(
+      home.open().run(DEVICE).expect("the run").identity.is_none(),
+      "an unstamped run claims nothing, so a resume falls back to trusting the address"
+    );
+  }
+
+  #[tokio::test]
   async fn a_clock_is_only_needed_for_fresh_runs() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned());
+    store.ingest(planned(), None);
     let planned_at = store.run(DEVICE).expect("the run").started_at_ms;
 
     let reopened = OtaRunStore::new(TestClock::new(), Some(home.path()));
@@ -923,13 +987,16 @@ mod tests {
   async fn the_available_set_is_not_carried_across_a_launch() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(OtaPollEvent::UpdateAvailable {
-      device_id: DEVICE.into(),
-      release: RELEASE.into(),
-      daemon_version: "0.9.1".into(),
-      image_version: "1.0.0".into(),
-    });
-    store.ingest(planned());
+    store.ingest(
+      OtaPollEvent::UpdateAvailable {
+        device_id: DEVICE.into(),
+        release: RELEASE.into(),
+        daemon_version: "0.9.1".into(),
+        image_version: "1.0.0".into(),
+      },
+      None,
+    );
+    store.ingest(planned(), None);
     assert_eq!(store.available().len(), 1);
 
     let reopened = home.open();

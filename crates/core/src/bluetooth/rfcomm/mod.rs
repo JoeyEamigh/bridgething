@@ -10,7 +10,7 @@ use futures::StreamExt;
 #[cfg(target_os = "linux")]
 use libbridgething::{BRIDGETHING_PROFILE_UUID, BRIDGETHING_RFCOMM_CHANNEL};
 use libbridgething::{
-  Device, DeviceType, PeerCompanionStatus, Priority,
+  Device, DeviceType, LinkKind, PeerCompanionStatus, Priority,
   gateway::{BridgeToGatewayMsg, GatewayToBridgeMsg},
   protocol::{BridgeEndec, Compress, DecodedFrame, EnvelopeProbe, encode_frame},
   wire::MsgMeta,
@@ -325,7 +325,8 @@ impl RfcommGateway {
     let placeholder = Device {
       name: address.to_string(),
       device_type: DeviceType::Unknown,
-      mac: address.to_string(),
+      id: address.to_string(),
+      kind: LinkKind::Bluetooth,
       default: false,
     };
     self.peers.ensure_exists(address, placeholder).await;

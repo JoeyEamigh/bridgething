@@ -139,6 +139,17 @@ pub enum OtaPollEvent {
 }
 
 impl OtaPollEvent {
+  pub fn device_id(&self) -> Option<&str> {
+    match self {
+      OtaPollEvent::ManifestPolled { .. } | OtaPollEvent::ManifestPollFailed { .. } => None,
+      OtaPollEvent::UpdateAvailable { device_id, .. }
+      | OtaPollEvent::Planned { device_id, .. }
+      | OtaPollEvent::Progress { device_id, .. }
+      | OtaPollEvent::Updated { device_id, .. }
+      | OtaPollEvent::Failed { device_id, .. } => Some(device_id),
+    }
+  }
+
   pub fn kind_name(&self) -> &'static str {
     match self {
       OtaPollEvent::ManifestPolled { .. } => "manifestPolled",

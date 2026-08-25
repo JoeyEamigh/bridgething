@@ -11,7 +11,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::iap2::Iap2ReconnectHandle;
 use super::{Address, BluetoothError, BluetoothResult};
 #[cfg(target_os = "linux")]
-use crate::{net::WireEventBus, peer::PeerTracker, state::DeviceStore, stock::StockSetupSend};
+use crate::{net::WireEventBus, peer::PeerTracker, state::DeviceStore};
 
 pub(crate) const PROFILE_COMMAND_CAPACITY: usize = 16;
 
@@ -141,7 +141,7 @@ impl ProfileManager {
 
   pub async fn reset(&self) -> BluetoothResult<()> {
     tracing::debug!("forgetting all devices");
-    for mac in self.devices.list().await?.keys() {
+    for mac in self.devices.list(libbridgething::LinkKind::Bluetooth).await?.keys() {
       self.forget(mac).await?;
     }
 
@@ -263,31 +263,20 @@ impl ProfileManager {
     let device = libbridgething::Device {
       name,
       device_type,
-      mac: mac_str.clone(),
+      id: mac_str.clone(),
+      kind: libbridgething::LinkKind::Bluetooth,
       default: true,
     };
 
-    let new_device = self.devices.get(&mac_str).await?.is_none();
-    if new_device {
-      self.devices.upsert(device.clone()).await?;
+    if self.devices.remember(&device).await? {
       self.set_discoverable(false).await?;
     }
-    self.devices.set_last(mac_str).await?;
 
     let _ = self.peers.upsert(mac, device.clone()).await;
     let _ = self.peers.set_paired(mac, true).await;
     let _ = self.peers.confirm_pairing(mac).await;
 
     self.iap2_reconnect.kick(mac).await;
-
-    if new_device {
-      self
-        .bus
-        .broadcast_stock(StockSetupSend::Status {
-          payload: "finished".to_string(),
-        })
-        .await?;
-    }
 
     Ok(device)
   }

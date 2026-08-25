@@ -13,7 +13,7 @@ use bridgething_desktop::{
   hints::{self, Hint, HintSink, Invalidation},
   shell::{DEFAULT_GATEWAY_URL, DesktopPaths, Shell, ShellConfig},
 };
-use libbridgething::{BRIDGETHING_MDNS_SERVICE_TYPE, gateway::WebappResourceKind};
+use libbridgething::{BRIDGETHING_MDNS_SERVICE_TYPE, BRIDGETHING_STOCK_WS_PORT, gateway::WebappResourceKind};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tauri::{
   Manager,
@@ -86,6 +86,54 @@ impl Heard {
       }
       tokio::time::sleep(Duration::from_millis(20)).await;
     }
+  }
+}
+
+fn stock_url_for(gateway_url: &str) -> String {
+  let rest = gateway_url.split_once("://").map_or(gateway_url, |(_, rest)| rest);
+  let authority = rest.split('/').next().unwrap_or(rest);
+  let host = match authority.rsplit_once(':') {
+    Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
+    _ => authority,
+  };
+  format!("ws://{host}:{BRIDGETHING_STOCK_WS_PORT}/")
+}
+
+fn ask_stock_onboarding(stock_url: &str) -> Option<String> {
+  use tokio_tungstenite::tungstenite::{Message, connect, stream::MaybeTlsStream};
+
+  let (mut stock, _) = connect(stock_url).expect("the stock websocket accepts a client");
+  if let MaybeTlsStream::Plain(stream) = stock.get_mut() {
+    stream
+      .set_read_timeout(Some(SETTLE))
+      .expect("the stock read has a deadline");
+  }
+  stock
+    .send(Message::text(
+      r#"{"type":"settings","action":"get","value_type":"string","key":"onboarding_status"}"#,
+    ))
+    .expect("the stock request goes out");
+
+  while let Ok(message) = stock.read() {
+    let Ok(text) = message.to_text() else { continue };
+    let Ok(frame) = serde_json::from_str::<serde_json::Value>(text) else {
+      continue;
+    };
+    if frame["type"] == "settings_response" && frame["payload"]["key"] == "onboarding_status" {
+      return frame["payload"]["value"].as_str().map(str::to_owned);
+    }
+  }
+  None
+}
+
+fn await_stock_onboarding(stock_url: &str) -> Option<String> {
+  let deadline = Instant::now() + SETTLE;
+  loop {
+    let answer = ask_stock_onboarding(stock_url);
+    if answer.is_some() || Instant::now() >= deadline {
+      return answer;
+    }
+    std::thread::sleep(Duration::from_millis(50));
   }
 }
 
@@ -404,7 +452,7 @@ async fn dialing_a_gateway_that_is_not_listening_names_the_url_it_tried() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_link_that_died_comes_back_on_its_own_and_one_the_user_dropped_does_not() {
+async fn a_link_that_died_comes_back_on_its_own_and_one_the_user_dropped_waits_to_be_replugged() {
   let daemon = Daemon::shared();
   let url = daemon.url();
 
@@ -413,20 +461,26 @@ async fn a_link_that_died_comes_back_on_its_own_and_one_the_user_dropped_does_no
   let shell =
     Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
   shell.start().await;
-  bridgething_desktop::autoconnect::spawn(shell.clone(), Vec::new);
+
+  let attached = Arc::new(Mutex::new(Vec::new()));
+  let source = Arc::clone(&attached);
+  bridgething_desktop::autoconnect::spawn(shell.clone(), move || source.lock().unwrap().clone());
 
   tokio::time::sleep(Duration::from_millis(500)).await;
   assert!(
     !shell.is_linked(&url),
-    "a host that has never held this daemon does not dial it on its own"
+    "a daemon that is not on the link is not dialed; there is nowhere for it to be"
   );
 
-  shell.connect(Some(url.clone())).await.expect("the user dials it once");
-  let known = shell.known_devices();
-  assert_eq!(known.len(), 1, "a link that came up is remembered");
-  assert_eq!(known[0].url, url);
-  assert!(known[0].auto_connect, "and it is held on to across launches");
-  assert!(known[0].last_connected_at.is_some());
+  let plug = || *attached.lock().unwrap() = vec![endpoint(&url, Some("Desk Thing"))];
+  let unplug = || attached.lock().unwrap().clear();
+
+  plug();
+  shell.wake().notify_one();
+  assert!(
+    settles(|| shell.is_linked(&url)).await,
+    "a daemon on the link is dialed with no user action at all"
+  );
 
   shell.session().disconnect_direct(&url).await;
   assert!(
@@ -439,25 +493,30 @@ async fn a_link_that_died_comes_back_on_its_own_and_one_the_user_dropped_does_no
   );
 
   shell.disconnect(Some(url.clone())).await;
-  assert!(
-    !shell.known_devices()[0].auto_connect,
-    "a link the user dropped stays dropped, or the reconnect loop undoes them"
-  );
   tokio::time::sleep(Duration::from_millis(500)).await;
-  assert!(!shell.is_linked(&url), "so nothing dials it behind their back");
+  assert!(
+    !shell.is_linked(&url),
+    "a link the user dropped stays dropped while the device is still attached"
+  );
 
-  shell.set_auto_connect(&url, true);
+  unplug();
+  shell.wake().notify_one();
+  tokio::time::sleep(Duration::from_millis(500)).await;
+  plug();
+  shell.wake().notify_one();
   assert!(
     settles(|| shell.is_linked(&url)).await,
-    "turning it back on dials without waiting for the next launch"
+    "and dropping it means until it is unplugged and back, not forever"
   );
 
-  shell.forget_device(&url);
+  let held = shell.known_devices();
+  assert_eq!(held.len(), 1);
+  shell.forget_device(&held[0].id);
   assert!(shell.known_devices().is_empty(), "a forgotten device is forgotten");
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_daemon_that_shows_up_on_the_network_is_linked_without_anyone_asking() {
+async fn a_daemon_that_shows_up_on_the_link_is_dialed_and_names_itself() {
   let daemon = Daemon::shared();
   let url = daemon.url();
 
@@ -467,22 +526,26 @@ async fn a_daemon_that_shows_up_on_the_network_is_linked_without_anyone_asking()
     Shell::create(shell_config(url.clone(), spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
   shell.start().await;
 
-  let announced = bridgething_delivery::discovery::Endpoint {
-    id: "probe._bridgething._tcp.local.".to_owned(),
-    url: url.clone(),
-    host: "127.0.0.1".to_owned(),
-    nickname: Some("Desk Thing".to_owned()),
-  };
+  let announced = endpoint(&url, Some("Desk Thing"));
   bridgething_desktop::autoconnect::spawn(shell.clone(), move || vec![announced.clone()]);
 
   assert!(
     settles(|| shell.is_linked(&url)).await,
     "a daemon announcing itself is linked without a first manual connect"
   );
+  assert!(
+    settles(|| shell.known_devices().first().is_some_and(|known| known.id != url)).await,
+    "and the daemon's first frame re-keys the row off the address it was dialed on"
+  );
+
   let known = shell.known_devices();
-  assert_eq!(known.len(), 1, "and the link that came up is remembered");
+  assert_eq!(known.len(), 1, "one device is one row, dial and adoption together");
   assert_eq!(known[0].name, "Desk Thing", "under the name it announced");
-  assert!(known[0].auto_connect);
+  assert_eq!(known[0].url, url, "with the address it answered on kept as an address");
+  assert_eq!(
+    known[0].id, "8558R481Q61R",
+    "and keyed on the serial the daemon reports, so two daemons at one address are two rows"
+  );
 
   shell.disconnect(Some(url.clone())).await;
   tokio::time::sleep(Duration::from_millis(500)).await;
@@ -490,6 +553,17 @@ async fn a_daemon_that_shows_up_on_the_network_is_linked_without_anyone_asking()
     !shell.is_linked(&url),
     "dropping it wins over the standing announcement"
   );
+}
+
+fn endpoint(url: &str, nickname: Option<&str>) -> bridgething_delivery::discovery::Endpoint {
+  bridgething_delivery::discovery::Endpoint {
+    id: "probe._bridgething._tcp.local.".to_owned(),
+    url: url.to_owned(),
+    host: "127.0.0.1".to_owned(),
+    nickname: nickname.map(str::to_owned),
+    serial: None,
+    browsed: true,
+  }
 }
 
 async fn settles(holds: impl Fn() -> bool) -> bool {
@@ -694,31 +768,10 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_network_gateway_finishes_stock_onboarding_when_it_connects() {
-  use tokio_tungstenite::tungstenite::{connect, stream::MaybeTlsStream};
-
+async fn a_network_gateway_finishes_stock_onboarding_and_it_outlives_the_link() {
   let daemon = Daemon::shared();
   let gateway_url = daemon.url();
-  let stock_url = gateway_url.replace(":8892", ":8890");
-  assert_ne!(stock_url, gateway_url, "the test daemon uses the expected gateway port");
-
-  let (mut stock, _) = connect(stock_url.as_str()).expect("the stock websocket accepts a client");
-  if let MaybeTlsStream::Plain(stream) = stock.get_mut() {
-    stream
-      .set_read_timeout(Some(SETTLE))
-      .expect("the stock read has a deadline");
-  }
-  let setup_finished = std::thread::spawn(move || {
-    while let Ok(message) = stock.read() {
-      if message
-        .to_text()
-        .is_ok_and(|text| text.contains(r#""type":"setup_status""#) && text.contains(r#""payload":"finished""#))
-      {
-        return true;
-      }
-    }
-    false
-  });
+  let stock_url = stock_url_for(&gateway_url);
 
   let spool = tempfile::tempdir().expect("a scratch directory");
   let (tx, _rx) = mpsc::unbounded_channel();
@@ -726,13 +779,32 @@ async fn a_network_gateway_finishes_stock_onboarding_when_it_connects() {
     Shell::create(shell_config(gateway_url, spool.path()), Arc::new(Channel { tx })).expect("the shell builds");
   shell.start().await;
   let app = mock_app(shell);
-  commands::connect(app.state(), None)
+  let device_id = commands::connect(app.state(), None)
     .await
     .expect("the network gateway connects");
 
-  assert!(
-    setup_finished.join().expect("the stock reader exits"),
-    "a gateway that connects after the stock status read broadcasts setup completion"
+  let asked = stock_url.clone();
+  assert_eq!(
+    tokio::task::spawn_blocking(move || await_stock_onboarding(&asked))
+      .await
+      .expect("the stock reader runs")
+      .as_deref(),
+    Some("finished"),
+    "a network gateway finishes stock onboarding on its own, with no phone ever paired"
+  );
+
+  commands::disconnect(app.state(), Some(device_id))
+    .await
+    .expect("the gateway link drops");
+
+  assert_eq!(
+    tokio::task::spawn_blocking(move || ask_stock_onboarding(&stock_url))
+      .await
+      .expect("the stock reader runs")
+      .as_deref(),
+    Some("finished"),
+    "and it stays finished once the companion is gone; the stock ui re-reads this every time it is shown, \
+     so a gate that hangs off a live link drops the device back into onboarding the moment the app quits"
   );
 }
 
@@ -762,11 +834,12 @@ async fn the_resume_target_preference_round_trips_and_invalidates_the_device_met
     commands::device_resume_target(app.state())
       .await
       .expect("a resume target"),
-    ResumeTarget::PhoneOnly,
-    "an unset preference answers the default, not an error"
+    ResumeTarget::AnySpeaker,
+    "an unset preference answers the default for this kind of host, and a desktop is not carried anywhere, \
+     so resuming onto it alone is the one thing the user did not ask for"
   );
 
-  commands::set_device_resume_target(app.state(), ResumeTarget::AnySpeaker)
+  commands::set_device_resume_target(app.state(), ResumeTarget::PhoneOnly)
     .await
     .expect("the pick lands");
   assert!(
@@ -777,18 +850,18 @@ async fn the_resume_target_preference_round_trips_and_invalidates_the_device_met
     commands::device_resume_target(app.state())
       .await
       .expect("the second read"),
-    ResumeTarget::AnySpeaker,
+    ResumeTarget::PhoneOnly,
     "the pull answers what the command wrote, through the same device"
   );
 
-  commands::set_device_resume_target(app.state(), ResumeTarget::PhoneOnly)
+  commands::set_device_resume_target(app.state(), ResumeTarget::AnySpeaker)
     .await
-    .expect("back to the default");
+    .expect("and back again");
   assert_eq!(
     commands::device_resume_target(app.state())
       .await
       .expect("the third read"),
-    ResumeTarget::PhoneOnly,
+    ResumeTarget::AnySpeaker,
     "the second write answers too; the preference is a value, not a sticky first one"
   );
 }

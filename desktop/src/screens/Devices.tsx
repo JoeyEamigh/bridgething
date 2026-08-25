@@ -11,7 +11,6 @@ import {
   SectionEmpty,
   SectionHeader,
   StatusStrip,
-  Switch,
   cx,
   describeError,
   useSession,
@@ -151,8 +150,8 @@ function KnownDevices(): VNode | null {
 
   if (known.length === 0) return null;
 
-  const act = async (url: string, run: () => Promise<void>) => {
-    setBusy(url);
+  const act = async (id: string, run: () => Promise<void>) => {
+    setBusy(id);
     setFailure(null);
     try {
       await run();
@@ -172,35 +171,30 @@ function KnownDevices(): VNode | null {
           const attached = linked.some(peer => peer.id === device.url);
           return (
             <ListRow
-              key={device.url}
+              key={device.id}
               icon={<Icon name="device" />}
               iconTint={attached ? 'accent' : 'default'}
               title={device.name}
               subtitle={device.url}
               value={attached ? 'linked' : since(device.lastConnectedAt)}
               trailing={
-                <span class="flex shrink-0 items-center gap-2">
-                  <Switch
-                    checked={device.autoConnect}
-                    label={`connect to ${device.name} automatically`}
-                    disabled={busy === device.url}
-                    onChange={next => void act(device.url, () => session.setDeviceAutoConnect(device.url, next))}
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Icon name="trash" size={13} />}
-                    disabled={busy === device.url}
-                    onClick={() => void act(device.url, () => session.forgetKnownDevice(device.url))}>
-                    forget
-                  </Button>
-                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Icon name="trash" size={13} />}
+                  disabled={busy === device.id}
+                  onClick={() => void act(device.id, () => session.forgetKnownDevice(device.id))}>
+                  forget
+                </Button>
               }
             />
           );
         })}
       </ListGroup>
-      <Hint>every daemon on the network is linked as it appears; turn one off here to leave it alone.</Hint>
+      <Hint>
+        every daemon on the link is connected as it appears; disconnect one to leave it alone until it is unplugged and
+        back.
+      </Hint>
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
     </Section>
   );

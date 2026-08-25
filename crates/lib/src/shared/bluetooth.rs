@@ -8,8 +8,18 @@ pub struct Device {
   pub name: String,
   #[serde(rename = "type")]
   pub device_type: DeviceType,
-  pub mac: String,
+  pub id: String,
+  pub kind: LinkKind,
   pub default: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS, Default)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "shared.ts")]
+pub enum LinkKind {
+  #[default]
+  Bluetooth,
+  Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]

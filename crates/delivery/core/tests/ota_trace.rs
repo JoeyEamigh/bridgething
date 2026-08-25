@@ -122,7 +122,7 @@ fn emit_run_store(steps: &[Value]) -> Vec<Value> {
     row.insert("t_ms".into(), json!(t_ms));
 
     if let Some(ingest) = step.get("ingest") {
-      let changes = store.ingest(parse_event(ingest));
+      let changes = store.ingest(parse_event(ingest), None);
 
       let kinds: Vec<&str> = changes.iter().map(change_kind).collect();
       let run = changes.iter().find_map(|change| match change {

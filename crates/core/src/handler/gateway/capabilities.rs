@@ -1,5 +1,5 @@
 use libbridgething::{
-  Device, DeviceType, GatewayCapabilities, PeerCompanionStatus,
+  Device, DeviceType, GatewayCapabilities, LinkKind, PeerCompanionStatus,
   gateway::{BridgeToGatewayNotificationsMsgEvent, GatewayToBridgeCapabilitiesMsgEventDispatch},
 };
 
@@ -21,17 +21,30 @@ impl GatewayToBridgeCapabilitiesMsgEventDispatch for CapabilitiesHandler {
 
   async fn announce(&self, params: GatewayCapabilities) -> HandlerResult {
     if let Some(mac) = self.handle.address {
-      let device = Device {
-        name: params.gateway.name.clone(),
-        device_type: device_type_from_os(&params.gateway.os_name),
-        mac: mac.to_string(),
-        default: false,
-      };
       match self.handle.protocol {
         GatewayType::Network => {
+          let device = Device {
+            name: params.gateway.name.clone(),
+            device_type: device_type_from_os(&params.gateway.os_name),
+            id: params.gateway.address.clone(),
+            kind: LinkKind::Network,
+            default: false,
+          };
+          if device.id.is_empty() {
+            tracing::debug!("a network companion announced no host identifier; not persisting it");
+          } else if let Err(err) = self.handle.state.devices.remember(&device).await {
+            tracing::warn!(?err, "failed to persist a network companion on capabilities announce");
+          }
           self.handle.state.peers.upsert(mac, device).await;
         }
         GatewayType::Rfcomm | GatewayType::Iap2Ea => {
+          let device = Device {
+            name: params.gateway.name.clone(),
+            device_type: device_type_from_os(&params.gateway.os_name),
+            id: mac.to_string(),
+            kind: LinkKind::Bluetooth,
+            default: false,
+          };
           match self
             .handle
             .bluetooth

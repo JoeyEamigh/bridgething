@@ -6,3 +6,15 @@ pub enum StockSetupSend {
   #[serde(rename = "setup_status")]
   Status { payload: String },
 }
+
+impl StockSetupSend {
+  pub fn finished() -> Self {
+    Self::Status {
+      payload: "finished".to_string(),
+    }
+  }
+
+  pub fn unfinished() -> Self {
+    Self::Status { payload: String::new() }
+  }
+}

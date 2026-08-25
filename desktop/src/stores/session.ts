@@ -27,7 +27,7 @@ export const webappActive = resource<api.ActiveWebapp | null>(null, () => bound(
 export const webappSlots = resource<api.WebappSlots>({ launcher: null, overlay: null }, () => bound().webappSlots());
 export const autoResume = resource(true, () => bound().deviceAutoResume());
 export const logStreaming = resource(false, () => bound().deviceLogStreaming());
-export const resumeTarget = resource<api.ResumeTarget>('phoneOnly', () => bound().deviceResumeTarget());
+export const resumeTarget = resource<api.ResumeTarget>('anySpeaker', () => bound().deviceResumeTarget());
 
 export const hostInfo: ReadonlySignal<api.SessionHostInfo | null> = computed(
   () => snapshot.data.value?.hostInfo ?? null,
@@ -86,7 +86,17 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   session: [snapshot],
   endpoints: [endpoints],
   providers: [snapshot],
-  peers: [snapshot, webapps, webappActive, webappSlots, autoResume, logStreaming, knownDevices, selectedDevice],
+  peers: [
+    snapshot,
+    webapps,
+    webappActive,
+    webappSlots,
+    autoResume,
+    resumeTarget,
+    logStreaming,
+    knownDevices,
+    selectedDevice,
+  ],
   'now-playing': [snapshot],
   ancs: [snapshot],
   'device-meta': [snapshot, autoResume, resumeTarget],
