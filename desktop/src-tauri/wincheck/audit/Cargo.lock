@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "bridgething-gateway",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -189,7 +189,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "thiserror",
  "tokio",
@@ -199,7 +199,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -209,7 +209,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bytes",
  "futures",
@@ -862,7 +862,7 @@ dependencies = [
 
 [[package]]
 name = "libbridgething"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "bridgething-macros",
  "bytes",
