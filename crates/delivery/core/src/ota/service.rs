@@ -906,7 +906,7 @@ impl OtaService {
       return;
     }
 
-    spooled.sort_by(|left, right| left.0.cmp(&right.0));
+    spooled.sort_by_key(|(modified, _, _)| *modified);
     for (_, size, path) in spooled {
       if held <= CACHE_BUDGET_BYTES {
         break;

@@ -532,7 +532,7 @@ impl SpotifyClient {
     }
     let user = self.username().await?;
     let mut items = self.spc.collection_paging(&user, set, 500).await?;
-    items.sort_by(|a, b| b.added_at.cmp(&a.added_at));
+    items.sort_by_key(|item| std::cmp::Reverse(item.added_at));
     let uris: Vec<String> = items
       .into_iter()
       .map(|i| i.uri)

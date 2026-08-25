@@ -229,7 +229,7 @@ impl LogStore {
         }
       })
       .collect();
-    archives.sort_by(|left, right| right.started_at_ms.cmp(&left.started_at_ms));
+    archives.sort_by_key(|archive| std::cmp::Reverse(archive.started_at_ms));
     archives
   }
 

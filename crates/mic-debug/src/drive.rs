@@ -39,7 +39,7 @@ pub fn candidates() -> Result<Vec<Candidate>, DriveError> {
       found.push(part);
     }
   }
-  found.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+  found.sort_by_key(|entry| std::cmp::Reverse(entry.size_bytes));
   Ok(found)
 }
 
@@ -180,7 +180,7 @@ mod tests {
         size_bytes: 900,
       },
     ];
-    found.sort_by(|a, b| b.size_bytes.cmp(&a.size_bytes));
+    found.sort_by_key(|entry| std::cmp::Reverse(entry.size_bytes));
     assert_eq!(found[0].node, PathBuf::from("/dev/sdb1"));
   }
 
