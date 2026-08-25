@@ -210,7 +210,7 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -321,7 +321,7 @@ jobs:
       - uses: extractions/setup-just@v3
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - run: |
           curl -fsSL https://get.maestro.mobile.dev | bash

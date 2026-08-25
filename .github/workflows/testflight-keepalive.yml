@@ -26,9 +26,10 @@ jobs:
       THRESHOLD_DAYS: 10
 
     steps:
+      - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: install asc
         run: brew install asc

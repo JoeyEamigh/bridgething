@@ -2,7 +2,7 @@
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
 
 // ../../node_modules/.bun/ajv-formats@3.0.1/node_modules/ajv-formats/dist/formats.js
-var require_formats = __commonJS((exports) => {
+var require_formats = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.formatNames = exports.fastFormats = exports.fullFormats = undefined;
   function fmtDef(validate, compare) {
@@ -179,7 +179,7 @@ var require_formats = __commonJS((exports) => {
 });
 
 // ../../node_modules/.bun/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
-var require_ucs2length = __commonJS((exports) => {
+var require_ucs2length = __commonJS(function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   function ucs2length(str) {
     const len = str.length;
@@ -202,7 +202,7 @@ var require_ucs2length = __commonJS((exports) => {
 });
 
 // scripts/.compile-validator/validator.cjs
-var require_validator = __commonJS((exports, module) => {
+var require_validator = __commonJS(function(exports, module) {
   module.exports = validate20;
   module.exports.default = validate20;
   var schema32 = { type: "object", additionalProperties: false, required: ["name", "description", "homepage", "icon"], properties: { name: { type: "string", minLength: 1, maxLength: 100, description: "Display name of this catalog source." }, description: { type: "string", minLength: 1, maxLength: 300 }, homepage: { type: ["string", "null"], format: "uri" }, icon: { type: ["string", "null"], format: "uri", description: "Square source icon for the companion's source list." } } };
