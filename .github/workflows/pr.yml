@@ -3,12 +3,10 @@ name: pr
 on:
   pull_request:
     branches: [dev]
-  push:
-    branches: [dev]
 
 concurrency:
   group: pr-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -40,12 +38,8 @@ jobs:
         id: rust
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            crates=$(python3 scripts/ci-affected-crates.py)
-          else
-            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-            crates=$(python3 scripts/ci-affected-crates.py "origin/${{ github.base_ref }}")
-          fi
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          crates=$(python3 scripts/ci-affected-crates.py "origin/${{ github.base_ref }}")
           echo "crates=${crates}" >>"$GITHUB_OUTPUT"
           echo "any=$([[ -n "$crates" ]] && echo true || echo false)" >>"$GITHUB_OUTPUT"
           echo "reaches: ${crates:-nothing}"
@@ -53,7 +47,7 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          base: ${{ github.event_name == 'push' && github.ref || github.base_ref }}
+          base: ${{ github.base_ref }}
           filters: |
             shared: &shared
               - 'Cargo.lock'
@@ -161,7 +155,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - uses: extractions/setup-just@v3
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
@@ -178,7 +172,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - uses: extractions/setup-just@v3
       - run: just test-swift
 
@@ -199,7 +193,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - uses: extractions/setup-just@v3
       - run: just test-kotlin
 
@@ -221,10 +215,10 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - run: bun install --frozen-lockfile
       - env:
-          TURBO_SCM_BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
+          TURBO_SCM_BASE: origin/${{ github.base_ref }}
         run: bunx turbo run typecheck test --affected
 
   e2e-android:
@@ -321,7 +315,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - uses: extractions/setup-just@v3
       - uses: oven-sh/setup-bun@v2
         with:

@@ -3,7 +3,6 @@
 
 Reads the same manifests cargo does, so it cannot drift the way a hand-written path
 glob does. Anything that can change every crate's build prints --workspace instead.
-With no base ref it prints the wide form outright.
 """
 
 import json
@@ -28,13 +27,9 @@ def changed_files(base: str) -> list[str]:
 
 
 def main() -> int:
-    if len(sys.argv) > 2:
-        print("usage: ci-affected-crates.py [base-ref]", file=sys.stderr)
+    if len(sys.argv) != 2:
+        print("usage: ci-affected-crates.py <base-ref>", file=sys.stderr)
         return 2
-
-    if len(sys.argv) == 1:
-        print(WIDE_FLAGS)
-        return 0
 
     changed = changed_files(sys.argv[1])
     if any(path.startswith(WIDE) for path in changed):
