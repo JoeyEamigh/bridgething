@@ -108,7 +108,11 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - run: bun install --frozen-lockfile
+
       - name: run the affected crates
+        env:
+          BRIDGETHING_NLU_GRAMMAR_OPTIONAL: "1"
         run: cargo nextest run --locked --no-fail-fast ${{ needs.scope.outputs.crates }}
 
   rust-shipping:
