@@ -3,6 +3,7 @@
 
 Reads the same manifests cargo does, so it cannot drift the way a hand-written path
 glob does. Anything that can change every crate's build prints --workspace instead.
+With no base ref it prints the wide form outright.
 """
 
 import json
@@ -11,6 +12,9 @@ import sys
 from pathlib import Path
 
 WIDE = ("Cargo.lock", "Cargo.toml", "rust-toolchain", ".cargo/", ".github/")
+
+SKIP = frozenset({"bridgething-desktop"})
+WIDE_FLAGS = "--workspace " + " ".join(f"--exclude {name}" for name in sorted(SKIP))
 
 
 def changed_files(base: str) -> list[str]:
@@ -24,14 +28,17 @@ def changed_files(base: str) -> list[str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: ci-affected-crates.py <base-ref>", file=sys.stderr)
+    if len(sys.argv) > 2:
+        print("usage: ci-affected-crates.py [base-ref]", file=sys.stderr)
         return 2
-    base = sys.argv[1]
 
-    changed = changed_files(base)
+    if len(sys.argv) == 1:
+        print(WIDE_FLAGS)
+        return 0
+
+    changed = changed_files(sys.argv[1])
     if any(path.startswith(WIDE) for path in changed):
-        print("--workspace")
+        print(WIDE_FLAGS)
         return 0
 
     meta = json.loads(
@@ -75,6 +82,10 @@ def main() -> int:
             continue
         affected.add(name)
         queue.extend(dependents.get(name, ()))
+
+    affected -= SKIP
+    if not affected:
+        return 0
 
     print(" ".join(f"-p {name}" for name in sorted(affected)))
     return 0
