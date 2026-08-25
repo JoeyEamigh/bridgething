@@ -41,6 +41,7 @@ impl Shared {
     self.report(|inbox| inbox.on_authorization_change(granted));
   }
 
+  #[cfg(any(target_os = "linux", target_os = "macos"))]
   pub fn watching(&self) -> bool {
     self.watching.load(Ordering::Relaxed)
   }
