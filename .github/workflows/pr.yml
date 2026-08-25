@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            crates=--workspace
+            crates=$(python3 scripts/ci-affected-crates.py)
           else
             git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
             crates=$(python3 scripts/ci-affected-crates.py "origin/${{ github.base_ref }}")
@@ -211,6 +211,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - run: bun install --frozen-lockfile
       - env:
           TURBO_SCM_BASE: ${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
