@@ -31,6 +31,8 @@ FEATURES=(--no-default-features)
 
 if [ "${XCFRAMEWORK_DEVICE_ONLY:-0}" = "1" ]; then
   TARGETS=("$DEVICE")
+elif [ "${XCFRAMEWORK_SIM_ONLY:-0}" = "1" ]; then
+  TARGETS=("$SIM_ARM")
 else
   TARGETS=("$DEVICE" "$SIM_ARM" "$SIM_X86" "$MAC_ARM" "$MAC_X86")
 fi
@@ -63,7 +65,7 @@ for t in "${TARGETS[@]}"; do
   "$OBJCOPY" --remove-section=__TEXT,__eh_frame --remove-section=__LD,__compact_unwind "$TARGET_DIR/$t/$PROFILE/$LIB"
 done
 
-xcf_args=(-library "$TARGET_DIR/$DEVICE/$PROFILE/$LIB" -headers "$HDRS")
+xcf_args=(-library "$TARGET_DIR/${TARGETS[0]}/$PROFILE/$LIB" -headers "$HDRS")
 
 if [ "${#TARGETS[@]}" -gt 1 ]; then
   echo "== lipo simulator + macos arches =="

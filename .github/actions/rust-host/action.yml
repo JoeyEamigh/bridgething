@@ -1,0 +1,35 @@
+name: rust-host
+description: Toolchain, link deps and caches every linux lane that builds the daemon needs.
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: extractions/setup-just@v3
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install --assume-yes --no-install-recommends \
+          libusb-1.0-0-dev libdbus-1-dev libasound2-dev pkg-config clang libclang-dev cmake
+
+    - uses: Swatinem/rust-cache@v2
+      with:
+        save-if: ${{ github.ref == 'refs/heads/dev' }}
+
+    - id: wakeword
+      uses: actions/cache@v4
+      with:
+        path: crates/wakeword/models
+        key: >-
+          wakeword-models-${{ hashFiles('scripts/bridgething-fetch-wakeword-models',
+          'scripts/bridgething-convert-wakeword', 'crates/wakeword/examples/convert.rs',
+          'crates/wakeword/src/blob.rs') }}
+
+    - if: steps.wakeword.outputs.cache-hit != 'true'
+      shell: bash
+      run: scripts/bridgething-fetch-wakeword-models

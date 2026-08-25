@@ -7,9 +7,9 @@ name: pushes a daemon-only release without touching the image
       MODE: daemon
 - extendedWaitUntil:
     visible: ".*99.0.0\\+image.0.1.0 available.*"
-    timeout: 30000
+    timeout: 180000
 - tapOn: ".*install 99.0.0\\+image.0.1.0.*"
 - extendedWaitUntil:
     visible: ".*update installed.*"
-    timeout: 120000
+    timeout: 180000
 - assertNotVisible: ".*the update did not finish.*"

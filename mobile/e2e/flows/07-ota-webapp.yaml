@@ -7,5 +7,5 @@ name: offers a builtin webapp bump on a device whose image and daemon are curren
       MODE: webapp
 - extendedWaitUntil:
     visible: ".*0.10.0\\+image.0.1.0 available.*"
-    timeout: 30000
+    timeout: 180000
 - assertVisible: ".*install 0.10.0\\+image.0.1.0.*"

@@ -22,7 +22,7 @@ running_pid() {
 }
 
 gateway_up() {
-    timeout 1 bash -c "exec 3<>/dev/tcp/${GATEWAY_HOST}/${GATEWAY_PORT}" 2>/dev/null
+    (exec 3<>"/dev/tcp/${GATEWAY_HOST}/${GATEWAY_PORT}") 2>/dev/null
 }
 
 do_start() {

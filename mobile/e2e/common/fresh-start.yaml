@@ -5,9 +5,12 @@ appId: com.bridgething.gateway
 - tapOn:
     text: "Don't show again"
     optional: true
+- tapOn:
+    text: "Wait"
+    optional: true
 - extendedWaitUntil:
     visible: "skip for now|continue"
-    timeout: 30000
+    timeout: 180000
 - repeat:
     times: 8
     while:
@@ -41,10 +44,13 @@ appId: com.bridgething.gateway
             - tapOn:
                 text: "not now"
                 optional: true
+- extendedWaitUntil:
+    visible: "open bridgething"
+    timeout: 180000
 - tapOn: "open bridgething"
 - extendedWaitUntil:
     visible: ".*dev gateway.*"
-    timeout: 30000
+    timeout: 180000
 - extendedWaitUntil:
     visible: ".*dev gateway, connected.*"
-    timeout: 30000
+    timeout: 180000

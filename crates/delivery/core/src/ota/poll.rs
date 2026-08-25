@@ -80,7 +80,7 @@ mod tests {
   use super::OtaPollConfig;
   use crate::{
     ota::{
-      autopush::LINK_STABILITY_MS,
+      autopush::{LINK_STABILITY_MS, MIN_POLL_INTERVAL_SECONDS},
       event::{OtaPollEvent, OtaStepKind},
       harness::{
         DEVICE, FakeDevice, FakeFetch, ManifestFixture, OTHER_DEVICE, Spool, TestClock, digest_of, linked_gateway,
@@ -215,8 +215,6 @@ mod tests {
     }
   }
 
-  // MARK: the manifest poll
-
   #[tokio::test(start_paused = true)]
   async fn a_poll_reports_when_the_manifest_was_last_updated() {
     let mut rig = rig().await;
@@ -255,8 +253,6 @@ mod tests {
     assert_eq!(status.last_polled_at.as_deref(), Some("2026-08-03T00:00:00Z"));
     assert!(status.error.is_some(), "the failure is still reported alongside it");
   }
-
-  // MARK: adoption
 
   #[tokio::test(start_paused = true)]
   async fn an_adopted_link_records_the_device_it_announces() {
@@ -320,8 +316,6 @@ mod tests {
       "only the drifted device is offered an update, got {event:?}"
     );
   }
-
-  // MARK: reconcile
 
   #[tokio::test(start_paused = true)]
   async fn a_device_on_the_latest_release_is_offered_nothing() {
@@ -581,7 +575,108 @@ mod tests {
     );
   }
 
-  // MARK: the wake word model
+  #[tokio::test(start_paused = true)]
+  async fn a_webapp_list_that_comes_back_empty_does_not_retract_a_held_offer() {
+    let mut rig = rig().await;
+    let mut fixture = serve_release(&rig.fetch, "prod");
+    fixture.builtin_webapps.insert("browser".into(), "0.5.0".into());
+    rig.fetch.serve_artifact(
+      &OtaArtifactUrls::builtin_webapp(ROOT, CHANNEL, "browser", "0.5.0"),
+      pattern(2 * 1024),
+    );
+    publish(&rig.fetch, &fixture);
+    rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
+    hold_link_open().await;
+
+    rig.service.set_poll_config(Some(config(false))).await;
+    rig
+      .device
+      .answer_webapp_list(vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.4.0")])
+      .await;
+    next_event(&mut rig.events, |event| {
+      matches!(event, OtaPollEvent::UpdateAvailable { .. })
+    })
+    .await;
+    assert_eq!(rig.service.retained_available().await.len(), 1);
+
+    let poll = tokio::spawn({
+      let service = rig.service.clone();
+      async move { service.poll_now().await }
+    });
+    rig.device.answer_webapp_list(Vec::new()).await;
+    poll.await.expect("the poll finishes");
+
+    assert_eq!(
+      rig.service.retained_available().await.len(),
+      1,
+      "a device that never said what it has is not a device that said it is current"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_unknown_webapp_list_is_rechecked_without_waiting_out_the_interval() {
+    let mut rig = rig().await;
+    let mut fixture = serve_release(&rig.fetch, "prod");
+    fixture.builtin_webapps.insert("browser".into(), "0.5.0".into());
+    rig.fetch.serve_artifact(
+      &OtaArtifactUrls::builtin_webapp(ROOT, CHANNEL, "browser", "0.5.0"),
+      pattern(2 * 1024),
+    );
+    publish(&rig.fetch, &fixture);
+    rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
+    hold_link_open().await;
+
+    rig.service.set_poll_config(Some(config(false))).await;
+    rig.device.answer_webapp_list(Vec::new()).await;
+    for _ in 0..64 {
+      tokio::task::yield_now().await;
+    }
+
+    tokio::time::advance(Duration::from_secs(MIN_POLL_INTERVAL_SECONDS + 1)).await;
+    rig
+      .device
+      .answer_webapp_list(vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.4.0")])
+      .await;
+
+    next_event(&mut rig.events, |event| {
+      matches!(event, OtaPollEvent::UpdateAvailable { .. })
+    })
+    .await;
+    assert_eq!(
+      rig.service.retained_available().await.len(),
+      1,
+      "the bump has to surface on the recheck, not an interval later"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_manifest_that_could_not_be_read_is_retried_without_waiting_out_the_interval() {
+    let mut rig = rig().await;
+    rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
+    hold_link_open().await;
+
+    rig.service.set_poll_config(Some(config(false))).await;
+    next_event(&mut rig.events, |event| {
+      matches!(event, OtaPollEvent::ManifestPollFailed { .. })
+    })
+    .await;
+    for _ in 0..64 {
+      tokio::task::yield_now().await;
+    }
+
+    publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
+    tokio::time::advance(Duration::from_secs(MIN_POLL_INTERVAL_SECONDS + 1)).await;
+
+    next_event(&mut rig.events, |event| {
+      matches!(event, OtaPollEvent::UpdateAvailable { .. })
+    })
+    .await;
+    assert_eq!(
+      rig.service.retained_available().await.len(),
+      1,
+      "a manifest that was unreadable once cannot cost a whole interval of silence"
+    );
+  }
 
   const TRAINED_AGAINST: &str = "0.9.0";
 
@@ -844,8 +939,6 @@ mod tests {
       "a device announcing the version it was being updated to is the update succeeding, got {updated:?}"
     );
   }
-
-  // MARK: apply-version precedence
 
   #[tokio::test(start_paused = true)]
   async fn apply_version_with_an_image_change_runs_the_image_only() {

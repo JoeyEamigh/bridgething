@@ -84,9 +84,9 @@ codegen:
 companion-bindings:
   bash scripts/generate-companion-bindings.sh
 
-# Build the shared core as an ios xcframework + swift wrapper
-companion-ios:
-  bash scripts/build-uniffi-xcframework.sh companion BridgethingCompanionCore
+# Build the shared core as an ios xcframework + swift wrapper. `sim` builds the simulator slice alone.
+companion-ios slices="all":
+  {{ if slices == "sim" { "XCFRAMEWORK_SIM_ONLY=1" } else { "" } }} bash scripts/build-uniffi-xcframework.sh companion BridgethingCompanionCore
 
 # --- Mobile app artifacts ---
 
@@ -102,7 +102,7 @@ e2e-android *flows:
   bash scripts/e2e-mobile.sh android {{flows}}
 
 # Drive the ios app on the simulator against a seeded host daemon
-e2e-ios *flows:
+e2e-ios *flows: (companion-ios "sim")
   bash scripts/e2e-mobile.sh ios {{flows}}
 
 # Build an unsigned ipa for sideloading. Requires macos.

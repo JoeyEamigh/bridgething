@@ -36,7 +36,7 @@ target 'bridgething' do
     %w[debug release].each do |config_name|
       xcconfig_path = File.join(__dir__, 'Pods/Target Support Files', user_target, "#{user_target}.#{config_name}.xcconfig")
       next unless File.exist?(xcconfig_path)
-      include_line = '#include? "../../../Local.xcconfig"'
+      include_line = %(#include "../../../Defaults.xcconfig"\n#include? "../../../Local.xcconfig")
       contents = File.read(xcconfig_path)
       next if contents.include?(include_line)
       File.write(xcconfig_path, "#{contents.rstrip}\n#{include_line}\n")

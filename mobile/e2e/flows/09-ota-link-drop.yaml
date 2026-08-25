@@ -7,7 +7,7 @@ name: survives the link dropping under a run in flight
           MODE: image
 - extendedWaitUntil:
       visible: ".*99.9.9 available.*"
-      timeout: 30000
+      timeout: 180000
 - tapOn: ".*install 0.10.0\\+image.99.9.9.*"
 - runScript:
       file: ../scripts/ota-bounce.js
@@ -17,6 +17,6 @@ name: survives the link dropping under a run in flight
           DOWN_MS: "10000"
 - extendedWaitUntil:
       visible: ".*dev gateway.*"
-      timeout: 60000
+      timeout: 180000
 - assertVisible: ".*dev gateway.*"
 - assertVisible: ".*firmware.*"

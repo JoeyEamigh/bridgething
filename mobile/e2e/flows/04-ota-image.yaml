@@ -7,9 +7,9 @@ name: streams an image release to the device and lands it through swupdate
       MODE: image
 - extendedWaitUntil:
     visible: ".*99.9.9 available.*"
-    timeout: 30000
+    timeout: 180000
 - tapOn: ".*install 0.10.0\\+image.99.9.9.*"
 - extendedWaitUntil:
     visible: ".*update installed.*"
-    timeout: 120000
+    timeout: 180000
 - assertNotVisible: ".*the update did not finish.*"

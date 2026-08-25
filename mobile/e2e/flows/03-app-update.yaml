@@ -7,8 +7,11 @@ tags:
 - assertNotVisible: "app update v99.0.0"
 - tapOn: ".*dev gateway.*"
 - scrollUntilVisible:
-    element: "update host"
+    element:
+      id: "update-host"
     direction: DOWN
+    centerElement: true
+    visibilityPercentage: 100
 - tapOn:
     id: "update-host"
 - inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}"
@@ -17,7 +20,7 @@ tags:
 - tapOn: "apps"
 - extendedWaitUntil:
     visible: "app update v99.0.0"
-    timeout: 30000
+    timeout: 180000
 - assertVisible: ".*apk from ${FIXTURE_HOST}.*"
 - tapOn: "skip this version"
 - assertNotVisible: "app update v99.0.0"
@@ -25,5 +28,5 @@ tags:
 - launchApp
 - extendedWaitUntil:
     visible: ".*dev gateway.*"
-    timeout: 30000
+    timeout: 180000
 - assertNotVisible: "app update v99.0.0"

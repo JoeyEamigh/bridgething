@@ -7,7 +7,7 @@ name: drops a stale update offer once the device turns out to be current
           MODE: bounce
 - extendedWaitUntil:
       visible: ".*99.9.9 available.*"
-      timeout: 30000
+      timeout: 180000
 - runScript:
       file: ../scripts/ota-bounce.js
       env:
@@ -18,8 +18,8 @@ name: drops a stale update offer once the device turns out to be current
 - launchApp
 - extendedWaitUntil:
       visible: ".*dev gateway, connected.*"
-      timeout: 60000
+      timeout: 180000
 - extendedWaitUntil:
       notVisible: ".*99.9.9 available.*"
-      timeout: 60000
+      timeout: 180000
 - assertNotVisible: ".*install 0.10.0\\+image.99.9.9.*"

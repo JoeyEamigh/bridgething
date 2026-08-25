@@ -1,7 +1,10 @@
 use std::{
   collections::{BTreeMap, BTreeSet},
   path::PathBuf,
-  sync::{Arc, Mutex},
+  sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+  },
   time::{Duration, SystemTime},
 };
 
@@ -24,7 +27,7 @@ use crate::{
     fetch::{ArtifactFetch, DownloadRequest, FetchError, fetch_json},
   },
   ota::{
-    autopush::{AutoPushSchedule, MIN_RESUME_DELAY_MS},
+    autopush::{AutoPushSchedule, MIN_POLL_INTERVAL_SECONDS, MIN_RESUME_DELAY_MS},
     event::{OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
     manifest::{
       OtaArtifactUrls, OtaCompositeVersion, OtaDiscoverManifest, OtaManifestRelease, OtaReleaseArtifacts,
@@ -361,6 +364,7 @@ pub struct OtaService {
   feed: Arc<Feed>,
   links: Mutex<BTreeMap<String, Link>>,
   schedules: Mutex<BTreeMap<String, AutoPushSchedule>>,
+  recheck_soon: AtomicBool,
   image_targets: Mutex<BTreeMap<String, String>>,
   in_flight: Mutex<BTreeSet<String>>,
   poll: Mutex<PollState>,
@@ -380,6 +384,7 @@ impl OtaService {
       feed: Arc::new(feed),
       links: Mutex::new(BTreeMap::new()),
       schedules: Mutex::new(BTreeMap::new()),
+      recheck_soon: AtomicBool::new(false),
       image_targets: Mutex::new(BTreeMap::new()),
       in_flight: Mutex::new(BTreeSet::new()),
       poll: Mutex::new(PollState::default()),
@@ -463,8 +468,6 @@ impl OtaService {
       rt::sleep(Duration::from_millis(RESUME_READY_POLL_MS)).await;
     }
   }
-
-  // MARK: inbound
 
   pub fn device_meta(&self, device_id: &str, meta: BridgeThingMeta) {
     self.record_meta(device_id, meta);
@@ -606,6 +609,7 @@ impl OtaService {
       return;
     };
     if self.in_flight.lock().unwrap().contains(device_id) {
+      self.recheck_soon.store(true, Ordering::SeqCst);
       return;
     }
 
@@ -778,8 +782,6 @@ impl OtaService {
     }
   }
 
-  // MARK: link bookkeeping
-
   fn link(&self, device_id: &str) -> Option<LinkHandle> {
     self.links.lock().unwrap().get(device_id).map(|link| LinkHandle {
       gateway: link.gateway.clone(),
@@ -915,8 +917,6 @@ impl OtaService {
     }
   }
 
-  // MARK: the manifest poll
-
   async fn run_poll_loop(self: Arc<Self>, generation: u64) {
     while let Some(config) = self.current_config(generation) {
       self.poll(&config).await;
@@ -939,6 +939,9 @@ impl OtaService {
   }
 
   fn wake_deadline(&self, now: u64, interval_seconds: u64) -> u64 {
+    if self.recheck_soon.swap(false, Ordering::SeqCst) {
+      return now + MIN_POLL_INTERVAL_SECONDS * 1_000;
+    }
     self
       .schedules
       .lock()
@@ -961,6 +964,7 @@ impl OtaService {
         self
           .feed
           .emit(OtaPollEvent::ManifestPollFailed { reason: e.to_string() });
+        self.recheck_soon.store(true, Ordering::SeqCst);
         return;
       }
     };
@@ -993,6 +997,7 @@ impl OtaService {
     config: &OtaPollConfig,
   ) {
     if self.in_flight.lock().unwrap().contains(device_id) {
+      self.recheck_soon.store(true, Ordering::SeqCst);
       return;
     }
 
@@ -1008,10 +1013,16 @@ impl OtaService {
     let webapps = self
       .builtin_webapp_drift(device_id, release, &meta.channel, config)
       .await;
+    let webapps_known = webapps.is_some();
+    let webapps = webapps.unwrap_or_default();
     let wakeword = wakeword_drift(meta, release, &latest.daemon);
     let drifted = drift(meta, latest);
     if !drifted.any() && webapps.is_empty() && wakeword.is_none() {
-      self.feed.retract_available(device_id);
+      if webapps_known {
+        self.feed.retract_available(device_id);
+      } else {
+        self.recheck_soon.store(true, Ordering::SeqCst);
+      }
       return;
     }
 
@@ -1061,11 +1072,11 @@ impl OtaService {
     release: Option<&OtaManifestRelease>,
     channel: &str,
     config: &OtaPollConfig,
-  ) -> Vec<BandaidPiece> {
+  ) -> Option<Vec<BandaidPiece>> {
     let Some(release) = release.filter(|release| !release.builtin_webapps.is_empty()) else {
-      return Vec::new();
+      return Some(Vec::new());
     };
-    let installed = self.installed_webapps(device_id).await;
+    let installed = self.installed_webapps(device_id).await?;
 
     let mut drifted = Vec::new();
     for (slug, id) in BUILTIN_WEBAPPS {
@@ -1089,24 +1100,30 @@ impl OtaService {
         patch: None,
       });
     }
-    drifted
+    Some(drifted)
   }
 
-  async fn installed_webapps(&self, device_id: &str) -> BTreeMap<Uuid, String> {
-    let Some(link) = self.link(device_id) else {
-      return BTreeMap::new();
+  async fn installed_webapps(&self, device_id: &str) -> Option<BTreeMap<Uuid, String>> {
+    let link = self.link(device_id)?;
+    let list = match link.gateway.webapp().list().await {
+      Ok(list) => list,
+      Err(err) => {
+        tracing::warn!(device_id, ?err, "webapp list failed; holding the ota verdict");
+        return None;
+      }
     };
-    match link.gateway.webapp().list().await {
-      Ok(list) => list
+    if list.webapps.is_empty() {
+      tracing::debug!(device_id, "webapp list came back empty; holding the ota verdict");
+      return None;
+    }
+    Some(
+      list
         .webapps
         .into_iter()
         .map(|webapp| (webapp.id, webapp.version))
         .collect(),
-      Err(_) => BTreeMap::new(),
-    }
+    )
   }
-
-  // MARK: the auto runs
 
   async fn run_image_auto(
     &self,
@@ -1380,8 +1397,6 @@ impl OtaService {
       ),
     }
   }
-
-  // MARK: the drive
 
   async fn push_image(
     &self,
@@ -1749,8 +1764,6 @@ mod tests {
     begin.update_id
   }
 
-  // MARK: plans and step routing
-
   #[test]
   fn an_image_plan_downloads_three_artifacts_streams_one_and_reboots() {
     let artifacts = OtaReleaseArtifacts {
@@ -1972,8 +1985,6 @@ mod tests {
     );
   }
 
-  // MARK: the daemon piece
-
   fn daemon_urls() -> OtaArtifactUrls {
     OtaArtifactUrls::build(ROOT, CHANNEL, "0.9.1", "1.0.0", "prod")
   }
@@ -2048,8 +2059,6 @@ mod tests {
     assert!(piece.patch.is_none());
   }
 
-  // MARK: the artifact spool
-
   fn spool_sparse(spool: &Spool, name: &str, size: u64) {
     let file = std::fs::File::create(spool.path().join(name)).expect("the scratch directory is writable");
     file.set_len(size).expect("a stand-in the size of a release artifact");
@@ -2098,8 +2107,6 @@ mod tests {
       "a live run streams from the artifacts it downloaded; evicting one mid-update breaks it"
     );
   }
-
-  // MARK: the drive
 
   #[tokio::test]
   async fn a_daemon_bandaid_stages_activates_and_completes_on_reboot() {
@@ -2388,8 +2395,6 @@ mod tests {
     );
   }
 
-  // MARK: third-party bundle installs
-
   fn installed_info(version: &str) -> WebappInfo {
     WebappInfo {
       id: Uuid::now_v7(),
@@ -2669,8 +2674,6 @@ mod tests {
     assert_eq!(reply.total_size, 256);
   }
 
-  // MARK: the idle-stall watchdog
-
   #[tokio::test(start_paused = true)]
   async fn a_daemon_that_goes_silent_mid_apply_fails_the_run_instead_of_hanging() {
     let mut rig = rig().await;
@@ -2766,8 +2769,6 @@ mod tests {
     assert_eq!(terminal, OtaPhaseSnapshot::Completed);
   }
 
-  // MARK: replayed failures
-
   #[tokio::test]
   async fn a_replayed_failure_does_not_kill_the_run_that_is_re_driving_it() {
     let mut rig = rig().await;
@@ -2824,8 +2825,6 @@ mod tests {
       "the replay guard must not have been widened into swallowing real failures, got {terminal:?}"
     );
   }
-
-  // MARK: resume over a reconnect
 
   fn publish_daemon_release(fetch: &FakeFetch, body: &[u8]) {
     let mut fixture = ManifestFixture::new(CHANNEL, TO_RELEASE);
@@ -2974,8 +2973,6 @@ mod tests {
     );
   }
 
-  // MARK: resume over an app death
-
   fn snapshot_runs(from: &std::path::Path, to: &std::path::Path) {
     let dest = to.join(RUNS_FILE);
     std::fs::create_dir_all(dest.parent().expect("the runs file is under a directory"))
@@ -3033,8 +3030,6 @@ mod tests {
     );
   }
 
-  // MARK: an artifact the daemon already holds
-
   #[tokio::test]
   async fn a_full_offset_ack_streams_nothing_and_still_completes_on_the_device() {
     let mut rig = rig().await;
@@ -3069,8 +3064,6 @@ mod tests {
       "the drive still rides the device's own signals to a terminal"
     );
   }
-
-  // MARK: the run feed
 
   #[tokio::test]
   async fn a_completed_drive_reports_a_terminal_the_reducer_can_close_a_run_with() {
