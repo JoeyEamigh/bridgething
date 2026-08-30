@@ -83,9 +83,6 @@ jobs:
             target: aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.runner }}
-    env:
-      RUSTC_WRAPPER: sccache
-      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -97,7 +94,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - uses: mozilla-actions/sccache-action@v0.0.11
+      - uses: ./.github/actions/sccache
+        with:
+          key: core-node-${{ matrix.target }}
 
       - uses: goto-bus-stop/setup-zig@v2
         if: matrix.zigbuild

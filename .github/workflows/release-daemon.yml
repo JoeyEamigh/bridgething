@@ -137,7 +137,9 @@ jobs:
           EOF
 
       - uses: extractions/setup-just@v3
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: ./.github/actions/sccache
+        with:
+          key: daemon-aarch64
       - uses: dtolnay/rust-toolchain@stable
 
       - name: provision the aarch64 build environment
@@ -158,9 +160,6 @@ jobs:
         run: scripts/bridgething-fetch-wakeword-models
 
       - name: build the daemon
-        env:
-          SCCACHE_GHA_ENABLED: "true"
-          RUSTC_WRAPPER: sccache
         run: |
           set -euo pipefail
           just cross-release-native
