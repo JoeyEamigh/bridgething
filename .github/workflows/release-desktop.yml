@@ -97,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf clang
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf clang xdg-utils
           { echo "CC=clang"; echo "CXX=clang++"; } >> "$GITHUB_ENV"
 
       - run: bun install --frozen-lockfile
