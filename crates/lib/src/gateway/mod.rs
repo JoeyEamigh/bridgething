@@ -11,7 +11,7 @@ pub use from::*;
 pub use to::*;
 
 use crate::{
-  BridgeThingMeta, ForwardMessage,
+  BridgeThingMeta,
   wire::{MsgMeta, WireError},
 };
 
@@ -40,6 +40,8 @@ pub enum GatewayToBridgeMsgData {
   Capabilities(GatewayToBridgeCapabilitiesMsg),
   #[from]
   Chrome(GatewayToBridgeChromeMsg),
+  #[from]
+  Forward(GatewayToBridgeForwardMsg),
   #[from]
   Geo(GatewayToBridgeGeoMsg),
   #[from]
@@ -116,7 +118,7 @@ pub enum BridgeToGatewayMsgData {
   #[from]
   Webapp(BridgeToGatewayWebappMsg),
   #[from]
-  Forward(ForwardMessage),
+  Forward(BridgeToGatewayForwardMsg),
   #[from]
   Error(WireError),
   Ack,

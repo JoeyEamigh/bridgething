@@ -2,6 +2,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
   aggregate,
+  extensionOf,
   newestCompatible,
   sortNewestFirst,
   type AppEntry,
@@ -9,8 +10,10 @@ import {
 } from '@bridgething/catalog';
 import { appIdFromPath } from '../../lib/app-routes';
 import { fetchMergedApps, type InstallCount, type MergedCatalog } from '../../lib/directory-client';
+import { webHref } from '../../lib/href';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import { orderedByTrust, sourceMap, type StoreSource } from '../../lib/store-sources';
+import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
 
 export type BakedApp = { app: AppEntry; source: StoreSource };
 
@@ -45,10 +48,12 @@ function Notice({ children }: { children: ComponentChildren }) {
 function Trust({ source }: { source: StoreSource | null }) {
   if (!source) return <p class="m-0 font-mono text-sm text-white/40">source: unknown</p>;
 
+  const href = webHref(source.url);
+
   return (
     <>
       <p class="m-0 font-mono text-sm break-all text-white/40">
-        source: <a href={source.url}>{source.name}</a>
+        source: {href ? <a href={href}>{source.name}</a> : source.name}
       </p>
       {source.official || source.attested ? null : (
         <p class="m-0 mt-2 text-sm text-white/50">this source is listed in the directory but unreviewed.</p>
@@ -61,7 +66,11 @@ function Detail({ listing, source }: Resolved) {
   const app = listing.app;
   const versions = sortNewestFirst(app.versions);
   const newest = listing.newestCompatible ?? versions[0] ?? null;
+  const extension = extensionOf(newest);
   const unpublished = newest === null || isPlaceholderDownload(newest.download);
+  const homepage = webHref(app.homepage);
+  const repo = webHref(app.source);
+  const shots = (app.screenshots ?? []).map(webHref).filter((url): url is string => url !== null);
 
   return (
     <>
@@ -81,6 +90,11 @@ function Detail({ listing, source }: Resolved) {
         <div class="min-w-0 flex-1">
           <h1 class="mb-1">{app.name.toLowerCase()}</h1>
           <p class="m-0 text-white/60">{app.description}</p>
+          {extension ? (
+            <div class="mt-3 flex">
+              <ExtensionBadge />
+            </div>
+          ) : null}
           <p class="m-0 mt-3 flex flex-wrap items-baseline gap-2 font-mono text-sm text-white/45">
             <span>{app.author}</span>
             {newest ? (
@@ -94,6 +108,32 @@ function Detail({ listing, source }: Resolved) {
           </p>
         </div>
       </header>
+
+      {shots.length > 0 ? (
+        <section class="mb-12">
+          <ul class="m-0 flex list-none gap-4 overflow-x-auto p-0">
+            {shots.map(shot => (
+              <li key={shot} class="shrink-0">
+                <img
+                  src={shot}
+                  alt={`${app.name} running on a car thing`}
+                  width="800"
+                  height="480"
+                  loading="lazy"
+                  class="h-48 w-auto border border-white/15 sm:h-64"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {extension ? (
+        <section class="mb-12">
+          <h2 class="mb-3 border-b border-white/20 pb-2 text-base">native extension</h2>
+          <ExtensionNote extension={extension} source={app.source} />
+        </section>
+      ) : null}
 
       <section class="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2">
         <div>
@@ -154,17 +194,13 @@ function Detail({ listing, source }: Resolved) {
             {app.homepage ? (
               <>
                 <dt class="text-white/40">homepage</dt>
-                <dd class="m-0 break-all">
-                  <a href={app.homepage}>{app.homepage}</a>
-                </dd>
+                <dd class="m-0 break-all">{homepage ? <a href={homepage}>{app.homepage}</a> : app.homepage}</dd>
               </>
             ) : null}
             {app.source ? (
               <>
                 <dt class="text-white/40">source</dt>
-                <dd class="m-0 break-all">
-                  <a href={app.source}>{app.source}</a>
-                </dd>
+                <dd class="m-0 break-all">{repo ? <a href={repo}>{app.source}</a> : app.source}</dd>
               </>
             ) : null}
           </dl>
@@ -219,7 +255,13 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
 
   const resolved = useMemo<Resolved | null>(() => {
     if (catalogs) {
-      const listings = aggregate({ orderedCatalogs: catalogs, installed: [], deviceLibVersion: null, installs });
+      const listings = aggregate({
+        orderedCatalogs: catalogs,
+        installed: [],
+        deviceLibVersion: null,
+        installs,
+        extensions: 'listed',
+      });
       const listing = listings.find(entry => entry.app.id === id);
       if (listing) return { listing, source: sourceMap(catalogs).get(listing.sourceUrl) ?? null };
     }

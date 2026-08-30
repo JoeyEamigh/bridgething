@@ -7,6 +7,8 @@ export const SITE = {
   officialCatalog: 'https://apps.bridgething.com/catalog.json',
   testflight: 'https://testflight.apple.com/join/PJHyDqZn',
   github: 'https://github.com/JoeyEamigh',
+  repo: 'https://github.com/JoeyEamigh/bridgething',
+  discord: 'https://tl.mt/d',
   pitch:
     'open firmware for the spotify car thing. a full system image, daemon, and companion app to restore your thing to its former glory.',
 } as const;

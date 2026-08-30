@@ -247,6 +247,7 @@ fn session_full(
     transfer_policy: None,
     connectivity: None,
     device_waker: None,
+    extensions: None,
   };
   let session = Session::new(
     CompanionConfig {
@@ -565,6 +566,7 @@ async fn a_reachability_edge_reaches_every_provider_and_stop_releases_the_monito
     transfer_policy: None,
     connectivity: Some(monitor.clone()),
     device_waker: None,
+    extensions: None,
   };
   let session = Session::new(
     CompanionConfig {

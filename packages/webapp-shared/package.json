@@ -20,15 +20,22 @@
     "./gitignore": "./gitignore",
     "./styles.css": "./styles.css"
   },
-  "files": ["dist", "tsconfig.json", "gitignore", "styles.css"],
+  "files": [
+    "dist",
+    "tsconfig.json",
+    "gitignore",
+    "styles.css"
+  ],
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.build.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "bun test"
   },
   "dependencies": {
-    "@bridgething/ui": "workspace:*"
+    "@bridgething/ui": "workspace:*",
+    "esbuild": "^0.28.2"
   },
   "peerDependencies": {
     "@msgpack/msgpack": "*",
@@ -37,5 +44,10 @@
     "tailwindcss": "*",
     "typescript": "*",
     "vite": "*"
+  },
+  "devDependencies": {
+    "@bridgething/extension": "workspace:*",
+    "@types/bun": "^1.4.0",
+    "deno": "^2.9.6"
   }
 }

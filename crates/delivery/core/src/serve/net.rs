@@ -447,7 +447,9 @@ fn fetch_failed(error: NetError) -> HandlerError<NetFetchErrorReply> {
 
 fn net_error(e: HttpError) -> NetError {
   match e {
-    HttpError::Transport(reason) | HttpError::Body(reason) => NetError::RequestFailed { reason },
+    HttpError::InvalidRequest(reason) | HttpError::Transport(reason) | HttpError::Body(reason) => {
+      NetError::RequestFailed { reason }
+    }
     HttpError::Dropped => NetError::Unavailable,
   }
 }
@@ -868,7 +870,7 @@ mod tests {
         .expect("a scripted 200");
     }
 
-    let seen: Vec<io::HttpMethod> = rig.http.seen.lock().unwrap().iter().map(|r| r.method).collect();
+    let seen: Vec<io::HttpMethod> = rig.http.seen.lock().unwrap().iter().map(|r| r.method.clone()).collect();
     assert_eq!(
       seen,
       vec![

@@ -110,6 +110,44 @@ describe('apply-webapp-publish', () => {
     expect(doc.apps[0]!.versions[0]!['changelog']).toBe('Initial release.');
   });
 
+  test('folds a manifest extension block into the catalog shape', async () => {
+    const { doc } = await run('apps: []\n', [
+      published({ extension: { entry: 'extension/desktop.mjs', permissions: ['all', 'run:osascript'], api: 1 } }),
+    ]);
+
+    expect(doc.apps[0]!.versions[0]!['extension']).toEqual({ desktop: true, permissions: ['all', 'run:osascript'] });
+  });
+
+  test('drops the extension block when a rebuilt version no longer ships one', async () => {
+    const state = [
+      'apps:',
+      '  - slug: calendar',
+      `    id: ${ID}`,
+      '    name: Calendar',
+      '    description: Upcoming events.',
+      '    icon: null',
+      '    versions:',
+      '      - version: 0.2.0',
+      '        released_at: 2026-07-01T00:00:00Z',
+      '        download:',
+      `          url: https://apps.bridgething.com/r/${ID}/0.2.0.zip`,
+      '          size: 100',
+      `          sha256: ${SHA}`,
+      '        permissions: []',
+      '        extension:',
+      '          desktop: true',
+      '          permissions:',
+      '            - all',
+      '        min_libbridgething_version: 0.4.0',
+      '        changelog: null',
+      '',
+    ].join('\n');
+
+    const { doc } = await run(state, [published()]);
+
+    expect(doc.apps[0]!.versions[0]!['extension']).toBeUndefined();
+  });
+
   test('carries the slot fields the launcher and overlay roles need', async () => {
     const { doc } = await run('apps: []\n', [published({ role: 'launcher', provides_overlay: true })]);
 

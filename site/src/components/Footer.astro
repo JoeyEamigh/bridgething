@@ -1,25 +1,33 @@
 ---
+import { SITE } from '../lib/site';
+
 const now = new Date();
 const rev = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+const cells: Array<{ label: string; value: string; href?: string }> = [
+  { label: 'title', value: 'bridgething' },
+  { label: 'rev', value: rev },
+  { label: 'drawn by', value: 'the community' },
+  { label: 'discord', value: 'tl.mt/d', href: SITE.discord },
+  { label: 'notes', value: 'not affiliated with spotify' },
+];
 ---
 
 <footer class="container-site w-full pb-16">
-  <div class="grid grid-cols-2 border border-white/25 font-mono text-sm md:grid-cols-4">
-    <div class="flex flex-col gap-1 border-r border-b border-white/25 p-4 md:border-b-0">
-      <span class="text-xs text-white/40">title</span>
-      <span class="text-white/80">bridgething</span>
-    </div>
-    <div class="flex flex-col gap-1 border-b border-white/25 p-4 md:border-r md:border-b-0">
-      <span class="text-xs text-white/40">rev</span>
-      <span class="text-white/80 tabular-nums">{rev}</span>
-    </div>
-    <div class="flex flex-col gap-1 border-r border-white/25 p-4">
-      <span class="text-xs text-white/40">drawn by</span>
-      <span class="text-white/80">the community</span>
-    </div>
-    <div class="flex flex-col gap-1 p-4">
-      <span class="text-xs text-white/40">notes</span>
-      <span class="text-white/80">not affiliated with spotify</span>
-    </div>
+  <div class="grid grid-cols-2 border-t border-l border-white/25 font-mono text-sm md:grid-cols-5">
+    {
+      cells.map(cell => (
+        <div class="flex flex-col gap-1 border-r border-b border-white/25 p-4 max-md:last:col-span-2">
+          <span class="text-xs text-white/40">{cell.label}</span>
+          {cell.href ? (
+            <a href={cell.href} class="text-white/80" rel="noreferrer noopener">
+              {cell.value}
+            </a>
+          ) : (
+            <span class="text-white/80 tabular-nums">{cell.value}</span>
+          )}
+        </div>
+      ))
+    }
   </div>
 </footer>

@@ -608,13 +608,24 @@ mod bridge_tests {
 #[cfg(test)]
 mod compression_tests {
   use super::*;
-  use crate::{ForwardMessage, gateway::BridgeToGatewayMsgData, wire::MsgMeta};
+  use crate::{
+    ForwardMessage, ForwardRouted,
+    gateway::{BridgeToGatewayForwardMsg, BridgeToGatewayMsgData},
+    wire::MsgMeta,
+  };
+
+  fn routed(bytes: Vec<u8>) -> BridgeToGatewayMsgData {
+    BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+      webapp: uuid::Uuid::nil(),
+      message: ForwardMessage::Binary(bytes),
+    }))
+  }
 
   fn frame_of(payload_len: usize, priority: Priority, compress: Compress) -> BytesMut {
     let msg = BridgeToGatewayMsg {
       id: uuid::Uuid::now_v7(),
       meta: MsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(vec![0x5a; payload_len])),
+      data: routed(vec![0x5a; payload_len]),
     };
     let mut wire = BytesMut::new();
     BridgeEndec::default()
@@ -671,7 +682,7 @@ mod compression_tests {
     let msg = BridgeToGatewayMsg {
       id: uuid::Uuid::now_v7(),
       meta: MsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(noise)),
+      data: routed(noise),
     };
     let mut wire = BytesMut::new();
     BridgeEndec::default()
@@ -702,7 +713,7 @@ mod compression_tests {
     let msg = BridgeToGatewayMsg {
       id: uuid::Uuid::now_v7(),
       meta: MsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(payload)),
+      data: routed(payload),
     };
     let mut wire = BytesMut::new();
     BridgeEndec::default()

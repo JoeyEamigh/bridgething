@@ -4,20 +4,29 @@ import DocsLayout from '../../layouts/DocsLayout.astro';
 const refdes = 'text-accent m-0 mb-4 font-mono text-sm font-normal tracking-normal';
 
 const using = [
-  { href: '/docs/getting-started', label: 'getting started', body: 'installing it and pairing your phone' },
-  { href: '/docs/faq', label: 'faq', body: 'what still works and what you can undo' },
-  { href: '/docs/troubleshooting', label: 'troubleshooting', body: 'when it does not go to plan' },
+  { href: '/docs/getting-started', label: 'getting started', body: 'install it and pair your phone' },
+  { href: '/docs/faq', label: 'faq', body: 'what works and what you can undo' },
+  { href: '/docs/troubleshooting', label: 'troubleshooting', body: 'fixes for what goes wrong' },
 ];
 
 const building = [
-  { href: '/docs/sdk', label: 'webapp sdk', body: 'the typed client your app talks to the device through' },
-  { href: '/docs/settings-pages', label: 'settings pages', body: 'a settings screen for your app in the companion app' },
+  { href: '/docs/sdk', label: 'webapp sdk', body: 'the typed client your webapp uses to talk to the device' },
+  {
+    href: '/docs/settings-pages',
+    label: 'settings pages',
+    body: 'a settings screen for your webapp, in the companion app',
+  },
+  {
+    href: '/docs/extensions',
+    label: 'extensions',
+    body: 'a desktop process your webapp can talk to',
+  },
   {
     href: '/docs/launchers-and-overlays',
     label: 'launchers and overlays',
-    body: 'replace the built-in hub or the system overlay with your own',
+    body: 'your own home screen or system overlay',
   },
-  { href: '/docs/publishing-apps', label: 'publishing apps', body: 'hosting a source and getting listed' },
+  { href: '/docs/publishing-apps', label: 'publishing apps', body: 'host a source, get listed' },
 ];
 ---
 
@@ -36,7 +45,7 @@ const building = [
       {
         using.map(item => (
           <li class="bg-bg flex border-r border-b border-white/10">
-            <a href={item.href} class="hover:bg-white/4 flex flex-col gap-2 border-b-0 p-5">
+            <a href={item.href} class="flex flex-col gap-2 border-b-0 p-5 hover:bg-white/4">
               <span class="font-display text-base font-medium">{item.label}</span>
               <span class="font-mono text-sm text-pretty text-white/50">{item.body}</span>
             </a>
@@ -49,14 +58,13 @@ const building = [
   <section class="mb-14">
     <h2 class={refdes}>d2 - building apps</h2>
     <p class="mb-6 text-white/60">
-      an app is a web page running full screen on the device, with a typed client for talking to it and the connected
-      phone's internet to work with.
+      a webapp is a web page that runs full screen on the device, with the connected phone's internet to work with.
     </p>
     <ul role="list" class="m-0 grid list-none grid-cols-1 border-t border-l border-white/10 p-0 sm:grid-cols-2">
       {
         building.map(item => (
           <li class="bg-bg flex border-r border-b border-white/10">
-            <a href={item.href} class="hover:bg-white/4 flex flex-col gap-2 border-b-0 p-5">
+            <a href={item.href} class="flex flex-col gap-2 border-b-0 p-5 hover:bg-white/4">
               <span class="font-display text-base font-medium">{item.label}</span>
               <span class="font-mono text-sm text-pretty text-white/50">{item.body}</span>
             </a>

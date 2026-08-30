@@ -1,28 +1,8 @@
-//! Canonical shape for "what is the connected phone playing" data.
-//!
-//! Two transports populate this surface:
-//!
-//! - The iAP2 control session (iOS) decodes Apple's NowPlayingUpdate
-//!   CSM into this shape. iOS provides this for free for any audio app
-//!   that registers with `MPNowPlayingInfoCenter`; no companion app
-//!   required.
-//! - The bridgething gateway protocol (Android, optionally iOS
-//!   companion) sends a `GatewayToBridgeMsgData::NowPlayingUpdate`
-//!   carrying this struct.
-//!
-//! Every field is optional: producers send partial updates populating
-//! only what changed, and unset fields keep their prior value. This
-//! matches the iAP2 wire semantics (Apple emits a fresh `NowPlayingUpdate`
-//! whenever any subscribed attribute changes, sending only that
-//! attribute) and lets the Android companion push partial updates
-//! without a full snapshot every time.
+//! Partial updates to what the phone is playing. A field left unset keeps its prior value.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// `repeat` is a typed enum (Off/All/One) shared across the player
-/// surface and the iAP2 NowPlaying CSM / MediaSession backends, which
-/// all expose three repeat states.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -33,10 +13,7 @@ pub enum RepeatMode {
   One,
 }
 
-/// Three-state shuffle. iAP2 and Apple Music distinguish track-level
-/// from album-level shuffle; companion gateways without that distinction
-/// project to `Songs` when on. Webapps that just need an on/off signal
-/// read `shuffle_on` (None when the underlying mode is unknown).
+/// A phone that does not separate track from album shuffle reports `songs` while shuffle is on.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -53,9 +30,7 @@ impl ShuffleMode {
   }
 }
 
-/// The kind of media currently playing. Multi-typed: an item can be
-/// e.g. both `Podcast` and `AudioBook` (rare). Drives webapp UI choices
-/// like skip-15s-vs-skip-track and chapter UI.
+/// An item can carry more than one kind.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -65,10 +40,6 @@ pub enum MediaType {
   AudioBook,
 }
 
-/// Delta event the companion or iAP2 stream emits whenever a player
-/// attribute changes. Every field is optional: producers send partial
-/// updates populating only what changed, and fields left unset keep
-/// their prior value.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -86,13 +57,7 @@ impl NowPlayingUpdate {
   }
 }
 
-/// Per-track attributes that vary per song. `persistent_id` is a stable
-/// per-platform identifier (iAP2 sends u64; we hex-encode it on the
-/// wire). `artwork_id` is an opaque asset id - webapps pass this value
-/// to `ClientToBridgeAssetMsg::Get` to retrieve the bytes. The id namespace
-/// is producer-defined: iAP2 emits `iap2/art/<track_key>/<content_hash>`, the
-/// companion picks whatever shape it wants (e.g. `spotify/track/<id>/image`).
-/// Webapps treat the value as opaque.
+/// Attributes that change when the track changes.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +71,7 @@ pub struct MediaItemUpdate {
   pub artist: Option<String>,
   pub artist_uri: Option<String>,
   pub liked: Option<bool>,
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub artwork_id: Option<String>,
   pub duration_ms: Option<u32>,
   pub media_types: Option<Vec<MediaType>>,
@@ -141,15 +107,7 @@ impl MediaItemUpdate {
   }
 }
 
-/// Per-playback-session attributes that vary regardless of track:
-/// playing/paused, position, shuffle/repeat, and the iOS bundle
-/// identifier of the app currently driving playback (e.g.
-/// `"com.spotify.client"`). `app_bundle` is null on the Android path
-/// since it isn't a meaningful surface there.
-///
-/// `set_elapsed_time_available` is the gate webapps must honor for
-/// scrub UI: when false, scrubbing is unsupported by the foreground
-/// app and the seek button must be disabled.
+/// Attributes that change without the track changing.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -160,12 +118,14 @@ pub struct PlaybackUpdate {
   pub shuffle: Option<bool>,
   pub shuffle_mode: Option<ShuffleMode>,
   pub repeat: Option<RepeatMode>,
+  /// For example `com.spotify.client`. Null on Android.
   pub app_bundle: Option<String>,
   pub app_display_name: Option<String>,
   pub queue_index: Option<u32>,
   pub queue_count: Option<u32>,
   pub queue_chapter_index: Option<u32>,
   pub playback_speed: Option<f32>,
+  /// False when the app refuses absolute seeks. Null means no signal yet.
   pub set_elapsed_time_available: Option<bool>,
   pub queue_list_avail: Option<bool>,
   pub apple_music_radio_ad: Option<bool>,

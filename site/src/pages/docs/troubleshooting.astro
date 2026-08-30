@@ -6,15 +6,15 @@ const refdes = 'text-accent m-0 mb-4 font-mono text-sm font-normal tracking-norm
 const items = [
   {
     q: 'the installer never sees the device',
-    a: 'use chrome. firefox needs the webserial extension and safari cannot do it at all. failing that, try a different usb-c cable.',
+    a: 'use chrome, or firefox with the webserial extension. if the installer still misses it, try a different usb-c cable.',
   },
   {
     q: 'the phone will not pair',
-    a: 'on the device, open settings, then bluetooth, then make discoverable. if it paired before and stopped connecting, forget it there and pair again.',
+    a: 'on the device, open settings, then bluetooth, then make discoverable. for a device that pairs but does not connect, forget it there and pair again.',
   },
   {
     q: 'an app wants a setting',
-    a: "calendar needs a feed url, home assistant needs your instance and a token, weather needs a location. they live on that app's settings screen in the companion app.",
+    a: "calendar needs a feed url. home assistant needs your instance address and a token. weather needs a location. open that app's settings screen in the companion app.",
   },
 ];
 ---
@@ -26,7 +26,7 @@ const items = [
   <header class="mb-14">
     <h1>troubleshooting</h1>
     <p class="text-white/60">
-      if none of these match, the <a href="https://tl.mt/d">thing labs discord</a> is where the rest of us are.
+      if none of these match, ask in the <a href="https://tl.mt/d">thing labs discord</a>.
     </p>
   </header>
 

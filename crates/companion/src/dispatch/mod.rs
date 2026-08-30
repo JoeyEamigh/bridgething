@@ -1,5 +1,6 @@
 pub mod asset;
 pub mod audio;
+pub mod extension;
 pub mod geo;
 pub mod library;
 pub mod lyrics;

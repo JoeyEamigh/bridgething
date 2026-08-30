@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 
 import { getSession, registerDomain } from './bridge';
+import { isHttpUrl } from './utils';
 import { useAppActiveInterval } from './poll';
 import { DEFAULT_OTA_ROOT_URL, storage } from './storage';
 
@@ -77,7 +78,7 @@ export function releaseFrom(
   if (typeof entry !== 'object' || entry === null) return null;
   const { version, url, size, sha256 } = entry as Record<string, unknown>;
   if (typeof version !== 'string' || version.length === 0) return null;
-  if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return null;
+  if (!isHttpUrl(url)) return null;
   if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0)
     return null;
   if (typeof sha256 !== 'string' || !/^[0-9a-fA-F]{64}$/.test(sha256))

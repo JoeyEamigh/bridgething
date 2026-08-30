@@ -330,6 +330,9 @@ impl WebappHandler for Routed {
   async fn doc_changed(&self, _payload: WebappDocChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn config_changed(&self, _payload: WebappConfigChanged) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn webapp_installed(&self, _payload: WebappInfo) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
@@ -339,13 +342,7 @@ impl WebappHandler for Routed {
 }
 
 impl ForwardHandler for Routed {
-  async fn text(&self, _payload: String) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn json(&self, _payload: serde_json::Value) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn binary(&self, _payload: Vec<u8>) -> Result<(), WireError> {
+  async fn routed(&self, _payload: ForwardRouted) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
 }

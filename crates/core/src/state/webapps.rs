@@ -6,7 +6,8 @@ use std::{
 
 pub use bridgething_delivery::webapp::{BROWSER_WEBAPP_ID, HUB_WEBAPP_ID, STOCK_WEBAPP_ID};
 use libbridgething::{
-  ConfigField, WEBAPP_PROVENANCE_MAX_LEN, WebappError, WebappInfo, WebappManifest, WebappRole, WebappSource,
+  ConfigField, EXTENSION_API_VERSION, ExtensionInfo, ExtensionManifest, WEBAPP_PROVENANCE_MAX_LEN, WebappError,
+  WebappInfo, WebappManifest, WebappRole, WebappSource,
 };
 use tokio::{
   fs,
@@ -44,6 +45,7 @@ pub struct WebappBundle {
   pub icon_hash: Option<String>,
   pub settings_hash: Option<String>,
   pub overlay_hash: Option<String>,
+  pub extension: Option<ExtensionInfo>,
   pub bundle_hash: Arc<OnceCell<String>>,
   pub provenance: Option<String>,
 }
@@ -276,6 +278,15 @@ impl WebappRegistry {
       });
     }
 
+    if let Some(declared) = &bundle.manifest.extension
+      && let Some(reason) = extension_rejection(&staging, declared).await
+    {
+      let _ = fs::remove_dir_all(&staging).await;
+      return Err(WebappError::InvalidManifest {
+        reason: format!("declared extension {reason}"),
+      });
+    }
+
     let final_path = self.installed_root.join(bundle_dir_name(bundle.manifest.id));
     swap_into_place(&self.installed_root, &staging, &final_path)
       .await
@@ -498,6 +509,20 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     None => None,
   };
 
+  let extension = match &manifest.extension {
+    Some(declared) => match extension_rejection(path, declared).await {
+      Some(reason) => {
+        tracing::warn!("webapp '{dir_name}' extension is unusable ({reason}); ignoring it");
+        None
+      }
+      None => Some(ExtensionInfo {
+        permissions: declared.permissions.clone(),
+        api: declared.api,
+      }),
+    },
+    None => None,
+  };
+
   Some(WebappBundle {
     path: path.to_path_buf(),
     source,
@@ -506,9 +531,42 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     icon_hash,
     settings_hash,
     overlay_hash,
+    extension,
     bundle_hash: Arc::new(OnceCell::new()),
     provenance: None,
   })
+}
+
+async fn extension_rejection(root: &Path, declared: &ExtensionManifest) -> Option<String> {
+  if declared.api != EXTENSION_API_VERSION {
+    return Some(format!(
+      "declares api {} (this daemon speaks {EXTENSION_API_VERSION})",
+      declared.api
+    ));
+  }
+  let Some(entry) = contained(root, &declared.entry) else {
+    return Some(format!("entry '{}' climbs out of the bundle", declared.entry));
+  };
+  match fs::metadata(&entry).await {
+    Ok(meta) if meta.is_file() => {}
+    _ => return Some(format!("entry '{}' is not a file in the bundle", declared.entry)),
+  }
+  match (fs::canonicalize(root).await, fs::canonicalize(&entry).await) {
+    (Ok(root), Ok(entry)) if entry.starts_with(&root) => None,
+    _ => Some(format!("entry '{}' resolves outside the bundle", declared.entry)),
+  }
+}
+
+fn contained(root: &Path, name: &str) -> Option<PathBuf> {
+  let mut out = root.to_path_buf();
+  for part in Path::new(name).components() {
+    match part {
+      Component::Normal(part) => out.push(part),
+      Component::CurDir => {}
+      _ => return None,
+    }
+  }
+  (out != root).then_some(out)
 }
 
 async fn hash_bundle_file(root: &Path, rel: &str, cap: u64, dir_name: &str, what: &str) -> Option<String> {
@@ -685,6 +743,7 @@ fn bundle_to_info(b: &WebappBundle) -> WebappInfo {
     renders_voice_display: b.manifest.renders_voice_display,
     art: b.manifest.art,
     provenance: b.provenance.clone(),
+    extension: b.extension.clone(),
   }
 }
 
@@ -762,7 +821,237 @@ fn normalize_webapp_name(raw: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-  use super::normalize_webapp_name;
+  use libbridgething::ExtensionPermission;
+  use tempfile::TempDir;
+
+  use super::*;
+
+  const EXTENSION_ENTRY: &str = "extension/desktop.mjs";
+
+  fn plant(root: &Path, extension: Option<&str>, with_entry: bool) -> Uuid {
+    let id = Uuid::now_v7();
+    let dir = root.join(bundle_dir_name(id));
+    std::fs::create_dir_all(&dir).expect("bundle dir");
+    std::fs::write(dir.join("index.html"), b"<h1>planted</h1>").expect("index");
+    if with_entry {
+      std::fs::create_dir_all(dir.join("extension")).expect("extension dir");
+      std::fs::write(dir.join(EXTENSION_ENTRY), b"export default {}").expect("entry");
+    }
+    let block = extension
+      .map(|block| format!(r#","extension":{block}"#))
+      .unwrap_or_default();
+    std::fs::write(
+      dir.join("manifest.json"),
+      format!(r#"{{"id":"{id}","name":"planted","version":"0.1.0"{block}}}"#),
+    )
+    .expect("manifest");
+    id
+  }
+
+  async fn loaded(root: &Path, id: Uuid) -> WebappBundle {
+    load_bundle(&root.join(bundle_dir_name(id)), WebappSource::Installed)
+      .await
+      .expect("bundle loads")
+  }
+
+  fn zip_of(dir: &Path, into: &Path) {
+    let file = std::fs::File::create(into).expect("archive");
+    let mut writer = zip::ZipWriter::new(file);
+    let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(next) = stack.pop() {
+      for entry in std::fs::read_dir(&next).expect("read dir") {
+        let path = entry.expect("entry").path();
+        if path.is_dir() {
+          stack.push(path);
+          continue;
+        }
+        let rel = path.strip_prefix(dir).expect("relative");
+        writer
+          .start_file(rel.to_string_lossy().into_owned(), options)
+          .expect("start file");
+        std::io::Write::write_all(&mut writer, &std::fs::read(&path).expect("read")).expect("write");
+      }
+    }
+    writer.finish().expect("finish");
+  }
+
+  async fn registry(root: &Path) -> WebappRegistry {
+    let db = crate::db::open(None).await.expect("in-memory db");
+    WebappRegistry::init(root.to_path_buf(), root.join("builtin"), WebappProvenanceStore::new(db))
+      .await
+      .expect("registry")
+  }
+
+  #[tokio::test]
+  async fn a_declared_extension_projects_its_permissions_and_api() {
+    let root = TempDir::new().expect("tempdir");
+    let id = plant(
+      root.path(),
+      Some(&format!(
+        r#"{{"entry":"{EXTENSION_ENTRY}","permissions":["all","net:example.com"],"api":1}}"#
+      )),
+      true,
+    );
+
+    let info = bundle_to_info(&loaded(root.path(), id).await);
+    let extension = info.extension.expect("extension surfaces on WebappInfo");
+    assert_eq!(extension.api, 1);
+    assert_eq!(
+      extension.permissions,
+      vec![
+        ExtensionPermission::All,
+        ExtensionPermission::Net(Some("example.com".into()))
+      ]
+    );
+  }
+
+  #[tokio::test]
+  async fn a_scan_tolerates_an_unusable_extension_by_dropping_it() {
+    let root = TempDir::new().expect("tempdir");
+    let missing = plant(
+      root.path(),
+      Some(&format!(r#"{{"entry":"{EXTENSION_ENTRY}","api":1}}"#)),
+      false,
+    );
+    let future_api = plant(
+      root.path(),
+      Some(&format!(r#"{{"entry":"{EXTENSION_ENTRY}","api":2}}"#)),
+      true,
+    );
+
+    assert!(
+      loaded(root.path(), missing).await.extension.is_none(),
+      "an entry that is not in the bundle is not an extension"
+    );
+    assert!(
+      loaded(root.path(), future_api).await.extension.is_none(),
+      "a manifest written against a newer contract is not an extension"
+    );
+  }
+
+  #[tokio::test]
+  async fn an_entry_outside_the_bundle_is_not_an_extension_however_real_the_file_is() {
+    let root = TempDir::new().expect("tempdir");
+    let elsewhere = TempDir::new().expect("tempdir");
+    let loose = elsewhere.path().join("desktop.mjs");
+    std::fs::write(&loose, b"export default {}").expect("a script that belongs to nobody");
+
+    let sibling = plant(root.path(), None, true);
+    let climbing = plant(
+      root.path(),
+      Some(&format!(
+        r#"{{"entry":"../{}/{EXTENSION_ENTRY}","api":1}}"#,
+        bundle_dir_name(sibling)
+      )),
+      false,
+    );
+    let absolute = plant(
+      root.path(),
+      Some(&serde_json::json!({ "entry": loose.to_string_lossy(), "api": 1 }).to_string()),
+      false,
+    );
+
+    assert!(
+      loaded(root.path(), climbing).await.extension.is_none(),
+      "a bundle must not borrow another bundle's script under its own permission set"
+    );
+    assert!(
+      loaded(root.path(), absolute).await.extension.is_none(),
+      "an absolute entry discards the bundle root entirely and must be refused"
+    );
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn an_entry_that_symlinks_out_of_the_bundle_is_not_an_extension() {
+    let root = TempDir::new().expect("tempdir");
+    let elsewhere = TempDir::new().expect("tempdir");
+    let loose = elsewhere.path().join("desktop.mjs");
+    std::fs::write(&loose, b"export default {}").expect("a script that belongs to nobody");
+
+    let id = plant(
+      root.path(),
+      Some(&format!(r#"{{"entry":"{EXTENSION_ENTRY}","api":1}}"#)),
+      false,
+    );
+    let dir = root.path().join(bundle_dir_name(id));
+    std::fs::create_dir_all(dir.join("extension")).expect("extension dir");
+    std::os::unix::fs::symlink(&loose, dir.join(EXTENSION_ENTRY)).expect("symlink");
+
+    assert!(
+      loaded(root.path(), id).await.extension.is_none(),
+      "a clean relative entry still has to resolve inside the bundle"
+    );
+  }
+
+  #[tokio::test]
+  async fn an_install_hard_rejects_an_extension_the_bundle_cannot_back() {
+    let staging = TempDir::new().expect("tempdir");
+    let installed = TempDir::new().expect("tempdir");
+    let archives = TempDir::new().expect("tempdir");
+    let registry = registry(installed.path()).await;
+
+    for (case, with_entry, api) in [("missing entry", false, 1), ("future api", true, 2)] {
+      let id = plant(
+        staging.path(),
+        Some(&format!(r#"{{"entry":"{EXTENSION_ENTRY}","api":{api}}}"#)),
+        with_entry,
+      );
+      let archive = archives.path().join(format!("{}.zip", id.simple()));
+      zip_of(&staging.path().join(bundle_dir_name(id)), &archive);
+
+      let outcome = registry.install_from_path(archive, None).await;
+      assert!(
+        matches!(outcome, Err(WebappError::InvalidManifest { .. })),
+        "{case} must be refused at install, got {outcome:?}"
+      );
+    }
+  }
+
+  #[tokio::test]
+  async fn an_install_keeps_a_bundle_whose_extension_checks_out() {
+    let staging = TempDir::new().expect("tempdir");
+    let installed = TempDir::new().expect("tempdir");
+    let archives = TempDir::new().expect("tempdir");
+    let registry = registry(installed.path()).await;
+
+    let id = plant(
+      staging.path(),
+      Some(&format!(
+        r#"{{"entry":"{EXTENSION_ENTRY}","permissions":["all"],"api":1}}"#
+      )),
+      true,
+    );
+    let archive = archives.path().join("ok.zip");
+    zip_of(&staging.path().join(bundle_dir_name(id)), &archive);
+
+    let info = registry.install_from_path(archive, None).await.expect("install");
+    assert_eq!(
+      info.extension.expect("extension survives the install").permissions,
+      vec![ExtensionPermission::All]
+    );
+  }
+
+  #[tokio::test]
+  async fn a_permission_descriptor_the_daemon_cannot_parse_fails_the_whole_bundle_closed() {
+    let root = TempDir::new().expect("tempdir");
+    let id = plant(
+      root.path(),
+      Some(&format!(
+        r#"{{"entry":"{EXTENSION_ENTRY}","permissions":["netwrok"],"api":1}}"#
+      )),
+      true,
+    );
+
+    assert!(
+      load_bundle(&root.path().join(bundle_dir_name(id)), WebappSource::Installed)
+        .await
+        .is_none(),
+      "the permission list is the trust model, so an unreadable one hides the app rather than \
+       shipping it with a silently narrowed grant"
+    );
+  }
 
   #[test]
   fn strips_noise_words_and_punctuation() {

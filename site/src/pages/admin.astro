@@ -1,0 +1,19 @@
+---
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import { AdminConsole } from '../components/admin/AdminConsole';
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="admin" description="Moderate catalog sources and judge the app jam." noindex>
+  <Header />
+  <main class="container-site w-full flex-1 py-12 md:py-16">
+    <header class="mb-10 max-w-2xl">
+      <h1 class="mb-1">admin</h1>
+      <p class="text-white/60">source moderation and the app jam panel.</p>
+    </header>
+
+    <AdminConsole client:load />
+  </main>
+  <Footer />
+</Layout>

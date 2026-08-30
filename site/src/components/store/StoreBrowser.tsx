@@ -52,7 +52,8 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
   const vouchedUrls = useMemo(() => new Set(ordered.filter(vouchedFor).map(entry => entry.url)), [ordered]);
 
   const listings = useMemo(
-    () => aggregate({ orderedCatalogs: ordered, installed: [], deviceLibVersion: null, installs }),
+    () =>
+      aggregate({ orderedCatalogs: ordered, installed: [], deviceLibVersion: null, installs, extensions: 'listed' }),
     [ordered, installs],
   );
 

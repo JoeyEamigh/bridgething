@@ -3,10 +3,11 @@ use libbridgething::{
   client::{BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, ConfigChanged, DocChanged},
   gateway::{
     BridgeToGatewayWebappMsgEvent, GatewayToBridgeWebappMsgRequestDispatch, GetActiveWebapp, GetWebappSlots,
-    ListWebapps, TransferBody, TransferRef, WebappActive, WebappConfigAck, WebappConfigDelete, WebappConfigGet,
-    WebappConfigGetReply, WebappConfigList, WebappConfigListReply, WebappConfigSet, WebappDocAck, WebappDocDelete,
-    WebappDocGet, WebappDocGetReply, WebappDocList, WebappDocListReply, WebappDocSet, WebappList, WebappResource,
-    WebappResourceKind, WebappResourceReply, WebappSetSlot, WebappSlot, WebappSwitchTo, WebappUninstall,
+    ListWebapps, TransferBody, TransferRef, WebappActive, WebappConfigAck, WebappConfigChanged, WebappConfigDelete,
+    WebappConfigGet, WebappConfigGetReply, WebappConfigList, WebappConfigListReply, WebappConfigSet, WebappDocAck,
+    WebappDocDelete, WebappDocGet, WebappDocGetReply, WebappDocList, WebappDocListReply, WebappDocSet, WebappList,
+    WebappResource, WebappResourceKind, WebappResourceReply, WebappSetSlot, WebappSlot, WebappSwitchTo,
+    WebappUninstall,
   },
 };
 use uuid::Uuid;
@@ -509,6 +510,16 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
 
 impl WebappHandler {
   async fn broadcast_config_change(&self, id: Uuid, key: &str, value: Option<String>) {
+    self
+      .handle
+      .bluetooth
+      .gateway_man
+      .broadcast(BridgeToGatewayWebappMsgEvent::ConfigChanged(WebappConfigChanged {
+        id,
+        key: key.to_string(),
+        value: value.clone(),
+      }))
+      .await;
     let active = match self.handle.state.active_webapp().await {
       Ok(Some(active)) => active,
       _ => return,

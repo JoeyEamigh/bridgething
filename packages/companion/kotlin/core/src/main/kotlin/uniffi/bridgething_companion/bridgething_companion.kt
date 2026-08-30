@@ -787,6 +787,15 @@ internal interface UniffiCallbackInterfaceSessionEventSinkMethod0 : com.sun.jna.
     )
 }
 
+internal interface UniffiCallbackInterfaceWebappBundleSinkMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `bundle`: RustBuffer.ByValue,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1061,6 +1070,78 @@ internal interface UniffiCallbackInterfaceConnectivityMonitorMethod0 : com.sun.j
 internal interface UniffiCallbackInterfaceConnectivityMonitorMethod1 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `inbox`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod2 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `message`: RustBuffer.ByValue,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod3 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `device`: RustBuffer.ByValue,
+        `name`: RustBuffer.ByValue,
+        `config`: RustBuffer.ByValue,
+        `webapps`: RustBuffer.ByValue,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod4 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `device`: RustBuffer.ByValue,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod5 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `active`: Byte,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceExtensionHostMethod6 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `key`: RustBuffer.ByValue,
+        `value`: RustBuffer.ByValue,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
@@ -1524,6 +1605,26 @@ internal open class UniffiVTableCallbackInterfaceSessionEventSink(
     }
 }
 
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "installed")
+internal open class UniffiVTableCallbackInterfaceWebappBundleSink(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `installed`: UniffiCallbackInterfaceWebappBundleSinkMethod0? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `installed`: UniffiCallbackInterfaceWebappBundleSinkMethod0? = null,
+    ) : UniffiVTableCallbackInterfaceWebappBundleSink(`uniffiFree`, `uniffiClone`, `installed`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceWebappBundleSink) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `installed` = other.`installed`
+    }
+}
+
 @Structure.FieldOrder(
     "uniffiFree",
     "uniffiClone",
@@ -1741,6 +1842,64 @@ internal open class UniffiVTableCallbackInterfaceConnectivityMonitor(
         `uniffiClone` = other.`uniffiClone`
         `start` = other.`start`
         `stop` = other.`stop`
+    }
+}
+
+@Structure.FieldOrder(
+    "uniffiFree",
+    "uniffiClone",
+    "start",
+    "stop",
+    "deliver",
+    "deviceConnected",
+    "deviceDisconnected",
+    "deviceActive",
+    "configChanged",
+)
+internal open class UniffiVTableCallbackInterfaceExtensionHost(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `start`: UniffiCallbackInterfaceExtensionHostMethod0? = null,
+    @JvmField internal var `stop`: UniffiCallbackInterfaceExtensionHostMethod1? = null,
+    @JvmField internal var `deliver`: UniffiCallbackInterfaceExtensionHostMethod2? = null,
+    @JvmField internal var `deviceConnected`: UniffiCallbackInterfaceExtensionHostMethod3? = null,
+    @JvmField internal var `deviceDisconnected`: UniffiCallbackInterfaceExtensionHostMethod4? = null,
+    @JvmField internal var `deviceActive`: UniffiCallbackInterfaceExtensionHostMethod5? = null,
+    @JvmField internal var `configChanged`: UniffiCallbackInterfaceExtensionHostMethod6? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `start`: UniffiCallbackInterfaceExtensionHostMethod0? = null,
+        `stop`: UniffiCallbackInterfaceExtensionHostMethod1? = null,
+        `deliver`: UniffiCallbackInterfaceExtensionHostMethod2? = null,
+        `deviceConnected`: UniffiCallbackInterfaceExtensionHostMethod3? = null,
+        `deviceDisconnected`: UniffiCallbackInterfaceExtensionHostMethod4? = null,
+        `deviceActive`: UniffiCallbackInterfaceExtensionHostMethod5? = null,
+        `configChanged`: UniffiCallbackInterfaceExtensionHostMethod6? = null,
+    ) : UniffiVTableCallbackInterfaceExtensionHost(
+            `uniffiFree`,
+            `uniffiClone`,
+            `start`,
+            `stop`,
+            `deliver`,
+            `deviceConnected`,
+            `deviceDisconnected`,
+            `deviceActive`,
+            `configChanged`,
+        ),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceExtensionHost) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `start` = other.`start`
+        `stop` = other.`stop`
+        `deliver` = other.`deliver`
+        `deviceConnected` = other.`deviceConnected`
+        `deviceDisconnected` = other.`deviceDisconnected`
+        `deviceActive` = other.`deviceActive`
+        `configChanged` = other.`configChanged`
     }
 }
 
@@ -2269,6 +2428,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_current_webapp(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_doc(): Int
@@ -2344,6 +2505,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_webappbundlesink_installed(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_otarunstore_annotate_webapp(): Int
 
@@ -2474,6 +2637,24 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_connectivitymonitor_start(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_connectivitymonitor_stop(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_start(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_stop(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_deliver(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_device_connected(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_device_active(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhost_config_changed(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhostinbox_running_changed(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_extensionhostinbox_send_to_device(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_geoinbox_on_authorization_change(): Int
 
@@ -2688,6 +2869,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceAudioBackend.register(this)
         uniffiCallbackInterfaceConnectivityMonitor.register(this)
         uniffiCallbackInterfaceDeviceWaker.register(this)
+        uniffiCallbackInterfaceExtensionHost.register(this)
         uniffiCallbackInterfaceGeoProvider.register(this)
         uniffiCallbackInterfaceHostEnvironment.register(this)
         uniffiCallbackInterfaceHttpTransport.register(this)
@@ -2704,6 +2886,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceSpeechRecognizer.register(this)
         uniffiCallbackInterfaceTransferPolicy.register(this)
         uniffiCallbackInterfaceVolumeMonitor.register(this)
+        uniffiCallbackInterfaceWebappBundleSink.register(this)
         uniffiCallbackInterfaceWsTransport.register(this)
     }
 
@@ -2770,6 +2953,11 @@ internal object UniffiLib {
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_default_resume_target(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_config_field(
         `ptr`: Long,
@@ -2846,6 +3034,7 @@ internal object UniffiLib {
         `url`: RustBuffer.ByValue,
         `expected`: RustBuffer.ByValue,
         `provenance`: RustBuffer.ByValue,
+        `sink`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_list_webapp_config(
@@ -2988,6 +3177,26 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_sessioneventsink_on_event(
         `ptr`: Long,
         `event`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_webappbundlesink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_webappbundlesink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_init_callback_vtable_webappbundlesink(
+        `vtable`: UniffiVTableCallbackInterfaceWebappBundleSink,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_webappbundlesink_installed(
+        `ptr`: Long,
+        `bundle`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -3604,6 +3813,95 @@ internal object UniffiLib {
 
     external fun uniffi_bridgething_companion_fn_method_connectivitymonitor_stop(
         `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_extensionhost(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_extensionhost(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_init_callback_vtable_extensionhost(
+        `vtable`: UniffiVTableCallbackInterfaceExtensionHost,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_start(
+        `ptr`: Long,
+        `inbox`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_stop(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_deliver(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `message`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_device_connected(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        `name`: RustBuffer.ByValue,
+        `config`: RustBuffer.ByValue,
+        `webapps`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_device_disconnected(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_device_active(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `active`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhost_config_changed(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `key`: RustBuffer.ByValue,
+        `value`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_extensionhostinbox(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_extensionhostinbox(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhostinbox_running_changed(
+        `ptr`: Long,
+        `webapps`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_extensionhostinbox_send_to_device(
+        `ptr`: Long,
+        `device`: RustBuffer.ByValue,
+        `webapp`: RustBuffer.ByValue,
+        `message`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -4928,6 +5226,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_current_webapp() != 44144) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target() != 39836) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field() != 42200) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4964,7 +5265,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 50155) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 55516) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 57765) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -5040,6 +5341,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event() != 19676) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_webappbundlesink_installed() != 640) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_otarunstore_annotate_webapp() != 65092) {
@@ -5235,6 +5539,33 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_connectivitymonitor_stop() != 37048) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_start() != 62617) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_stop() != 61125) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_deliver() != 22605) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 6431) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected() != 43849) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_active() != 1408) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_config_changed() != 43304) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhostinbox_running_changed() != 25097) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhostinbox_send_to_device() != 41831) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_geoinbox_on_authorization_change() != 60712) {
@@ -10656,6 +10987,8 @@ public interface CompanionSessionInterface {
 
     suspend fun `currentWebapp`(`deviceId`: kotlin.String): ActiveWebapp?
 
+    fun `defaultResumeTarget`(): ResumeTarget
+
     suspend fun `deleteWebappConfigField`(
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
@@ -10708,6 +11041,7 @@ public interface CompanionSessionInterface {
         `url`: kotlin.String,
         `expected`: ArtifactDigest?,
         `provenance`: kotlin.String?,
+        `sink`: WebappBundleSink? = null,
     ): WebappInfo
 
     suspend fun `listWebappConfig`(
@@ -11088,6 +11422,18 @@ open class CompanionSession :
             CompanionException.ErrorHandler,
         )
 
+    override fun `defaultResumeTarget`(): ResumeTarget =
+        FfiConverterTypeResumeTarget.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_default_resume_target(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
     @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `deleteWebappConfigField`(
@@ -11367,6 +11713,7 @@ open class CompanionSession :
         `url`: kotlin.String,
         `expected`: ArtifactDigest?,
         `provenance`: kotlin.String?,
+        `sink`: WebappBundleSink?,
     ): WebappInfo =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -11376,6 +11723,7 @@ open class CompanionSession :
                     FfiConverterString.lower(`url`),
                     FfiConverterOptionalTypeArtifactDigest.lower(`expected`),
                     FfiConverterOptionalString.lower(`provenance`),
+                    FfiConverterOptionalTypeWebappBundleSink.lower(`sink`),
                 )
             },
             {
@@ -13061,6 +13409,837 @@ public object FfiConverterTypeEarconSink : FfiConverter<EarconSink, Long> {
 
     override fun write(
         value: EarconSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * The seam a native extension host plugs into. Desktop supplies one; phones
+ * pass `None` and every extension surface stays unsupported there.
+ */
+public interface ExtensionHost {
+    fun `start`(`inbox`: ExtensionHostInbox)
+
+    fun `stop`()
+
+    fun `deliver`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `message`: ExtensionMessage,
+    )
+
+    /**
+     * `webapps` is what `config` was actually read for: everything running when
+     * the link itself came up, or the extensions that just started and missed
+     * that announce. A host must not tell an extension outside that list the
+     * device connected, and must not tell one inside it twice without a
+     * disconnect in between.
+     */
+    fun `deviceConnected`(
+        `device`: kotlin.String,
+        `name`: kotlin.String,
+        `config`: List<ExtensionConfigEntry>,
+        `webapps`: List<kotlin.String>,
+    )
+
+    fun `deviceDisconnected`(`device`: kotlin.String)
+
+    fun `deviceActive`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `active`: kotlin.Boolean,
+    )
+
+    fun `configChanged`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `key`: kotlin.String,
+        `value`: kotlin.String?,
+    )
+
+    companion object
+}
+
+/**
+ * The seam a native extension host plugs into. Desktop supplies one; phones
+ * pass `None` and every extension surface stays unsupported there.
+ */
+open class ExtensionHostImpl :
+    Disposable,
+    AutoCloseable,
+    ExtensionHost {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_extensionhost(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_extensionhost(handle, status)
+        }
+    }
+
+    override fun `start`(`inbox`: ExtensionHostInbox) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_start(
+                    it,
+                    FfiConverterTypeExtensionHostInbox.lower(`inbox`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `stop`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_stop(
+                    it,
+                    _status,
+                )
+            }
+        }
+
+    override fun `deliver`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `message`: ExtensionMessage,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_deliver(
+                it,
+                FfiConverterString.lower(`device`),
+                FfiConverterString.lower(`webapp`),
+                FfiConverterTypeExtensionMessage.lower(`message`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * `webapps` is what `config` was actually read for: everything running when
+     * the link itself came up, or the extensions that just started and missed
+     * that announce. A host must not tell an extension outside that list the
+     * device connected, and must not tell one inside it twice without a
+     * disconnect in between.
+     */
+    override fun `deviceConnected`(
+        `device`: kotlin.String,
+        `name`: kotlin.String,
+        `config`: List<ExtensionConfigEntry>,
+        `webapps`: List<kotlin.String>,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_device_connected(
+                it,
+                FfiConverterString.lower(`device`),
+                FfiConverterString.lower(`name`),
+                FfiConverterSequenceTypeExtensionConfigEntry.lower(`config`),
+                FfiConverterSequenceString.lower(`webapps`),
+                _status,
+            )
+        }
+    }
+
+    override fun `deviceDisconnected`(`device`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_device_disconnected(
+                    it,
+                    FfiConverterString.lower(`device`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `deviceActive`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `active`: kotlin.Boolean,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_device_active(
+                it,
+                FfiConverterString.lower(`device`),
+                FfiConverterString.lower(`webapp`),
+                FfiConverterBoolean.lower(`active`),
+                _status,
+            )
+        }
+    }
+
+    override fun `configChanged`(
+        `device`: kotlin.String,
+        `webapp`: kotlin.String,
+        `key`: kotlin.String,
+        `value`: kotlin.String?,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_extensionhost_config_changed(
+                it,
+                FfiConverterString.lower(`device`),
+                FfiConverterString.lower(`webapp`),
+                FfiConverterString.lower(`key`),
+                FfiConverterOptionalString.lower(`value`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceExtensionHost {
+    internal object `start` : UniffiCallbackInterfaceExtensionHostMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `inbox`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeExtensionHostInbox.lift(`inbox`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `stop` : UniffiCallbackInterfaceExtensionHostMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = { uniffiObj.`stop`() }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `deliver` : UniffiCallbackInterfaceExtensionHostMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `device`: RustBuffer.ByValue,
+            `webapp`: RustBuffer.ByValue,
+            `message`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`deliver`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterTypeExtensionMessage.lift(`message`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `deviceConnected` : UniffiCallbackInterfaceExtensionHostMethod3 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `device`: RustBuffer.ByValue,
+            `name`: RustBuffer.ByValue,
+            `config`: RustBuffer.ByValue,
+            `webapps`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`deviceConnected`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`name`),
+                FfiConverterSequenceTypeExtensionConfigEntry.lift(`config`),
+                FfiConverterSequenceString.lift(`webapps`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `deviceDisconnected` : UniffiCallbackInterfaceExtensionHostMethod4 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `device`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`deviceDisconnected`(
+                FfiConverterString.lift(`device`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `deviceActive` : UniffiCallbackInterfaceExtensionHostMethod5 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `device`: RustBuffer.ByValue,
+            `webapp`: RustBuffer.ByValue,
+            `active`: Byte,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`deviceActive`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterBoolean.lift(`active`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `configChanged` : UniffiCallbackInterfaceExtensionHostMethod6 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `device`: RustBuffer.ByValue,
+            `webapp`: RustBuffer.ByValue,
+            `key`: RustBuffer.ByValue,
+            `value`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`configChanged`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterString.lift(`key`),
+                FfiConverterOptionalString.lift(`value`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeExtensionHost.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeExtensionHost.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceExtensionHost.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `start`,
+            `stop`,
+            `deliver`,
+            `deviceConnected`,
+            `deviceDisconnected`,
+            `deviceActive`,
+            `configChanged`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_bridgething_companion_fn_init_callback_vtable_extensionhost(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExtensionHost : FfiConverter<ExtensionHost, Long> {
+    internal val handleMap = UniffiHandleMap<ExtensionHost>()
+
+    override fun lower(value: ExtensionHost): Long {
+        if (value is ExtensionHostImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): ExtensionHost {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ExtensionHostImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): ExtensionHost = lift(buf.getLong())
+
+    override fun allocationSize(value: ExtensionHost) = 8UL
+
+    override fun write(
+        value: ExtensionHost,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+public interface ExtensionHostInboxInterface {
+    fun `runningChanged`(`webapps`: List<kotlin.String>)
+
+    fun `sendToDevice`(
+        `device`: kotlin.String?,
+        `webapp`: kotlin.String,
+        `message`: ExtensionMessage,
+    )
+
+    companion object
+}
+
+open class ExtensionHostInbox :
+    Disposable,
+    AutoCloseable,
+    ExtensionHostInboxInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_extensionhostinbox(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_extensionhostinbox(handle, status)
+        }
+    }
+
+    override fun `runningChanged`(`webapps`: List<kotlin.String>) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_extensionhostinbox_running_changed(
+                    it,
+                    FfiConverterSequenceString.lower(`webapps`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `sendToDevice`(
+        `device`: kotlin.String?,
+        `webapp`: kotlin.String,
+        `message`: ExtensionMessage,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_extensionhostinbox_send_to_device(
+                it,
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterString.lower(`webapp`),
+                FfiConverterTypeExtensionMessage.lower(`message`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExtensionHostInbox : FfiConverter<ExtensionHostInbox, Long> {
+    override fun lower(value: ExtensionHostInbox): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): ExtensionHostInbox = ExtensionHostInbox(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): ExtensionHostInbox = lift(buf.getLong())
+
+    override fun allocationSize(value: ExtensionHostInbox) = 8UL
+
+    override fun write(
+        value: ExtensionHostInbox,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -23762,6 +24941,319 @@ public object FfiConverterTypeVolumeMonitor : FfiConverter<VolumeMonitor, Long> 
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+/**
+ * Handed the downloaded bundle once it has verified and landed on the device,
+ * while the artifact is still on disk. A host that keeps something out of the
+ * zip hooks in here rather than composing the fetch and the install itself.
+ */
+public interface WebappBundleSink {
+    fun `installed`(`bundle`: kotlin.String)
+
+    companion object
+}
+
+/**
+ * Handed the downloaded bundle once it has verified and landed on the device,
+ * while the artifact is still on disk. A host that keeps something out of the
+ * zip hooks in here rather than composing the fetch and the install itself.
+ */
+open class WebappBundleSinkImpl :
+    Disposable,
+    AutoCloseable,
+    WebappBundleSink {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_webappbundlesink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_webappbundlesink(handle, status)
+        }
+    }
+
+    override fun `installed`(`bundle`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_webappbundlesink_installed(
+                    it,
+                    FfiConverterString.lower(`bundle`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceWebappBundleSink {
+    internal object `installed` : UniffiCallbackInterfaceWebappBundleSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `bundle`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeWebappBundleSink.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`installed`(
+                FfiConverterString.lift(`bundle`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeWebappBundleSink.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeWebappBundleSink.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceWebappBundleSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `installed`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_bridgething_companion_fn_init_callback_vtable_webappbundlesink(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeWebappBundleSink : FfiConverter<WebappBundleSink, Long> {
+    internal val handleMap = UniffiHandleMap<WebappBundleSink>()
+
+    override fun lower(value: WebappBundleSink): Long {
+        if (value is WebappBundleSinkImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): WebappBundleSink {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return WebappBundleSinkImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): WebappBundleSink = lift(buf.getLong())
+
+    override fun allocationSize(value: WebappBundleSink) = 8UL
+
+    override fun write(
+        value: WebappBundleSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface WsInboxInterface {
     fun `onBinary`(
         `id`: kotlin.String,
@@ -24950,6 +26442,7 @@ data class CompanionBackends(
     var `transferPolicy`: TransferPolicy? = null,
     var `connectivity`: ConnectivityMonitor? = null,
     var `deviceWaker`: DeviceWaker? = null,
+    var `extensions`: ExtensionHost? = null,
 ) : Disposable {
     @Suppress("UNNECESSARY_SAFE_CALL") // codegen is much simpler if we unconditionally emit safe calls here
     override fun destroy() {
@@ -24974,6 +26467,7 @@ data class CompanionBackends(
             this.`transferPolicy`,
             this.`connectivity`,
             this.`deviceWaker`,
+            this.`extensions`,
         )
     }
 
@@ -25006,6 +26500,7 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
             FfiConverterOptionalTypeTransferPolicy.read(buf),
             FfiConverterOptionalTypeConnectivityMonitor.read(buf),
             FfiConverterOptionalTypeDeviceWaker.read(buf),
+            FfiConverterOptionalTypeExtensionHost.read(buf),
         )
 
     override fun allocationSize(value: CompanionBackends) =
@@ -25029,7 +26524,8 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
                 FfiConverterOptionalTypeModelArtifactValidator.allocationSize(value.`modelValidator`) +
                 FfiConverterOptionalTypeTransferPolicy.allocationSize(value.`transferPolicy`) +
                 FfiConverterOptionalTypeConnectivityMonitor.allocationSize(value.`connectivity`) +
-                FfiConverterOptionalTypeDeviceWaker.allocationSize(value.`deviceWaker`)
+                FfiConverterOptionalTypeDeviceWaker.allocationSize(value.`deviceWaker`) +
+                FfiConverterOptionalTypeExtensionHost.allocationSize(value.`extensions`)
         )
 
     override fun write(
@@ -25056,6 +26552,7 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
         FfiConverterOptionalTypeTransferPolicy.write(value.`transferPolicy`, buf)
         FfiConverterOptionalTypeConnectivityMonitor.write(value.`connectivity`, buf)
         FfiConverterOptionalTypeDeviceWaker.write(value.`deviceWaker`, buf)
+        FfiConverterOptionalTypeExtensionHost.write(value.`extensions`, buf)
     }
 }
 
@@ -25495,6 +26992,12 @@ data class DeviceWebappsEntry(
     var `deviceId`: kotlin.String,
     var `webapps`: List<WebappInfo>,
     var `active`: ActiveWebapp?,
+    /**
+     * Whether this is a full inventory read off the device. Install and
+     * active-webapp pushes can land before the listing does, and an entry that
+     * has never been listed says nothing about what the device holds.
+     */
+    var `listed`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -25508,13 +27011,15 @@ public object FfiConverterTypeDeviceWebappsEntry : FfiConverterRustBuffer<Device
             FfiConverterString.read(buf),
             FfiConverterSequenceTypeWebappInfo.read(buf),
             FfiConverterOptionalTypeActiveWebapp.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: DeviceWebappsEntry) =
         (
             FfiConverterString.allocationSize(value.`deviceId`) +
                 FfiConverterSequenceTypeWebappInfo.allocationSize(value.`webapps`) +
-                FfiConverterOptionalTypeActiveWebapp.allocationSize(value.`active`)
+                FfiConverterOptionalTypeActiveWebapp.allocationSize(value.`active`) +
+                FfiConverterBoolean.allocationSize(value.`listed`)
         )
 
     override fun write(
@@ -25524,6 +27029,7 @@ public object FfiConverterTypeDeviceWebappsEntry : FfiConverterRustBuffer<Device
         FfiConverterString.write(value.`deviceId`, buf)
         FfiConverterSequenceTypeWebappInfo.write(value.`webapps`, buf)
         FfiConverterOptionalTypeActiveWebapp.write(value.`active`, buf)
+        FfiConverterBoolean.write(value.`listed`, buf)
     }
 }
 
@@ -25556,6 +27062,81 @@ public object FfiConverterTypeDocEntry : FfiConverterRustBuffer<DocEntry> {
     ) {
         FfiConverterString.write(value.`key`, buf)
         FfiConverterString.write(value.`value`, buf)
+    }
+}
+
+/**
+ * One config value the host hands to the extension owning `webapp`.
+ */
+data class ExtensionConfigEntry(
+    var `webapp`: kotlin.String,
+    var `key`: kotlin.String,
+    var `value`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExtensionConfigEntry : FfiConverterRustBuffer<ExtensionConfigEntry> {
+    override fun read(buf: ByteBuffer): ExtensionConfigEntry =
+        ExtensionConfigEntry(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: ExtensionConfigEntry) =
+        (
+            FfiConverterString.allocationSize(value.`webapp`) +
+                FfiConverterString.allocationSize(value.`key`) +
+                FfiConverterString.allocationSize(value.`value`)
+        )
+
+    override fun write(
+        value: ExtensionConfigEntry,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`webapp`, buf)
+        FfiConverterString.write(value.`key`, buf)
+        FfiConverterString.write(value.`value`, buf)
+    }
+}
+
+/**
+ * The extension block a webapp declares, as every surface that renders an
+ * installed app sees it. Permissions are the plain Deno descriptor strings.
+ */
+data class ExtensionInfo(
+    var `permissions`: List<kotlin.String>,
+    var `api`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExtensionInfo : FfiConverterRustBuffer<ExtensionInfo> {
+    override fun read(buf: ByteBuffer): ExtensionInfo =
+        ExtensionInfo(
+            FfiConverterSequenceString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: ExtensionInfo) =
+        (
+            FfiConverterSequenceString.allocationSize(value.`permissions`) +
+                FfiConverterUInt.allocationSize(value.`api`)
+        )
+
+    override fun write(
+        value: ExtensionInfo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceString.write(value.`permissions`, buf)
+        FfiConverterUInt.write(value.`api`, buf)
     }
 }
 
@@ -27968,6 +29549,7 @@ data class WebappInfo(
     var `overlayHash`: kotlin.String?,
     var `config`: List<ConfigField>,
     var `permissions`: List<kotlin.String>,
+    var `extension`: ExtensionInfo?,
 ) {
     companion object
 }
@@ -27990,6 +29572,7 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceTypeConfigField.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalTypeExtensionInfo.read(buf),
         )
 
     override fun allocationSize(value: WebappInfo) =
@@ -28005,7 +29588,8 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
                 FfiConverterOptionalString.allocationSize(value.`settingsHash`) +
                 FfiConverterOptionalString.allocationSize(value.`overlayHash`) +
                 FfiConverterSequenceTypeConfigField.allocationSize(value.`config`) +
-                FfiConverterSequenceString.allocationSize(value.`permissions`)
+                FfiConverterSequenceString.allocationSize(value.`permissions`) +
+                FfiConverterOptionalTypeExtensionInfo.allocationSize(value.`extension`)
         )
 
     override fun write(
@@ -28024,6 +29608,7 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
         FfiConverterOptionalString.write(value.`overlayHash`, buf)
         FfiConverterSequenceTypeConfigField.write(value.`config`, buf)
         FfiConverterSequenceString.write(value.`permissions`, buf)
+        FfiConverterOptionalTypeExtensionInfo.write(value.`extension`, buf)
     }
 }
 
@@ -29028,6 +30613,114 @@ public object FfiConverterTypeEndCallAction : FfiConverterRustBuffer<EndCallActi
     }
 }
 
+/**
+ * A forward payload across the FFI. `Json` carries the serialized document
+ * because uniffi has no JSON value type.
+ */
+sealed class ExtensionMessage {
+    data class Text(
+        val `text`: kotlin.String,
+    ) : ExtensionMessage() {
+        companion object
+    }
+
+    data class Json(
+        val `json`: kotlin.String,
+    ) : ExtensionMessage() {
+        companion object
+    }
+
+    data class Binary(
+        val `bytes`: kotlin.ByteArray,
+    ) : ExtensionMessage() {
+        companion object
+    }
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeExtensionMessage : FfiConverterRustBuffer<ExtensionMessage> {
+    override fun read(buf: ByteBuffer): ExtensionMessage =
+        when (buf.getInt()) {
+            1 -> {
+                ExtensionMessage.Text(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            2 -> {
+                ExtensionMessage.Json(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            3 -> {
+                ExtensionMessage.Binary(
+                    FfiConverterByteArray.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ExtensionMessage): ULong =
+        when (value) {
+            is ExtensionMessage.Text -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`text`)
+                )
+            }
+
+            is ExtensionMessage.Json -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`json`)
+                )
+            }
+
+            is ExtensionMessage.Binary -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterByteArray.allocationSize(value.`bytes`)
+                )
+            }
+        }
+
+    override fun write(
+        value: ExtensionMessage,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ExtensionMessage.Text -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`text`, buf)
+                Unit
+            }
+
+            is ExtensionMessage.Json -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`json`, buf)
+                Unit
+            }
+
+            is ExtensionMessage.Binary -> {
+                buf.putInt(3)
+                FfiConverterByteArray.write(value.`bytes`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
 enum class GeoAccuracy {
     COARSE,
     FINE,
@@ -29088,15 +30781,29 @@ public object FfiConverterTypeGeoError : FfiConverterRustBuffer<GeoError> {
     }
 }
 
-enum class HttpMethod {
-    GET,
-    HEAD,
-    POST,
-    PUT,
-    PATCH,
-    DELETE,
-    OPTIONS,
-    ;
+sealed class HttpMethod {
+    object Get : HttpMethod()
+
+    object Head : HttpMethod()
+
+    object Post : HttpMethod()
+
+    object Put : HttpMethod()
+
+    object Patch : HttpMethod()
+
+    object Delete : HttpMethod()
+
+    object Options : HttpMethod()
+
+    /**
+     * A verb this enum does not name, handed to the platform transport verbatim.
+     */
+    data class Other(
+        val `verb`: kotlin.String,
+    ) : HttpMethod() {
+        companion object
+    }
 
     companion object
 }
@@ -29105,20 +30812,153 @@ enum class HttpMethod {
  * @suppress
  */
 public object FfiConverterTypeHttpMethod : FfiConverterRustBuffer<HttpMethod> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            HttpMethod.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    override fun read(buf: ByteBuffer): HttpMethod =
+        when (buf.getInt()) {
+            1 -> {
+                HttpMethod.Get
+            }
+
+            2 -> {
+                HttpMethod.Head
+            }
+
+            3 -> {
+                HttpMethod.Post
+            }
+
+            4 -> {
+                HttpMethod.Put
+            }
+
+            5 -> {
+                HttpMethod.Patch
+            }
+
+            6 -> {
+                HttpMethod.Delete
+            }
+
+            7 -> {
+                HttpMethod.Options
+            }
+
+            8 -> {
+                HttpMethod.Other(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
         }
 
-    override fun allocationSize(value: HttpMethod) = 4UL
+    override fun allocationSize(value: HttpMethod): ULong =
+        when (value) {
+            is HttpMethod.Get -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Head -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Post -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Put -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Patch -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Delete -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Options -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is HttpMethod.Other -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`verb`)
+                )
+            }
+        }
 
     override fun write(
         value: HttpMethod,
         buf: ByteBuffer,
     ) {
-        buf.putInt(value.ordinal + 1)
+        when (value) {
+            is HttpMethod.Get -> {
+                buf.putInt(1)
+                Unit
+            }
+
+            is HttpMethod.Head -> {
+                buf.putInt(2)
+                Unit
+            }
+
+            is HttpMethod.Post -> {
+                buf.putInt(3)
+                Unit
+            }
+
+            is HttpMethod.Put -> {
+                buf.putInt(4)
+                Unit
+            }
+
+            is HttpMethod.Patch -> {
+                buf.putInt(5)
+                Unit
+            }
+
+            is HttpMethod.Delete -> {
+                buf.putInt(6)
+                Unit
+            }
+
+            is HttpMethod.Options -> {
+                buf.putInt(7)
+                Unit
+            }
+
+            is HttpMethod.Other -> {
+                buf.putInt(8)
+                FfiConverterString.write(value.`verb`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -32803,6 +34643,38 @@ public object FfiConverterOptionalTypeDeviceWaker : FfiConverterRustBuffer<Devic
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeExtensionHost : FfiConverterRustBuffer<ExtensionHost?> {
+    override fun read(buf: ByteBuffer): ExtensionHost? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeExtensionHost.read(buf)
+    }
+
+    override fun allocationSize(value: ExtensionHost?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeExtensionHost.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: ExtensionHost?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeExtensionHost.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeGeoProvider : FfiConverterRustBuffer<GeoProvider?> {
     override fun read(buf: ByteBuffer): GeoProvider? {
         if (buf.get().toInt() == 0) {
@@ -33155,6 +35027,38 @@ public object FfiConverterOptionalTypeVolumeMonitor : FfiConverterRustBuffer<Vol
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeWebappBundleSink : FfiConverterRustBuffer<WebappBundleSink?> {
+    override fun read(buf: ByteBuffer): WebappBundleSink? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeWebappBundleSink.read(buf)
+    }
+
+    override fun allocationSize(value: WebappBundleSink?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeWebappBundleSink.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: WebappBundleSink?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeWebappBundleSink.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeActiveWebapp : FfiConverterRustBuffer<ActiveWebapp?> {
     override fun read(buf: ByteBuffer): ActiveWebapp? {
         if (buf.get().toInt() == 0) {
@@ -33244,6 +35148,38 @@ public object FfiConverterOptionalTypeArtifactDigest : FfiConverterRustBuffer<Ar
         } else {
             buf.put(1)
             FfiConverterTypeArtifactDigest.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeExtensionInfo : FfiConverterRustBuffer<ExtensionInfo?> {
+    override fun read(buf: ByteBuffer): ExtensionInfo? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeExtensionInfo.read(buf)
+    }
+
+    override fun allocationSize(value: ExtensionInfo?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeExtensionInfo.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: ExtensionInfo?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeExtensionInfo.write(value, buf)
         }
     }
 }
@@ -34396,6 +36332,34 @@ public object FfiConverterSequenceTypeDocEntry : FfiConverterRustBuffer<List<Doc
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeDocEntry.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeExtensionConfigEntry : FfiConverterRustBuffer<List<ExtensionConfigEntry>> {
+    override fun read(buf: ByteBuffer): List<ExtensionConfigEntry> {
+        val len = buf.getInt()
+        return List<ExtensionConfigEntry>(len) {
+            FfiConverterTypeExtensionConfigEntry.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ExtensionConfigEntry>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeExtensionConfigEntry.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<ExtensionConfigEntry>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeExtensionConfigEntry.write(it, buf)
         }
     }
 }

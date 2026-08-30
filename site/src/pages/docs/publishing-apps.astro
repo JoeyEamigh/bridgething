@@ -23,6 +23,7 @@ const entrySnippet = `{
   "description": "Upcoming events from an iCalendar feed.",
   "author": "you",
   "icon": "https://example.com/icons/calendar.svg",
+  "screenshots": ["https://example.com/shots/calendar-1.png"],
   "homepage": "https://example.com",
   "source": "https://github.com/you/calendar",
   "versions": [
@@ -37,10 +38,26 @@ const entrySnippet = `{
       "permissions": ["net.fetch"],
       "role": "launcher",
       "provides_overlay": true,
+      "extension": { "desktop": true, "permissions": ["all"] },
       "min_libbridgething_version": "0.5.0",
       "changelog": "Initial release."
     }
   ]
+}`;
+
+const bundleExtensionSnippet = `{
+  "extension": {
+    "entry": "extension/desktop.mjs",
+    "permissions": ["all"],
+    "api": 1
+  }
+}`;
+
+const catalogExtensionSnippet = `{
+  "extension": {
+    "desktop": true,
+    "permissions": ["all"]
+  }
 }`;
 
 const corsSnippet = `Access-Control-Allow-Origin: *
@@ -52,7 +69,7 @@ const newest = entry.versions
   .filter(v => compatible(v.min_libbridgething_version, device.libbridgethingVersion))
   .sort((a, b) => Date.parse(b.released_at) - Date.parse(a.released_at))[0];
 
-// wrong: trusts a file you did not write
+// wrong: trusts the order the source emitted
 const newest = entry.versions[0];`;
 ---
 
@@ -62,15 +79,13 @@ const newest = entry.versions[0];`;
   current="publishing-apps">
   <header class="mb-12">
     <h1>publishing apps</h1>
-    <p class="text-white/60">
-      the app catalog is federated. the official <code>apps.bridgething.com</code> is the default.
-    </p>
+    <p class="text-white/60"><code>apps.bridgething.com</code> is the default source. anyone can host another.</p>
   </header>
 
   <section class="mb-14">
     <h2 class={refdes}>a source is a url</h2>
     <p class="text-white/70">
-      publish a <code>catalog.v1</code> document anywhere that serves it over https and it is a source. users add it by url.
+      publish a <code>catalog.v1</code> document at an https url. users add it by pasting the url.
     </p>
     <Snippet code={catalogSnippet} lang="json" />
   </section>
@@ -78,28 +93,61 @@ const newest = entry.versions[0];`;
   <section class="mb-14">
     <h2 class={refdes}>app entries</h2>
     <p class="text-white/70">
-      <code>id</code> is a uuidv7 and is the app's real identity: it keys upgrade-in-place and the device key-value namespace,
-      so it must stay stable across versions and must not collide with another app. generate one once and keep it.
+      <code>id</code> is a uuidv7. keep it stable across versions, and give every app in your catalog a different one.
     </p>
     <Snippet code={entrySnippet} lang="json" />
+    <p class="text-white/70">the store checks <code>download.sha256</code> before installing.</p>
     <p class="text-white/70">
-      <code>download.sha256</code> is mandatory and is verified before anything reaches the device.
-    </p>
-    <p class="text-white/70">
-      <code>permissions</code> is shown at install, informationally.
-    </p>
-    <p class="text-white/70">
-      <code>role</code> and <code>provides_overlay</code> are optional and mirror the bundle's manifest. set
-      <code>"role": "launcher"</code> if the app declares <code>role: launcher</code>, and
-      <code>"provides_overlay": true</code> if it ships an <code>overlay</code>. see <a
-        href="/docs/launchers-and-overlays">launchers and overlays</a
-      >.
+      <code>role</code>, <code>provides_overlay</code>, and <code>extension</code> are optional and mirror the bundle's manifest.
+      see <a href="/docs/launchers-and-overlays">launchers and overlays</a>.
     </p>
     <p class="text-white/70">
       <code>icon</code> can be any image format.
     </p>
     <p class="text-white/70">
-      <code>min_libbridgething_version</code> is the compatibility axis.
+      <code>screenshots</code> is up to six https urls of the app running on a device, 800x480. the store card uses the first
+      one, and the listing shows the rest. it is optional in the schema and required to enter the{' '}
+      <a href="/appjam">app jam</a>. with the thing plugged in, chromium answers CDP on port 9222, so{' '}
+      <code>Page.captureScreenshot</code> against the kiosk target gives you an exact 800x480 png.
+    </p>
+    <p class="text-white/70">
+      <code>min_libbridgething_version</code> is dotted semver, no leading <code>v</code>. the store installs the newest
+      version the connected device can run.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>native extensions</h2>
+    <p class="text-white/70">
+      a bundle with an <a href="/docs/extensions">extension</a> declares it in <code>manifest.json</code>:
+    </p>
+    <Snippet code={bundleExtensionSnippet} lang="json" />
+    <p class="text-white/70">and the catalog entry carries a copy:</p>
+    <Snippet code={catalogExtensionSnippet} lang="json" />
+    <p class="text-white/70">
+      <code>desktop</code> is always <code>true</code>. <code>permissions</code> here are the deno descriptors from the bundle
+      manifest.
+    </p>
+    <p class="text-white/70">
+      an app with any version that declares <code>extension</code> must set <code>source</code> to a
+      <code>github.com</code> repo url people can open. a catalog that breaks the rule fails to load.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>permissions</h2>
+    <p class="text-white/70">
+      app permissions go in <code>versions[].permissions</code>. declare every one you use. <code>geo</code> gates
+      <code>geo.watch</code> and <code>geo.getOnce</code>, and <code>net.proxy</code> gates the socks proxy. the store shows
+      the rest on the install screen.
+    </p>
+    <p class="text-white/70">
+      the desktop app shows the catalog copy at install and refuses a bundle that asks for anything outside the set the
+      user confirmed. <code>all</code> and a bare kind widen, so <code>net</code> covers <code>net:discord.com</code>.
+    </p>
+    <p class="text-white/70">
+      keep the catalog list a superset of the bundle manifest's. the desktop app launches deno with the descriptors from
+      the bundle manifest.
     </p>
   </section>
 
@@ -108,48 +156,42 @@ const newest = entry.versions[0];`;
     <p class="text-white/70">
       your catalog url <strong>and every</strong>
       <code>download.url</code> must send
-      <code>Access-Control-Allow-Origin: *</code>. the companion apps are native and do not care, but bridgething.com
-      cannot read a cross-origin response without it.
+      <code>Access-Control-Allow-Origin: *</code>.
     </p>
     <Snippet code={corsSnippet} lang="http" />
-    <p class="text-white/70">github raw and github pages already comply</p>
+    <p class="text-white/70">github raw and github pages already send it.</p>
   </section>
 
   <section class="mb-14">
     <h2 class={refdes}>if you are writing a client</h2>
     <p class="text-white/70">
-      emit <code>versions[]</code> newest-first by <code>released_at</code>, but never rely on a source having done so.
+      emit <code>versions[]</code> newest-first by <code>released_at</code>. sort before you pick.
     </p>
     <Snippet code={sortSnippet} lang="ts" />
   </section>
 
   <section class="mb-14">
     <h2 class={refdes}>getting listed</h2>
+    <p class="text-white/70">the directory is how people find you without the url.</p>
     <p class="text-white/70">
-      you do not need to be listed anywhere for your source to work. someone who has your url can add it and install
-      from it, always. the directory exists so people can find you without already knowing the url.
+      submit yours on the <a href="/apps">apps page</a>. the url must be reachable over https, parse as
+      <code>catalog.v1</code>, and send <code>Access-Control-Allow-Origin</code>.
     </p>
     <p class="text-white/70">
-      submit yours on the <a href="/apps">apps page</a>. it is checked automatically for three things: that it is
-      reachable over https, that it parses as <code>catalog.v1</code>, and that it sends
-      <code>Access-Control-Allow-Origin</code>.
+      a new source is <strong>unreviewed</strong>: named under a collapsed section, apps hidden. a reviewer moves it to
+      <strong>listed</strong>, which shows its apps under community apps and offers it in the phone app.
+      <strong>vouched for</strong> puts your apps next to the official ones.
     </p>
     <p class="text-white/70">
-      a fresh submission lands as <strong>unreviewed</strong>: named on the apps page under a collapsed section and
-      nowhere else, with its apps left out of the grid. once someone looks at it, it becomes <strong>listed</strong>,
-      its apps show up under community apps, and the phone app offers it as a quick-add. <strong>vouched for</strong> is an
-      editorial nod on top of that, and it is what moves your apps up next to the official ones.
-    </p>
-    <p class="text-white/70">
-      if your source goes down it is reported, not removed, and apps already installed from it keep working.
+      a source that goes down is reported and stays in the directory. apps installed from it keep working.
     </p>
   </section>
 
   <section class="mb-14">
-    <h2 class={refdes}>identity, and what happens when two sources collide</h2>
+    <h2 class={refdes}>two sources listing the same app</h2>
     <p class="text-white/70">
-      an installed app is pinned to the source it came from, and updates are auto-offered only from that source. another
-      catalog listing the same uuid shows up as "also available from".
+      an installed app takes updates from the source it came from. another catalog listing the same id shows as "also
+      available from".
     </p>
   </section>
 </DocsLayout>

@@ -1,25 +1,27 @@
 # @bridgething/lib
 
-The wire-protocol layer for [bridgething](https://github.com/JoeyEamigh/bridgething),
-the community daemon that replaces Spotify's stock app on the Car Thing. This
-package holds the serialized types every peer speaks (companion phone, on-device
-webapp, host tools). The codec and framing themselves live in the Rust crate this
-package is generated from; a TypeScript consumer that needs to speak the byte
-protocol uses [`@bridgething/browser`](https://www.npmjs.com/package/@bridgething/browser),
-which is that crate compiled to wasm.
+TypeScript types for the [bridgething](https://github.com/JoeyEamigh/bridgething)
+wire protocol, generated from the Rust crate that defines them.
 
-Most webapp authors want [`@bridgething/client`](https://www.npmjs.com/package/@bridgething/client)
-instead, it's an ergonomic surface facade.
+```sh
+bun add @bridgething/lib
+```
 
-Subpath exports:
+| export                     | what it holds                                   |
+| -------------------------- | ----------------------------------------------- |
+| `@bridgething/lib`         | Shared types, envelope types, protocol constants |
+| `@bridgething/lib/client`  | Messages between a webapp and the daemon        |
+| `@bridgething/lib/gateway` | Messages between the daemon and the phone       |
+| `@bridgething/lib/shared`  | `Track`, `Album`, and other cross-protocol types |
+| `@bridgething/lib/stock`   | Preset types for the stock Spotify app          |
+| `@bridgething/lib/wire`    | `MsgMeta` and `WireError`                       |
+| `@bridgething/lib/uuid`    | UUID encoding helpers                           |
+| `@bridgething/lib/logger`  | The `Logger` the SDKs write through             |
 
-- `@bridgething/lib/client` / `/gateway` / `/stock` - per-protocol message types.
-- `@bridgething/lib/shared` - types used across protocols (`Track`, `Album`, ...).
-- `@bridgething/lib/wire` - the envelope (`MsgMeta`, `WireEvent`, `WireRequest`, ...).
-- `@bridgething/lib/uuid` - the protocol UUIDs and id helpers.
+To write a webapp, use
+[`@bridgething/client`](https://www.npmjs.com/package/@bridgething/client). To
+speak the byte protocol from TypeScript, use
+[`@bridgething/browser`](https://www.npmjs.com/package/@bridgething/browser).
 
-## Learn more
-
-- Full docs: <https://bridgething.com/docs>
-- Scaffold a webapp: `bun create bridgething my-app`
+- Docs: <https://bridgething.com/docs>
 - Source: <https://github.com/JoeyEamigh/bridgething>

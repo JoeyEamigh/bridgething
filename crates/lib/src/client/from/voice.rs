@@ -5,7 +5,7 @@ use ts_rs::TS;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Payload for `voice.muteMic`.
+/// `preserve` keeps a voice capture that is already running.
 pub struct MicMute {
   pub preserve: bool,
 }
@@ -13,12 +13,11 @@ pub struct MicMute {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Payload for `voice.unmuteMic`.
 pub struct MicUnmute {
   pub preserve: bool,
 }
 
-/// Webapp asks for the current `VoiceState` (muted / capturing).
+/// Returns the current `VoiceState`.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
   direction = ClientToBridge,
@@ -34,7 +33,7 @@ pub struct VoiceStateGet;
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon voice/NLU surface: mic mute control and manual capture triggering
+/// Mic control and manual voice capture for a webapp.
 pub enum ClientToBridgeVoiceMsg {
   #[bridge_command]
   Cancel,

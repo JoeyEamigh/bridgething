@@ -2,7 +2,7 @@
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
 
 // ../../node_modules/.bun/ajv-formats@3.0.1/node_modules/ajv-formats/dist/formats.js
-var require_formats = __commonJS(function(exports) {
+var require_formats = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.formatNames = exports.fastFormats = exports.fullFormats = undefined;
   function fmtDef(validate, compare) {
@@ -179,7 +179,7 @@ var require_formats = __commonJS(function(exports) {
 });
 
 // ../../node_modules/.bun/ajv@8.20.0/node_modules/ajv/dist/runtime/ucs2length.js
-var require_ucs2length = __commonJS(function(exports) {
+var require_ucs2length = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   function ucs2length(str) {
     const len = str.length;
@@ -202,17 +202,17 @@ var require_ucs2length = __commonJS(function(exports) {
 });
 
 // scripts/.compile-validator/validator.cjs
-var require_validator = __commonJS(function(exports, module) {
+var require_validator = __commonJS((exports, module) => {
   module.exports = validate20;
   module.exports.default = validate20;
   var schema32 = { type: "object", additionalProperties: false, required: ["name", "description", "homepage", "icon"], properties: { name: { type: "string", minLength: 1, maxLength: 100, description: "Display name of this catalog source." }, description: { type: "string", minLength: 1, maxLength: 300 }, homepage: { type: ["string", "null"], format: "uri" }, icon: { type: ["string", "null"], format: "uri", description: "Square source icon for the companion's source list." } } };
-  var schema40 = { type: "object", additionalProperties: false, required: ["name", "url", "description", "attested"], properties: { name: { type: "string", minLength: 1, maxLength: 100 }, url: { type: "string", format: "uri", description: "A catalog.v1 manifest URL the companion can subscribe to." }, description: { type: ["string", "null"], maxLength: 300 }, attested: { type: "boolean", description: "True if the publishing source vouches for this URL. Editorial signal, not a trust boundary." } } };
+  var schema41 = { type: "object", additionalProperties: false, required: ["name", "url", "description", "attested"], properties: { name: { type: "string", minLength: 1, maxLength: 100 }, url: { type: "string", format: "uri", description: "A catalog.v1 manifest URL the companion can subscribe to." }, description: { type: ["string", "null"], maxLength: 300 }, attested: { type: "boolean", description: "True if the publishing source vouches for this URL. Editorial signal, not a trust boundary." } } };
   var formats0 = require_formats().fullFormats.uri;
   var formats2 = require_formats().fullFormats["date-time"];
   var func1 = require_ucs2length().default;
-  var schema33 = { type: "object", additionalProperties: false, required: ["id", "name", "description", "author", "icon", "homepage", "source", "versions"], properties: { id: { $ref: "#/$defs/Uuid" }, name: { type: "string", minLength: 1, maxLength: 100, description: "Display name." }, description: { type: "string", minLength: 1, maxLength: 300, description: "One-line tagline for store cards." }, author: { type: "string", minLength: 1, maxLength: 100 }, icon: { type: ["string", "null"], format: "uri", description: "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then." }, homepage: { type: ["string", "null"], format: "uri" }, source: { type: ["string", "null"], format: "uri", description: "Repository or source URL, for users who want to check it themselves." }, versions: { type: "array", minItems: 1, items: { $ref: "#/$defs/AppVersion" }, description: "Published versions, newest-first. The companion installs the newest version compatible with the connected device." } } };
+  var schema33 = { type: "object", additionalProperties: true, description: "One installable webapp. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["id", "name", "description", "author", "icon", "homepage", "source", "versions"], properties: { id: { $ref: "#/$defs/Uuid" }, name: { type: "string", minLength: 1, maxLength: 100, description: "Display name." }, description: { type: "string", minLength: 1, maxLength: 300, description: "One-line tagline for store cards." }, author: { type: "string", minLength: 1, maxLength: 100 }, icon: { type: ["string", "null"], format: "uri", description: "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then." }, screenshots: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", format: "uri" }, description: "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array." }, homepage: { type: ["string", "null"], format: "uri" }, source: { type: ["string", "null"], format: "uri", description: "Repository or source URL, for users who want to check it themselves." }, versions: { type: "array", minItems: 1, items: { $ref: "#/$defs/AppVersion" }, description: "Published versions, newest-first. The companion installs the newest version compatible with the connected device." } } };
   var formats8 = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-  var schema35 = { type: "object", additionalProperties: false, required: ["version", "released_at", "download", "permissions", "min_libbridgething_version", "changelog"], properties: { version: { $ref: "#/$defs/Version" }, released_at: { type: "string", format: "date-time" }, download: { $ref: "#/$defs/Download" }, permissions: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true, description: "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate." }, role: { enum: ["standard", "launcher"], description: "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard." }, provides_overlay: { type: "boolean", description: "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not." }, min_libbridgething_version: { $ref: "#/$defs/Semver" }, changelog: { type: ["string", "null"], description: "Markdown changelog for this version." } } };
+  var schema35 = { type: "object", additionalProperties: true, description: "One published version. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["version", "released_at", "download", "permissions", "min_libbridgething_version", "changelog"], properties: { version: { $ref: "#/$defs/Version" }, released_at: { type: "string", format: "date-time" }, download: { $ref: "#/$defs/Download" }, permissions: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true, description: "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate." }, role: { enum: ["standard", "launcher"], description: "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard." }, provides_overlay: { type: "boolean", description: "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not." }, extension: { $ref: "#/$defs/Extension" }, min_libbridgething_version: { $ref: "#/$defs/Semver" }, changelog: { type: ["string", "null"], description: "Markdown changelog for this version." } } };
   var pattern4 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$", "u");
   var pattern6 = new RegExp("^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$", "u");
   var pattern5 = new RegExp("^[a-f0-9]{64}$", "u");
@@ -410,22 +410,20 @@ var require_validator = __commonJS(function(exports, module) {
         }
         errors++;
       }
-      for (const key0 in data) {
-        if (!(key0 === "version" || key0 === "released_at" || key0 === "download" || key0 === "permissions" || key0 === "role" || key0 === "provides_overlay" || key0 === "min_libbridgething_version" || key0 === "changelog")) {
-          const err6 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
-          if (vErrors === null) {
-            vErrors = [err6];
-          } else {
-            vErrors.push(err6);
-          }
-          errors++;
-        }
-      }
       if (data.version !== undefined) {
         let data0 = data.version;
         if (typeof data0 === "string") {
           if (func1(data0) > 100) {
-            const err7 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            const err6 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            if (vErrors === null) {
+              vErrors = [err6];
+            } else {
+              vErrors.push(err6);
+            }
+            errors++;
+          }
+          if (func1(data0) < 1) {
+            const err7 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
             if (vErrors === null) {
               vErrors = [err7];
             } else {
@@ -433,8 +431,8 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (func1(data0) < 1) {
-            const err8 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+          if (!pattern4.test(data0)) {
+            const err8 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" }, message: 'must match pattern "' + "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" + '"' };
             if (vErrors === null) {
               vErrors = [err8];
             } else {
@@ -442,21 +440,12 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (!pattern4.test(data0)) {
-            const err9 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" }, message: 'must match pattern "' + "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" + '"' };
-            if (vErrors === null) {
-              vErrors = [err9];
-            } else {
-              vErrors.push(err9);
-            }
-            errors++;
-          }
         } else {
-          const err10 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err9 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err10];
+            vErrors = [err9];
           } else {
-            vErrors.push(err10);
+            vErrors.push(err9);
           }
           errors++;
         }
@@ -465,20 +454,20 @@ var require_validator = __commonJS(function(exports, module) {
         let data1 = data.released_at;
         if (typeof data1 === "string") {
           if (!formats2.validate(data1)) {
-            const err11 = { instancePath: instancePath + "/released_at", schemaPath: "#/properties/released_at/format", keyword: "format", params: { format: "date-time" }, message: 'must match format "' + "date-time" + '"' };
+            const err10 = { instancePath: instancePath + "/released_at", schemaPath: "#/properties/released_at/format", keyword: "format", params: { format: "date-time" }, message: 'must match format "' + "date-time" + '"' };
             if (vErrors === null) {
-              vErrors = [err11];
+              vErrors = [err10];
             } else {
-              vErrors.push(err11);
+              vErrors.push(err10);
             }
             errors++;
           }
         } else {
-          const err12 = { instancePath: instancePath + "/released_at", schemaPath: "#/properties/released_at/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err11 = { instancePath: instancePath + "/released_at", schemaPath: "#/properties/released_at/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err12];
+            vErrors = [err11];
           } else {
-            vErrors.push(err12);
+            vErrors.push(err11);
           }
           errors++;
         }
@@ -497,20 +486,20 @@ var require_validator = __commonJS(function(exports, module) {
             let data4 = data3[i0];
             if (typeof data4 === "string") {
               if (func1(data4) < 1) {
-                const err13 = { instancePath: instancePath + "/permissions/" + i0, schemaPath: "#/properties/permissions/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+                const err12 = { instancePath: instancePath + "/permissions/" + i0, schemaPath: "#/properties/permissions/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
                 if (vErrors === null) {
-                  vErrors = [err13];
+                  vErrors = [err12];
                 } else {
-                  vErrors.push(err13);
+                  vErrors.push(err12);
                 }
                 errors++;
               }
             } else {
-              const err14 = { instancePath: instancePath + "/permissions/" + i0, schemaPath: "#/properties/permissions/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+              const err13 = { instancePath: instancePath + "/permissions/" + i0, schemaPath: "#/properties/permissions/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
               if (vErrors === null) {
-                vErrors = [err14];
+                vErrors = [err13];
               } else {
-                vErrors.push(err14);
+                vErrors.push(err13);
               }
               errors++;
             }
@@ -526,11 +515,11 @@ var require_validator = __commonJS(function(exports, module) {
               }
               if (typeof indices0[item0] == "number") {
                 j0 = indices0[item0];
-                const err15 = { instancePath: instancePath + "/permissions", schemaPath: "#/properties/permissions/uniqueItems", keyword: "uniqueItems", params: { i: i1, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i1 + " are identical)" };
+                const err14 = { instancePath: instancePath + "/permissions", schemaPath: "#/properties/permissions/uniqueItems", keyword: "uniqueItems", params: { i: i1, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i1 + " are identical)" };
                 if (vErrors === null) {
-                  vErrors = [err15];
+                  vErrors = [err14];
                 } else {
-                  vErrors.push(err15);
+                  vErrors.push(err14);
                 }
                 errors++;
                 break;
@@ -539,7 +528,19 @@ var require_validator = __commonJS(function(exports, module) {
             }
           }
         } else {
-          const err16 = { instancePath: instancePath + "/permissions", schemaPath: "#/properties/permissions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+          const err15 = { instancePath: instancePath + "/permissions", schemaPath: "#/properties/permissions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+          if (vErrors === null) {
+            vErrors = [err15];
+          } else {
+            vErrors.push(err15);
+          }
+          errors++;
+        }
+      }
+      if (data.role !== undefined) {
+        let data5 = data.role;
+        if (!(data5 === "standard" || data5 === "launcher")) {
+          const err16 = { instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema35.properties.role.enum }, message: "must be equal to one of the allowed values" };
           if (vErrors === null) {
             vErrors = [err16];
           } else {
@@ -548,10 +549,9 @@ var require_validator = __commonJS(function(exports, module) {
           errors++;
         }
       }
-      if (data.role !== undefined) {
-        let data5 = data.role;
-        if (!(data5 === "standard" || data5 === "launcher")) {
-          const err17 = { instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema35.properties.role.enum }, message: "must be equal to one of the allowed values" };
+      if (data.provides_overlay !== undefined) {
+        if (typeof data.provides_overlay !== "boolean") {
+          const err17 = { instancePath: instancePath + "/provides_overlay", schemaPath: "#/properties/provides_overlay/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
           if (vErrors === null) {
             vErrors = [err17];
           } else {
@@ -560,22 +560,20 @@ var require_validator = __commonJS(function(exports, module) {
           errors++;
         }
       }
-      if (data.provides_overlay !== undefined) {
-        if (typeof data.provides_overlay !== "boolean") {
-          const err18 = { instancePath: instancePath + "/provides_overlay", schemaPath: "#/properties/provides_overlay/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
-          if (vErrors === null) {
-            vErrors = [err18];
-          } else {
-            vErrors.push(err18);
+      if (data.extension !== undefined) {
+        let data7 = data.extension;
+        if (data7 && typeof data7 == "object" && !Array.isArray(data7)) {
+          if (data7.desktop === undefined) {
+            const err18 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/required", keyword: "required", params: { missingProperty: "desktop" }, message: "must have required property '" + "desktop" + "'" };
+            if (vErrors === null) {
+              vErrors = [err18];
+            } else {
+              vErrors.push(err18);
+            }
+            errors++;
           }
-          errors++;
-        }
-      }
-      if (data.min_libbridgething_version !== undefined) {
-        let data7 = data.min_libbridgething_version;
-        if (typeof data7 === "string") {
-          if (!pattern6.test(data7)) {
-            const err19 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/pattern", keyword: "pattern", params: { pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" }, message: 'must match pattern "' + "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" + '"' };
+          if (data7.permissions === undefined) {
+            const err19 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/required", keyword: "required", params: { missingProperty: "permissions" }, message: "must have required property '" + "permissions" + "'" };
             if (vErrors === null) {
               vErrors = [err19];
             } else {
@@ -583,34 +581,137 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
+          for (const key0 in data7) {
+            if (!(key0 === "desktop" || key0 === "permissions")) {
+              const err20 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
+              if (vErrors === null) {
+                vErrors = [err20];
+              } else {
+                vErrors.push(err20);
+              }
+              errors++;
+            }
+          }
+          if (data7.desktop !== undefined) {
+            if (data7.desktop !== true) {
+              const err21 = { instancePath: instancePath + "/extension/desktop", schemaPath: "#/$defs/Extension/properties/desktop/const", keyword: "const", params: { allowedValue: true }, message: "must be equal to constant" };
+              if (vErrors === null) {
+                vErrors = [err21];
+              } else {
+                vErrors.push(err21);
+              }
+              errors++;
+            }
+          }
+          if (data7.permissions !== undefined) {
+            let data9 = data7.permissions;
+            if (Array.isArray(data9)) {
+              const len1 = data9.length;
+              for (let i2 = 0;i2 < len1; i2++) {
+                let data10 = data9[i2];
+                if (typeof data10 === "string") {
+                  if (func1(data10) < 1) {
+                    const err22 = { instancePath: instancePath + "/extension/permissions/" + i2, schemaPath: "#/$defs/Extension/properties/permissions/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+                    if (vErrors === null) {
+                      vErrors = [err22];
+                    } else {
+                      vErrors.push(err22);
+                    }
+                    errors++;
+                  }
+                } else {
+                  const err23 = { instancePath: instancePath + "/extension/permissions/" + i2, schemaPath: "#/$defs/Extension/properties/permissions/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+                  if (vErrors === null) {
+                    vErrors = [err23];
+                  } else {
+                    vErrors.push(err23);
+                  }
+                  errors++;
+                }
+              }
+              let i3 = data9.length;
+              let j1;
+              if (i3 > 1) {
+                const indices1 = {};
+                for (;i3--; ) {
+                  let item1 = data9[i3];
+                  if (typeof item1 !== "string") {
+                    continue;
+                  }
+                  if (typeof indices1[item1] == "number") {
+                    j1 = indices1[item1];
+                    const err24 = { instancePath: instancePath + "/extension/permissions", schemaPath: "#/$defs/Extension/properties/permissions/uniqueItems", keyword: "uniqueItems", params: { i: i3, j: j1 }, message: "must NOT have duplicate items (items ## " + j1 + " and " + i3 + " are identical)" };
+                    if (vErrors === null) {
+                      vErrors = [err24];
+                    } else {
+                      vErrors.push(err24);
+                    }
+                    errors++;
+                    break;
+                  }
+                  indices1[item1] = i3;
+                }
+              }
+            } else {
+              const err25 = { instancePath: instancePath + "/extension/permissions", schemaPath: "#/$defs/Extension/properties/permissions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+              if (vErrors === null) {
+                vErrors = [err25];
+              } else {
+                vErrors.push(err25);
+              }
+              errors++;
+            }
+          }
         } else {
-          const err20 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err26 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/type", keyword: "type", params: { type: "object" }, message: "must be object" };
           if (vErrors === null) {
-            vErrors = [err20];
+            vErrors = [err26];
           } else {
-            vErrors.push(err20);
+            vErrors.push(err26);
+          }
+          errors++;
+        }
+      }
+      if (data.min_libbridgething_version !== undefined) {
+        let data11 = data.min_libbridgething_version;
+        if (typeof data11 === "string") {
+          if (!pattern6.test(data11)) {
+            const err27 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/pattern", keyword: "pattern", params: { pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" }, message: 'must match pattern "' + "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" + '"' };
+            if (vErrors === null) {
+              vErrors = [err27];
+            } else {
+              vErrors.push(err27);
+            }
+            errors++;
+          }
+        } else {
+          const err28 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          if (vErrors === null) {
+            vErrors = [err28];
+          } else {
+            vErrors.push(err28);
           }
           errors++;
         }
       }
       if (data.changelog !== undefined) {
-        let data8 = data.changelog;
-        if (typeof data8 !== "string" && data8 !== null) {
-          const err21 = { instancePath: instancePath + "/changelog", schemaPath: "#/properties/changelog/type", keyword: "type", params: { type: schema35.properties.changelog.type }, message: "must be string,null" };
+        let data12 = data.changelog;
+        if (typeof data12 !== "string" && data12 !== null) {
+          const err29 = { instancePath: instancePath + "/changelog", schemaPath: "#/properties/changelog/type", keyword: "type", params: { type: schema35.properties.changelog.type }, message: "must be string,null" };
           if (vErrors === null) {
-            vErrors = [err21];
+            vErrors = [err29];
           } else {
-            vErrors.push(err21);
+            vErrors.push(err29);
           }
           errors++;
         }
       }
     } else {
-      const err22 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+      const err30 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
       if (vErrors === null) {
-        vErrors = [err22];
+        vErrors = [err30];
       } else {
-        vErrors.push(err22);
+        vErrors.push(err30);
       }
       errors++;
     }
@@ -701,35 +802,24 @@ var require_validator = __commonJS(function(exports, module) {
         }
         errors++;
       }
-      for (const key0 in data) {
-        if (!(key0 === "id" || key0 === "name" || key0 === "description" || key0 === "author" || key0 === "icon" || key0 === "homepage" || key0 === "source" || key0 === "versions")) {
-          const err8 = { instancePath, schemaPath: "#/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
-          if (vErrors === null) {
-            vErrors = [err8];
-          } else {
-            vErrors.push(err8);
-          }
-          errors++;
-        }
-      }
       if (data.id !== undefined) {
         let data0 = data.id;
         if (typeof data0 === "string") {
           if (!formats8.test(data0)) {
-            const err9 = { instancePath: instancePath + "/id", schemaPath: "#/$defs/Uuid/format", keyword: "format", params: { format: "uuid" }, message: 'must match format "' + "uuid" + '"' };
+            const err8 = { instancePath: instancePath + "/id", schemaPath: "#/$defs/Uuid/format", keyword: "format", params: { format: "uuid" }, message: 'must match format "' + "uuid" + '"' };
             if (vErrors === null) {
-              vErrors = [err9];
+              vErrors = [err8];
             } else {
-              vErrors.push(err9);
+              vErrors.push(err8);
             }
             errors++;
           }
         } else {
-          const err10 = { instancePath: instancePath + "/id", schemaPath: "#/$defs/Uuid/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err9 = { instancePath: instancePath + "/id", schemaPath: "#/$defs/Uuid/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err10];
+            vErrors = [err9];
           } else {
-            vErrors.push(err10);
+            vErrors.push(err9);
           }
           errors++;
         }
@@ -738,7 +828,16 @@ var require_validator = __commonJS(function(exports, module) {
         let data1 = data.name;
         if (typeof data1 === "string") {
           if (func1(data1) > 100) {
-            const err11 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            const err10 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            if (vErrors === null) {
+              vErrors = [err10];
+            } else {
+              vErrors.push(err10);
+            }
+            errors++;
+          }
+          if (func1(data1) < 1) {
+            const err11 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
             if (vErrors === null) {
               vErrors = [err11];
             } else {
@@ -746,21 +845,12 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (func1(data1) < 1) {
-            const err12 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
-            if (vErrors === null) {
-              vErrors = [err12];
-            } else {
-              vErrors.push(err12);
-            }
-            errors++;
-          }
         } else {
-          const err13 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err12 = { instancePath: instancePath + "/name", schemaPath: "#/properties/name/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err13];
+            vErrors = [err12];
           } else {
-            vErrors.push(err13);
+            vErrors.push(err12);
           }
           errors++;
         }
@@ -769,7 +859,16 @@ var require_validator = __commonJS(function(exports, module) {
         let data2 = data.description;
         if (typeof data2 === "string") {
           if (func1(data2) > 300) {
-            const err14 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/maxLength", keyword: "maxLength", params: { limit: 300 }, message: "must NOT have more than 300 characters" };
+            const err13 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/maxLength", keyword: "maxLength", params: { limit: 300 }, message: "must NOT have more than 300 characters" };
+            if (vErrors === null) {
+              vErrors = [err13];
+            } else {
+              vErrors.push(err13);
+            }
+            errors++;
+          }
+          if (func1(data2) < 1) {
+            const err14 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
             if (vErrors === null) {
               vErrors = [err14];
             } else {
@@ -777,21 +876,12 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (func1(data2) < 1) {
-            const err15 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
-            if (vErrors === null) {
-              vErrors = [err15];
-            } else {
-              vErrors.push(err15);
-            }
-            errors++;
-          }
         } else {
-          const err16 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err15 = { instancePath: instancePath + "/description", schemaPath: "#/properties/description/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err16];
+            vErrors = [err15];
           } else {
-            vErrors.push(err16);
+            vErrors.push(err15);
           }
           errors++;
         }
@@ -800,7 +890,16 @@ var require_validator = __commonJS(function(exports, module) {
         let data3 = data.author;
         if (typeof data3 === "string") {
           if (func1(data3) > 100) {
-            const err17 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            const err16 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/maxLength", keyword: "maxLength", params: { limit: 100 }, message: "must NOT have more than 100 characters" };
+            if (vErrors === null) {
+              vErrors = [err16];
+            } else {
+              vErrors.push(err16);
+            }
+            errors++;
+          }
+          if (func1(data3) < 1) {
+            const err17 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
             if (vErrors === null) {
               vErrors = [err17];
             } else {
@@ -808,21 +907,12 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (func1(data3) < 1) {
-            const err18 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
-            if (vErrors === null) {
-              vErrors = [err18];
-            } else {
-              vErrors.push(err18);
-            }
-            errors++;
-          }
         } else {
-          const err19 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+          const err18 = { instancePath: instancePath + "/author", schemaPath: "#/properties/author/type", keyword: "type", params: { type: "string" }, message: "must be string" };
           if (vErrors === null) {
-            vErrors = [err19];
+            vErrors = [err18];
           } else {
-            vErrors.push(err19);
+            vErrors.push(err18);
           }
           errors++;
         }
@@ -830,17 +920,31 @@ var require_validator = __commonJS(function(exports, module) {
       if (data.icon !== undefined) {
         let data4 = data.icon;
         if (typeof data4 !== "string" && data4 !== null) {
-          const err20 = { instancePath: instancePath + "/icon", schemaPath: "#/properties/icon/type", keyword: "type", params: { type: schema33.properties.icon.type }, message: "must be string,null" };
+          const err19 = { instancePath: instancePath + "/icon", schemaPath: "#/properties/icon/type", keyword: "type", params: { type: schema33.properties.icon.type }, message: "must be string,null" };
           if (vErrors === null) {
-            vErrors = [err20];
+            vErrors = [err19];
           } else {
-            vErrors.push(err20);
+            vErrors.push(err19);
           }
           errors++;
         }
         if (typeof data4 === "string") {
           if (!formats0(data4)) {
-            const err21 = { instancePath: instancePath + "/icon", schemaPath: "#/properties/icon/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+            const err20 = { instancePath: instancePath + "/icon", schemaPath: "#/properties/icon/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+            if (vErrors === null) {
+              vErrors = [err20];
+            } else {
+              vErrors.push(err20);
+            }
+            errors++;
+          }
+        }
+      }
+      if (data.screenshots !== undefined) {
+        let data5 = data.screenshots;
+        if (Array.isArray(data5)) {
+          if (data5.length > 6) {
+            const err21 = { instancePath: instancePath + "/screenshots", schemaPath: "#/properties/screenshots/maxItems", keyword: "maxItems", params: { limit: 6 }, message: "must NOT have more than 6 items" };
             if (vErrors === null) {
               vErrors = [err21];
             } else {
@@ -848,89 +952,129 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-        }
-      }
-      if (data.homepage !== undefined) {
-        let data5 = data.homepage;
-        if (typeof data5 !== "string" && data5 !== null) {
-          const err22 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/type", keyword: "type", params: { type: schema33.properties.homepage.type }, message: "must be string,null" };
+          if (data5.length < 1) {
+            const err22 = { instancePath: instancePath + "/screenshots", schemaPath: "#/properties/screenshots/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+            if (vErrors === null) {
+              vErrors = [err22];
+            } else {
+              vErrors.push(err22);
+            }
+            errors++;
+          }
+          const len0 = data5.length;
+          for (let i0 = 0;i0 < len0; i0++) {
+            let data6 = data5[i0];
+            if (typeof data6 === "string") {
+              if (!formats0(data6)) {
+                const err23 = { instancePath: instancePath + "/screenshots/" + i0, schemaPath: "#/properties/screenshots/items/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+                if (vErrors === null) {
+                  vErrors = [err23];
+                } else {
+                  vErrors.push(err23);
+                }
+                errors++;
+              }
+            } else {
+              const err24 = { instancePath: instancePath + "/screenshots/" + i0, schemaPath: "#/properties/screenshots/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+              if (vErrors === null) {
+                vErrors = [err24];
+              } else {
+                vErrors.push(err24);
+              }
+              errors++;
+            }
+          }
+        } else {
+          const err25 = { instancePath: instancePath + "/screenshots", schemaPath: "#/properties/screenshots/type", keyword: "type", params: { type: "array" }, message: "must be array" };
           if (vErrors === null) {
-            vErrors = [err22];
+            vErrors = [err25];
           } else {
-            vErrors.push(err22);
+            vErrors.push(err25);
           }
           errors++;
         }
-        if (typeof data5 === "string") {
-          if (!formats0(data5)) {
-            const err23 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+      }
+      if (data.homepage !== undefined) {
+        let data7 = data.homepage;
+        if (typeof data7 !== "string" && data7 !== null) {
+          const err26 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/type", keyword: "type", params: { type: schema33.properties.homepage.type }, message: "must be string,null" };
+          if (vErrors === null) {
+            vErrors = [err26];
+          } else {
+            vErrors.push(err26);
+          }
+          errors++;
+        }
+        if (typeof data7 === "string") {
+          if (!formats0(data7)) {
+            const err27 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
             if (vErrors === null) {
-              vErrors = [err23];
+              vErrors = [err27];
             } else {
-              vErrors.push(err23);
+              vErrors.push(err27);
             }
             errors++;
           }
         }
       }
       if (data.source !== undefined) {
-        let data6 = data.source;
-        if (typeof data6 !== "string" && data6 !== null) {
-          const err24 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/type", keyword: "type", params: { type: schema33.properties.source.type }, message: "must be string,null" };
+        let data8 = data.source;
+        if (typeof data8 !== "string" && data8 !== null) {
+          const err28 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/type", keyword: "type", params: { type: schema33.properties.source.type }, message: "must be string,null" };
           if (vErrors === null) {
-            vErrors = [err24];
+            vErrors = [err28];
           } else {
-            vErrors.push(err24);
+            vErrors.push(err28);
           }
           errors++;
         }
-        if (typeof data6 === "string") {
-          if (!formats0(data6)) {
-            const err25 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+        if (typeof data8 === "string") {
+          if (!formats0(data8)) {
+            const err29 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
             if (vErrors === null) {
-              vErrors = [err25];
+              vErrors = [err29];
             } else {
-              vErrors.push(err25);
+              vErrors.push(err29);
             }
             errors++;
           }
         }
       }
       if (data.versions !== undefined) {
-        let data7 = data.versions;
-        if (Array.isArray(data7)) {
-          if (data7.length < 1) {
-            const err26 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+        let data9 = data.versions;
+        if (Array.isArray(data9)) {
+          if (data9.length < 1) {
+            const err30 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
             if (vErrors === null) {
-              vErrors = [err26];
+              vErrors = [err30];
             } else {
-              vErrors.push(err26);
+              vErrors.push(err30);
             }
             errors++;
           }
-          const len0 = data7.length;
-          for (let i0 = 0;i0 < len0; i0++) {
-            if (!validate22(data7[i0], { instancePath: instancePath + "/versions/" + i0, parentData: data7, parentDataProperty: i0, rootData, dynamicAnchors })) {
+          const len1 = data9.length;
+          for (let i1 = 0;i1 < len1; i1++) {
+            if (!validate22(data9[i1], { instancePath: instancePath + "/versions/" + i1, parentData: data9, parentDataProperty: i1, rootData, dynamicAnchors })) {
               vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
               errors = vErrors.length;
             }
           }
         } else {
-          const err27 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+          const err31 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
           if (vErrors === null) {
-            vErrors = [err27];
+            vErrors = [err31];
           } else {
-            vErrors.push(err27);
+            vErrors.push(err31);
           }
           errors++;
         }
       }
     } else {
-      const err28 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+      const err32 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
       if (vErrors === null) {
-        vErrors = [err28];
+        vErrors = [err32];
       } else {
-        vErrors.push(err28);
+        vErrors.push(err32);
       }
       errors++;
     }
@@ -1368,7 +1512,7 @@ var require_validator = __commonJS(function(exports, module) {
               if (data11.description !== undefined) {
                 let data14 = data11.description;
                 if (typeof data14 !== "string" && data14 !== null) {
-                  const err39 = { instancePath: instancePath + "/recommended_sources/" + i1 + "/description", schemaPath: "#/$defs/RecommendedSource/properties/description/type", keyword: "type", params: { type: schema40.properties.description.type }, message: "must be string,null" };
+                  const err39 = { instancePath: instancePath + "/recommended_sources/" + i1 + "/description", schemaPath: "#/$defs/RecommendedSource/properties/description/type", keyword: "type", params: { type: schema41.properties.description.type }, message: "must be string,null" };
                   if (vErrors === null) {
                     vErrors = [err39];
                   } else {

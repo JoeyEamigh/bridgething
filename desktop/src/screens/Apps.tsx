@@ -1,4 +1,4 @@
-import { listedWebapps } from '@bridgething/catalog';
+import { describeExtensionPermissions, listedWebapps } from '@bridgething/catalog';
 import type { WebappInfo, WebappSlot, WebappSlots } from '@bridgething/companion-types';
 import {
   Button,
@@ -10,6 +10,7 @@ import {
   SectionEmpty,
   SectionHeader,
   Spinner,
+  Switch,
   describeError,
   useSession,
 } from '@bridgething/ui';
@@ -20,11 +21,20 @@ import { useState } from 'preact/hooks';
 import { ConfigEditor } from '../components/ConfigEditor.tsx';
 import { BackButton, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import { WebappSettingsFrame } from '../components/WebappSettingsFrame.tsx';
+import { useDesktop, type ExtensionEntry } from '../desktop.ts';
+import {
+  EXTENSION_MISSING,
+  describeExtensionStatus,
+  extensionFor,
+  extensionMissing,
+  needsRuntime,
+  orphanedExtensions,
+} from '../lib/extension.ts';
 import { Icon } from '../lib/icons.tsx';
 import { humanizePermission } from '../lib/permissions.ts';
 import { WebappIcon } from '../lib/webapp-icon.tsx';
 import { PATHS } from '../routes.ts';
-import { webappActive, webappConfigFor, webappSlots, webapps } from '../stores/session.ts';
+import { extensions, webappActive, webappConfigFor, webappSlots, webapps } from '../stores/session.ts';
 
 export function AppsRoute(): VNode {
   const { route } = useLocation();
@@ -64,7 +74,7 @@ export function AppsRoute(): VNode {
                 title={app.name}
                 subtitle={app.description ?? `v${app.version}`}
                 value={`v${app.version}`}
-                trailing={app.source === 'builtin' ? <Pill tone="neutral">built-in</Pill> : undefined}
+                trailing={<InstalledMark app={app} />}
                 chevron
                 onClick={() => route(PATHS.app(app.id))}
               />
@@ -73,8 +83,35 @@ export function AppsRoute(): VNode {
         )}
       </Section>
 
+      <OrphanedExtensions />
+
       <SlotAssignment list={list} />
     </Screen>
+  );
+}
+
+function OrphanedExtensions(): VNode | null {
+  const orphans = orphanedExtensions(extensions.data.value);
+  if (orphans.length === 0) return null;
+
+  return (
+    <Section>
+      <SectionHeader
+        title="extensions with no app"
+        hint="no Car Thing this computer knows about still has the app these came with"
+      />
+      <div class="flex flex-col gap-6">
+        {orphans.map(entry => (
+          <div key={entry.id}>
+            <span class="mb-2 block font-mono text-eyebrow tracking-[0.18em] text-muted uppercase">
+              {entry.name} v{entry.version}
+            </span>
+            <ExtensionRow entry={entry} />
+          </div>
+        ))}
+      </div>
+      <Hint>they keep running with the permissions they were installed with until you remove them.</Hint>
+    </Section>
   );
 }
 
@@ -241,6 +278,8 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
         <Hint>granted at install. what this computer is willing to offer is in settings.</Hint>
       </Section>
 
+      <ExtensionSection webapp={webapp} />
+
       {webapp.provenance ? (
         <Section>
           <SectionHeader title="where it came from" />
@@ -250,6 +289,160 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
         </Section>
       ) : null}
     </Screen>
+  );
+}
+
+function InstalledMark({ app }: { app: WebappInfo }): VNode | null {
+  const entry = extensionFor(extensions.data.value, app.id);
+  if (entry) {
+    const copy = describeExtensionStatus(entry.status);
+    return (
+      <Pill tone={entry.enabled ? copy.tone : 'neutral'} dot>
+        {entry.enabled ? copy.label : 'extension off'}
+      </Pill>
+    );
+  }
+  if (extensionMissing(extensions.data.value, app)) {
+    return (
+      <Pill tone={EXTENSION_MISSING.tone} dot>
+        {EXTENSION_MISSING.label}
+      </Pill>
+    );
+  }
+  return app.source === 'builtin' ? <Pill tone="neutral">built-in</Pill> : null;
+}
+
+function ExtensionSection({ webapp }: { webapp: WebappInfo }): VNode | null {
+  const entry = extensionFor(extensions.data.value, webapp.id);
+  const declared = webapp.extension;
+
+  if (!entry && !declared) return null;
+
+  return (
+    <Section>
+      <SectionHeader title="native extension" hint="a background process this app ships, running on this computer" />
+      {entry ? <ExtensionRow entry={entry} /> : <MissingExtensionRow permissions={declared?.permissions ?? []} />}
+      <Hint>
+        it runs whenever this app runs, device or no device. its permissions were granted when you installed the app.
+      </Hint>
+    </Section>
+  );
+}
+
+function MissingExtensionRow({ permissions }: { permissions: string[] }): VNode {
+  return (
+    <ListGroup>
+      <ListRow
+        icon={<Icon name={EXTENSION_MISSING.icon} />}
+        iconTint={EXTENSION_MISSING.tint}
+        title={EXTENSION_MISSING.label}
+        subtitle={EXTENSION_MISSING.detail}
+      />
+      {describeExtensionPermissions({ desktop: true, permissions }).map((line, at) => (
+        <ListRow
+          key={permissions[at]}
+          icon={<Icon name="shield" />}
+          iconTint="warn"
+          title={line}
+          value={permissions[at]}
+        />
+      ))}
+    </ListGroup>
+  );
+}
+
+type Act = 'toggle' | 'folder' | 'runtime' | 'remove';
+
+function ExtensionRow({ entry }: { entry: ExtensionEntry }): VNode {
+  const session = useDesktop();
+  const [busy, setBusy] = useState<Act | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const copy = describeExtensionStatus(entry.status);
+
+  const act = async (kind: Act, run: () => Promise<void>) => {
+    setBusy(kind);
+    setFailure(null);
+    try {
+      await run();
+    } catch (reason) {
+      setFailure(describeError(reason));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <>
+      <ListGroup>
+        <ListRow
+          icon={<Icon name={copy.icon} />}
+          iconTint={entry.enabled ? copy.tint : 'default'}
+          title={entry.enabled ? copy.label : 'turned off'}
+          subtitle={entry.enabled ? copy.detail : 'this extension does not run until you turn it back on'}
+          value={`api v${entry.api}`}
+          trailing={
+            busy === 'toggle' ? (
+              <Spinner />
+            ) : (
+              <Switch
+                checked={entry.enabled}
+                label={`run the ${entry.name} extension`}
+                onChange={next => void act('toggle', () => session.setExtensionEnabled(entry.id, next))}
+              />
+            )
+          }
+        />
+        {entry.permissions.length === 0 ? (
+          <ListRow
+            icon={<Icon name="shield" />}
+            title="talks only to your Car Thing"
+            subtitle="it asked for nothing on this computer"
+          />
+        ) : (
+          describeExtensionPermissions({ desktop: true, permissions: entry.permissions }).map((line, at) => (
+            <ListRow
+              key={entry.permissions[at]}
+              icon={<Icon name="shield" />}
+              iconTint="warn"
+              title={line}
+              value={entry.permissions[at]}
+            />
+          ))
+        )}
+      </ListGroup>
+
+      <div class="mt-2 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          icon={<Icon name="file" />}
+          loading={busy === 'folder'}
+          onClick={() => void act('folder', () => session.openExtensionData(entry.id))}>
+          open data folder
+        </Button>
+        {needsRuntime(entry.status) ? (
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Icon name="download" />}
+            loading={busy === 'runtime'}
+            onClick={() => void act('runtime', () => session.retryExtensionRuntime())}>
+            get the runtime
+          </Button>
+        ) : null}
+        {entry.orphaned ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            icon={<Icon name="trash" />}
+            loading={busy === 'remove'}
+            onClick={() => void act('remove', () => session.removeExtension(entry.id))}>
+            remove
+          </Button>
+        ) : null}
+      </div>
+
+      {failure ? <ErrorNote>{failure}</ErrorNote> : null}
+    </>
   );
 }
 

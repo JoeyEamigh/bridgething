@@ -6,7 +6,7 @@ use ts_rs::TS;
 
 use crate::Peer;
 
-/// Map of peer-id to `Peer`.
+/// Every known peer, keyed by peer id.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(transparent)]
 #[ts(export, export_to = "client.ts")]
@@ -17,10 +17,7 @@ pub struct PeerSnapshotMap(pub HashMap<String, Peer>);
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp peer surface: a full snapshot of every known peer
-/// (paired, iAP2, and companion-gateway state), re-sent whenever any
-/// peer changes. There is no per-webapp request; a fresh snapshot
-/// arrives on connect and after every change.
+/// Every device the daemon knows about, with its pairing and companion-app connection state.
 pub enum BridgeToClientPeerMsg {
   #[bridge_event]
   Snapshot(PeerSnapshotMap),

@@ -20,6 +20,7 @@ export type SourceRecord = {
   status: SourceStatus;
   submitted_at: string;
   reviewed_at: string | null;
+  reviewed_by: string | null;
   app_count: number;
   last_checked_at: string;
   last_check_ok: boolean;
@@ -28,7 +29,7 @@ export type SourceRecord = {
   note: string | null;
 };
 
-export type DirectoryEntry = Omit<SourceRecord, 'note'>;
+export type DirectoryEntry = Omit<SourceRecord, 'note' | 'reviewed_by'>;
 
 export const KEY_PREFIX = 'source:';
 
@@ -97,5 +98,5 @@ export function toDirectoryView(records: SourceRecord[]): DirectoryEntry[] {
   return records
     .filter(isVisible)
     .sort(byAttestedThenName)
-    .map(({ note: _note, ...rest }) => rest);
+    .map(({ note: _note, reviewed_by: _reviewedBy, ...rest }) => rest);
 }

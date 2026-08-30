@@ -207,6 +207,7 @@ fn gateway_capabilities() -> GatewayCapabilities {
       audio_tts: false,
       lyrics: true,
       playback_targets: true,
+      forward: false,
     },
     audio: AudioCapabilities {
       earcons: vec![],
@@ -289,6 +290,7 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
             renders_voice_display: false,
             art: None,
             provenance: None,
+            extension: None,
           },
           WebappInfo {
             id: FIXED_DEMO_WEBAPP.parse().unwrap(),
@@ -305,6 +307,13 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
             renders_voice_display: false,
             art: None,
             provenance: Some("https://apps.bridgething.com/catalog.json".into()),
+            extension: Some(ExtensionInfo {
+              permissions: vec![
+                "all".parse().expect("descriptor parses"),
+                "net:example.com:443".parse().expect("descriptor parses"),
+              ],
+              api: 1,
+            }),
           },
         ],
       })),
@@ -358,6 +367,7 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
         renders_voice_display: false,
         art: None,
         provenance: Some("https://apps.bridgething.com/catalog.json".into()),
+        extension: None,
       })),
     },
   ));
@@ -415,7 +425,10 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
     BridgeToGatewayMsg {
       id: id(),
       meta: GatewayMsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Text("hello, gateway".into())),
+      data: BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+        webapp: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        message: ForwardMessage::Text("hello, gateway".into()),
+      })),
     },
   ));
 
@@ -425,10 +438,13 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
     BridgeToGatewayMsg {
       id: id(),
       meta: GatewayMsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Json(serde_json::json!({
-        "kind": "playback-changed",
-        "payload": { "playing": true, "positionMs": 12345 }
-      }))),
+      data: BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+        webapp: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        message: ForwardMessage::Json(serde_json::json!({
+          "kind": "playback-changed",
+          "payload": { "playing": true, "positionMs": 12345 }
+        })),
+      })),
     },
   ));
 
@@ -438,7 +454,10 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
     BridgeToGatewayMsg {
       id: id(),
       meta: GatewayMsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(fingerprint_bytes())),
+      data: BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+        webapp: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        message: ForwardMessage::Binary(fingerprint_bytes()),
+      })),
     },
   ));
 
@@ -448,7 +467,10 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
     BridgeToGatewayMsg {
       id: id(),
       meta: GatewayMsgMeta::Event,
-      data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(fingerprint_bytes())),
+      data: BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+        webapp: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        message: ForwardMessage::Binary(fingerprint_bytes()),
+      })),
     },
     PRIORITY_BULK,
   ));
@@ -817,7 +839,10 @@ fn priority_round_trips_through_codec_on_all_lanes() {
   let bridge_msg = BridgeToGatewayMsg {
     id: id(),
     meta: GatewayMsgMeta::Event,
-    data: BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(fingerprint_bytes())),
+    data: BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(ForwardRouted {
+      webapp: FIXED_DEMO_WEBAPP.parse().unwrap(),
+      message: ForwardMessage::Binary(fingerprint_bytes()),
+    })),
   };
   let gateway_msg = GatewayToBridgeMsg {
     id: id(),

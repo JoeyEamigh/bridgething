@@ -96,6 +96,18 @@ pub struct WebappDocChanged {
   pub value: Option<String>,
 }
 
+/// A settings write landed on the daemon. `value` is `None` when the key was cleared.
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappConfigChanged {
+  #[ts(type = "string")]
+  pub id: Uuid,
+  pub key: String,
+  pub value: Option<String>,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +171,8 @@ pub enum BridgeToGatewayWebappMsg {
   DocAck(WebappDocAck),
   #[bridge_event]
   DocChanged(WebappDocChanged),
+  #[bridge_event]
+  ConfigChanged(WebappConfigChanged),
   #[bridge_event]
   WebappInstalled(WebappInfo),
   #[bridge_event]

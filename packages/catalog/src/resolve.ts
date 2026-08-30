@@ -1,5 +1,12 @@
+import { declaresExtension } from './extension.ts';
 import type { AppEntry, AppVersion, Catalog, InstallCount, RecommendedSource, SourceCatalog } from './types.ts';
 import { sortNewestFirst } from './versions.ts';
+
+export type ExtensionOffering = 'listed' | 'omitted';
+
+export function offersApp(app: AppEntry, extensions: ExtensionOffering): boolean {
+  return extensions === 'listed' || !declaresExtension(app);
+}
 
 export type InstalledWebapp = {
   id: string;
@@ -97,8 +104,9 @@ export function aggregate(args: {
   installed: InstalledWebapp[];
   deviceLibVersion: string | null;
   installs?: InstallCount[];
+  extensions: ExtensionOffering;
 }): CatalogAppListing[] {
-  const { orderedCatalogs, installed, deviceLibVersion } = args;
+  const { orderedCatalogs, installed, deviceLibVersion, extensions } = args;
   const installedById = new Map(installed.map(i => [i.id.toLowerCase(), i]));
   const tallies = installsById(args.installs ?? []);
   const pins = pinsFrom(installed);
@@ -106,6 +114,7 @@ export function aggregate(args: {
   const offerings = new Map<string, { url: string; app: AppEntry }[]>();
   for (const { url, catalog } of orderedCatalogs) {
     for (const app of catalog.apps) {
+      if (!offersApp(app, extensions)) continue;
       const list = offerings.get(app.id.toLowerCase());
       if (list) list.push({ url, app });
       else offerings.set(app.id.toLowerCase(), [{ url, app }]);
@@ -142,8 +151,9 @@ export function updates(args: {
   catalogs: Map<string, Catalog>;
   installed: InstalledWebapp[];
   deviceLibVersion: string | null;
+  extensions: ExtensionOffering;
 }): CatalogAppUpdate[] {
-  const { catalogs, installed, deviceLibVersion } = args;
+  const { catalogs, installed, deviceLibVersion, extensions } = args;
   const pins = pinsFrom(installed);
   const out: CatalogAppUpdate[] = [];
 
@@ -153,7 +163,7 @@ export function updates(args: {
     const sourceUrl = pins.get(id);
     if (!sourceUrl) continue;
     const app = catalogs.get(sourceUrl)?.apps.find(a => a.id.toLowerCase() === id);
-    if (!app) continue;
+    if (!app || !offersApp(app, extensions)) continue;
     const newest = newestCompatible(app, deviceLibVersion);
     if (!newest || !isUpgrade(newest.version, info.version)) continue;
     out.push({

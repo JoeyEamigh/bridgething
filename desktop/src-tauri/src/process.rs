@@ -1,8 +1,13 @@
-use std::process::Command;
+use std::{process::Command, sync::Arc};
 
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager as _, Runtime};
+
+use crate::extensions::Extensions;
 
 pub fn leave<R: Runtime>(app: &AppHandle<R>) -> ! {
+  if let Some(extensions) = app.try_state::<Arc<Extensions>>() {
+    extensions.halt();
+  }
   app.cleanup_before_exit();
   unsafe { libc::_exit(0) }
 }

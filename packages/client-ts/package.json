@@ -13,7 +13,13 @@
   "bugs": {
     "url": "https://github.com/JoeyEamigh/bridgething/issues"
   },
-  "keywords": ["bridgething", "spotify", "car-thing", "superbird", "sdk"],
+  "keywords": [
+    "bridgething",
+    "spotify",
+    "car-thing",
+    "superbird",
+    "sdk"
+  ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -30,13 +36,16 @@
       "default": "./dist/settings.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "bun test"
   },
   "dependencies": {
     "@bridgething/lib": "workspace:*",
@@ -44,5 +53,8 @@
   },
   "peerDependencies": {
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
   }
 }

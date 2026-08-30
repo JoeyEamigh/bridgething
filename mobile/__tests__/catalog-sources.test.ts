@@ -201,6 +201,7 @@ describe('installing from a catalog you added yourself', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
 
     expect(listings.map(l => l.app.name)).toEqual(['my app']);
@@ -227,6 +228,7 @@ describe('installing from a catalog you added yourself', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
     await r.catalog.installApp(DEVICE, listing!);
 
@@ -283,6 +285,7 @@ describe('source priority', () => {
         orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
         installed: [],
         deviceLibVersion: '0.6.0',
+        extensions: 'omitted',
       })[0]!.sourceUrl;
 
     expect(winner()).toBe(OFFICIAL);
@@ -358,6 +361,7 @@ describe('reporting an install to the directory', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
     await r.catalog.installApp(DEVICE, listing!);
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -412,6 +416,7 @@ describe('reporting an install to the directory', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
 
     await expect(
@@ -436,6 +441,7 @@ describe('reporting an install to the directory', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
 
     await expect(r.catalog.installApp(DEVICE, listing!)).rejects.toThrow();
@@ -465,6 +471,7 @@ describe('installing a version other than the newest', () => {
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
     });
 
     return { r, fetchMock, calls, listing: listing! };
@@ -534,6 +541,7 @@ describe('popularity from the directory', () => {
       orderedCatalogs: state.catalogs,
       installed: [],
       deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
       installs: state.installs,
     });
     expect(listings.map(l => l.app.name)).toEqual(['zebra', 'aardvark']);

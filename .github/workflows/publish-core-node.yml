@@ -127,8 +127,7 @@ jobs:
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     env:
-      # provenance attestations are unsupported from a private repository. flip to true when published
-      NPM_CONFIG_PROVENANCE: "false"
+      NPM_CONFIG_PROVENANCE: "true"
     steps:
       - uses: actions/checkout@v4
 

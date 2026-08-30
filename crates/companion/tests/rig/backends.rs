@@ -26,8 +26,13 @@ impl HostEnvironment for RigHost {
 pub struct Offline;
 
 impl HttpTransport for Offline {
-  fn execute(&self, _request: HttpRequest, _sink: Arc<HttpSink>) {}
-  fn download(&self, _request: HttpRequest, _sink: Arc<HttpDownloadSink>) {}
+  fn execute(&self, _request: HttpRequest, sink: Arc<HttpSink>) {
+    sink.fail("the rig has no network".into());
+  }
+
+  fn download(&self, _request: HttpRequest, sink: Arc<HttpDownloadSink>) {
+    sink.on_failed("the rig has no network".into());
+  }
 }
 
 impl WsTransport for Offline {

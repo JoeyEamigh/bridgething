@@ -2,11 +2,13 @@ pub mod autoconnect;
 pub mod backends;
 pub mod capabilities;
 pub mod commands;
+pub mod extensions;
 pub mod hints;
 pub mod known_device;
 pub mod logs;
 pub mod process;
 pub mod route;
+pub mod settings;
 pub mod shell;
 pub mod sources;
 pub mod store;
@@ -20,6 +22,7 @@ use tauri::Manager;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 use crate::{
+  extensions::Deps,
   hints::{ENDPOINTS, Hint, HintSink, Visibility, WindowHints},
   route::Route,
   shell::{DesktopPaths, Shell, ShellConfig},
@@ -27,6 +30,16 @@ use crate::{
 };
 
 const AUTOSTART_ARG: &str = "--autostart";
+
+fn opener<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Arc<dyn Fn(String) -> Result<(), String> + Send + Sync> {
+  use tauri_plugin_opener::OpenerExt as _;
+  Arc::new(move |url| {
+    app
+      .opener()
+      .open_url(url, None::<&str>)
+      .map_err(|error| error.to_string())
+  })
+}
 
 #[macro_export]
 macro_rules! desktop_commands {
@@ -56,6 +69,8 @@ macro_rules! desktop_commands {
       $crate::commands::webapp_config,
       $crate::commands::webapp_doc,
       $crate::commands::webapp_doc_entry,
+      $crate::settings::settings_fetch,
+      $crate::settings::settings_authorize,
       $crate::commands::device_logs,
       $crate::commands::export_logs,
       $crate::commands::ota_manifest,
@@ -91,6 +106,7 @@ macro_rules! desktop_commands {
       $crate::commands::apply_ota_update,
       $crate::commands::ota_push_daemon,
       $crate::commands::ota_install_webapp,
+      $crate::commands::webapp_bundle_extension,
       $crate::commands::install_webapp_from_url,
       $crate::commands::ota_check_now,
       $crate::commands::ota_dismiss_run,
@@ -98,6 +114,11 @@ macro_rules! desktop_commands {
       $crate::commands::set_debug_logging,
       $crate::commands::known_devices,
       $crate::commands::forget_known_device,
+      $crate::commands::extensions,
+      $crate::commands::set_extension_enabled,
+      $crate::commands::remove_extension,
+      $crate::commands::open_extension_data,
+      $crate::commands::retry_extension_runtime,
       $crate::commands::restart,
       $crate::commands::quit,
     ]
@@ -123,11 +144,27 @@ pub fn run() {
       tauri_plugin_autostart::MacosLauncher::LaunchAgent,
       Some(vec![AUTOSTART_ARG]),
     ))
+    .plugin(tauri_plugin_deep_link::init())
+    .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .setup(move |app| {
+      use tauri_plugin_deep_link::DeepLinkExt as _;
+
       app.manage(verbosity);
+      let authorize = Arc::new(settings::Authorize::default());
+      app.manage(Arc::clone(&authorize));
+      let browser = Arc::clone(&authorize);
+      #[cfg(any(target_os = "linux", target_os = "windows"))]
+      if let Err(error) = app.deep_link().register_all() {
+        tracing::warn!(%error, "the bridgething url scheme did not register with the desktop");
+      }
+      app.deep_link().on_open_url(move |event| {
+        for url in event.urls() {
+          authorize.deliver(&url);
+        }
+      });
       let visible = if resident {
         Visibility::hidden()
       } else {
@@ -138,6 +175,13 @@ pub fn run() {
       let config = ShellConfig::from_env()?;
       let paths = DesktopPaths::xdg()?;
       let shell = Shell::create(config, hints.clone())?;
+      let extensions = Arc::clone(shell.extensions());
+      extensions.spawn(Deps {
+        http: shell.http().clone(),
+        authorize: Arc::clone(&browser),
+        open_url: opener(app.handle().clone()),
+        hints: hints.clone(),
+      });
       logs::attach(shell.session().log_inbox());
       tauri::async_runtime::block_on(shell.start());
       let wake = shell.wake();
@@ -150,6 +194,7 @@ pub fn run() {
         move || discovery.endpoints()
       });
       app.manage(shell);
+      app.manage(extensions);
       app.manage(discovery);
       app.manage(Sources::open(&paths.config_dir));
       app.manage(Route::open(&paths.config_dir));

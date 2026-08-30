@@ -1,8 +1,3 @@
-//! Hardware surface - the bits a webapp can drive on the device itself.
-//! Wheel/button/touch input bypass the wire (chromium keypresses to the
-//! active webapp); the only on-wire hardware is display backlight and
-//! the ALS reading.
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -10,33 +5,30 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum BrightnessMode {
-  /// Daemon drives backlight from the on-board ALS.
+  /// The device sets the backlight from its ambient light sensor.
   #[default]
   Auto,
-  /// Webapp drives backlight directly via `setLevel`.
+  /// `setLevel` sets the backlight.
   Manual,
 }
 
-/// Backlight state. `level` is the user-set value (only respected in
-/// `Manual`); `effective_level` is what's actually on the panel - equal
-/// to `level` in `Manual`, ALS-derived in `Auto`.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct BrightnessState {
   pub mode: BrightnessMode,
+  /// 0.0 to 1.0, as last set by `setLevel`.
   pub level: f32,
+  /// 0.0 to 1.0. Follows `level` in `manual` mode and the light sensor in `auto`.
   pub effective_level: f32,
 }
 
-/// Snapshot of the device's hardware-controlled surfaces. Sent on
-/// `hardware.state.get` and re-broadcast on any change. `ambient_level`
-/// is the 0-255 ambient light reading.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct HardwareState {
   pub brightness: BrightnessState,
+  /// 0 to 100.
   pub ambient_level: u8,
 }
 
@@ -44,9 +36,8 @@ pub struct HardwareState {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum HardwareError {
-  /// The supplied level is outside `[0.0, 1.0]`.
+  /// `setLevel` takes a level from 0.0 to 1.0.
   LevelOutOfRange,
-  /// `setLevel` was called while in `Auto` mode - ignored, switch to
-  /// `Manual` first.
+  /// `setLevel` needs `manual` mode. Set the mode first.
   ModeMismatch,
 }

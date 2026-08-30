@@ -12,8 +12,8 @@ pub use session::*;
 use crate::{
   api::ota::{ArtifactDigest, OtaAvailable, OtaPollStatus, OtaRun, OtaRunProgress},
   backend::{
-    AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ForeignHttp, ForeignWs, GeoProvider,
-    HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
+    AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, ForeignWs,
+    GeoProvider, HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
     MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend, SecretStore,
     SpeechRecognizer, TransferPolicy, VolumeMonitor, WsTransport,
   },
@@ -71,6 +71,8 @@ pub struct CompanionBackends {
   pub connectivity: Option<Arc<dyn ConnectivityMonitor>>,
   #[uniffi(default = None)]
   pub device_waker: Option<Arc<dyn DeviceWaker>>,
+  #[uniffi(default = None)]
+  pub extensions: Option<Arc<dyn ExtensionHost>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -191,6 +193,11 @@ pub enum CompanionError {
 #[uniffi::export(with_foreign)]
 pub trait SessionEventSink: Send + Sync {
   fn on_event(&self, event: SessionEvent);
+}
+
+#[uniffi::export(with_foreign)]
+pub trait WebappBundleSink: Send + Sync {
+  fn installed(&self, bundle: String);
 }
 
 #[derive(uniffi::Object)]
@@ -381,12 +388,14 @@ impl CompanionSession {
     }
   }
 
+  #[uniffi::method(default(sink = None))]
   pub async fn install_webapp_from_url(
     &self,
     device_id: String,
     url: String,
     expected: Option<ArtifactDigest>,
     provenance: Option<String>,
+    sink: Option<Arc<dyn WebappBundleSink>>,
   ) -> Result<WebappInfo, CompanionError> {
     self.gateway_checked(&device_id)?;
     let path = self
@@ -408,6 +417,10 @@ impl CompanionSession {
     let installed = self
       .install_webapp(device_id, path.display().to_string(), provenance)
       .await;
+    if let (Ok(_), Some(sink)) = (&installed, sink) {
+      let bundle = path.display().to_string();
+      let _ = tokio::task::spawn_blocking(move || sink.installed(bundle)).await;
+    }
     let _ = std::fs::remove_file(&path);
     installed
   }
@@ -575,8 +588,8 @@ impl CompanionSession {
       .webapp()
       .config_set(libbridgething::gateway::WebappConfigSet { id, key, value })
       .await
-      .map(|_| ())
-      .map_err(device_error)
+      .map_err(device_error)?;
+    Ok(())
   }
 
   pub async fn delete_webapp_config_field(
@@ -591,8 +604,8 @@ impl CompanionSession {
       .webapp()
       .config_delete(libbridgething::gateway::WebappConfigDelete { id, key })
       .await
-      .map(|_| ())
-      .map_err(device_error)
+      .map_err(device_error)?;
+    Ok(())
   }
 
   pub async fn get_webapp_doc(

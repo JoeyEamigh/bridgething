@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Legacy operations the unmodified stock Spotify webapp invokes.
-/// Reaches the daemon as `ClientToBridgeMsgData::LegacyStock` and is
-/// dispatched by the stock translation layer; this type is not part of
-/// the generated client SDK.
+/// Stock Spotify webapp operations. Send one as a `legacyStock` message.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "action", content = "args", rename_all = "camelCase")]

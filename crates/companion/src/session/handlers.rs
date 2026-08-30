@@ -14,9 +14,9 @@ use uuid::Uuid;
 
 use crate::{
   dispatch::{
-    OtaInbound, asset::AssetDispatcher, audio::AudioDispatcher, geo::GeoDispatcher, library::LibraryDispatcher,
-    lyrics::LyricsDispatcher, notifications::NotificationDispatcher, phone::PhoneDispatcher, player::PlayerDispatcher,
-    system::SystemDispatcher, webapp::WebappDispatcher,
+    OtaInbound, asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
+    library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
+    phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
   session::{observer::SessionObserver, ota::OtaLink},
   voice::dispatcher::VoiceDispatcher,
@@ -37,6 +37,7 @@ pub struct Peer {
   pub(crate) tunnel: TunnelDispatcher,
   pub(crate) voice: Option<VoiceDispatcher>,
   pub(crate) webapp: WebappDispatcher,
+  pub(crate) extensions: Option<Arc<ExtensionDispatcher>>,
   pub(crate) receiver: Arc<TransferReceiver>,
   pub(crate) ota: Arc<OtaLink>,
   pub(crate) observer: Arc<SessionObserver>,
@@ -383,19 +384,26 @@ impl WebappHandler for Peer {
     self.webapp.webapp_installed(payload).await
   }
   async fn active_changed(&self, payload: WebappActiveChanged) -> Result<(), WireError> {
+    if let Some(extensions) = &self.extensions {
+      extensions.active_changed(&self.device_id, &payload);
+    }
     self.webapp.active_changed(payload).await
+  }
+  async fn config_changed(&self, payload: WebappConfigChanged) -> Result<(), WireError> {
+    if let Some(extensions) = &self.extensions {
+      extensions.config_changed(&self.device_id, payload.id, &payload.key, payload.value);
+    }
+    Ok(())
   }
 }
 
 impl ForwardHandler for Peer {
-  async fn text(&self, _payload: String) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn json(&self, _payload: serde_json::Value) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn binary(&self, _payload: Vec<u8>) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
+  async fn routed(&self, payload: ForwardRouted) -> Result<(), WireError> {
+    let Some(extensions) = &self.extensions else {
+      return Err(WireError::Unsupported);
+    };
+    extensions.deliver(&self.device_id, payload);
+    Ok(())
   }
 }
 

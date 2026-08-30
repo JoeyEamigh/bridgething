@@ -98,9 +98,16 @@ export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };
 
 export type DeviceResumeTarget = { deviceId: string; target: ResumeTarget };
 
-export type DeviceWebappsEntry = { deviceId: string; webapps: Array<WebappInfo>; active: ActiveWebapp | null };
+export type DeviceWebappsEntry = {
+  deviceId: string;
+  webapps: Array<WebappInfo>;
+  active: ActiveWebapp | null;
+  listed: boolean;
+};
 
 export type DocEntry = { key: string; value: string };
+
+export type ExtensionInfo = { permissions: Array<string>; api: number };
 
 export type HostInfo = {
   appName: string;
@@ -439,6 +446,7 @@ export type WebappInfo = {
   overlayHash: string | null;
   config: Array<ConfigField>;
   permissions: Array<string>;
+  extension: ExtensionInfo | null;
 };
 
 export type WebappResourceFile = { path: string; mime: string | null };

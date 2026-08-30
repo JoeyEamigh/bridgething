@@ -237,7 +237,24 @@ impl AppState {
       self.tunnel_routes.kill_all();
     }
     self.sync_overlay(false).await;
+    self.refresh_forward_availability().await;
     Ok(())
+  }
+
+  pub async fn refresh_forward_availability(&self) {
+    let active = self.active_webapp().await.ok().flatten();
+    if let Err(err) = self.capabilities.set_active_webapp(active).await {
+      tracing::warn!(?err, "failed to broadcast capabilities after an active-webapp change");
+    }
+  }
+
+  pub async fn note_extensions_running(&self, addr: crate::bluetooth::Address, webapps: Vec<Uuid>) {
+    if let Err(err) = self.capabilities.set_extensions_running(addr, webapps).await {
+      tracing::warn!(
+        ?err,
+        "failed to broadcast capabilities after an extensions-running change"
+      );
+    }
   }
 
   pub async fn resolve_injected_script(&self) -> Option<std::sync::Arc<String>> {

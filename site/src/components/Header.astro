@@ -1,10 +1,12 @@
 ---
 import { LAUNCHED } from '../lib/launched';
+import { SITE } from '../lib/site';
 
 const path = Astro.url.pathname;
 const links: Array<{ href: string; label: string }> = [
   { href: '/install', label: 'install' },
   { href: '/apps', label: 'apps' },
+  { href: '/appjam', label: 'app jam' },
   { href: '/device', label: 'device' },
   { href: '/docs', label: 'docs' },
   { href: '/releases', label: 'releases' },
@@ -35,7 +37,7 @@ const isActive = (href: string) => href === activeHref;
       }
       {
         LAUNCHED ? (
-          <a href="https://github.com/JoeyEamigh/bridgething" class="hover:text-off-white border-b-0">
+          <a href={SITE.repo} class="hover:text-off-white border-b-0">
             github
           </a>
         ) : (

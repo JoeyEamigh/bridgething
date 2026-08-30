@@ -1,7 +1,7 @@
 {
   "$schema": "https://apps.bridgething.com/schemas/catalog/v1.json",
   "schema": "catalog.v1",
-  "updated_at": "2026-08-09T19:12:35Z",
+  "updated_at": "2026-08-30T17:08:40Z",
   "repo": {
     "name": "bridgething apps",
     "description": "The official catalog of installable webapps for bridgething.",
@@ -15,6 +15,9 @@
       "description": "Upcoming events from an iCalendar (.ics) feed.",
       "author": "JoeyEamigh",
       "icon": "https://apps.bridgething.com/icons/019e6701-13f8-71b5-ba04-85d326630e98.svg",
+      "screenshots": [
+        "https://bridgething.com/screenshots/device-calendar.png"
+      ],
       "homepage": "https://bridgething.com/apps",
       "source": "https://github.com/JoeyEamigh/bridgething",
       "versions": [
@@ -40,6 +43,9 @@
       "description": "Current conditions and a short forecast.",
       "author": "JoeyEamigh",
       "icon": "https://apps.bridgething.com/icons/019e6701-13f8-71b5-ba04-81f347137de2.svg",
+      "screenshots": [
+        "https://bridgething.com/screenshots/device-weather.png"
+      ],
       "homepage": "https://bridgething.com/apps",
       "source": "https://github.com/JoeyEamigh/bridgething",
       "versions": [
@@ -66,6 +72,9 @@
       "description": "Live tiles and controls for a handful of your Home Assistant entities.",
       "author": "JoeyEamigh",
       "icon": "https://apps.bridgething.com/icons/019e7f1a-bcea-7187-a438-4e182be86a33.svg",
+      "screenshots": [
+        "https://bridgething.com/screenshots/device-home-assistant.png"
+      ],
       "homepage": "https://bridgething.com/apps",
       "source": "https://github.com/JoeyEamigh/bridgething",
       "versions": [

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{NluSlots, NluStage, VoiceCaptureReason, VoiceDispatchErrorCode, VoiceDispatchTarget};
 
-/// The display-shaped intents
+/// Intents that ask the webapp to change what it shows.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -15,7 +15,6 @@ pub enum VoiceDisplayIntent {
   MoreLikeThis,
 }
 
-/// A resolved display intent for the active webapp to render
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +26,6 @@ pub struct VoiceIntent {
   pub transcript: String,
 }
 
-/// Where a voice turn is in the pipeline
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -43,7 +41,6 @@ pub enum VoicePhase {
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Current mic state.
 pub struct VoiceState {
   pub muted: bool,
   pub capturing: bool,
@@ -55,7 +52,7 @@ pub struct VoiceState {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Why a turn ended without dispatching.
+/// Why a voice turn ended early.
 pub struct VoiceActivityError {
   pub code: VoiceDispatchErrorCode,
   pub msg: String,
@@ -65,7 +62,7 @@ pub struct VoiceActivityError {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// One step of a voice turn, as it happens
+/// One step of a voice turn, reported as it happens.
 pub struct VoiceActivity {
   pub phase: VoicePhase,
   #[ts(type = "string | null")]
@@ -101,7 +98,6 @@ impl VoiceActivity {
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `voice.stateGet`.
 pub struct VoiceStateReply {
   pub state: VoiceState,
 }
@@ -111,7 +107,8 @@ pub struct VoiceStateReply {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp voice/NLU surface
+/// Voice capture and intent results for a webapp. `onStateChanged` reports mic mute and capture
+/// state, `onActivity` reports each step of a voice turn, and `onIntent` delivers a resolved intent.
 pub enum BridgeToClientVoiceMsg {
   #[bridge_event]
   StateChanged(VoiceState),

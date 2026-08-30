@@ -87,12 +87,21 @@ async function main() {
     role?: string;
     overlay?: string;
     permissions?: string[];
+    extension?: { entry?: string; permissions?: string[]; api?: number };
   };
   for (const field of ['id', 'name', 'description', 'version'] as const) {
     if (!manifest[field]) throw new Error(`${dist}/manifest.json missing required field "${field}"`);
   }
   if (!(await readdir(dist)).includes('index.html')) {
     throw new Error(`${dist} has no index.html at its root`);
+  }
+  if (manifest.extension?.entry) {
+    const entry = join(dist, manifest.extension.entry);
+    if (!(await stat(entry).catch(() => null))?.isFile()) {
+      throw new Error(
+        `${dist}/manifest.json declares extension entry "${manifest.extension.entry}", which is not in the bundle`,
+      );
+    }
   }
 
   await mkdir(dirname(out), { recursive: true });
@@ -111,6 +120,7 @@ async function main() {
     permissions: manifest.permissions ?? [],
     role: manifest.role ?? null,
     provides_overlay: Boolean(manifest.overlay),
+    extension: manifest.extension ?? null,
     icon: manifest.icon ?? null,
     iconPath: manifest.icon ? join(dist, manifest.icon) : null,
     size,

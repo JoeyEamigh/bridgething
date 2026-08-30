@@ -8,10 +8,9 @@ use crate::{CurrentlyActiveApplication, NowPlayingUpdate, PlaybackTarget, Player
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `stateGet`, also carried by the `Snapshot` event.
 pub struct PlayerStateReply {
   pub state: PlayerState,
-  /// The app currently driving playback, when known (iOS surfaces this over iAP2).
+  /// The app driving playback, when the phone reports it.
   pub active_app: Option<CurrentlyActiveApplication>,
 }
 
@@ -19,7 +18,6 @@ pub struct PlayerStateReply {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `queueGet`, also carried by the `QueueChanged` event.
 pub struct PlayerQueueReply {
   /// The now-playing track, when one is loaded.
   pub current: Option<QueueItem>,
@@ -40,16 +38,12 @@ pub struct PlayerErrorReply {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `targetsGet`, also carried by the `TargetsChanged` event.
 pub struct PlayerTargetsReply {
   pub targets: Vec<PlaybackTarget>,
 }
 
-/// Daemon -> webapp player surface. `Snapshot` lands on connect with the
-/// current player state; `Delta` is the `NowPlayingUpdate` stream the
-/// SDK auto-merges; `QueueChanged` fires when the queue mutates without
-/// a track change. `StateReply`/`QueueReply` are the typed responses
-/// to the matching webapp queries.
+/// Playback state and transport for a webapp. `onSnapshot` delivers the full `PlayerState` after
+/// every change. `stateGet`, `queueGet`, and `targetsGet` return the same shapes on demand.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]

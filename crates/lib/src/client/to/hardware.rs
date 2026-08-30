@@ -4,11 +4,10 @@ use ts_rs::TS;
 
 use crate::{BrightnessState, HardwareState};
 
-/// 0..=100 ambient-brightness indicator derived from the on-board ALS +
-/// backlight curve. Low = dark room, high = bright room.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
+/// Room brightness, `0` (dark) to `100` (bright).
 pub struct AmbientLightUpdate {
   pub ambient_level: u8,
 }
@@ -16,7 +15,6 @@ pub struct AmbientLightUpdate {
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `hardware.stateGet`.
 pub struct HardwareStateReply {
   pub state: HardwareState,
 }
@@ -26,8 +24,8 @@ pub struct HardwareStateReply {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp hardware surface: ambient-light and backlight
-/// change events, plus the reply to `hardware.stateGet`.
+/// The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive
+/// the backlight, and `stateGet` reads the current state.
 pub enum BridgeToClientHardwareMsg {
   #[bridge_event]
   AmbientLightUpdate(AmbientLightUpdate),

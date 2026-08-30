@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@bridgething/lib/shared": "../../crates/lib/ts/bindings/shared.ts"
+  }
+}

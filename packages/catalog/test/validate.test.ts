@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { declaresExtension, isExtensionPermission } from '../src/extension.ts';
 import type { Catalog } from '../src/types.ts';
 import { CatalogValidationError, validate, validateInvariants, validateSchema } from '../src/validate.ts';
 
@@ -14,6 +15,22 @@ function version(v: string, releasedAt: string) {
     permissions: ['net.fetch'],
     min_libbridgething_version: '0.5.0',
     changelog: null,
+  };
+}
+
+function extensionApp(overrides: Partial<Catalog['apps'][number]> = {}): Catalog['apps'][number] {
+  const v = version('0.1.0', '2026-05-31T00:00:00Z') as Catalog['apps'][number]['versions'][number];
+  v.extension = { desktop: true, permissions: ['all'] };
+  return {
+    id: WEATHER_ID,
+    name: 'Discord Presence',
+    description: 'Shows what you are listening to in Discord.',
+    author: 'JoeyEamigh',
+    icon: null,
+    homepage: null,
+    source: 'https://github.com/JoeyEamigh/bridgething-discord',
+    versions: [v],
+    ...overrides,
   };
 }
 
@@ -47,6 +64,32 @@ describe('validateSchema()', () => {
     const m = fixture() as Record<string, unknown>;
     m['extra'] = true;
     expect(() => validateSchema(m)).toThrow(CatalogValidationError);
+  });
+
+  test('tolerates a key on an app or a version that this client has never heard of', () => {
+    const m = fixture();
+    (m.apps[0] as unknown as Record<string, unknown>)['badge'] = 'staff pick';
+    (m.apps[0]!.versions[0] as unknown as Record<string, unknown>)['runtime'] = { wasm: true };
+
+    expect(() => validateSchema(m)).not.toThrow();
+  });
+
+  test('still checks every app and version key it does know', () => {
+    const badRole = fixture();
+    (badRole.apps[0]!.versions[0] as unknown as Record<string, unknown>)['role'] = 'overlord';
+    expect(() => validateSchema(badRole)).toThrow(CatalogValidationError);
+
+    const badIcon = fixture();
+    (badIcon.apps[0] as unknown as Record<string, unknown>)['icon'] = 42;
+    expect(() => validateSchema(badIcon)).toThrow(CatalogValidationError);
+
+    const badExtension = fixture();
+    (badExtension.apps[0]!.versions[0] as unknown as Record<string, unknown>)['extension'] = {
+      desktop: true,
+      permissions: ['all'],
+      api: 1,
+    };
+    expect(() => validateSchema(badExtension)).toThrow(CatalogValidationError);
   });
 
   test('rejects a non-catalog schema discriminant', () => {
@@ -98,6 +141,161 @@ describe('validateInvariants()', () => {
   });
 });
 
+describe('extension versions', () => {
+  test('schema accepts an extension block', () => {
+    const m = fixture();
+    m.apps.push(extensionApp());
+    expect(() => validateSchema(m)).not.toThrow();
+  });
+
+  test('schema rejects an unknown key inside the extension block', () => {
+    const m = fixture();
+    const app = extensionApp();
+    (app.versions[0]!.extension as unknown as Record<string, unknown>)['entry'] = 'extension/desktop.mjs';
+    m.apps.push(app);
+    expect(() => validateSchema(m)).toThrow(CatalogValidationError);
+  });
+
+  test('schema rejects desktop: false, since there is no other host', () => {
+    const m = fixture();
+    const app = extensionApp();
+    (app.versions[0]!.extension as unknown as { desktop: boolean }).desktop = false;
+    m.apps.push(app);
+    expect(() => validateSchema(m)).toThrow(CatalogValidationError);
+  });
+
+  test('schema rejects an extension block with no permissions key', () => {
+    const m = fixture();
+    const app = extensionApp();
+    delete (app.versions[0]!.extension as unknown as Record<string, unknown>)['permissions'];
+    m.apps.push(app);
+    expect(() => validateSchema(m)).toThrow(CatalogValidationError);
+  });
+
+  test('invariants accept every descriptor shape in the grammar', () => {
+    const m = fixture();
+    const app = extensionApp();
+    app.versions[0]!.extension!.permissions = [
+      'all',
+      'net',
+      'net:discord.com',
+      'net:127.0.0.1:6463',
+      'read',
+      'read:~/Library/Application Support',
+      'write',
+      'write:/tmp/out',
+      'run',
+      'run:osascript',
+      'env',
+      'env:HOME',
+      'sys',
+      'sys:hostname',
+      'ffi',
+      'ffi:/usr/lib/libfoo.dylib',
+    ];
+    m.apps.push(app);
+    expect(() => validateInvariants(m)).not.toThrow();
+  });
+
+  test('invariants reject a descriptor outside the grammar', () => {
+    const m = fixture();
+    const app = extensionApp();
+    app.versions[0]!.extension!.permissions = ['hid'];
+    m.apps.push(app);
+    expect(() => validateInvariants(m)).toThrow(/not a permission descriptor/);
+  });
+
+  test('invariants reject a scoped form of all', () => {
+    const m = fixture();
+    const app = extensionApp();
+    app.versions[0]!.extension!.permissions = ['all:everything'];
+    m.apps.push(app);
+    expect(() => validateInvariants(m)).toThrow(/not a permission descriptor/);
+  });
+
+  test('invariants require a github source when any version ships an extension', () => {
+    const m = fixture();
+    m.apps.push(extensionApp({ source: 'https://example.com/code' }));
+    expect(() => validateInvariants(m)).toThrow(/must be a github\.com repo url/);
+  });
+
+  test('invariants reject a null source on an extension app', () => {
+    const m = fixture();
+    m.apps.push(extensionApp({ source: null }));
+    expect(() => validateInvariants(m)).toThrow(/not null/);
+  });
+
+  test('invariants reject a github url deeper than owner\/repo', () => {
+    const m = fixture();
+    m.apps.push(extensionApp({ source: 'https://github.com/JoeyEamigh/bridgething/tree/main/apps' }));
+    expect(() => validateInvariants(m)).toThrow(/must be a github\.com repo url/);
+  });
+
+  test('invariants accept a trailing slash on the repo url', () => {
+    const m = fixture();
+    m.apps.push(extensionApp({ source: 'https://github.com/JoeyEamigh/bridgething-discord/' }));
+    expect(() => validateInvariants(m)).not.toThrow();
+  });
+
+  test('the source rule fires even when only an older version ships the extension', () => {
+    const m = fixture();
+    const app = extensionApp({ source: null });
+    app.versions.unshift(version('0.2.0', '2026-06-01T00:00:00Z'));
+    m.apps.push(app);
+    expect(() => validateInvariants(m)).toThrow(/must be a github\.com repo url/);
+  });
+
+  test('an app with no extension keeps a null source', () => {
+    expect(() => validateInvariants(fixture())).not.toThrow();
+  });
+
+  test('the descriptors the invariants accept are exactly the ones isExtensionPermission accepts', () => {
+    const descriptors = [
+      'all',
+      'net',
+      'net:discord.com',
+      'net:127.0.0.1:6463',
+      'read:~/Library/Application Support',
+      'env:HOME',
+      'ffi:/usr/lib/libfoo.dylib',
+      'hid',
+      'all:everything',
+      'net:',
+      'net:a.com,b.com',
+      '',
+      'NET',
+    ];
+
+    for (const permission of descriptors) {
+      const m = fixture();
+      const app = extensionApp();
+      app.versions[0]!.extension!.permissions = [permission];
+      m.apps.push(app);
+
+      let accepted = true;
+      try {
+        validateInvariants(m);
+      } catch {
+        accepted = false;
+      }
+
+      expect(accepted).toBe(isExtensionPermission(permission));
+    }
+  });
+
+  test('the source rule fires for exactly the apps declaresExtension flags', () => {
+    const plain = fixture();
+    expect(declaresExtension(plain.apps[0]!)).toBe(false);
+    expect(() => validateInvariants(plain)).not.toThrow();
+
+    const shipping = fixture();
+    const app = extensionApp({ source: null });
+    shipping.apps.push(app);
+    expect(declaresExtension(app)).toBe(true);
+    expect(() => validateInvariants(shipping)).toThrow(/github\.com repo url/);
+  });
+});
+
 describe('validate()', () => {
   test('passes a multi-app catalog', () => {
     const m = fixture();
@@ -112,5 +310,29 @@ describe('validate()', () => {
       versions: [version('0.1.0', '2026-05-31T00:00:00Z')],
     });
     expect(() => validate(m)).not.toThrow();
+  });
+});
+
+describe('screenshots', () => {
+  test('an app without the key still validates, so catalogs published before it keep working', () => {
+    expect(() => validateSchema(fixture())).not.toThrow();
+  });
+
+  test('a list of https captures validates', () => {
+    const doc = fixture();
+    doc.apps[0]!.screenshots = ['https://apps.bridgething.com/shots/calendar-1.png'];
+    expect(() => validateSchema(doc)).not.toThrow();
+  });
+
+  test('an empty array is refused, so a card cannot promise a picture it does not have', () => {
+    const doc = fixture();
+    doc.apps[0]!.screenshots = [];
+    expect(() => validateSchema(doc)).toThrow(CatalogValidationError);
+  });
+
+  test('a non-url entry is refused', () => {
+    const doc = fixture();
+    doc.apps[0]!.screenshots = ['not a url'];
+    expect(() => validateSchema(doc)).toThrow(CatalogValidationError);
   });
 });

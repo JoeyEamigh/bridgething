@@ -8,6 +8,7 @@ import StoryTerminal from '../components/StoryTerminal.astro';
 import TraceRail from '../components/TraceRail.astro';
 import Wordmark from '../components/Wordmark.astro';
 import Layout from '../layouts/Layout.astro';
+import { SITE } from '../lib/site';
 
 const SCREENS = [
   { src: '/screenshots/device-spotify-alt.png', alt: 'now playing on the stock spotify ui', name: 'stock ui' },
@@ -50,7 +51,8 @@ const APPS = [
           </p>
           <div class="flex flex-wrap items-center gap-4">
             <InstallCTA channel="stable" label="install" variant="primary" size="lg" />
-            <a href="/releases" class="btn btn-lg">release notes</a>
+            <a href={SITE.discord} class="btn" rel="noreferrer noopener">discord</a>
+            <a href={SITE.repo} class="btn" rel="noreferrer noopener">github</a>
           </div>
           <p class="m-0 font-mono text-sm text-white/40">connect your phone, run the stock ui, or make your own apps</p>
         </div>

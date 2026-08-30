@@ -17,21 +17,17 @@ use crate::{ItemKind, ItemRef};
   error = crate::client::LibraryErrorReply,
   error_variant = ErrorReply,
 )]
-/// Payload for the `browse` request: page through a folder in the library tree, or the root
-/// menu when `node_id` is `None`. Root-level results are cached by the daemon for up to 5
-/// minutes, so a fresh call immediately after a library change on the gateway side may still
-/// return the previous shelf layout.
+/// Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.
 pub struct LibraryBrowse {
-  /// Folder to descend into, from a prior result's `BrowseFolder::node_id`. `None` browses the root.
+  /// A `nodeId` from an earlier result. Null browses the root.
   pub node_id: Option<String>,
-  /// Requested page size; the daemon clamps this to 100 regardless of the value sent.
+  /// Capped at 100.
   pub limit: u32,
   pub offset: u32,
-  /// Root only: cap on the number of folders returned. `None` returns every folder.
+  /// Root only. Null returns every folder.
   #[serde(default)]
   pub sections: Option<u32>,
-  /// Root only: preview children per folder. `None` is the gateway default; `0` skips preview
-  /// hydration entirely and returns a cheap index of node ids, titles, and totals.
+  /// Root only. Preview children per folder; `0` returns ids and titles only.
   #[serde(default)]
   pub preview: Option<u32>,
 }
@@ -49,18 +45,15 @@ pub struct LibraryBrowse {
   error = crate::client::LibraryErrorReply,
   error_variant = ErrorReply,
 )]
-/// Payload for the `search` request: free-text search across the connected gateway's library.
 pub struct LibrarySearch {
   pub query: String,
-  /// Restrict results to these item kinds. `None` searches every kind.
+  /// Null searches every kind.
   pub kinds: Option<Vec<ItemKind>>,
-  /// Requested page size; the daemon clamps this to 100 regardless of the value sent.
+  /// Capped at 100.
   pub limit: u32,
   pub offset: u32,
 }
 
-/// Recommendations seeded by up to 5 items. Spotify hard-caps at 5
-/// combined seeds across tracks/artists/genres.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
@@ -75,11 +68,11 @@ pub struct LibrarySearch {
   error_variant = ErrorReply,
 )]
 pub struct LibraryRecommendations {
-  /// Seed items; the daemon truncates this to the first 5 regardless of the count sent.
+  /// Only the first 5 are used.
   pub seeds: Vec<ItemRef>,
-  /// Restrict results to this item kind. `None` lets the gateway choose based on the seeds.
+  /// Null lets the companion app choose from the seeds.
   pub kind: Option<ItemKind>,
-  /// Requested page size; the daemon clamps this to 100 regardless of the value sent.
+  /// Capped at 100.
   pub limit: u32,
   pub offset: u32,
 }
@@ -97,9 +90,7 @@ pub struct LibraryRecommendations {
   error = crate::client::LibraryErrorReply,
   error_variant = ErrorReply,
 )]
-/// Payload for the `resolveContext` request: turn a context uri into something renderable.
-/// The uri a webapp holds is usually `PlayerState::context`, so this is what backs a
-/// "playing from <playlist>" line without having to browse for the containing entity.
+/// Resolves a context uri, such as `PlayerState.context.uri`, into a name and an artwork id.
 pub struct LibraryResolveContext {
   pub uri: String,
 }
@@ -117,16 +108,14 @@ pub struct LibraryResolveContext {
   error = crate::client::LibraryErrorReply,
   error_variant = ErrorReply,
 )]
-/// Payload for the `favoritesList` request: page through the user's saved/liked library items,
-/// mixed across kinds.
+/// Pages the user's saved items, mixed across kinds.
 pub struct LibraryFavoritesList {
-  /// Requested page size; the daemon clamps this to 100 regardless of the value sent.
+  /// Capped at 100.
   pub limit: u32,
   pub offset: u32,
 }
 
-/// Batch "is each of these favorited?" lookup. Reply `liked` is
-/// index-aligned with the request `uris`, capped at 50 per call.
+/// Checks which uris the user has saved. The reply's `liked` lines up with `uris`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
@@ -141,12 +130,10 @@ pub struct LibraryFavoritesList {
   error_variant = ErrorReply,
 )]
 pub struct LibraryFavoritesContains {
-  /// Uris to check; the daemon truncates this to the first 50 regardless of the count sent.
+  /// Only the first 50 are used.
   pub uris: Vec<String>,
 }
 
-/// Payload for the `favoritesToggle` command: flip `item`'s favorited state (liked becomes
-/// unliked and vice versa). Fire-and-forget; the result surfaces as a `FavoriteChanged` event.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -154,8 +141,6 @@ pub struct FavoritesToggle {
   pub item: ItemRef,
 }
 
-/// Payload for the `favoritesSet` command: set `item`'s favorited state explicitly. Fire-and-
-/// forget; the result surfaces as a `FavoriteChanged` event.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -164,8 +149,6 @@ pub struct FavoritesSet {
   pub liked: bool,
 }
 
-/// Bulk favorites mutation. Webapps observing partial success listen
-/// for `FavoriteChanged` events.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -178,14 +161,7 @@ pub struct FavoritesSetMany {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon library surface: browse/search/recommend across the connected gateway's
-/// library, resolve a context uri, and read or mutate favorites. `Browse`, `Search`,
-/// `Recommendations`, `ResolveContext`, `FavoritesList`, and `FavoritesContains` are
-/// request/reply and fail with
-/// `LibraryErrorReply` when no gateway is connected. `FavoritesToggle`, `FavoritesSet`, and
-/// `FavoritesSetMany` are fire-and-forget commands with no completion reply; if no gateway is
-/// connected they are silently dropped, and on success their effect surfaces later as a
-/// `FavoriteChanged` event.
+/// Browses, searches, and edits the music library on the connected phone.
 pub enum ClientToBridgeLibraryMsg {
   #[bridge_request]
   Browse(LibraryBrowse),

@@ -19,6 +19,8 @@ const NEXT_WAKEWORD = '99.0.0';
 const WAKEWORD_FILE = 'hey_bridgething.btww';
 const BUILTIN = 'hub';
 
+const STORE_APP_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
+
 const ROOT = join(dirname(Bun.main), '..', '..');
 const DEV_DAEMON = join(ROOT, 'scripts', 'dev-daemon.sh');
 const DEV_DIR = process.env.BRIDGETHING_DEV_DIR ?? join(ROOT, '.e2e');
@@ -100,6 +102,39 @@ function manifest(mode: Mode) {
   };
 }
 
+const SHOT = join(ROOT, 'site', 'public', 'screenshots', 'device-calendar.png');
+
+function storeCatalog(host: string) {
+  return {
+    schema: 'catalog.v1',
+    updated_at: '2026-01-01T00:00:00Z',
+    repo: { name: 'e2e fixtures', description: 'store fixtures for the e2e lane', homepage: null, icon: null },
+    apps: [
+      {
+        id: STORE_APP_ID,
+        name: 'Fixture Calendar',
+        description: 'A store fixture with a screenshot.',
+        author: 'e2e',
+        icon: null,
+        screenshots: [`http://${host}/store/shot.png`, `http://${host}/store/shot.png?two`],
+        homepage: null,
+        source: 'https://github.com/JoeyEamigh/bridgething',
+        versions: [
+          {
+            version: '1.0.0',
+            released_at: '2026-01-01T00:00:00Z',
+            download: { url: `http://${host}/store/app.zip`, ...digestOf(artifacts.webapp) },
+            permissions: [],
+            min_libbridgething_version: '0.4.0',
+            changelog: null,
+          },
+        ],
+      },
+    ],
+    recommended_sources: [],
+  };
+}
+
 function bytes(body: Uint8Array): Response {
   return new Response(body, {
     headers: {
@@ -145,6 +180,16 @@ Bun.serve({
 
     if (pathname === '/companion.json') return Response.json(companion);
 
+    if (pathname === '/store/catalog.json') {
+      return Response.json(storeCatalog(new URL(request.url).host), {
+        headers: { 'access-control-allow-origin': '*' },
+      });
+    }
+    if (pathname === '/store/shot.png') {
+      return new Response(Bun.file(SHOT), { headers: { 'content-type': 'image/png' } });
+    }
+    if (pathname === '/store/app.zip') return bytes(artifacts.webapp);
+
     const rooted = /^\/m\/([a-z]+)(\/.*)?$/.exec(pathname);
     if (rooted) {
       const name = rooted[1];
@@ -172,4 +217,6 @@ Bun.serve({
   },
 });
 
-console.log(`[e2e-fixtures] companion v${version} + ota roots /m/{${MODES.join('|')}|bounce} on :${port}`);
+console.log(
+  `[e2e-fixtures] companion v${version} + ota roots /m/{${MODES.join('|')}|bounce} + store /store/catalog.json on :${port}`,
+);

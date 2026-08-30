@@ -1,4 +1,4 @@
-import { aggregate, type CatalogAppListing, type InstalledWebapp } from './resolve.ts';
+import { aggregate, type CatalogAppListing, type ExtensionOffering, type InstalledWebapp } from './resolve.ts';
 import type { MergedCatalog } from './sources.ts';
 import type { InstallCount, SourceCatalog } from './types.ts';
 
@@ -15,6 +15,7 @@ export function blendStoreListings(args: {
   deviceLibVersion: string | null;
   installs: InstallCount[];
   subscribed: string[];
+  extensions: ExtensionOffering;
 }): StoreListings {
   const subscribed = new Set(args.subscribed);
   const extras = args.merged.filter(entry => !subscribed.has(entry.url));
@@ -32,6 +33,7 @@ export function blendStoreListings(args: {
     installed: args.installed,
     deviceLibVersion: args.deviceLibVersion,
     installs: args.installs,
+    extensions: args.extensions,
   });
 
   const sourceNames: Record<string, string> = {};

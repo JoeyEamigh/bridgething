@@ -2,9 +2,7 @@ use bridgething_macros::{BridgeEnum, WireRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Webapp request: read one config value for the currently active webapp,
-/// as most recently set by the gateway. This surface is read-only; only
-/// the gateway can write config.
+/// Returns one config value for the active webapp.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -19,8 +17,7 @@ pub struct ConfigGet {
   pub key: String,
 }
 
-/// Marker request: webapp asks for every config entry the gateway has
-/// set for the currently active webapp.
+/// Returns every config value set for the active webapp.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
   direction = ClientToBridge,
@@ -36,12 +33,7 @@ pub struct ConfigList;
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon read-only config surface (`client.config`). Config
-/// values are user-tunable settings the gateway pushes down for the
-/// active webapp; webapps cannot write here. `Get` reads a single key,
-/// `List` reads every set key. The daemon also broadcasts
-/// `BridgeToClientConfigMsg::Changed` whenever the gateway writes a
-/// value, so most webapps don't need to poll `Get`.
+/// Reads the settings the companion app holds for the active webapp.
 pub enum ClientToBridgeConfigMsg {
   #[bridge_request]
   Get(ConfigGet),

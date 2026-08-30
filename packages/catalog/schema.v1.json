@@ -5,7 +5,13 @@
   "description": "A federated catalog of installable webapps for a bridgething-flashed Spotify Car Thing. Served at any source URL; the companion aggregates entries across subscribed sources.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "updated_at", "repo", "apps", "recommended_sources"],
+  "required": [
+    "schema",
+    "updated_at",
+    "repo",
+    "apps",
+    "recommended_sources"
+  ],
   "properties": {
     "$schema": {
       "type": "string",
@@ -66,7 +72,12 @@
     "Repo": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "description", "homepage", "icon"],
+      "required": [
+        "name",
+        "description",
+        "homepage",
+        "icon"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -80,11 +91,17 @@
           "maxLength": 300
         },
         "homepage": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri"
         },
         "icon": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri",
           "description": "Square source icon for the companion's source list."
         }
@@ -92,8 +109,18 @@
     },
     "AppEntry": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "name", "description", "author", "icon", "homepage", "source", "versions"],
+      "additionalProperties": true,
+      "description": "One installable webapp. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.",
+      "required": [
+        "id",
+        "name",
+        "description",
+        "author",
+        "icon",
+        "homepage",
+        "source",
+        "versions"
+      ],
       "properties": {
         "id": {
           "$ref": "#/$defs/Uuid"
@@ -116,16 +143,35 @@
           "maxLength": 100
         },
         "icon": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri",
           "description": "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then."
         },
+        "screenshots": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "description": "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array."
+        },
         "homepage": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri"
         },
         "source": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri",
           "description": "Repository or source URL, for users who want to check it themselves."
         },
@@ -141,7 +187,8 @@
     },
     "AppVersion": {
       "type": "object",
-      "additionalProperties": false,
+      "additionalProperties": true,
+      "description": "One published version. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.",
       "required": [
         "version",
         "released_at",
@@ -171,26 +218,63 @@
           "description": "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate."
         },
         "role": {
-          "enum": ["standard", "launcher"],
+          "enum": [
+            "standard",
+            "launcher"
+          ],
           "description": "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard."
         },
         "provides_overlay": {
           "type": "boolean",
           "description": "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not."
         },
+        "extension": {
+          "$ref": "#/$defs/Extension"
+        },
         "min_libbridgething_version": {
           "$ref": "#/$defs/Semver"
         },
         "changelog": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Markdown changelog for this version."
+        }
+      }
+    },
+    "Extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktop",
+        "permissions"
+      ],
+      "description": "A native extension shipped inside the bundle, run by a host that has an extension host. Absent means the version is webapp-only.",
+      "properties": {
+        "desktop": {
+          "const": true,
+          "description": "The desktop companion runs this extension. Phones have no extension host and ignore the block."
+        },
+        "permissions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Deno permission descriptors the extension is granted verbatim: all, net[:host[:port]], read[:path], write[:path], run[:binary], env[:VAR], sys[:kind], ffi[:path]. Shown before install, never a gate."
         }
       }
     },
     "Download": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url", "size", "sha256"],
+      "required": [
+        "url",
+        "size",
+        "sha256"
+      ],
       "properties": {
         "url": {
           "type": "string",
@@ -210,7 +294,12 @@
     "RecommendedSource": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "url", "description", "attested"],
+      "required": [
+        "name",
+        "url",
+        "description",
+        "attested"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -223,7 +312,10 @@
           "description": "A catalog.v1 manifest URL the companion can subscribe to."
         },
         "description": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "maxLength": 300
         },
         "attested": {

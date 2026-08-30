@@ -4,8 +4,7 @@ use ts_rs::TS;
 
 use crate::{GeoError, Position};
 
-/// Watch handle. Webapps pass the token back as
-/// `ClientToBridgeGeoMsg::Unwatch { token }` to release the watch.
+/// Pass `token` to `unwatch` to stop the watch.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -16,7 +15,6 @@ pub struct GeoWatchReply {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Response to `geo.getOnce`.
 pub struct GeoGetOnceReply {
   pub position: Position,
 }
@@ -24,7 +22,6 @@ pub struct GeoGetOnceReply {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Error response to a failed `geo.watch` or `geo.getOnce` request.
 pub struct GeoErrorReply {
   pub error: GeoError,
 }
@@ -34,8 +31,8 @@ pub struct GeoErrorReply {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp location surface: the `Position` stream a watch
-/// produces, plus replies to `geo.watch` and `geo.getOnce`.
+/// Position fixes from the connected phone. `watch` subscribes and `getOnce` returns a single fix.
+/// Declare the `geo` permission in the webapp manifest, or both fail.
 pub enum BridgeToClientGeoMsg {
   #[bridge_event]
   Position(Position),

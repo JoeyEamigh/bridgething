@@ -2,7 +2,7 @@ import type * as api from '@bridgething/companion-types';
 import type { Endpoint, Topic } from '@bridgething/ui';
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 
-import type { DesktopSession, KnownDevice } from '../desktop.ts';
+import type { DesktopSession, ExtensionEntry, KnownDevice } from '../desktop.ts';
 import { keyed, resource, type Store } from './resource.ts';
 
 let attached: DesktopSession | null = null;
@@ -21,6 +21,7 @@ export const catalogSources = resource<string[]>([], () => bound().catalogSource
 export const knownDevices = resource<KnownDevice[]>([], () => bound().knownDevices());
 export const selectedDevice = resource<string | null>(null, () => bound().selectedDevice());
 export const debugLogging = resource(false, () => bound().debugLogging());
+export const extensions = resource<ExtensionEntry[]>([], () => bound().extensions());
 
 export const webapps = resource<api.WebappInfo[]>([], () => bound().webapps());
 export const webappActive = resource<api.ActiveWebapp | null>(null, () => bound().webappActive());
@@ -108,6 +109,7 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   'ota-available': [snapshot],
   'ota-poll': [snapshot],
   logs: [logStreaming, { refresh: logs.refreshAll }],
+  extensions: [extensions],
 };
 
 export async function seed(session: DesktopSession): Promise<void> {
@@ -122,6 +124,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     defaultGateway.refresh(),
     knownDevices.refresh(),
     selectedDevice.refresh(),
+    extensions.refresh(),
   ]);
 
   void Promise.all([

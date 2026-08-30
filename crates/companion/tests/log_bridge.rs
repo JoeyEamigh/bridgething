@@ -47,6 +47,7 @@ async fn a_core_tracing_line_reaches_the_host_log_sink() {
     transfer_policy: None,
     connectivity: None,
     device_waker: None,
+    extensions: None,
   };
   let _session = Session::new(
     CompanionConfig {

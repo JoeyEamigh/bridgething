@@ -72,11 +72,10 @@ impl KnownDevices {
     });
   }
 
-  pub fn forget(&self, id: &str) -> bool {
+  pub fn forget(&self, id: &str) -> Option<KnownDevice> {
     self.0.write(|held| {
-      let before = held.len();
-      held.retain(|known| known.id != id);
-      held.len() != before
+      let seat = held.iter().position(|known| known.id == id)?;
+      Some(held.remove(seat))
     })
   }
 }
@@ -208,9 +207,9 @@ mod tests {
     let dir = tempfile::tempdir().expect("a scratch directory");
 
     let devices = KnownDevices::open(dir.path());
-    assert!(!devices.forget(SERIAL), "there is nothing to forget yet");
+    assert!(devices.forget(SERIAL).is_none(), "there is nothing to forget yet");
     devices.seen(SERIAL, URL, None);
-    assert!(devices.forget(SERIAL));
+    assert_eq!(devices.forget(SERIAL).map(|gone| gone.url), Some(URL.to_owned()));
 
     assert!(
       KnownDevices::open(dir.path()).list().is_empty(),

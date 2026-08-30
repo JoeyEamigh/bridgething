@@ -5,6 +5,28 @@ import type { InstallOutcome, OtaOutcome } from './tauri-session.ts';
 
 export type KnownDevice = { id: string; url: string; name: string; lastConnectedAt: string | null };
 
+export type ExtensionStatus =
+  | { kind: 'starting' }
+  | { kind: 'running' }
+  | { kind: 'crashed'; reason: string }
+  | { kind: 'stopped' }
+  | { kind: 'runtime-missing'; reason: string }
+  | { kind: 'refused'; reason: string };
+
+export type BundleExtension = { permissions: string[]; api: number };
+
+export type ExtensionEntry = {
+  id: string;
+  name: string;
+  version: string;
+  permissions: string[];
+  api: number;
+  enabled: boolean;
+  dataDir: string;
+  status: ExtensionStatus;
+  orphaned: boolean;
+};
+
 export interface DesktopSession extends CompanionSession {
   readonly host: 'desktop';
 
@@ -35,7 +57,21 @@ export interface DesktopSession extends CompanionSession {
   exportLogs(path: string, body: string): Promise<void>;
 
   otaPushDaemon(artifact: string): Promise<OtaOutcome>;
-  otaInstallWebapp(bundle: string, provenance?: string): Promise<InstallOutcome>;
+  otaInstallWebapp(bundle: string, provenance?: string, confirmed?: string[]): Promise<InstallOutcome>;
+  webappBundleExtension(bundle: string): Promise<BundleExtension | null>;
+
+  installWebappFromUrl(
+    url: string,
+    provenance?: string,
+    expected?: api.ArtifactDigest | null,
+    confirmed?: string[],
+  ): Promise<api.WebappInfo>;
+
+  extensions(): Promise<ExtensionEntry[]>;
+  setExtensionEnabled(id: string, enabled: boolean): Promise<void>;
+  removeExtension(id: string): Promise<void>;
+  openExtensionData(id: string): Promise<void>;
+  retryExtensionRuntime(): Promise<void>;
 
   setDeviceResumeTarget(target: api.ResumeTarget): Promise<void>;
 }

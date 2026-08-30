@@ -12,6 +12,11 @@ import { Press } from '../components/Press';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { Spinner } from '../components/Spinner';
 import { getSession } from '../lib/session';
+import {
+  settingsAuthorize,
+  settingsFetch,
+  type FetchVerbRequest,
+} from '../lib/settings-bridge';
 import { TEXT } from '../lib/theme';
 import { useWebapps } from '../lib/webapps';
 import type { AppsScreenProps } from '../navigation';
@@ -124,6 +129,12 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
         case 'doc.delete':
           await session.deleteWebappDoc(deviceId, id, key);
           return { key, value: null };
+        case 'fetch':
+          return settingsFetch(payload as FetchVerbRequest);
+        case 'auth.authorize':
+          return settingsAuthorize(
+            typeof payload.url === 'string' ? payload.url : '',
+          );
         default:
           throw new Error(`unknown settings bridge verb: ${verb}`);
       }

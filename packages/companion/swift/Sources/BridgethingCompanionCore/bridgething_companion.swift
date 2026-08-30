@@ -3498,6 +3498,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func currentWebapp(deviceId: String) async throws  -> ActiveWebapp?
     
+    func defaultResumeTarget()  -> ResumeTarget
+    
     func deleteWebappConfigField(deviceId: String, id: String, key: String) async throws 
     
     func deleteWebappDoc(deviceId: String, id: String, key: String) async throws 
@@ -3522,7 +3524,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func installWebapp(deviceId: String, archivePath: String, provenance: String?) async throws  -> WebappInfo
     
-    func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?) async throws  -> WebappInfo
+    func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink?) async throws  -> WebappInfo
     
     func listWebappConfig(deviceId: String, id: String) async throws  -> [ConfigEntry]
     
@@ -3778,6 +3780,15 @@ open func currentWebapp(deviceId: String)async throws  -> ActiveWebapp?  {
         )
 }
     
+open func defaultResumeTarget() -> ResumeTarget  {
+    return try!  FfiConverterTypeResumeTarget_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_default_resume_target(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func deleteWebappConfigField(deviceId: String, id: String, key: String)async throws   {
     return
         try  await uniffiRustCallAsync(
@@ -3968,12 +3979,12 @@ open func installWebapp(deviceId: String, archivePath: String, provenance: Strin
         )
 }
     
-open func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?)async throws  -> WebappInfo  {
+open func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(url),FfiConverterOptionTypeArtifactDigest.lower(expected),FfiConverterOptionString.lower(provenance)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(url),FfiConverterOptionTypeArtifactDigest.lower(expected),FfiConverterOptionString.lower(provenance),FfiConverterOptionTypeWebappBundleSink.lower(sink)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -5067,6 +5078,593 @@ public func FfiConverterTypeEarconSink_lift(_ handle: UInt64) throws -> EarconSi
 #endif
 public func FfiConverterTypeEarconSink_lower(_ value: EarconSink) -> UInt64 {
     return FfiConverterTypeEarconSink.lower(value)
+}
+
+
+
+
+
+
+/**
+ * The seam a native extension host plugs into. Desktop supplies one; phones
+ * pass `None` and every extension surface stays unsupported there.
+ */
+public protocol ExtensionHost: AnyObject, Sendable {
+    
+    func start(inbox: ExtensionHostInbox) 
+    
+    func stop() 
+    
+    func deliver(device: String, webapp: String, message: ExtensionMessage) 
+    
+    /**
+     * `webapps` is what `config` was actually read for: everything running when
+     * the link itself came up, or the extensions that just started and missed
+     * that announce. A host must not tell an extension outside that list the
+     * device connected, and must not tell one inside it twice without a
+     * disconnect in between.
+     */
+    func deviceConnected(device: String, name: String, config: [ExtensionConfigEntry], webapps: [String]) 
+    
+    func deviceDisconnected(device: String) 
+    
+    func deviceActive(device: String, webapp: String, active: Bool) 
+    
+    func configChanged(device: String, webapp: String, key: String, value: String?) 
+    
+}
+/**
+ * The seam a native extension host plugs into. Desktop supplies one; phones
+ * pass `None` and every extension surface stays unsupported there.
+ */
+open class ExtensionHostImpl: ExtensionHost, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_extensionhost(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_extensionhost(handle, $0) }
+    }
+
+    
+
+    
+open func start(inbox: ExtensionHostInbox)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_start(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeExtensionHostInbox_lower(inbox),uniffiCallStatus
+    )
+}
+}
+    
+open func stop()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_stop(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func deliver(device: String, webapp: String, message: ExtensionMessage)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_deliver(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),
+        FfiConverterString.lower(webapp),
+        FfiConverterTypeExtensionMessage_lower(message),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * `webapps` is what `config` was actually read for: everything running when
+     * the link itself came up, or the extensions that just started and missed
+     * that announce. A host must not tell an extension outside that list the
+     * device connected, and must not tell one inside it twice without a
+     * disconnect in between.
+     */
+open func deviceConnected(device: String, name: String, config: [ExtensionConfigEntry], webapps: [String])  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_device_connected(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),
+        FfiConverterString.lower(name),
+        FfiConverterSequenceTypeExtensionConfigEntry.lower(config),
+        FfiConverterSequenceString.lower(webapps),uniffiCallStatus
+    )
+}
+}
+    
+open func deviceDisconnected(device: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_device_disconnected(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),uniffiCallStatus
+    )
+}
+}
+    
+open func deviceActive(device: String, webapp: String, active: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_device_active(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),
+        FfiConverterString.lower(webapp),
+        FfiConverterBool.lower(active),uniffiCallStatus
+    )
+}
+}
+    
+open func configChanged(device: String, webapp: String, key: String, value: String?)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhost_config_changed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),
+        FfiConverterString.lower(webapp),
+        FfiConverterString.lower(key),
+        FfiConverterOptionString.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceExtensionHost {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceExtensionHost = UniffiVTableCallbackInterfaceExtensionHost(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeExtensionHost.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface ExtensionHost: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeExtensionHost.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface ExtensionHost: handle missing in uniffiClone")
+            }
+        },
+        start: { (
+            uniffiHandle: UInt64,
+            inbox: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.start(
+                     inbox: try FfiConverterTypeExtensionHostInbox_lift(inbox)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        stop: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.stop(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        deliver: { (
+            uniffiHandle: UInt64,
+            device: RustBuffer,
+            webapp: RustBuffer,
+            message: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.deliver(
+                     device: try FfiConverterString.lift(device),
+                     webapp: try FfiConverterString.lift(webapp),
+                     message: try FfiConverterTypeExtensionMessage_lift(message)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        deviceConnected: { (
+            uniffiHandle: UInt64,
+            device: RustBuffer,
+            name: RustBuffer,
+            config: RustBuffer,
+            webapps: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.deviceConnected(
+                     device: try FfiConverterString.lift(device),
+                     name: try FfiConverterString.lift(name),
+                     config: try FfiConverterSequenceTypeExtensionConfigEntry.lift(config),
+                     webapps: try FfiConverterSequenceString.lift(webapps)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        deviceDisconnected: { (
+            uniffiHandle: UInt64,
+            device: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.deviceDisconnected(
+                     device: try FfiConverterString.lift(device)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        deviceActive: { (
+            uniffiHandle: UInt64,
+            device: RustBuffer,
+            webapp: RustBuffer,
+            active: Int8,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.deviceActive(
+                     device: try FfiConverterString.lift(device),
+                     webapp: try FfiConverterString.lift(webapp),
+                     active: try FfiConverterBool.lift(active)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        configChanged: { (
+            uniffiHandle: UInt64,
+            device: RustBuffer,
+            webapp: RustBuffer,
+            key: RustBuffer,
+            value: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeExtensionHost.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.configChanged(
+                     device: try FfiConverterString.lift(device),
+                     webapp: try FfiConverterString.lift(webapp),
+                     key: try FfiConverterString.lift(key),
+                     value: try FfiConverterOptionString.lift(value)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceExtensionHost> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceExtensionHost>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitExtensionHost() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_extensionhost(UniffiCallbackInterfaceExtensionHost.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtensionHost: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<ExtensionHost>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = ExtensionHost
+
+    public static func lift(_ handle: UInt64) throws -> ExtensionHost {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return ExtensionHostImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: ExtensionHost) -> UInt64 {
+         if let rustImpl = value as? ExtensionHostImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtensionHost {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ExtensionHost, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionHost_lift(_ handle: UInt64) throws -> ExtensionHost {
+    return try FfiConverterTypeExtensionHost.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionHost_lower(_ value: ExtensionHost) -> UInt64 {
+    return FfiConverterTypeExtensionHost.lower(value)
+}
+
+
+
+
+
+
+public protocol ExtensionHostInboxProtocol: AnyObject, Sendable {
+    
+    func runningChanged(webapps: [String]) 
+    
+    func sendToDevice(device: String?, webapp: String, message: ExtensionMessage) 
+    
+}
+open class ExtensionHostInbox: ExtensionHostInboxProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_extensionhostinbox(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_extensionhostinbox(handle, $0) }
+    }
+
+    
+
+    
+open func runningChanged(webapps: [String])  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhostinbox_running_changed(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(webapps),uniffiCallStatus
+    )
+}
+}
+    
+open func sendToDevice(device: String?, webapp: String, message: ExtensionMessage)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_extensionhostinbox_send_to_device(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(device),
+        FfiConverterString.lower(webapp),
+        FfiConverterTypeExtensionMessage_lower(message),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtensionHostInbox: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ExtensionHostInbox
+
+    public static func lift(_ handle: UInt64) throws -> ExtensionHostInbox {
+        return ExtensionHostInbox(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ExtensionHostInbox) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtensionHostInbox {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ExtensionHostInbox, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionHostInbox_lift(_ handle: UInt64) throws -> ExtensionHostInbox {
+    return try FfiConverterTypeExtensionHostInbox.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionHostInbox_lower(_ value: ExtensionHostInbox) -> UInt64 {
+    return FfiConverterTypeExtensionHostInbox.lower(value)
 }
 
 
@@ -11803,6 +12401,214 @@ public func FfiConverterTypeVolumeMonitor_lower(_ value: VolumeMonitor) -> UInt6
 
 
 
+/**
+ * Handed the downloaded bundle once it has verified and landed on the device,
+ * while the artifact is still on disk. A host that keeps something out of the
+ * zip hooks in here rather than composing the fetch and the install itself.
+ */
+public protocol WebappBundleSink: AnyObject, Sendable {
+    
+    func installed(bundle: String) 
+    
+}
+/**
+ * Handed the downloaded bundle once it has verified and landed on the device,
+ * while the artifact is still on disk. A host that keeps something out of the
+ * zip hooks in here rather than composing the fetch and the install itself.
+ */
+open class WebappBundleSinkImpl: WebappBundleSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_webappbundlesink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_webappbundlesink(handle, $0) }
+    }
+
+    
+
+    
+open func installed(bundle: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_webappbundlesink_installed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(bundle),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceWebappBundleSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceWebappBundleSink = UniffiVTableCallbackInterfaceWebappBundleSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeWebappBundleSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface WebappBundleSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeWebappBundleSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface WebappBundleSink: handle missing in uniffiClone")
+            }
+        },
+        installed: { (
+            uniffiHandle: UInt64,
+            bundle: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeWebappBundleSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.installed(
+                     bundle: try FfiConverterString.lift(bundle)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceWebappBundleSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceWebappBundleSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitWebappBundleSink() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_webappbundlesink(UniffiCallbackInterfaceWebappBundleSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWebappBundleSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<WebappBundleSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = WebappBundleSink
+
+    public static func lift(_ handle: UInt64) throws -> WebappBundleSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return WebappBundleSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: WebappBundleSink) -> UInt64 {
+         if let rustImpl = value as? WebappBundleSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WebappBundleSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: WebappBundleSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappBundleSink_lift(_ handle: UInt64) throws -> WebappBundleSink {
+    return try FfiConverterTypeWebappBundleSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappBundleSink_lower(_ value: WebappBundleSink) -> UInt64 {
+    return FfiConverterTypeWebappBundleSink.lower(value)
+}
+
+
+
+
+
+
 public protocol WsInboxProtocol: AnyObject, Sendable {
     
     func onBinary(id: String, bytes: Data) 
@@ -13081,10 +13887,11 @@ public struct CompanionBackends {
     public var transferPolicy: TransferPolicy?
     public var connectivity: ConnectivityMonitor?
     public var deviceWaker: DeviceWaker?
+    public var extensions: ExtensionHost?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeMonitor? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil) {
+    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeMonitor? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
         self.link = link
         self.host = host
         self.http = http
@@ -13105,6 +13912,7 @@ public struct CompanionBackends {
         self.transferPolicy = transferPolicy
         self.connectivity = connectivity
         self.deviceWaker = deviceWaker
+        self.extensions = extensions
     }
 
     
@@ -13142,7 +13950,8 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
                 modelValidator: FfiConverterOptionTypeModelArtifactValidator.read(from: &buf), 
                 transferPolicy: FfiConverterOptionTypeTransferPolicy.read(from: &buf), 
                 connectivity: FfiConverterOptionTypeConnectivityMonitor.read(from: &buf), 
-                deviceWaker: FfiConverterOptionTypeDeviceWaker.read(from: &buf)
+                deviceWaker: FfiConverterOptionTypeDeviceWaker.read(from: &buf), 
+                extensions: FfiConverterOptionTypeExtensionHost.read(from: &buf)
         )
     }
 
@@ -13167,6 +13976,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
         FfiConverterOptionTypeTransferPolicy.write(value.transferPolicy, into: &buf)
         FfiConverterOptionTypeConnectivityMonitor.write(value.connectivity, into: &buf)
         FfiConverterOptionTypeDeviceWaker.write(value.deviceWaker, into: &buf)
+        FfiConverterOptionTypeExtensionHost.write(value.extensions, into: &buf)
     }
 }
 
@@ -13820,13 +14630,25 @@ public struct DeviceWebappsEntry: Equatable, Hashable {
     public var deviceId: String
     public var webapps: [WebappInfo]
     public var active: ActiveWebapp?
+    /**
+     * Whether this is a full inventory read off the device. Install and
+     * active-webapp pushes can land before the listing does, and an entry that
+     * has never been listed says nothing about what the device holds.
+     */
+    public var listed: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(deviceId: String, webapps: [WebappInfo], active: ActiveWebapp?) {
+    public init(deviceId: String, webapps: [WebappInfo], active: ActiveWebapp?, 
+        /**
+         * Whether this is a full inventory read off the device. Install and
+         * active-webapp pushes can land before the listing does, and an entry that
+         * has never been listed says nothing about what the device holds.
+         */listed: Bool) {
         self.deviceId = deviceId
         self.webapps = webapps
         self.active = active
+        self.listed = listed
     }
 
     
@@ -13847,7 +14669,8 @@ public struct FfiConverterTypeDeviceWebappsEntry: FfiConverterRustBuffer {
             try DeviceWebappsEntry(
                 deviceId: FfiConverterString.read(from: &buf), 
                 webapps: FfiConverterSequenceTypeWebappInfo.read(from: &buf), 
-                active: FfiConverterOptionTypeActiveWebapp.read(from: &buf)
+                active: FfiConverterOptionTypeActiveWebapp.read(from: &buf), 
+                listed: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -13855,6 +14678,7 @@ public struct FfiConverterTypeDeviceWebappsEntry: FfiConverterRustBuffer {
         FfiConverterString.write(value.deviceId, into: &buf)
         FfiConverterSequenceTypeWebappInfo.write(value.webapps, into: &buf)
         FfiConverterOptionTypeActiveWebapp.write(value.active, into: &buf)
+        FfiConverterBool.write(value.listed, into: &buf)
     }
 }
 
@@ -13925,6 +14749,125 @@ public func FfiConverterTypeDocEntry_lift(_ buf: RustBuffer) throws -> DocEntry 
 #endif
 public func FfiConverterTypeDocEntry_lower(_ value: DocEntry) -> RustBuffer {
     return FfiConverterTypeDocEntry.lower(value)
+}
+
+
+/**
+ * One config value the host hands to the extension owning `webapp`.
+ */
+public struct ExtensionConfigEntry: Equatable, Hashable {
+    public var webapp: String
+    public var key: String
+    public var value: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(webapp: String, key: String, value: String) {
+        self.webapp = webapp
+        self.key = key
+        self.value = value
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ExtensionConfigEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtensionConfigEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtensionConfigEntry {
+        return
+            try ExtensionConfigEntry(
+                webapp: FfiConverterString.read(from: &buf), 
+                key: FfiConverterString.read(from: &buf), 
+                value: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExtensionConfigEntry, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.webapp, into: &buf)
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionConfigEntry_lift(_ buf: RustBuffer) throws -> ExtensionConfigEntry {
+    return try FfiConverterTypeExtensionConfigEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionConfigEntry_lower(_ value: ExtensionConfigEntry) -> RustBuffer {
+    return FfiConverterTypeExtensionConfigEntry.lower(value)
+}
+
+
+/**
+ * The extension block a webapp declares, as every surface that renders an
+ * installed app sees it. Permissions are the plain Deno descriptor strings.
+ */
+public struct ExtensionInfo: Equatable, Hashable {
+    public var permissions: [String]
+    public var api: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(permissions: [String], api: UInt32) {
+        self.permissions = permissions
+        self.api = api
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ExtensionInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtensionInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtensionInfo {
+        return
+            try ExtensionInfo(
+                permissions: FfiConverterSequenceString.read(from: &buf), 
+                api: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExtensionInfo, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.permissions, into: &buf)
+        FfiConverterUInt32.write(value.api, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionInfo_lift(_ buf: RustBuffer) throws -> ExtensionInfo {
+    return try FfiConverterTypeExtensionInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionInfo_lower(_ value: ExtensionInfo) -> RustBuffer {
+    return FfiConverterTypeExtensionInfo.lower(value)
 }
 
 
@@ -17569,10 +18512,11 @@ public struct WebappInfo: Equatable, Hashable {
     public var overlayHash: String?
     public var config: [ConfigField]
     public var permissions: [String]
+    public var `extension`: ExtensionInfo?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, name: String, source: WebappSource, role: WebappRole, version: String, provenance: String?, description: String?, iconHash: String?, settingsHash: String?, overlayHash: String?, config: [ConfigField], permissions: [String]) {
+    public init(id: String, name: String, source: WebappSource, role: WebappRole, version: String, provenance: String?, description: String?, iconHash: String?, settingsHash: String?, overlayHash: String?, config: [ConfigField], permissions: [String], `extension`: ExtensionInfo?) {
         self.id = id
         self.name = name
         self.source = source
@@ -17585,6 +18529,7 @@ public struct WebappInfo: Equatable, Hashable {
         self.overlayHash = overlayHash
         self.config = config
         self.permissions = permissions
+        self.`extension` = `extension`
     }
 
     
@@ -17614,7 +18559,8 @@ public struct FfiConverterTypeWebappInfo: FfiConverterRustBuffer {
                 settingsHash: FfiConverterOptionString.read(from: &buf), 
                 overlayHash: FfiConverterOptionString.read(from: &buf), 
                 config: FfiConverterSequenceTypeConfigField.read(from: &buf), 
-                permissions: FfiConverterSequenceString.read(from: &buf)
+                permissions: FfiConverterSequenceString.read(from: &buf), 
+                extension: FfiConverterOptionTypeExtensionInfo.read(from: &buf)
         )
     }
 
@@ -17631,6 +18577,7 @@ public struct FfiConverterTypeWebappInfo: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.overlayHash, into: &buf)
         FfiConverterSequenceTypeConfigField.write(value.config, into: &buf)
         FfiConverterSequenceString.write(value.permissions, into: &buf)
+        FfiConverterOptionTypeExtensionInfo.write(value.`extension`, into: &buf)
     }
 }
 
@@ -19138,6 +20085,92 @@ public func FfiConverterTypeEndCallAction_lower(_ value: EndCallAction) -> RustB
 
 
 
+/**
+ * A forward payload across the FFI. `Json` carries the serialized document
+ * because uniffi has no JSON value type.
+ */
+
+public enum ExtensionMessage: Equatable, Hashable {
+    
+    case text(text: String
+    )
+    case json(json: String
+    )
+    case binary(bytes: Data
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ExtensionMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtensionMessage: FfiConverterRustBuffer {
+    typealias SwiftType = ExtensionMessage
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtensionMessage {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .text(text: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .json(json: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .binary(bytes: try FfiConverterData.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ExtensionMessage, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .text(text):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(text, into: &buf)
+            
+        
+        case let .json(json):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(json, into: &buf)
+            
+        
+        case let .binary(bytes):
+            writeInt(&buf, Int32(3))
+            FfiConverterData.write(bytes, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionMessage_lift(_ buf: RustBuffer) throws -> ExtensionMessage {
+    return try FfiConverterTypeExtensionMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtensionMessage_lower(_ value: ExtensionMessage) -> RustBuffer {
+    return FfiConverterTypeExtensionMessage.lower(value)
+}
+
+
+
 
 public enum GeoAccuracy: Equatable, Hashable {
     
@@ -19294,6 +20327,11 @@ public enum HttpMethod: Equatable, Hashable {
     case patch
     case delete
     case options
+    /**
+     * A verb this enum does not name, handed to the platform transport verbatim.
+     */
+    case other(verb: String
+    )
 
 
 
@@ -19328,6 +20366,9 @@ public struct FfiConverterTypeHttpMethod: FfiConverterRustBuffer {
         case 6: return .delete
         
         case 7: return .options
+        
+        case 8: return .other(verb: try FfiConverterString.read(from: &buf)
+        )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -19364,6 +20405,11 @@ public struct FfiConverterTypeHttpMethod: FfiConverterRustBuffer {
         case .options:
             writeInt(&buf, Int32(7))
         
+        
+        case let .other(verb):
+            writeInt(&buf, Int32(8))
+            FfiConverterString.write(verb, into: &buf)
+            
         }
     }
 }
@@ -23905,6 +24951,30 @@ fileprivate struct FfiConverterOptionTypeDeviceWaker: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeExtensionHost: FfiConverterRustBuffer {
+    typealias SwiftType = ExtensionHost?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeExtensionHost.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeExtensionHost.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeGeoProvider: FfiConverterRustBuffer {
     typealias SwiftType = GeoProvider?
 
@@ -24169,6 +25239,30 @@ fileprivate struct FfiConverterOptionTypeVolumeMonitor: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeWebappBundleSink: FfiConverterRustBuffer {
+    typealias SwiftType = WebappBundleSink?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeWebappBundleSink.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeWebappBundleSink.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeActiveWebapp: FfiConverterRustBuffer {
     typealias SwiftType = ActiveWebapp?
 
@@ -24233,6 +25327,30 @@ fileprivate struct FfiConverterOptionTypeArtifactDigest: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeArtifactDigest.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeExtensionInfo: FfiConverterRustBuffer {
+    typealias SwiftType = ExtensionInfo?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeExtensionInfo.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeExtensionInfo.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -25169,6 +26287,31 @@ fileprivate struct FfiConverterSequenceTypeDocEntry: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeExtensionConfigEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [ExtensionConfigEntry]
+
+    public static func write(_ value: [ExtensionConfigEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExtensionConfigEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExtensionConfigEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExtensionConfigEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExtensionConfigEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHttpHeader: FfiConverterRustBuffer {
     typealias SwiftType = [HttpHeader]
 
@@ -25941,6 +27084,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_current_webapp() != 44144) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target() != 39836) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field() != 42200) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -25977,7 +27123,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 50155) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 55516) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 57765) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -26053,6 +27199,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event() != 19676) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_webappbundlesink_installed() != 640) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_otarunstore_annotate_webapp() != 65092) {
@@ -26248,6 +27397,33 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_connectivitymonitor_stop() != 37048) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_start() != 62617) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_stop() != 61125) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_deliver() != 22605) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 6431) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected() != 43849) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_device_active() != 1408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_config_changed() != 43304) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhostinbox_running_changed() != 25097) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_extensionhostinbox_send_to_device() != 41831) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_geoinbox_on_authorization_change() != 60712) {
@@ -26552,6 +27728,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitAudioBackend()
     uniffiCallbackInitConnectivityMonitor()
     uniffiCallbackInitDeviceWaker()
+    uniffiCallbackInitExtensionHost()
     uniffiCallbackInitGeoProvider()
     uniffiCallbackInitHostEnvironment()
     uniffiCallbackInitHttpTransport()
@@ -26568,6 +27745,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitSpeechRecognizer()
     uniffiCallbackInitTransferPolicy()
     uniffiCallbackInitVolumeMonitor()
+    uniffiCallbackInitWebappBundleSink()
     uniffiCallbackInitWsTransport()
     return InitializationResult.ok
 }()

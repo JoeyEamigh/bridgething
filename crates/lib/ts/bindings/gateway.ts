@@ -15,7 +15,7 @@ import type {
   DtmfTone,
   EndCallAction,
   FavoritesPage,
-  ForwardMessage,
+  ForwardRouted,
   GatewayCapabilities,
   GeoAccuracy,
   GeoError,
@@ -101,6 +101,8 @@ export type BridgeToGatewayAudioMsg =
   | { event: 'ttsCancelAll' }
   | { event: 'earcon'; data: Earcon };
 
+export type BridgeToGatewayForwardMsg = { event: 'routed'; data: ForwardRouted };
+
 export type BridgeToGatewayGeoMsg =
   | { event: 'watch'; data: GeoWatch }
   | { event: 'unwatch' }
@@ -140,7 +142,7 @@ export type BridgeToGatewayMsgData =
   | { type: 'tunnel'; data: BridgeToGatewayTunnelMsg }
   | { type: 'voice'; data: BridgeToGatewayVoiceMsg }
   | { type: 'webapp'; data: BridgeToGatewayWebappMsg }
-  | { type: 'forward'; data: ForwardMessage }
+  | { type: 'forward'; data: BridgeToGatewayForwardMsg }
   | { type: 'error'; data: WireError }
   | { type: 'ack' }
   | { type: 'done' };
@@ -238,6 +240,7 @@ export type BridgeToGatewayWebappMsg =
   | { event: 'docList'; data: WebappDocListReply }
   | { event: 'docAck'; data: WebappDocAck }
   | { event: 'docChanged'; data: WebappDocChanged }
+  | { event: 'configChanged'; data: WebappConfigChanged }
   | { event: 'webappInstalled'; data: WebappInfo }
   | { event: 'activeChanged'; data: WebappActiveChanged };
 
@@ -256,6 +259,11 @@ export type DeviceNicknameReply = { nickname: string | null };
 export type DeviceSetNickname = { nickname: string };
 
 export type Earcon = { name: string };
+
+/**
+ * The webapps this gateway currently has a native extension running for.
+ */
+export type ExtensionsRunning = { webapps: string[] };
 
 export type FavoriteChanged = { uri: string; liked: boolean };
 
@@ -287,6 +295,10 @@ export type GatewayToBridgeAuthorityMsg =
 export type GatewayToBridgeCapabilitiesMsg = { event: 'announce'; data: GatewayCapabilities };
 
 export type GatewayToBridgeChromeMsg = { event: 'navigate'; data: ChromeNavigate };
+
+export type GatewayToBridgeForwardMsg =
+  | { event: 'routed'; data: ForwardRouted }
+  | { event: 'extensionsRunning'; data: ExtensionsRunning };
 
 export type GatewayToBridgeGeoMsg =
   | { event: 'position'; data: Position }
@@ -321,6 +333,7 @@ export type GatewayToBridgeMsgData =
   | { type: 'authority'; data: GatewayToBridgeAuthorityMsg }
   | { type: 'capabilities'; data: GatewayToBridgeCapabilitiesMsg }
   | { type: 'chrome'; data: GatewayToBridgeChromeMsg }
+  | { type: 'forward'; data: GatewayToBridgeForwardMsg }
   | { type: 'geo'; data: GatewayToBridgeGeoMsg }
   | { type: 'library'; data: GatewayToBridgeLibraryMsg }
   | { type: 'lyrics'; data: GatewayToBridgeLyricsMsg }
@@ -672,6 +685,11 @@ export type WebappActive = { id: string | null; name: string | null };
 export type WebappActiveChanged = { id: string | null; name: string | null; art: ArtProfile | null };
 
 export type WebappConfigAck = { key: string; value: string | null };
+
+/**
+ * A settings write landed on the daemon. `value` is `None` when the key was cleared.
+ */
+export type WebappConfigChanged = { id: string; key: string; value: string | null };
 
 export type WebappConfigDelete = { id: string; key: string };
 

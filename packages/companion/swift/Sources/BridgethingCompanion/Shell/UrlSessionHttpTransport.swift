@@ -76,6 +76,7 @@ public final class UrlSessionHttpTransport: NSObject, HttpTransport, @unchecked 
         case .patch: "PATCH"
         case .delete: "DELETE"
         case .options: "OPTIONS"
+        case let .other(verb): verb
         }
         for header in request.headers {
             req.setValue(header.value, forHTTPHeaderField: header.name)

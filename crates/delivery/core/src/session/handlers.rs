@@ -379,6 +379,9 @@ impl WebappHandler for DeliveryHandlers {
   async fn doc_changed(&self, _payload: WebappDocChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn config_changed(&self, _payload: WebappConfigChanged) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn webapp_installed(&self, payload: WebappInfo) -> Result<(), WireError> {
     self.ota.webapp_installed(&self.device_id, payload);
     Ok(())
@@ -389,13 +392,7 @@ impl WebappHandler for DeliveryHandlers {
 }
 
 impl ForwardHandler for DeliveryHandlers {
-  async fn text(&self, _payload: String) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn json(&self, _payload: serde_json::Value) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-  async fn binary(&self, _payload: Vec<u8>) -> Result<(), WireError> {
+  async fn routed(&self, _payload: ForwardRouted) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
 }

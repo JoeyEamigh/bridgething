@@ -354,6 +354,7 @@ impl ModelRig {
       transfer_policy: Some(policy),
       connectivity: None,
       device_waker: None,
+      extensions: None,
     };
 
     let session = Session::new(

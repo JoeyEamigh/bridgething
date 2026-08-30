@@ -12,15 +12,17 @@ use bridgething_companion::{
     CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, ModelPlatform,
     SpotifyProviderConfig,
   },
-  backend::{GeoProvider, LinkDevice, NativeHttp, NativeWs},
+  backend::{ExtensionHost, ForeignHttp, GeoProvider, HttpTransport, LinkDevice, NativeHttp, NativeWs},
 };
 use bridgething_delivery::{blob::FsBlobStore, ota::service::OtaService, webapp::WebappResourceService};
 use bridgething_gateway::{Gateway, connect_ws, transport::WsConnector};
+use bridgething_io::HttpExecutor;
 use tokio::sync::Notify;
 
 use crate::{
   backends::{DesktopHost, FileSecrets, Platform, TracingLog},
   capabilities::Capabilities,
+  extensions::Extensions,
   hints::{Hint, HintSink, Relay},
   known_device::{KnownDevice, KnownDevices},
 };
@@ -93,6 +95,7 @@ impl ShellConfig {
 
 pub struct Shell {
   session: Arc<CompanionSession>,
+  http: HttpExecutor,
   gateway_url: String,
   selected: Mutex<Option<String>>,
   hints: Arc<dyn HintSink>,
@@ -103,6 +106,7 @@ pub struct Shell {
   support: CapabilityFlags,
   geo: Option<Arc<dyn GeoProvider>>,
   log_streaming: AtomicBool,
+  extensions: Arc<Extensions>,
 }
 
 fn capability_support(model_platform: Option<ModelPlatform>, backends: &CompanionBackends) -> CapabilityFlags {
@@ -140,10 +144,12 @@ impl Shell {
     let models = platform.models.clone();
     let model_platform = platform.model_platform;
 
+    let extensions = Extensions::init(&config.paths.state_dir);
+    let http: Arc<dyn HttpTransport> = Arc::new(NativeHttp::default());
     let backends = CompanionBackends {
       link: None,
       host: Arc::new(DesktopHost),
-      http: Arc::new(NativeHttp::default()),
+      http: http.clone(),
       ws: Arc::new(NativeWs::new()),
       secrets: Arc::new(FileSecrets::open(&config.paths.config_dir)),
       log: Arc::new(TracingLog),
@@ -161,6 +167,7 @@ impl Shell {
       transfer_policy: None,
       connectivity: platform.connectivity,
       device_waker: None,
+      extensions: Some(extensions.clone() as Arc<dyn ExtensionHost>),
     };
 
     let support = capability_support(model_platform, &backends);
@@ -184,12 +191,18 @@ impl Shell {
         spotify: spotify_provider(),
       },
       backends,
-      Relay::new(Arc::clone(&hints), Arc::clone(&wake), Arc::clone(&known)),
+      Relay::new(
+        Arc::clone(&hints),
+        Arc::clone(&wake),
+        Arc::clone(&known),
+        Arc::clone(&extensions),
+      ),
     );
     models.bind(&session);
 
     Ok(Arc::new(Self {
       session,
+      http: HttpExecutor::new(Arc::new(ForeignHttp::new(http))),
       gateway_url: config.gateway_url,
       selected: Mutex::new(None),
       hints,
@@ -200,6 +213,7 @@ impl Shell {
       support,
       geo,
       log_streaming: AtomicBool::new(false),
+      extensions,
     }))
   }
 
@@ -210,6 +224,14 @@ impl Shell {
 
   pub fn log_streaming(&self) -> bool {
     self.log_streaming.load(Ordering::Relaxed)
+  }
+
+  pub fn http(&self) -> &HttpExecutor {
+    &self.http
+  }
+
+  pub fn extensions(&self) -> &Arc<Extensions> {
+    &self.extensions
   }
 
   pub fn capability_support(&self) -> CapabilityFlags {
@@ -326,8 +348,13 @@ impl Shell {
   }
 
   pub fn forget_device(&self, id: &str) {
-    if self.known.forget(id) {
-      self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
+    let Some(gone) = self.known.forget(id) else {
+      return;
+    };
+    self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
+    self.extensions.forget_device(&gone.id);
+    if gone.id != gone.url {
+      self.extensions.forget_address(&gone.url);
     }
   }
 

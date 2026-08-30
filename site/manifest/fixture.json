@@ -1,7 +1,7 @@
 {
   "$schema": "https://terbium.app/schemas/manifest/v1.json",
   "manifest_version": 1,
-  "updated_at": "2026-08-02T21:58:57Z",
+  "updated_at": "2026-08-30T19:07:34Z",
   "project": {
     "id": "bridgething",
     "name": "bridgething",

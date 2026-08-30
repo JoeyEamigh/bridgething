@@ -245,8 +245,36 @@ fn write_bundle(dir: &Path, id: Uuid) -> PathBuf {
   path
 }
 
+fn write_extension_bundle(dir: &Path, id: Uuid) -> PathBuf {
+  let path = dir.join("extension-bundle.zip");
+  let mut bundle = zip::ZipWriter::new(std::fs::File::create(&path).expect("create the bundle"));
+  let opts = zip::write::SimpleFileOptions::default();
+  bundle.start_file("index.html", opts).expect("start index.html");
+  bundle
+    .write_all(b"<!doctype html><title>sidecar</title>")
+    .expect("write index");
+  bundle.start_file("icon.png", opts).expect("start icon.png");
+  bundle.write_all(ICON).expect("write icon");
+  bundle
+    .start_file("extension/desktop.mjs", opts)
+    .expect("start the extension");
+  bundle.write_all(b"export {}").expect("write the extension");
+  bundle.start_file("manifest.json", opts).expect("start manifest.json");
+  bundle
+    .write_all(
+      format!(
+        r#"{{"id":"{id}","name":"sidecar","version":"0.1.0","icon":"icon.png","config":[],"permissions":[],"extension":{{"entry":"extension/desktop.mjs","permissions":["all"],"api":1}}}}"#
+      )
+      .as_bytes(),
+    )
+    .expect("write manifest");
+  bundle.finish().expect("finish the bundle");
+  path
+}
+
 fn mock_app(shell: Arc<Shell>) -> tauri::App<MockRuntime> {
   mock_builder()
+    .manage(Arc::clone(shell.extensions()))
     .manage(shell)
     .manage(Discovery::spawn(|_| ()).expect("the responder starts"))
     .invoke_handler(bridgething_desktop::desktop_commands!())
@@ -566,6 +594,21 @@ fn endpoint(url: &str, nickname: Option<&str>) -> bridgething_delivery::discover
   }
 }
 
+fn holders(spool: &Path, webapp: Uuid) -> Vec<String> {
+  let path = spool
+    .join("state/extensions")
+    .join(webapp.to_string())
+    .join("extension.json");
+  let raw = std::fs::read_to_string(&path).expect("the extension record");
+  let held: serde_json::Value = serde_json::from_str(&raw).expect("the record parses");
+  held["devices"]
+    .as_array()
+    .expect("a claim list")
+    .iter()
+    .filter_map(|device| device.as_str().map(str::to_owned))
+    .collect()
+}
+
 async fn settles(holds: impl Fn() -> bool) -> bool {
   let deadline = tokio::time::Instant::now() + SETTLE;
   while !holds() {
@@ -698,12 +741,19 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
 
   let webapp = Uuid::now_v7();
   let bundle = write_bundle(spool.path(), webapp);
+  assert_eq!(
+    commands::webapp_bundle_extension(bundle.clone()).expect("the picker reads the bundle"),
+    None,
+    "a plain webapp has nothing for the picker to confirm before it installs"
+  );
   let installed = tokio::time::timeout(
     DRIVE_DEADLINE,
     commands::ota_install_webapp(
       app.state(),
+      app.state(),
       bundle,
       Some("https://apps.bridgething.test/catalog.json".into()),
+      None,
     ),
   )
   .await
@@ -725,6 +775,90 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
     "the device's own registry is what the webapp query answers from"
   );
   assert!(commands::webapp_active(app.state()).await.is_ok());
+
+  let sidecar = Uuid::now_v7();
+  let declaring = write_extension_bundle(spool.path(), sidecar);
+  assert_eq!(
+    commands::webapp_bundle_extension(declaring.clone())
+      .expect("the picker reads the bundle")
+      .map(|declared| declared.permissions),
+    Some(vec!["all".to_owned()]),
+    "the picker has to be able to show what a local bundle would run before it runs it"
+  );
+  assert!(
+    tokio::time::timeout(
+      DRIVE_DEADLINE,
+      commands::ota_install_webapp(app.state(), app.state(), declaring, None, None),
+    )
+    .await
+    .expect("the install ended rather than parking")
+    .is_ok()
+  );
+  assert!(
+    !spool
+      .path()
+      .join("state/extensions")
+      .join(sidecar.to_string())
+      .join("0.1.0")
+      .exists(),
+    "picking a zip off your own disk is not consent to run it: with no confirmation, nothing is extracted"
+  );
+
+  let unreadable = Uuid::now_v7();
+  let confirmed = write_extension_bundle(spool.path(), unreadable);
+  assert!(
+    tokio::time::timeout(
+      DRIVE_DEADLINE,
+      commands::ota_install_webapp(
+        app.state(),
+        app.state(),
+        confirmed,
+        None,
+        Some(vec!["net:one,two".to_owned()]),
+      ),
+    )
+    .await
+    .expect("the install ended rather than parking")
+    .is_err(),
+    "a descriptor set the host cannot read is not a set anyone consented to"
+  );
+  let listed = commands::webapps(app.state()).await.expect("the device's webapp list");
+  assert!(
+    !listed.iter().any(|info| info.id == unreadable.to_string()),
+    "the consent is checked before the device is touched, or the Car Thing ends up holding an app the \
+     command reported as failed"
+  );
+
+  let orphan = Uuid::now_v7();
+  app.state::<Arc<Shell>>().extensions().adopt(
+    Some(&device_id),
+    &write_extension_bundle(spool.path(), orphan),
+    Some(&["all".parse().expect("a descriptor")]),
+  );
+  let remembered = commands::known_devices(app.state())
+    .await
+    .expect("known devices")
+    .into_iter()
+    .find(|known| known.url == device_id)
+    .expect("the device that answered the dial is remembered");
+  assert_ne!(
+    remembered.id, device_id,
+    "the daemon has named itself by now, so the row is keyed on that and not on the address"
+  );
+  assert_eq!(
+    holders(spool.path(), orphan),
+    vec![remembered.id.clone()],
+    "an extension is claimed by the daemon whose install brought it, under what that daemon named \
+     itself: an address is whoever answers there today"
+  );
+  commands::forget_known_device(app.state(), remembered.id)
+    .await
+    .expect("forgetting a device");
+  assert!(
+    holders(spool.path(), orphan).is_empty(),
+    "a forgotten device never reports a webapp list again, so nothing else would ever drop its claim \
+     and the sidecar outlives every app that could reach it"
+  );
 
   let icon = commands::webapp_resource(app.state(), webapp.to_string(), WebappResourceKind::Icon)
     .await

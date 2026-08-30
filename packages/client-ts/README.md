@@ -1,27 +1,37 @@
 # @bridgething/client
 
-The SDK a [bridgething](https://github.com/JoeyEamigh/bridgething) webapp uses to
-talk to the on-device daemon on a Spotify Car Thing. It is a typed facade over
-the daemon's local WebSocket.
+The SDK a [bridgething](https://github.com/JoeyEamigh/bridgething) webapp uses
+to talk to the daemon on a Spotify Car Thing.
+
+```sh
+bun add @bridgething/client
+```
 
 ```ts
 import { BridgethingClient } from '@bridgething/client';
 
-const client = new BridgethingClient(); // auto-connects to the daemon, auto-reconnects
-client.player.onSnapshot(r => render(r.state));
+const client = new BridgethingClient();
+client.player.onSnapshot(msg => render(msg.state));
 client.player.skipNext();
 ```
 
-Every surface is fully typed with doc comments in
-`dist/dispatch.generated.d.ts` or hover in your editor.
+The client connects on construction and reconnects on its own. Every method
+has hover docs.
 
-## Getting started
+`@bridgething/client/settings` is the API for a webapp's settings page, which
+runs in the companion app or the desktop app:
 
-Scaffold a new webapp (React + Vite + Tailwind, this client preinstalled):
+```ts
+import { settings } from '@bridgething/client/settings';
+
+await settings.config.set('city', 'Detroit');
+```
+
+Scaffold a webapp with the client preinstalled:
 
 ```sh
 bun create bridgething my-app
 ```
 
-- Full docs: <https://bridgething.com/docs>
+- Docs: <https://bridgething.com/docs>
 - Source: <https://github.com/JoeyEamigh/bridgething>

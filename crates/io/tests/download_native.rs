@@ -8,7 +8,7 @@ use std::{
   time::Duration,
 };
 
-use bridgething_io::{DownloadBody, HttpExecutor, HttpHeader, HttpMethod, HttpRequest, ReqwestTransport};
+use bridgething_io::{DownloadBody, HttpError, HttpExecutor, HttpHeader, HttpMethod, HttpRequest, ReqwestTransport};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const HOLD: Duration = Duration::from_millis(100);
@@ -102,5 +102,86 @@ async fn a_blocking_body_write_does_not_stall_the_runtime() {
   assert!(
     during.iter().all(|advanced| *advanced >= 4),
     "the runtime kept scheduling other tasks across every {HOLD:?} body write, ticks advanced: {during:?}"
+  );
+}
+
+async fn method_server() -> (u16, Arc<Mutex<Option<String>>>) {
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("a free port");
+  let port = listener.local_addr().expect("a bound address").port();
+  let seen: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+  let recording = seen.clone();
+  tokio::spawn(async move {
+    let (mut socket, _) = listener.accept().await.expect("a client");
+    let mut head = Vec::new();
+    let mut buf = [0u8; 1024];
+    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+      let read = socket.read(&mut buf).await.expect("a request");
+      if read == 0 {
+        return;
+      }
+      head.extend_from_slice(&buf[..read]);
+    }
+    let line = String::from_utf8_lossy(&head)
+      .lines()
+      .next()
+      .unwrap_or_default()
+      .to_owned();
+    *recording.lock().unwrap() = Some(line);
+    socket
+      .write_all(b"HTTP/1.1 207 Multi-Status\r\ncontent-length: 0\r\n\r\n")
+      .await
+      .expect("the head goes out");
+    socket.flush().await.expect("flushed");
+  });
+  (port, seen)
+}
+
+#[tokio::test]
+async fn a_verb_the_enum_does_not_name_reaches_the_wire_verbatim() {
+  let (port, seen) = method_server().await;
+  let exec = HttpExecutor::new(Arc::new(ReqwestTransport::default()));
+
+  let response = exec
+    .execute(HttpRequest {
+      method: HttpMethod::Other("PROPFIND".into()),
+      url: format!("http://127.0.0.1:{port}/dav/"),
+      headers: Vec::new(),
+      body: Vec::new(),
+      timeout_ms: 0,
+    })
+    .await
+    .expect("the request completes");
+
+  assert_eq!(response.status, 207);
+  assert_eq!(
+    seen.lock().unwrap().as_deref(),
+    Some("PROPFIND /dav/ HTTP/1.1"),
+    "a custom verb must not be rewritten or refused on the way to the transport"
+  );
+}
+
+#[tokio::test]
+async fn a_verb_that_is_not_a_token_never_degrades_into_a_get_on_the_wire() {
+  let (port, seen) = method_server().await;
+  let exec = HttpExecutor::new(Arc::new(ReqwestTransport::default()));
+
+  let refused = exec
+    .execute(HttpRequest {
+      method: HttpMethod::Other("PROP FIND".into()),
+      url: format!("http://127.0.0.1:{port}/dav/"),
+      headers: Vec::new(),
+      body: Vec::new(),
+      timeout_ms: 0,
+    })
+    .await;
+
+  assert!(
+    matches!(refused, Err(HttpError::InvalidRequest(_))),
+    "a verb with a space is an invalid request, got {refused:?}"
+  );
+  assert_eq!(
+    seen.lock().unwrap().as_deref(),
+    None,
+    "a request the caller cannot have meant must not reach the server at all"
   );
 }

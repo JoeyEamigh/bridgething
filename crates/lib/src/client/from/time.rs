@@ -2,9 +2,7 @@ use bridgething_macros::{BridgeEnum, WireRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Webapp asks for the current `TimeSnapshot` (wall clock + locale +
-/// timezone). Most webapps don't need this - the daemon also pushes
-/// `Changed` events on the same shape whenever the source updates.
+/// Returns the current wall clock, locale, and timezone.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
   direction = ClientToBridge,
@@ -20,9 +18,6 @@ pub struct TimeGet;
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon wall-clock surface. The device has no
-/// battery-backed RTC, so time authority lives with the connected
-/// companion (or with iOS over iAP2's DeviceTimeUpdate).
 pub enum ClientToBridgeTimeMsg {
   #[bridge_request]
   Get,

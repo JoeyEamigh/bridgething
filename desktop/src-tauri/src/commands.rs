@@ -15,12 +15,13 @@ use bridgething_delivery::{
   seam::BlobStore,
   transfer::FragmentSource,
 };
-use libbridgething::gateway::WebappResourceKind;
+use libbridgething::{ExtensionPermission, gateway::WebappResourceKind};
 use serde::Serialize;
 use tauri::{AppHandle, Runtime, State};
 use uuid::Uuid;
 
 use crate::{
+  extensions::{ExtensionEntry, Extensions},
   hints::{self, Hint},
   known_device::KnownDevice,
   logs::Verbosity,
@@ -74,8 +75,6 @@ fn webapp_id(raw: &str) -> Answer<Uuid> {
 fn peer(shell: &Shell) -> Answer<String> {
   shell.peer().ok_or(CommandError::NotConnected)
 }
-
-// MARK: pulls
 
 #[tauri::command]
 pub async fn session_snapshot(shell: State<'_, Arc<Shell>>) -> Answer<SessionSnapshot> {
@@ -270,8 +269,6 @@ pub async fn webapp_resource(
   })
 }
 
-// MARK: actions
-
 #[tauri::command]
 pub async fn endpoints(discovery: State<'_, Arc<Discovery>>) -> Answer<Vec<Endpoint>> {
   Ok(discovery.endpoints())
@@ -420,8 +417,16 @@ pub async fn switch_webapp(shell: State<'_, Arc<Shell>>, id: String) -> Answer<(
 }
 
 #[tauri::command]
-pub async fn uninstall_webapp(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
-  Ok(shell.session().uninstall_webapp(peer(&shell)?, id).await?)
+pub async fn uninstall_webapp(
+  shell: State<'_, Arc<Shell>>,
+  extensions: State<'_, Arc<Extensions>>,
+  id: String,
+) -> Answer<()> {
+  let webapp = webapp_id(&id)?;
+  let device_id = peer(&shell)?;
+  shell.session().uninstall_webapp(device_id.clone(), id).await?;
+  extensions.removed(&device_id, webapp);
+  Ok(())
 }
 
 #[tauri::command]
@@ -513,6 +518,13 @@ pub async fn ota_push_daemon(shell: State<'_, Arc<Shell>>, artifact: PathBuf) ->
   Ok(shell.ota().push_daemon(&device_id, spool(artifact)?, None).await.into())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleExtension {
+  pub permissions: Vec<String>,
+  pub api: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InstallOutcome {
@@ -523,19 +535,25 @@ pub enum InstallOutcome {
 #[tauri::command]
 pub async fn ota_install_webapp(
   shell: State<'_, Arc<Shell>>,
+  extensions: State<'_, Arc<Extensions>>,
   bundle: PathBuf,
   provenance: Option<String>,
+  confirmed: Option<Vec<String>>,
 ) -> Answer<InstallOutcome> {
   let device_id = peer(&shell)?;
-  let bundle = spool(bundle)?;
+  let confirmed = consented(confirmed)?;
+  let source = spool(bundle.clone())?;
   let outcome = shell
     .ota()
-    .install_webapp(&device_id, bundle, provenance.as_deref())
+    .install_webapp(&device_id, source, provenance.as_deref())
     .await;
   Ok(match outcome {
-    WebappInstallResult::Installed(info) => InstallOutcome::Installed {
-      id: info.id.to_string(),
-    },
+    WebappInstallResult::Installed(info) => {
+      extensions.inner().adopt_off_worker(device_id, bundle, confirmed).await;
+      InstallOutcome::Installed {
+        id: info.id.to_string(),
+      }
+    }
     WebappInstallResult::Failed { reason } => InstallOutcome::Failed { reason },
   })
 }
@@ -543,16 +561,82 @@ pub async fn ota_install_webapp(
 #[tauri::command]
 pub async fn install_webapp_from_url(
   shell: State<'_, Arc<Shell>>,
+  extensions: State<'_, Arc<Extensions>>,
   url: String,
   expected: Option<ArtifactDigest>,
   provenance: Option<String>,
+  confirmed: Option<Vec<String>>,
 ) -> Answer<WebappInfo> {
+  let device_id = peer(&shell)?;
+  let sink = extensions.inner().sink(&device_id, consented(confirmed)?);
   Ok(
     shell
       .session()
-      .install_webapp_from_url(peer(&shell)?, url, expected, provenance)
+      .install_webapp_from_url(device_id, url, expected, provenance, Some(sink))
       .await?,
   )
+}
+
+fn consented(confirmed: Option<Vec<String>>) -> Answer<Option<Vec<ExtensionPermission>>> {
+  confirmed
+    .map(|held| {
+      held
+        .iter()
+        .map(|raw| raw.parse().map_err(|error| CommandError::Host(format!("{error}"))))
+        .collect()
+    })
+    .transpose()
+}
+
+#[tauri::command]
+pub fn webapp_bundle_extension(bundle: PathBuf) -> Answer<Option<BundleExtension>> {
+  let declared = crate::extensions::store::declared_extension(&bundle).map_err(CommandError::Artifact)?;
+  Ok(declared.map(|declared| {
+    BundleExtension {
+      permissions: declared
+        .permissions
+        .iter()
+        .map(ExtensionPermission::to_string)
+        .collect(),
+      api: declared.api,
+    }
+  }))
+}
+
+#[tauri::command]
+pub fn extensions(extensions: State<'_, Arc<Extensions>>) -> Vec<ExtensionEntry> {
+  extensions.list()
+}
+
+#[tauri::command]
+pub fn set_extension_enabled(extensions: State<'_, Arc<Extensions>>, id: String, enabled: bool) -> Answer<()> {
+  extensions.set_enabled(webapp_id(&id)?, enabled);
+  Ok(())
+}
+
+#[tauri::command]
+pub fn remove_extension(extensions: State<'_, Arc<Extensions>>, id: String) -> Answer<()> {
+  extensions.remove(webapp_id(&id)?).map_err(CommandError::Host)
+}
+
+#[tauri::command]
+pub fn open_extension_data<R: Runtime>(
+  app: AppHandle<R>,
+  extensions: State<'_, Arc<Extensions>>,
+  id: String,
+) -> Answer<()> {
+  use tauri_plugin_opener::OpenerExt as _;
+  let dir = extensions.data_dir(webapp_id(&id)?);
+  std::fs::create_dir_all(&dir).map_err(|error| CommandError::Host(format!("{}: {error}", dir.display())))?;
+  app
+    .opener()
+    .open_path(dir.to_string_lossy(), None::<&str>)
+    .map_err(|error| CommandError::Host(error.to_string()))
+}
+
+#[tauri::command]
+pub fn retry_extension_runtime(extensions: State<'_, Arc<Extensions>>) {
+  extensions.retry_runtime();
 }
 
 #[tauri::command]

@@ -16,7 +16,7 @@ export type DirectoryEntry = {
   downloads_cors_ok: boolean | null;
 };
 
-export type AdminEntry = DirectoryEntry & { note: string | null };
+export type AdminEntry = DirectoryEntry & { note: string | null; reviewed_by: string | null };
 
 export class DirectoryApiError extends Error {
   constructor(
@@ -28,7 +28,7 @@ export class DirectoryApiError extends Error {
   }
 }
 
-async function unwrap<T>(response: Response): Promise<T> {
+export async function unwrap<T>(response: Response): Promise<T> {
   let body: unknown;
   try {
     body = await response.json();

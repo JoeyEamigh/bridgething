@@ -3,7 +3,7 @@ import type { CompanionSession, Endpoint, Invalidation, Topic, WebappResource } 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-import type { KnownDevice } from './desktop.ts';
+import type { BundleExtension, ExtensionEntry, KnownDevice } from './desktop.ts';
 
 const HINTS: Record<string, Topic> = {
   'invalidate:session': 'session',
@@ -21,6 +21,7 @@ const HINTS: Record<string, Topic> = {
   'invalidate:ota-poll': 'ota-poll',
   'invalidate:logs': 'logs',
   'invalidate:known-devices': 'known-devices',
+  'invalidate:extensions': 'extensions',
 };
 
 const RESYNC = 'invalidate:all';
@@ -105,11 +106,17 @@ export class TauriSession implements CompanionSession {
   setWebappSlot = (slot: api.WebappSlot, id: string | null) => invoke<api.WebappSlots>('set_webapp_slot', { slot, id });
   switchWebapp = (id: string) => invoke<void>('switch_webapp', { id });
   uninstallWebapp = (id: string) => invoke<void>('uninstall_webapp', { id });
-  installWebappFromUrl = (url: string, provenance?: string, expected?: api.ArtifactDigest | null) =>
+  installWebappFromUrl = (
+    url: string,
+    provenance?: string,
+    expected?: api.ArtifactDigest | null,
+    confirmed?: string[],
+  ) =>
     invoke<api.WebappInfo>('install_webapp_from_url', {
       url,
       expected: expected ?? null,
       provenance: provenance ?? null,
+      confirmed: confirmed ?? null,
     });
   webappResource = (id: string, kind: api.WebappResourceKind) =>
     invoke<WebappResource>('webapp_resource', { id, kind });
@@ -136,8 +143,19 @@ export class TauriSession implements CompanionSession {
   dismissOtaRun = () => invoke<void>('ota_dismiss_run');
 
   otaPushDaemon = (artifact: string) => invoke<OtaOutcome>('ota_push_daemon', { artifact });
-  otaInstallWebapp = (bundle: string, provenance?: string) =>
-    invoke<InstallOutcome>('ota_install_webapp', { bundle, provenance: provenance ?? null });
+  otaInstallWebapp = (bundle: string, provenance?: string, confirmed?: string[]) =>
+    invoke<InstallOutcome>('ota_install_webapp', {
+      bundle,
+      provenance: provenance ?? null,
+      confirmed: confirmed ?? null,
+    });
+  webappBundleExtension = (bundle: string) => invoke<BundleExtension | null>('webapp_bundle_extension', { bundle });
+
+  extensions = () => invoke<ExtensionEntry[]>('extensions');
+  setExtensionEnabled = (id: string, enabled: boolean) => invoke<void>('set_extension_enabled', { id, enabled });
+  removeExtension = (id: string) => invoke<void>('remove_extension', { id });
+  openExtensionData = (id: string) => invoke<void>('open_extension_data', { id });
+  retryExtensionRuntime = () => invoke<void>('retry_extension_runtime');
 
   deviceLogs = (limit: number) => invoke<api.DeviceLogLine[]>('device_logs', { limit });
   deviceLogStreaming = () => invoke<boolean>('device_log_streaming');

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bridgething_io as io;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum HttpMethod {
   Get,
   Head,
@@ -12,6 +12,7 @@ pub enum HttpMethod {
   Patch,
   Delete,
   Options,
+  Other { verb: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -227,6 +228,7 @@ impl From<io::HttpMethod> for HttpMethod {
       io::HttpMethod::Patch => Self::Patch,
       io::HttpMethod::Delete => Self::Delete,
       io::HttpMethod::Options => Self::Options,
+      io::HttpMethod::Other(verb) => Self::Other { verb },
     }
   }
 }
@@ -241,6 +243,7 @@ impl From<HttpMethod> for io::HttpMethod {
       HttpMethod::Patch => Self::Patch,
       HttpMethod::Delete => Self::Delete,
       HttpMethod::Options => Self::Options,
+      HttpMethod::Other { verb } => Self::Other(verb),
     }
   }
 }
@@ -322,6 +325,40 @@ impl From<HttpResponse> for io::HttpResponse {
       status: response.status,
       headers: response.headers.into_iter().map(Into::into).collect(),
       body: response.body,
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn a_verb_the_enum_does_not_name_survives_the_ffi_hop_in_both_directions() {
+    let original = io::HttpMethod::Other("PROPFIND".into());
+    let crossed: HttpMethod = original.clone().into();
+    assert_eq!(
+      crossed,
+      HttpMethod::Other {
+        verb: "PROPFIND".into()
+      }
+    );
+    assert_eq!(io::HttpMethod::from(crossed), original);
+  }
+
+  #[test]
+  fn every_named_verb_still_round_trips() {
+    for method in [
+      io::HttpMethod::Get,
+      io::HttpMethod::Head,
+      io::HttpMethod::Post,
+      io::HttpMethod::Put,
+      io::HttpMethod::Patch,
+      io::HttpMethod::Delete,
+      io::HttpMethod::Options,
+    ] {
+      let crossed: HttpMethod = method.clone().into();
+      assert_eq!(io::HttpMethod::from(crossed), method);
     }
   }
 }

@@ -6,6 +6,7 @@ mod audio;
 mod authority;
 mod capabilities;
 mod chrome;
+mod forward;
 mod geo;
 mod library;
 mod net;
@@ -24,6 +25,7 @@ use audio::*;
 use authority::*;
 use capabilities::*;
 use chrome::*;
+use forward::*;
 use geo::*;
 use libbridgething::{
   gateway::{
@@ -139,6 +141,11 @@ impl GatewayHandler {
       GatewayToBridgeMsgData::Chrome(chrome_msg) => {
         if let Some(cmd) = chrome_msg.into_command() {
           tokio::spawn(async move { cmd.dispatch(&ChromeHandler::new(handle)).await });
+        }
+      }
+      GatewayToBridgeMsgData::Forward(forward_msg) => {
+        if let Some(event) = forward_msg.into_event() {
+          tokio::spawn(async move { event.dispatch(&ForwardHandler::new(handle)).await });
         }
       }
       GatewayToBridgeMsgData::Geo(geo_msg) => {

@@ -4,10 +4,7 @@ use ts_rs::TS;
 
 use crate::{BridgeThingMeta, Diagnostics, LogEntry, OtaError, OtaFinished, OtaProgress};
 
-/// Current device nickname. `nickname: None` when the user hasn't set
-/// one. Reply to `DeviceGetNickname`; daemon also broadcasts this as a
-/// `DeviceNicknameChanged` event when the value mutates so webapps stay
-/// in sync without polling.
+/// `nickname` is `null` until someone sets one.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +13,6 @@ pub struct DeviceNicknameReply {
   pub nickname: Option<String>,
 }
 
-/// Reply to `DiagnosticsGet`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -24,7 +20,6 @@ pub struct DiagnosticsReply {
   pub diagnostics: Diagnostics,
 }
 
-/// Reply to `LogsTail`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -33,12 +28,10 @@ pub struct LogsTailReply {
   pub entries: Vec<LogEntry>,
 }
 
-/// Reply to `LogsSubscribe`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 pub struct LogsSubscribeReply {
-  /// Opaque handle; pass to `LogsUnsubscribe` to release the subscription.
   pub token: String,
 }
 
@@ -47,13 +40,10 @@ pub struct LogsSubscribeReply {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp system events and replies. `Version` replies to
-/// `VersionRequest` with the daemon's `BridgeThingMeta`. `DiagnosticsReply`,
-/// `LogsTailReply`, `LogsSubscribeReply`, and `DeviceNickname` are replies
-/// to their matching requests. `LogEntry` streams matching lines to a live
-/// `LogsSubscribe` subscription. `OtaProgress` / `OtaError` report OTA
-/// orchestrator state. `DeviceNicknameChanged` broadcasts whenever the
-/// nickname mutates, including from another surface.
+/// Device identity, health, logs, and power control for a webapp. `versionRequest` and
+/// `diagnosticsGet` return the daemon version and a health snapshot, `logsTail` returns a batch of
+/// log entries, and `logsSubscribe` streams them as `onLogEntry`. `onOtaProgress` and
+/// `onOtaFinished` track a software update.
 pub enum BridgeToClientSystemMsg {
   #[bridge_response]
   Version(Box<BridgeThingMeta>),

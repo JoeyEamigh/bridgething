@@ -45,9 +45,9 @@ use crate::{
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink,
   },
   dispatch::{
-    asset::AssetDispatcher, audio::AudioDispatcher, geo::GeoDispatcher, library::LibraryDispatcher,
-    lyrics::LyricsDispatcher, notifications::NotificationDispatcher, phone::PhoneDispatcher, player::PlayerDispatcher,
-    system::SystemDispatcher, webapp::WebappDispatcher,
+    asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
+    library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
+    phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
   hub::Hub,
   provider::{
@@ -156,6 +156,7 @@ pub struct Session {
   resource_slots: Arc<FsSlotIndex>,
   hub: Arc<Hub>,
   broadcast: Arc<Broadcast>,
+  extensions: Option<Arc<ExtensionDispatcher>>,
   links: Mutex<HashMap<String, Link>>,
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
@@ -237,6 +238,7 @@ impl Session {
       config.host.clone(),
       config.capabilities,
     );
+    let extensions = backends.extensions.clone().map(ExtensionDispatcher::new);
     Arc::new(Self {
       caps: Arc::new(Mutex::new(config.capabilities)),
       config,
@@ -262,6 +264,7 @@ impl Session {
       resource_slots: Arc::new(FsSlotIndex::new(cache_dir.join("slots.json"))),
       hub,
       broadcast,
+      extensions,
       links: Mutex::new(HashMap::new()),
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
@@ -557,6 +560,9 @@ impl Session {
   pub fn start(self: &Arc<Self>) {
     self.hub.start();
     self.mirror_system_media();
+    if let Some(extensions) = &self.extensions {
+      extensions.start();
+    }
     if let Some(previous) = self.arbitration.lock().unwrap().replace(self.watch_arbitration()) {
       previous.abort();
     }
@@ -659,6 +665,9 @@ impl Session {
     }
     for device_id in self.device_ids() {
       self.teardown(&device_id).await;
+    }
+    if let Some(extensions) = &self.extensions {
+      extensions.stop().await;
     }
     self.hub.detach_all().await;
     self.hub.detach_system().await;
@@ -893,6 +902,10 @@ impl Session {
       phone.announce().await;
     }
 
+    if let Some(extensions) = &self.extensions {
+      extensions.peer_connected(&device.id, &device.name, gateway).await;
+    }
+
     self.observer.peer_connected(SessionPeer {
       id: device.id.clone(),
       name: device.name.clone(),
@@ -984,6 +997,7 @@ impl Session {
       tunnel: TunnelDispatcher::new(outbound.clone(), self.clock.clone()),
       voice,
       webapp: WebappDispatcher::new(registry, observer.clone(), device_id),
+      extensions: self.extensions.clone(),
       receiver: TransferReceiver::new(Arc::new(LinkAcks(outbound.clone())), self.clock.clone()),
       ota: OtaLink::new(self.ota.clone(), device_id),
       observer: observer.clone(),
@@ -1041,6 +1055,9 @@ impl Session {
     self.hub.peer_disconnected(device_id);
     let Some(link) = link else { return };
     tracing::info!(%device_id, "a peer link is being torn down");
+    if let Some(extensions) = &self.extensions {
+      extensions.peer_disconnected(device_id);
+    }
     self.ota.release(device_id).await;
     link.peer.net.stop();
     link.peer.tunnel.stop();

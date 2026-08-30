@@ -16,8 +16,9 @@ use super::LOG_RING_CAPACITY;
 use crate::{
   api::{
     ActiveWebapp, AncsAuthStatus, AncsAuthStatusEntry, ConfigField, ConfigKind, DeviceMeta, DeviceMetaEntry,
-    DeviceWebappsEntry, LogOrigin, NowPlaying, NowPlayingPlayback, NowPlayingTrack, RepeatMode, SessionEvent,
-    SessionEventSink, SessionPeer, VoiceTurn, VoiceTurnPhase, VoiceTurnTrigger, WebappInfo, WebappRole, WebappSource,
+    DeviceWebappsEntry, ExtensionInfo, LogOrigin, NowPlaying, NowPlayingPlayback, NowPlayingTrack, RepeatMode,
+    SessionEvent, SessionEventSink, SessionPeer, VoiceTurn, VoiceTurnPhase, VoiceTurnTrigger, WebappInfo, WebappRole,
+    WebappSource,
   },
   backend::{LogLevel, log::ring_level},
   dispatch::{system::DeviceLogSink, webapp::WebappObserver},
@@ -184,6 +185,7 @@ impl SessionObserver {
       let at = self.entry(&mut held, device_id);
       held.webapps[at].webapps = webapps;
       held.webapps[at].active = active;
+      held.webapps[at].listed = true;
       held.webapps[at].clone()
     };
     self.emit(SessionEvent::WebappsChanged { entry });
@@ -197,6 +199,7 @@ impl SessionObserver {
           device_id: device_id.to_owned(),
           webapps: Vec::new(),
           active: None,
+          listed: false,
         });
         held.webapps.len() - 1
       }
@@ -291,6 +294,10 @@ pub(crate) fn webapp(info: libbridgething::WebappInfo) -> WebappInfo {
     overlay_hash: info.overlay_hash,
     config: info.config.into_iter().map(field).collect(),
     permissions: info.permissions,
+    extension: info.extension.map(|extension| ExtensionInfo {
+      permissions: extension.permissions.iter().map(ToString::to_string).collect(),
+      api: extension.api,
+    }),
   }
 }
 
@@ -430,5 +437,61 @@ fn field(field: libbridgething::ConfigField) -> ConfigField {
       default_value: choice.default,
       ..bare(ConfigKind::Enum, choice.key, choice.label)
     },
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use bridgething_delivery::seam::SystemClock;
+
+  use super::*;
+
+  #[derive(Default)]
+  struct Recorded(Mutex<Vec<SessionEvent>>);
+
+  impl SessionEventSink for Recorded {
+    fn on_event(&self, event: SessionEvent) {
+      self.0.lock().unwrap().push(event);
+    }
+  }
+
+  fn entries(recorded: &Recorded) -> Vec<DeviceWebappsEntry> {
+    recorded
+      .0
+      .lock()
+      .unwrap()
+      .iter()
+      .filter_map(|event| match event {
+        SessionEvent::WebappsChanged { entry } => Some(entry.clone()),
+        _ => None,
+      })
+      .collect()
+  }
+
+  #[test]
+  fn an_active_webapp_push_before_the_listing_is_not_an_inventory() {
+    let recorded = Arc::new(Recorded::default());
+    let observer = SessionObserver::new(recorded.clone(), Arc::new(DeviceLogRing::new(8, Arc::new(SystemClock))));
+
+    observer.active_changed(
+      "sn-1",
+      WebappActiveChanged {
+        id: Some(uuid::Uuid::from_u128(1)),
+        name: Some("weather".to_owned()),
+        art: None,
+      },
+    );
+    observer.webapps_listed("sn-1", Vec::new(), None);
+
+    let seen = entries(&recorded);
+    assert_eq!(seen.len(), 2);
+    assert!(
+      !seen[0].listed,
+      "the device's webapps have not been read yet, so an empty list here is ignorance, not an empty device"
+    );
+    assert!(
+      seen[1].listed,
+      "the listing is the only event that carries what the device actually holds"
+    );
   }
 }

@@ -2,12 +2,16 @@ import {
   aggregate,
   blendStoreListings,
   compareVersions,
+  describeExtensionPermissions,
+  extensionOf,
+  extensionRepoLabel,
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
   recommendedSources,
   reportInstall,
   sortNewestFirst,
   versionCompatible,
+  type AppExtension,
   type AppVersion,
   type Catalog,
   type CatalogAppListing,
@@ -34,6 +38,7 @@ import { useState } from 'preact/hooks';
 import { BackButton, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import { useDesktop } from '../desktop.ts';
 import { toInstalled } from '../lib/catalog.ts';
+import { sideloadConsent } from '../lib/extension.ts';
 import { bytes, day } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
 import { humanizePermission } from '../lib/permissions.ts';
@@ -72,6 +77,7 @@ function blend(): Blend {
     deviceLibVersion: libVersion,
     installs: merged.installs,
     subscribed,
+    extensions: 'listed',
   });
 
   return {
@@ -246,13 +252,16 @@ function ListingRow({ listing, onOpen }: { listing: CatalogAppListing; onOpen: (
       subtitle={app.description}
       value={newestCompatible ? `v${newestCompatible.version}` : undefined}
       trailing={
-        updateAvailable ? (
-          <Pill tone="accent">update</Pill>
-        ) : installedVersion ? (
-          <Pill tone="ok">installed</Pill>
-        ) : !newestCompatible ? (
-          <Pill tone="warn">needs newer firmware</Pill>
-        ) : undefined
+        <span class="flex shrink-0 items-center gap-1.5">
+          {extensionOf(newestCompatible) ? <Pill tone="accent">extension</Pill> : null}
+          {updateAvailable ? (
+            <Pill tone="accent">update</Pill>
+          ) : installedVersion ? (
+            <Pill tone="ok">installed</Pill>
+          ) : !newestCompatible ? (
+            <Pill tone="warn">needs newer firmware</Pill>
+          ) : null}
+        </span>
       }
       chevron
       onClick={onOpen}
@@ -335,6 +344,7 @@ function listingsFor(
     installed,
     deviceLibVersion: libVersion,
     installs: mergedApps().data.value.installs,
+    extensions: 'listed',
   });
 }
 
@@ -392,6 +402,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
   }
 
   const { app, sourceUrl, newestCompatible, installedVersion, updateAvailable } = listing;
+  const extension = extensionOf(newestCompatible);
   const actionable = newestCompatible !== null && (installedVersion === null || updateAvailable);
 
   const install = async (version: AppVersion) => {
@@ -399,10 +410,12 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
     setConfirming(null);
     setFailure(null);
     try {
-      await session.installWebappFromUrl(version.download.url, sourceUrl, {
-        size: version.download.size,
-        sha256: version.download.sha256,
-      });
+      await session.installWebappFromUrl(
+        version.download.url,
+        sourceUrl,
+        { size: version.download.size, sha256: version.download.sha256 },
+        extensionOf(version)?.permissions,
+      );
       reportInstall({ appId: app.id, sourceUrl, version: version.version });
       if (!subscribed.includes(sourceUrl)) {
         await session.addCatalogSource(sourceUrl);
@@ -416,7 +429,8 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
   };
 
   const start = (version: AppVersion) => {
-    if (newestCompatible && version.version !== newestCompatible.version) setConfirming(version);
+    const older = newestCompatible !== null && version.version !== newestCompatible.version;
+    if (older || version.extension) setConfirming(version);
     else void install(version);
   };
 
@@ -436,6 +450,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
             {installedVersion ? <Pill tone="ok">{`installed v${installedVersion}`}</Pill> : null}
             {newestCompatible?.role === 'launcher' ? <Pill tone="neutral">home screen</Pill> : null}
             {newestCompatible?.provides_overlay ? <Pill tone="neutral">overlay</Pill> : null}
+            {extension ? <Pill tone="accent">native extension</Pill> : null}
           </div>
         </div>
       </div>
@@ -447,7 +462,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
           loading={installing !== null && installing === newestCompatible?.version}
           disabled={!actionable || installing !== null}
           onClick={() => {
-            if (newestCompatible) void install(newestCompatible);
+            if (newestCompatible) start(newestCompatible);
           }}>
           {!newestCompatible
             ? 'needs newer firmware'
@@ -487,6 +502,26 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
         </Section>
       ) : null}
 
+      {extension ? (
+        <Section>
+          <SectionHeader title="native extension" hint="native code this app runs on this computer" />
+          <ListGroup>
+            {describeExtensionPermissions(extension).map(grant => (
+              <ListRow key={grant} icon={<Icon name="shield" />} iconTint="accent" title={grant} />
+            ))}
+            <ListRow
+              icon={<Icon name="file" />}
+              title="read it before you install"
+              subtitle={extensionRepoLabel(app.source) ?? 'this app lists no repository'}
+            />
+          </ListGroup>
+          <Hint>
+            it runs outside the browser sandbox whenever this app is running, with the access above. your phone has no
+            extension host, so it never runs there.
+          </Hint>
+        </Section>
+      ) : null}
+
       <Section>
         <SectionHeader
           title="versions"
@@ -510,33 +545,19 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
         </Hint>
       </Section>
 
-      <Dialog
+      <ConfirmInstall
         open={confirming !== null}
-        onClose={() => setConfirming(null)}
         title={confirming ? `install v${confirming.version}?` : 'install this version?'}
-        subtitle={
-          newestCompatible ? `v${newestCompatible.version} is the newest build this Car Thing can run` : undefined
-        }
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setConfirming(null)}>
-              cancel
-            </Button>
-            <Button
-              variant="primary"
-              loading={installing !== null}
-              onClick={() => {
-                if (confirming) void install(confirming);
-              }}>
-              install it anyway
-            </Button>
-          </>
-        }>
-        <p class="m-0 text-body text-muted">
-          this replaces whatever is installed. an older build misses whatever the newer ones fixed, and the next update
-          offer puts you back on the newest.
-        </p>
-      </Dialog>
+        extension={extensionOf(confirming)}
+        source={app.source}
+        older={confirming !== null && newestCompatible !== null && confirming.version !== newestCompatible.version}
+        newest={newestCompatible}
+        busy={installing !== null}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          if (confirming) void install(confirming);
+        }}
+      />
 
       <Section>
         <SectionHeader title="where this came from" />
@@ -550,6 +571,82 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
         </Hint>
       </Section>
     </Screen>
+  );
+}
+
+function ConfirmInstall({
+  open,
+  title,
+  extension,
+  source,
+  older,
+  newest,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  extension: AppExtension | null;
+  source: string | null;
+  older: boolean;
+  newest: AppVersion | null;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): VNode {
+  const repo = extensionRepoLabel(source);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      title={title}
+      subtitle={
+        older && newest
+          ? `v${newest.version} is the newest build this Car Thing can run`
+          : extension
+            ? 'this app runs native code on this computer'
+            : undefined
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={onCancel}>
+            cancel
+          </Button>
+          <Button variant="primary" loading={busy} onClick={onConfirm}>
+            {extension ? 'install and let it run' : 'install it anyway'}
+          </Button>
+        </>
+      }>
+      {extension ? (
+        <>
+          <p class="m-0 text-body text-muted">
+            this app ships a native extension. the desktop app starts it outside the browser sandbox and keeps it
+            running, granting it:
+          </p>
+          <ul class="mt-3 mb-0 flex list-none flex-col gap-1.5 p-0">
+            {describeExtensionPermissions(extension).map(grant => (
+              <li key={grant} class="flex items-center gap-2 text-body text-off-white">
+                <span class="shrink-0 text-accent">
+                  <Icon name="shield" size={14} />
+                </span>
+                {grant}
+              </li>
+            ))}
+          </ul>
+          <p class="mt-3 mb-0 text-hint text-muted">
+            {repo ? `nobody reviews store apps. the code is at ${repo}.` : 'this app lists no repository to read.'}
+          </p>
+        </>
+      ) : null}
+      {older ? (
+        <p class={extension ? 'mt-3 mb-0 text-body text-muted' : 'm-0 text-body text-muted'}>
+          this replaces whatever is installed. an older build misses whatever the newer ones fixed, and the next update
+          offer puts you back on the newest.
+        </p>
+      ) : null}
+    </Dialog>
   );
 }
 
@@ -637,15 +734,17 @@ function SideloadBundle(): VNode {
   const session = useDesktop();
   const [path, setPath] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<{ bundle: string; extension: AppExtension } | null>(null);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const install = async (bundle: string) => {
+  const install = async (bundle: string, confirmed?: string[]) => {
     setBusy(true);
+    setConfirming(null);
     setOutcome(null);
     setFailure(null);
     try {
-      const answer = await session.otaInstallWebapp(bundle);
+      const answer = await session.otaInstallWebapp(bundle, undefined, confirmed);
       if (answer.kind === 'installed') setOutcome('installed');
       else setFailure(answer.reason);
     } catch (reason) {
@@ -655,11 +754,28 @@ function SideloadBundle(): VNode {
     }
   };
 
+  const start = async (bundle: string) => {
+    setBusy(true);
+    setOutcome(null);
+    setFailure(null);
+    let extension: AppExtension | null;
+    try {
+      extension = sideloadConsent(await session.webappBundleExtension(bundle));
+    } catch (reason) {
+      setFailure(describeError(reason));
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    if (extension) setConfirming({ bundle, extension });
+    else await install(bundle);
+  };
+
   const browse = async () => {
     const picked = await pickArtifact('webapp');
     if (!picked) return;
     setPath(picked);
-    await install(picked);
+    await start(picked);
   };
 
   return (
@@ -670,7 +786,7 @@ function SideloadBundle(): VNode {
           class="flex-1"
           value={path}
           onInput={setPath}
-          onCommit={value => value.trim() && void install(value.trim())}
+          onCommit={value => value.trim() && void start(value.trim())}
           icon={<Icon name="file" />}
           placeholder="/path/to/my-webapp.zip"
           clearable
@@ -681,6 +797,19 @@ function SideloadBundle(): VNode {
       </div>
       {outcome ? <Hint>{outcome}</Hint> : null}
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
+      <ConfirmInstall
+        open={confirming !== null}
+        title="install this bundle?"
+        extension={confirming?.extension ?? null}
+        source={null}
+        older={false}
+        newest={null}
+        busy={busy}
+        onCancel={() => setConfirming(null)}
+        onConfirm={() => {
+          if (confirming) void install(confirming.bundle, confirming.extension.permissions);
+        }}
+      />
     </Section>
   );
 }

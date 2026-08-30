@@ -226,6 +226,7 @@ export function useStoreListings(deviceId: string | null): StoreListings {
         deviceLibVersion,
         installs,
         subscribed: sources,
+        extensions: 'omitted',
       }),
     [catalogs, merged, installs, sources, installed, deviceLibVersion],
   );
@@ -251,6 +252,7 @@ export function useSourceListings(
       installed: toInstalled(installed),
       deviceLibVersion,
       installs,
+      extensions: 'omitted',
     });
   }, [url, preview, catalogs, merged, installs, installed, deviceLibVersion]);
 }
@@ -263,6 +265,7 @@ export function useUpdates(deviceId: string | null): CatalogAppUpdate[] {
         catalogs: new Map(catalogs.map(e => [e.url, e.catalog])),
         installed: toInstalled(installed),
         deviceLibVersion,
+        extensions: 'omitted',
       }),
     [catalogs, installed, deviceLibVersion],
   );
@@ -350,6 +353,7 @@ function pendingUpdates(deviceId: string): CatalogAppUpdate[] {
     catalogs: new Map(catalogs.map(e => [e.url, e.catalog])),
     installed: toInstalled(installed),
     deviceLibVersion: deviceLibVersion(useSessionStore.getState(), deviceId),
+    extensions: 'omitted',
   });
 }
 

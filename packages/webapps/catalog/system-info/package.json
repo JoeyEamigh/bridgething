@@ -1,0 +1,34 @@
+{
+  "name": "@bridgething/webapp-system-info",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:device": "vite --mode device",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.extension.json",
+    "push": "bun scripts/push.ts"
+  },
+  "devDependencies": {
+    "@msgpack/msgpack": "^3.1.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "^1.3.14",
+    "@types/deno": "^2.7.0",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.2"
+  },
+  "dependencies": {
+    "@bridgething/client": "workspace:*",
+    "@bridgething/extension": "workspace:*",
+    "@bridgething/webapp-shared": "workspace:*",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  }
+}

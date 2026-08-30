@@ -250,6 +250,13 @@ typedef void (*UniffiCallbackInterfaceSessionEventSinkMethod0)(uint64_t, RustBuf
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_WEBAPP_BUNDLE_SINK_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_WEBAPP_BUNDLE_SINK_METHOD0
+typedef void (*UniffiCallbackInterfaceWebappBundleSinkMethod0)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD0
 typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod0)(uint64_t, uint64_t, void* _Nonnull, 
@@ -456,6 +463,55 @@ typedef void (*UniffiCallbackInterfaceConnectivityMonitorMethod0)(uint64_t, uint
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CONNECTIVITY_MONITOR_METHOD1
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CONNECTIVITY_MONITOR_METHOD1
 typedef void (*UniffiCallbackInterfaceConnectivityMonitorMethod1)(uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD0
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod0)(uint64_t, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD1
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod1)(uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD2
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod2)(uint64_t, RustBuffer, RustBuffer, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD3
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod3)(uint64_t, RustBuffer, RustBuffer, RustBuffer, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD4
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD4
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod4)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD5
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD5
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod5)(uint64_t, RustBuffer, RustBuffer, int8_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD6
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EXTENSION_HOST_METHOD6
+typedef void (*UniffiCallbackInterfaceExtensionHostMethod6)(uint64_t, RustBuffer, RustBuffer, RustBuffer, RustBuffer, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -805,6 +861,15 @@ typedef struct UniffiVTableCallbackInterfaceSessionEventSink {
 } UniffiVTableCallbackInterfaceSessionEventSink;
 
 #endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_WEBAPP_BUNDLE_SINK
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_WEBAPP_BUNDLE_SINK
+typedef struct UniffiVTableCallbackInterfaceWebappBundleSink {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceWebappBundleSinkMethod0 _Nonnull installed;
+} UniffiVTableCallbackInterfaceWebappBundleSink;
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND
 typedef struct UniffiVTableCallbackInterfaceAppleMusicBackend {
@@ -865,6 +930,21 @@ typedef struct UniffiVTableCallbackInterfaceConnectivityMonitor {
     UniffiCallbackInterfaceConnectivityMonitorMethod0 _Nonnull start;
     UniffiCallbackInterfaceConnectivityMonitorMethod1 _Nonnull stop;
 } UniffiVTableCallbackInterfaceConnectivityMonitor;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EXTENSION_HOST
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EXTENSION_HOST
+typedef struct UniffiVTableCallbackInterfaceExtensionHost {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceExtensionHostMethod0 _Nonnull start;
+    UniffiCallbackInterfaceExtensionHostMethod1 _Nonnull stop;
+    UniffiCallbackInterfaceExtensionHostMethod2 _Nonnull deliver;
+    UniffiCallbackInterfaceExtensionHostMethod3 _Nonnull deviceConnected;
+    UniffiCallbackInterfaceExtensionHostMethod4 _Nonnull deviceDisconnected;
+    UniffiCallbackInterfaceExtensionHostMethod5 _Nonnull deviceActive;
+    UniffiCallbackInterfaceExtensionHostMethod6 _Nonnull configChanged;
+} UniffiVTableCallbackInterfaceExtensionHost;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_GEO_PROVIDER
@@ -1103,6 +1183,11 @@ uint64_t uniffi_bridgething_companion_fn_method_companionsession_connect_provide
 uint64_t uniffi_bridgething_companion_fn_method_companionsession_current_webapp(uint64_t ptr, RustBuffer device_id
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_DEFAULT_RESUME_TARGET
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_DEFAULT_RESUME_TARGET
+RustBuffer uniffi_bridgething_companion_fn_method_companionsession_default_resume_target(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_DELETE_WEBAPP_CONFIG_FIELD
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_DELETE_WEBAPP_CONFIG_FIELD
 uint64_t uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_config_field(uint64_t ptr, RustBuffer device_id, RustBuffer id, RustBuffer key
@@ -1165,7 +1250,7 @@ uint64_t uniffi_bridgething_companion_fn_method_companionsession_install_webapp(
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_INSTALL_WEBAPP_FROM_URL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_INSTALL_WEBAPP_FROM_URL
-uint64_t uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(uint64_t ptr, RustBuffer device_id, RustBuffer url, RustBuffer expected, RustBuffer provenance
+uint64_t uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(uint64_t ptr, RustBuffer device_id, RustBuffer url, RustBuffer expected, RustBuffer provenance, RustBuffer sink
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_LIST_WEBAPP_CONFIG
@@ -1306,6 +1391,26 @@ void uniffi_bridgething_companion_fn_init_callback_vtable_sessioneventsink(const
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_SESSIONEVENTSINK_ON_EVENT
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_SESSIONEVENTSINK_ON_EVENT
 void uniffi_bridgething_companion_fn_method_sessioneventsink_on_event(uint64_t ptr, RustBuffer event, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_WEBAPPBUNDLESINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_WEBAPPBUNDLESINK
+uint64_t uniffi_bridgething_companion_fn_clone_webappbundlesink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_WEBAPPBUNDLESINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_WEBAPPBUNDLESINK
+void uniffi_bridgething_companion_fn_free_webappbundlesink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_WEBAPPBUNDLESINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_WEBAPPBUNDLESINK
+void uniffi_bridgething_companion_fn_init_callback_vtable_webappbundlesink(const UniffiVTableCallbackInterfaceWebappBundleSink* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_WEBAPPBUNDLESINK_INSTALLED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_WEBAPPBUNDLESINK_INSTALLED
+void uniffi_bridgething_companion_fn_method_webappbundlesink_installed(uint64_t ptr, RustBuffer bundle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_OTARUNSTORE
@@ -1857,6 +1962,76 @@ void uniffi_bridgething_companion_fn_method_connectivitymonitor_start(uint64_t p
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_CONNECTIVITYMONITOR_STOP
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_CONNECTIVITYMONITOR_STOP
 void uniffi_bridgething_companion_fn_method_connectivitymonitor_stop(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_EXTENSIONHOST
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_EXTENSIONHOST
+uint64_t uniffi_bridgething_companion_fn_clone_extensionhost(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_EXTENSIONHOST
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_EXTENSIONHOST
+void uniffi_bridgething_companion_fn_free_extensionhost(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_EXTENSIONHOST
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_EXTENSIONHOST
+void uniffi_bridgething_companion_fn_init_callback_vtable_extensionhost(const UniffiVTableCallbackInterfaceExtensionHost* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_START
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_START
+void uniffi_bridgething_companion_fn_method_extensionhost_start(uint64_t ptr, uint64_t inbox, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_STOP
+void uniffi_bridgething_companion_fn_method_extensionhost_stop(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DELIVER
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DELIVER
+void uniffi_bridgething_companion_fn_method_extensionhost_deliver(uint64_t ptr, RustBuffer device, RustBuffer webapp, RustBuffer message, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_CONNECTED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_CONNECTED
+void uniffi_bridgething_companion_fn_method_extensionhost_device_connected(uint64_t ptr, RustBuffer device, RustBuffer name, RustBuffer config, RustBuffer webapps, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_DISCONNECTED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_DISCONNECTED
+void uniffi_bridgething_companion_fn_method_extensionhost_device_disconnected(uint64_t ptr, RustBuffer device, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_DEVICE_ACTIVE
+void uniffi_bridgething_companion_fn_method_extensionhost_device_active(uint64_t ptr, RustBuffer device, RustBuffer webapp, int8_t active, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_CONFIG_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOST_CONFIG_CHANGED
+void uniffi_bridgething_companion_fn_method_extensionhost_config_changed(uint64_t ptr, RustBuffer device, RustBuffer webapp, RustBuffer key, RustBuffer value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_EXTENSIONHOSTINBOX
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_EXTENSIONHOSTINBOX
+uint64_t uniffi_bridgething_companion_fn_clone_extensionhostinbox(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_EXTENSIONHOSTINBOX
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_EXTENSIONHOSTINBOX
+void uniffi_bridgething_companion_fn_free_extensionhostinbox(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOSTINBOX_RUNNING_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOSTINBOX_RUNNING_CHANGED
+void uniffi_bridgething_companion_fn_method_extensionhostinbox_running_changed(uint64_t ptr, RustBuffer webapps, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOSTINBOX_SEND_TO_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_EXTENSIONHOSTINBOX_SEND_TO_DEVICE
+void uniffi_bridgething_companion_fn_method_extensionhostinbox_send_to_device(uint64_t ptr, RustBuffer device, RustBuffer webapp, RustBuffer message, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_GEOINBOX
@@ -3203,6 +3378,12 @@ uint16_t uniffi_bridgething_companion_checksum_method_companionsession_current_w
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_DEFAULT_RESUME_TARGET
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_DEFAULT_RESUME_TARGET
+uint16_t uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_DELETE_WEBAPP_CONFIG_FIELD
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_COMPANIONSESSION_DELETE_WEBAPP_CONFIG_FIELD
 uint16_t uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field(void
@@ -3428,6 +3609,12 @@ uint16_t uniffi_bridgething_companion_checksum_method_companionsession_webapp_sl
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_SESSIONEVENTSINK_ON_EVENT
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_SESSIONEVENTSINK_ON_EVENT
 uint16_t uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_WEBAPPBUNDLESINK_INSTALLED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_WEBAPPBUNDLESINK_INSTALLED
+uint16_t uniffi_bridgething_companion_checksum_method_webappbundlesink_installed(void
     
 );
 #endif
@@ -3818,6 +4005,60 @@ uint16_t uniffi_bridgething_companion_checksum_method_connectivitymonitor_start(
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_CONNECTIVITYMONITOR_STOP
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_CONNECTIVITYMONITOR_STOP
 uint16_t uniffi_bridgething_companion_checksum_method_connectivitymonitor_stop(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_START
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_START
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_start(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_STOP
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_stop(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DELIVER
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DELIVER
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_deliver(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_CONNECTED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_CONNECTED
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_device_connected(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_DISCONNECTED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_DISCONNECTED
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_ACTIVE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_DEVICE_ACTIVE
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_device_active(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_CONFIG_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOST_CONFIG_CHANGED
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhost_config_changed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOSTINBOX_RUNNING_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOSTINBOX_RUNNING_CHANGED
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhostinbox_running_changed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOSTINBOX_SEND_TO_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_EXTENSIONHOSTINBOX_SEND_TO_DEVICE
+uint16_t uniffi_bridgething_companion_checksum_method_extensionhostinbox_send_to_device(void
     
 );
 #endif

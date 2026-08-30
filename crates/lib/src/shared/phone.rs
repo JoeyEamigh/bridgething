@@ -1,6 +1,3 @@
-//! Phone surface - telephony state from the connected companion (iAP2
-//! call CSMs on iOS, Android via gateway).
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -25,9 +22,7 @@ pub enum PhoneCallDirection {
   Outgoing,
 }
 
-/// Call bearer / service kind. iAP2's `CallStateUpdateService` enum
-/// values, projected to our wire surface. Companion gateways that don't
-/// distinguish bearers project all calls to `Telephony`.
+/// How the call is carried. A phone that does not distinguish bearers reports `telephony`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -38,16 +33,14 @@ pub enum PhoneCallService {
   FaceTimeVideo,
 }
 
-/// One telephony call. `call_id` is companion-stable for the call's
-/// lifetime; webapps pass it back to `answer`/`decline`/`end`/`hold`.
-/// `remote_id` is the raw E.164 (or platform raw); `display_name` is the
-/// gateway's resolved contact name when available.
+/// `callId` stays the same for the life of the call. Pass it to `answer`, `decline`, `end`, `hold`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct PhoneCall {
   pub call_id: String,
+  /// E.164 form when the phone provides one.
   pub remote_id: String,
   pub display_name: String,
   pub status: PhoneCallStatus,
@@ -60,9 +53,7 @@ pub struct PhoneCall {
   pub conference_group: Option<u8>,
 }
 
-/// Snapshot of every active call known to the gateway. Multi-call is
-/// possible (call-waiting, conference) - webapps rendering only one
-/// active call typically pick the first non-Held entry.
+/// Call waiting and conference calls produce more than one entry.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -71,8 +62,6 @@ pub struct PhoneState {
   pub active_calls: Vec<PhoneCall>,
 }
 
-/// Why a call ended, surfaced on `onPhoneCallEnded`. `Failed` carries a
-/// platform-defined reason (network, busy, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -84,8 +73,6 @@ pub enum CallEndReason {
   Failed { reason: String },
 }
 
-/// Cellular registration state - populated from iAP2 `CommunicationsUpdate`
-/// or the companion's equivalent.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -99,9 +86,7 @@ pub enum RegistrationStatus {
   EmergencyCallsOnly,
 }
 
-/// What call-control verbs are currently legal. Webapps must gate UI on
-/// these flags; sending an unavailable verb is a protocol violation, not
-/// a no-op. All `None` = no signal received yet, treat as conservatively
+/// Enable a call-control button only while its `*Available` flag is true. Treat a null flag as
 /// unavailable.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -132,19 +117,21 @@ pub struct CommunicationsState {
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum PhoneError {
-  /// The supplied `call_id` is not in the daemon's active set.
-  CallNotFound { call_id: String },
-  /// The companion or platform refused the action (e.g. answer while no
-  /// ringing call exists, end on a remote-controlled conference leg).
-  ActionRejected { reason: String },
-  /// No iAP2 link or companion attached, so there's nowhere to send the
-  /// outbound action.
+  /// The phone reports no call with this id.
+  CallNotFound {
+    call_id: String,
+  },
+  ActionRejected {
+    reason: String,
+  },
+  /// No phone is connected.
   NoTarget,
-  /// `*Available` flag for this verb was false at action time.
-  Unavailable { verb: String },
+  /// The verb's `*Available` flag was false when the action ran.
+  Unavailable {
+    verb: String,
+  },
 }
 
-/// DTMF tones the accessory can play during an active call.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -163,33 +150,27 @@ pub enum DtmfTone {
   Hash,
 }
 
-/// Direction the accessory wants iOS to take when answering an incoming
-/// call while another call is active.
+/// What to do with an existing call when answering a new one.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum AcceptCallAction {
-  /// Answer the new call (placing any existing active call on hold if
-  /// telephony allows it).
+  /// Answer the new call and hold the existing one.
   #[default]
   Accept,
-  /// End the existing active call and answer the new one.
+  /// End the existing call and answer the new one.
   EndAndAccept,
 }
 
-/// Direction the accessory wants iOS to take when ending a call.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum EndCallAction {
-  /// End / decline the call referenced by `CallUUID`.
   #[default]
   End,
-  /// End every active call.
   EndAll,
 }
 
-/// What kind of outbound call the accessory wants placed.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]

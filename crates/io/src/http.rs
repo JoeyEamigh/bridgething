@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use tokio::sync::oneshot;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HttpMethod {
   Get,
   Head,
@@ -11,6 +11,33 @@ pub enum HttpMethod {
   Patch,
   Delete,
   Options,
+  Other(String),
+}
+
+impl HttpMethod {
+  pub fn validate(&self) -> Result<(), String> {
+    let Self::Other(verb) = self else { return Ok(()) };
+    if verb.is_empty() {
+      return Err("http method is empty".to_string());
+    }
+    match verb.bytes().find(|byte| !is_token_byte(*byte)) {
+      Some(byte) => Err(format!("http method {verb:?} is not a token: byte {byte:#04x}")),
+      None => Ok(()),
+    }
+  }
+
+  pub fn as_str(&self) -> &str {
+    match self {
+      Self::Get => "GET",
+      Self::Head => "HEAD",
+      Self::Post => "POST",
+      Self::Put => "PUT",
+      Self::Patch => "PATCH",
+      Self::Delete => "DELETE",
+      Self::Options => "OPTIONS",
+      Self::Other(verb) => verb,
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,8 +72,14 @@ impl HttpResponse {
   }
 }
 
+fn is_token_byte(byte: u8) -> bool {
+  byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
+  #[error("{0}")]
+  InvalidRequest(String),
   #[error("{0}")]
   Transport(String),
   #[error("{0}")]
@@ -197,37 +230,38 @@ impl HttpExecutor {
   }
 
   pub async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, HttpError> {
+    request.method.validate().map_err(HttpError::InvalidRequest)?;
     let transport = self.transport.read().unwrap().clone();
     let (tx, rx) = oneshot::channel();
     let sink = Arc::new(HttpSink {
       tx: Mutex::new(Some(tx)),
     });
-    let method = request.method;
+    let method = request.method.as_str().to_owned();
     let url = request.url.clone();
-    tracing::trace!(?method, %url, bytes = request.body.len(), "http request");
+    tracing::trace!(%method, %url, bytes = request.body.len(), "http request");
     transport.execute(request, sink);
     match rx.await {
       Ok(Ok(resp)) => {
         match (resp.status >= 400, text_body(&resp)) {
           (true, _) => {
             let body = String::from_utf8_lossy(&resp.body);
-            tracing::warn!(?method, %url, status = resp.status, bytes = resp.body.len(), %body, "http response");
+            tracing::warn!(%method, %url, status = resp.status, bytes = resp.body.len(), %body, "http response");
           }
           (false, Some(body)) => {
-            tracing::debug!(?method, %url, status = resp.status, bytes = resp.body.len(), %body, "http response");
+            tracing::debug!(%method, %url, status = resp.status, bytes = resp.body.len(), %body, "http response");
           }
           (false, None) => {
-            tracing::debug!(?method, %url, status = resp.status, bytes = resp.body.len(), "http response");
+            tracing::debug!(%method, %url, status = resp.status, bytes = resp.body.len(), "http response");
           }
         }
         Ok(resp)
       }
       Ok(Err(reason)) => {
-        tracing::warn!(?method, %url, %reason, "http transport error");
+        tracing::warn!(%method, %url, %reason, "http transport error");
         Err(HttpError::Transport(reason))
       }
       Err(_) => {
-        tracing::warn!(?method, %url, "http transport dropped without responding");
+        tracing::warn!(%method, %url, "http transport dropped without responding");
         Err(HttpError::Dropped)
       }
     }
@@ -238,6 +272,7 @@ impl HttpExecutor {
     request: HttpRequest,
     body: Box<dyn DownloadBody>,
   ) -> Result<DownloadOutcome, HttpError> {
+    request.method.validate().map_err(HttpError::InvalidRequest)?;
     let transport = self.transport.read().unwrap().clone();
     let (tx, rx) = oneshot::channel();
     let sink = Arc::new(HttpDownloadSink {

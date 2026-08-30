@@ -27,7 +27,7 @@ use config::*;
 use doc::*;
 use geo::*;
 use hardware::*;
-use libbridgething::{ForwardMessage, wire::WireError};
+use libbridgething::{ForwardMessage, ForwardRouted, gateway::BridgeToGatewayForwardMsgEvent, wire::WireError};
 use library::*;
 use lyrics::*;
 use net::*;
@@ -247,9 +247,24 @@ impl TopLevelHandler {
     Self { handle }
   }
 
-  pub async fn handle_forward(&mut self, data: ForwardMessage) -> HandlerResult {
-    tracing::debug!("({:?}) handling forward message", &self.handle.from);
-    self.handle.bluetooth.gateway_man.broadcast(data).await;
+  pub async fn handle_forward(&mut self, message: ForwardMessage) -> HandlerResult {
+    let Some(webapp) = self.handle.state.active_webapp().await? else {
+      tracing::debug!(
+        "({:?}) dropping a forward with no active webapp to stamp",
+        &self.handle.from
+      );
+      return Ok(());
+    };
+    tracing::debug!("({:?}) forwarding a message from webapp {webapp}", &self.handle.from);
+    self
+      .handle
+      .bluetooth
+      .gateway_man
+      .broadcast(BridgeToGatewayForwardMsgEvent::Routed(ForwardRouted {
+        webapp,
+        message,
+      }))
+      .await;
 
     Ok(())
   }

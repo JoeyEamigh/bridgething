@@ -3,49 +3,72 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-/// Upper bound on `WebappInfo::provenance`
+use super::{ExtensionInfo, ExtensionManifest};
+
 pub const WEBAPP_PROVENANCE_MAX_LEN: usize = 2048;
 
-/// Domain errors emitted by any webapp surface (gateway- or client-side).
-/// Single catalog: both protocols speak the same variant set.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum WebappError {
-  /// No installed webapp matches this id (uninstall / activate / icon / config target).
-  WebappNotFound { id: String },
-  /// Built-in webapps cannot be uninstalled.
-  CannotUninstallBuiltin { id: String },
-  /// Install rejected: the manifest's id is in the reserved-uuid set
-  /// (stock, hub, launcher, etc).
-  IdReserved { id: String },
-  /// Extracted bundle exceeds the 1 GiB disk-protection cap.
-  ExtractedTooLarge { max_bytes: u32 },
-  /// Install carried a provenance string over `WEBAPP_PROVENANCE_MAX_LEN`.
-  ProvenanceTooLong { max_bytes: u32 },
-  /// Zip extraction failed: corrupt archive, unsafe entry names, etc.
-  ZipMalformed { reason: String },
-  /// Bundle has no index.html at its root.
+  WebappNotFound {
+    id: String,
+  },
+  CannotUninstallBuiltin {
+    id: String,
+  },
+  /// The manifest id is one the device reserves. Give the webapp a different uuid.
+  IdReserved {
+    id: String,
+  },
+  /// The extracted bundle is over the 1 GiB cap.
+  ExtractedTooLarge {
+    max_bytes: u32,
+  },
+  /// The provenance string is over 2048 bytes.
+  ProvenanceTooLong {
+    max_bytes: u32,
+  },
+  ZipMalformed {
+    reason: String,
+  },
+  /// Put an `index.html` at the root of the bundle.
   MissingIndexHtml,
-  /// manifest.json missing, unparseable, or failed schema validation.
-  InvalidManifest { reason: String },
-  /// The requested resource (icon / settings page / overlay) isn't declared
-  /// by the webapp's manifest or its file is missing on disk.
-  ResourceNotAvailable { id: String },
-  /// Launcher slot rejected: the bundle does not declare `role: launcher`.
-  NotALauncher { id: String },
-  /// Overlay slot rejected: the bundle declares no overlay entry.
-  NoOverlay { id: String },
-  /// Config key is not declared in the webapp's manifest schema.
-  UnknownConfigKey { key: String },
-  /// Value failed schema validation (out of range, regex mismatch, not in enum).
-  InvalidConfigValue { key: String, reason: String },
-  /// Doc value rejected (oversized).
-  InvalidDocValue { key: String, reason: String },
-  /// Catch-all for genuinely-unexpected failures (io errors, daemon-side
-  /// bugs). Reason is human-readable; not a stable wire contract.
-  Internal { reason: String },
+  /// `manifest.json` is missing, unparseable, or failed validation. `reason` says which.
+  InvalidManifest {
+    reason: String,
+  },
+  /// The manifest must declare the resource and the file must exist in the bundle.
+  ResourceNotAvailable {
+    id: String,
+  },
+  /// A bundle must declare `role` as `launcher` to take the launcher slot.
+  NotALauncher {
+    id: String,
+  },
+  /// A bundle must declare `overlay` to take the overlay slot.
+  NoOverlay {
+    id: String,
+  },
+  /// The manifest declares no config field with this key.
+  UnknownConfigKey {
+    key: String,
+  },
+  /// The value failed the field's declared constraints. `reason` says which.
+  InvalidConfigValue {
+    key: String,
+    reason: String,
+  },
+  /// The doc value is over 256 KiB.
+  InvalidDocValue {
+    key: String,
+    reason: String,
+  },
+  /// An unexpected failure.
+  Internal {
+    reason: String,
+  },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -56,12 +79,7 @@ pub enum WebappSource {
   Installed,
 }
 
-/// A webapp's launcher visibility. `Standard` shows up in user-facing
-/// listings (the hub grid, etc); `Launcher` is itself a launcher and is
-/// hidden from those listings. The daemon filters `Launcher` bundles
-/// out of `client.webapp.list`; the gateway list keeps everything.
-/// Declaring `Launcher` is also what makes a bundle eligible for the
-/// device's launcher slot.
+/// `launcher` makes the bundle eligible for the launcher slot and keeps it out of `webapp.list`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -71,16 +89,11 @@ pub enum WebappRole {
   Launcher,
 }
 
-/// Which system overlays the daemon injects into the active webapp's page.
-/// Every surface defaults to on, so a minimal webapp gets call / pairing /
-/// notification / connection / volume UI for free; a full-service webapp
-/// declares off the surfaces it draws itself. The wire events the webapp
-/// receives are unchanged either way; this only gates the injected UI.
+/// Each overlay defaults to on. Set one false to draw that UI yourself; the events are unchanged.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct OverlayProfile {
-  /// Notification toasts.
   #[serde(default = "overlay_surface_default")]
   pub notifications: bool,
   /// Incoming / active call banner.
@@ -89,14 +102,13 @@ pub struct OverlayProfile {
   /// Bluetooth pairing PIN modal.
   #[serde(default = "overlay_surface_default")]
   pub pairing: bool,
-  /// Companion-disconnected banner, shown only while a paired phone has
-  /// no useful link.
+  /// Banner shown while a paired phone has no live link.
   #[serde(default = "overlay_surface_default")]
   pub connection: bool,
   /// Transient volume level indicator.
   #[serde(default = "overlay_surface_default")]
   pub volume: bool,
-  /// Voice turn indicator: listening, recognizing, and the outcome.
+  /// Voice turn indicator for listening, recognizing, and the outcome.
   #[serde(default = "overlay_surface_default")]
   pub voice: bool,
 }
@@ -124,9 +136,7 @@ impl OverlayProfile {
   }
 }
 
-/// Art render sizes a webapp declares so the companion warms exactly the
-/// pixels it renders: hero (now-playing / detail views) and thumb (queue /
-/// grid). Omitted in a manifest falls back to the canonical `{248, 96}`
+/// A manifest that omits it gets 248 for `heroPx` and 96 for `thumbPx`.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -165,11 +175,11 @@ pub struct WebappInfo {
   pub renders_voice_display: bool,
   pub art: Option<ArtProfile>,
   pub provenance: Option<String>,
+  #[serde(default)]
+  pub extension: Option<ExtensionInfo>,
 }
 
-/// On-disk `manifest.json` shape. Read from the bundle at install time
-/// and validated; the resulting metadata projects to `WebappInfo` for
-/// the wire.
+/// The `manifest.json` at the root of a webapp bundle.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -180,13 +190,17 @@ pub struct WebappManifest {
   pub name: String,
   pub version: String,
   pub description: Option<String>,
+  /// Path in the bundle. The file must be 64 KiB or under.
   pub icon: Option<String>,
+  /// Path in the bundle. The file must be 1 MiB or under.
   pub settings: Option<String>,
+  /// Path in the bundle. The file must be 512 KiB or under.
   pub overlay: Option<String>,
   #[serde(default)]
   pub role: WebappRole,
   #[serde(default)]
   pub config: Vec<ConfigField>,
+  /// The device recognizes `geo` and `net.proxy`.
   #[serde(default)]
   pub permissions: Vec<String>,
   #[serde(default)]
@@ -195,10 +209,12 @@ pub struct WebappManifest {
   pub art: Option<ArtProfile>,
   #[serde(default)]
   pub overlays: OverlayProfile,
+  #[serde(default)]
+  pub extension: Option<ExtensionManifest>,
 }
 
-/// One declared user-tunable setting. Adjacent-tagged on the wire:
-/// `{"type":"string","data":{"key":"zip",...}}`.
+/// One setting the user can tune. In `manifest.json` it reads
+/// `{"type":"string","data":{"key":"zip","label":"ZIP code"}}`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
@@ -219,7 +235,9 @@ pub struct StringField {
   pub key: String,
   pub label: String,
   pub pattern: Option<String>,
+  /// In characters.
   pub min_length: Option<u32>,
+  /// In characters.
   pub max_length: Option<u32>,
   pub default: Option<String>,
 }
@@ -278,9 +296,7 @@ impl ConfigField {
   }
 }
 
-/// One key/value pair as exposed by config read APIs. `value` is always a
-/// string; consumers parse per the field's declared kind (number -> parseFloat,
-/// boolean -> "true"/"false", string/enum/secret -> as-is).
+/// `value` is always a string. Parse it by the field's kind; a boolean is `"true"` or `"false"`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -290,10 +306,7 @@ pub struct ConfigEntry {
   pub value: String,
 }
 
-/// One key/value pair from a webapp's doc namespace: shared structured
-/// state writable from both the companion (gateway) and the webapp
-/// itself, last write wins. Values are strings; apps encode JSON as
-/// needed.
+/// Both the webapp and the companion app write it, and the last write wins. Values are strings.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]

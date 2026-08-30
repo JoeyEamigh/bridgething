@@ -12,6 +12,7 @@ type PublishedApp = {
   permissions: string[];
   role?: 'standard' | 'launcher';
   provides_overlay?: boolean;
+  extension?: { entry?: string; permissions?: string[]; api?: number } | null;
   icon: string | null;
   download: { url: string; size: number; sha256: string };
 };
@@ -21,11 +22,13 @@ type AppRow = { slug: string; versions: VersionRow[]; [k: string]: unknown };
 
 const DEFAULT_MIN_LIB = '0.4.0';
 
-function applySlotFields(row: VersionRow, app: PublishedApp): void {
+function applyBundleTraits(row: VersionRow, app: PublishedApp): void {
   if (app.role === 'launcher') row['role'] = 'launcher';
   else delete row['role'];
   if (app.provides_overlay) row['provides_overlay'] = true;
   else delete row['provides_overlay'];
+  if (app.extension) row['extension'] = { desktop: true, permissions: app.extension.permissions ?? [] };
+  else delete row['extension'];
 }
 
 function parseArgs(argv: string[]): { payload: string; statePath: string; releasedAt: string } {
@@ -79,7 +82,7 @@ for (const app of published) {
   if (existing) {
     existing['download'] = app.download;
     existing['permissions'] = app.permissions;
-    applySlotFields(existing, app);
+    applyBundleTraits(existing, app);
     console.log(`rewrote ${app.slug}@${app.version} artifact metadata`);
   } else {
     const added: VersionRow = {
@@ -90,7 +93,7 @@ for (const app of published) {
       min_libbridgething_version: DEFAULT_MIN_LIB,
       changelog: null,
     };
-    applySlotFields(added, app);
+    applyBundleTraits(added, app);
     row.versions.push(added);
     console.log(`added ${app.slug}@${app.version}`);
   }

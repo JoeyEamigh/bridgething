@@ -380,6 +380,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   }
 
   state.sync_overlay(true).await;
+  state.refresh_forward_availability().await;
 
   if let Some(examples_dir) = config.examples_dir.clone() {
     install::seed_examples(&state.webapps, &examples_dir, &seed_marker).await;

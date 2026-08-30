@@ -1,0 +1,442 @@
+---
+import Snippet from '../../components/docs/Snippet.astro';
+import DocsLayout from '../../layouts/DocsLayout.astro';
+
+const refdes = 'text-accent m-0 mb-4 font-mono text-sm font-normal tracking-normal';
+
+const scaffold = `bun create bridgething my-app --extension`;
+
+const extensionManifest = `{
+  "id": "…",
+  "name": "My App",
+  "version": "0.1.0",
+  "extension": {
+    "entry": "extension/desktop.mjs",
+    "permissions": ["all"],
+    "api": 1
+  }
+}`;
+
+const catalogBlock = `{
+  "version": "0.1.0",
+  "released_at": "2026-08-01T00:00:00Z",
+  "download": { "url": "…", "size": 402118, "sha256": "…" },
+  "permissions": ["net.fetch"],
+  "extension": {
+    "desktop": true,
+    "permissions": ["all"]
+  },
+  "min_libbridgething_version": "0.12.0",
+  "changelog": "Initial release."
+}`;
+
+const extensionShape = `import { asJson, defineExtension, json } from '@bridgething/extension';
+
+let timer: ReturnType<typeof setInterval> | undefined;
+
+defineExtension({
+  start(ctx) {
+    ctx.log.info(\`up, data in \${ctx.dataDir}\`);
+
+    ctx.on('device', event => {
+      if (event.type !== 'connected') return;
+      event.device.send(json({ type: 'hello', name: ctx.webapp.name }));
+    });
+
+    ctx.on('message', (device, message) => {
+      const payload = asJson<{ type: string }>(message);
+      if (payload?.type === 'ping') device.send(json({ type: 'pong' }));
+    });
+
+    timer = setInterval(() => ctx.broadcast(json({ tick: Date.now() })), 5_000);
+  },
+  stop() {
+    clearInterval(timer);
+  },
+});`;
+
+const devicePage = `// the webapp, on the car thing
+const caps = await client.capabilities.get();
+const live = caps.ok && caps.response.capabilities.available.forward;
+
+client.forward.onJson(msg => apply(msg));
+await client.forward.json({ type: 'ping' });`;
+
+const devLoop = `bun run dev            # page in the browser + extension under deno, both on the connected car thing
+bun run dev:device     # the same, with the page on the car thing's own screen
+bun run build          # webapp, settings page, and dist/extension/desktop.mjs
+bun run share          # zip dist/, extension included`;
+
+const discordExtension = `// extension/main.ts, on the desktop
+import { defineExtension, json, type ExtensionContext } from '@bridgething/extension';
+
+const CLIENT_ID = '…'; // the discord application id the settings page uses
+const TOKEN_KEY = 'discord_access_token';
+
+const socket = \`\${Deno.env.get('XDG_RUNTIME_DIR') ?? '/tmp'}/discord-ipc-0\`;
+
+let latest = { type: 'voice', speaking: false, channel: null as string | null };
+let session: Promise<void> | null = null;
+let live: Deno.Conn | null = null;
+let lastToken: string | null = null;
+
+function frame(op: number, payload: unknown): Uint8Array {
+  const body = new TextEncoder().encode(JSON.stringify(payload));
+  const out = new Uint8Array(8 + body.length);
+  const head = new DataView(out.buffer);
+  head.setUint32(0, op, true);
+  head.setUint32(4, body.length, true);
+  out.set(body, 8);
+  return out;
+}
+
+// readFrames is yours: 4 byte op, 4 byte length, then json
+async function pump(ctx: ExtensionContext, conn: Deno.Conn) {
+  for await (const event of readFrames(conn)) {
+    if (event.evt !== 'VOICE_STATE_UPDATE') continue;
+    latest = { type: 'voice', speaking: event.data.speaking, channel: event.data.channel_id };
+    ctx.broadcast(json(latest));
+  }
+}
+
+async function open(ctx: ExtensionContext, token: string) {
+  const conn = await Deno.connect({ transport: 'unix', path: socket });
+  live = conn;
+  try {
+    await conn.write(frame(0, { v: 1, client_id: CLIENT_ID }));
+    await conn.write(frame(1, { cmd: 'AUTHENTICATE', args: { access_token: token }, nonce: crypto.randomUUID() }));
+    await conn.write(frame(1, { cmd: 'SUBSCRIBE', evt: 'VOICE_STATE_UPDATE', nonce: crypto.randomUUID() }));
+    await pump(ctx, conn);
+  } finally {
+    if (live === conn) { // skip the close when a rotation already took the socket
+      live = null;
+      conn.close();
+    }
+  }
+}
+
+// one socket per process, cleared on any exit so the next event reopens it
+function connect(ctx: ExtensionContext) {
+  if (!lastToken || session) return;
+  session = open(ctx, lastToken)
+    .catch(err => ctx.log.error('discord ipc: ' + err))
+    .finally(() => {
+      session = null;
+    });
+}
+
+// a rotated token needs a new socket, discord will not re-auth the live one
+async function use(ctx: ExtensionContext, token: string | null) {
+  if (token !== lastToken) {
+    lastToken = token;
+    const closing = session;
+    live?.close();
+    live = null;
+    await closing;
+  }
+  connect(ctx);
+}
+
+defineExtension({
+  start(ctx) {
+    // ctx.devices is empty here, so read the config off the event
+    ctx.on('device', event => {
+      if (event.type === 'disconnected') return;
+      event.device.send(json(latest)); // late joiners get current state instead of the next change
+      void use(ctx, ctx.config(event.device)[TOKEN_KEY] ?? lastToken);
+    });
+
+    ctx.on('config', (device, key, value) => {
+      if (key !== TOKEN_KEY) return;
+      void use(ctx, value); // hold the last token so a reconnect skips the settings page
+    });
+  },
+});`;
+---
+
+<DocsLayout
+  title="extensions"
+  current="extensions"
+  description="a deno process the desktop app runs alongside your webapp, with the host access your manifest declares.">
+  <header class="mb-12">
+    <h1>extensions</h1>
+    <p class="text-white/60">
+      the desktop app runs one deno process per installed webapp, with the host access your manifest asks for, talking
+      to the car thing over the <a href="/docs/forward">forward</a> surface.
+    </p>
+  </header>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e1 - what it is, and where it runs</h2>
+    <p class="text-white/60">
+      an extension gives your webapp deno and node apis on the computer running the desktop app. pc stats, discord rpc,
+      hotkeys, a local database, spawning ffmpeg.
+    </p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80">desktop only.</strong> a webapp that ships one is installed from the desktop app.
+      </li>
+      <li>
+        <strong class="text-white/80">handle the extension being away.</strong>
+        <code>available.forward</code> is false while the desktop app is closed or the car thing is on a phone. render both
+        states.
+      </li>
+      <li>
+        <strong class="text-white/80">it starts with the desktop app</strong>, device or no device. connect and
+        disconnect arrive as events.
+      </li>
+      <li>
+        <strong class="text-white/80">one process per webapp.</strong> a crash restarts with backoff and shows a status row
+        in the desktop app.
+      </li>
+    </ul>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e2 - the trust model</h2>
+    <p class="text-white/60">the desktop app launches deno with the manifest's permission list.</p>
+    <p class="mt-4 text-white/60">one descriptor string per entry:</p>
+    <ul role="list" class="mt-4 space-y-1.5 font-mono text-sm text-white/60">
+      <li><code>all</code> - full host access.</li>
+      <li><code>net</code>, <code>net:host</code>, <code>net:host:port</code></li>
+      <li><code>read</code>, <code>read:path</code></li>
+      <li><code>write</code>, <code>write:path</code></li>
+      <li><code>run</code>, <code>run:binary</code></li>
+      <li><code>env</code>, <code>env:VAR</code></li>
+      <li><code>sys</code>, <code>sys:kind</code></li>
+      <li><code>ffi</code>, <code>ffi:path</code></li>
+    </ul>
+    <p class="mt-4 text-white/60">
+      a leading <code>~</code> in a <code>read</code>, <code>write</code>, <code>run</code>, or <code>ffi</code> scope expands
+      to the home directory. <code>net</code>, <code>env</code>, and <code>sys</code> scopes pass through as written.
+    </p>
+    <p class="mt-4 text-white/60">before installing, the user sees:</p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        a <strong class="text-white/80">native extension</strong> badge on the store card, with the permission list in plain
+        words. <code>all</code> reads as <strong class="text-white/80">full host access</strong>.
+      </li>
+      <li>
+        a link to your <strong class="text-white/80">public github repo</strong>. every version that declares an
+        extension needs one.
+      </li>
+      <li>
+        a <strong class="text-white/80">confirmation at install</strong> in the desktop app, listing the same permissions.
+      </li>
+    </ul>
+    <p class="mt-4 text-white/60">
+      the scaffold writes <code>["all"]</code>. narrow it before you publish.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e3 - scaffold one</h2>
+    <Snippet code={scaffold} lang="bash" />
+    <p class="mt-3 text-white/60">
+      combines with <code>--launcher</code> and <code>--overlay</code>. it writes <code>extension/main.ts</code>, the
+      <code>@bridgething/extension</code> dependency, an esbuild target that bundles it to
+      <code>dist/extension/desktop.mjs</code>, and the manifest block.
+    </p>
+    <Snippet code={extensionManifest} lang="json" />
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <code>entry</code> is the path to the bundled extension inside the zip. a missing file refuses the install.
+      </li>
+      <li><code>api</code> is the host protocol revision. <code>1</code> is the frozen contract.</li>
+      <li><code>permissions</code> are the deno descriptors from above.</li>
+    </ul>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e4 - the shape of one</h2>
+    <Snippet code={extensionShape} />
+    <p class="mt-3 text-white/60">
+      <code>console.log</code> corrupts the host protocol. log with <code>ctx.log</code>. <code>console.error</code> goes
+      to stderr and is free for scratch debugging.
+    </p>
+    <p class="mt-4 text-white/60">
+      register listeners synchronously at the top of <code>start</code>. the host replays every live device the moment
+      <code>start</code> is invoked, so a listener added after an <code>await</code> misses them.
+    </p>
+    <p class="mt-4 text-white/60">
+      <strong class="text-white/80"><code>start</code> must return.</strong>
+      <code>available.forward</code> stays false on the device until the promise it returns settles. put a long-running loop
+      in a detached task.
+    </p>
+    <p class="mt-4 text-white/60">
+      a complete one is at <a
+        href="https://github.com/JoeyEamigh/bridgething/tree/main/packages/webapps/catalog/system-info"
+        >packages/webapps/catalog/system-info</a
+      >.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e5 - the ctx contract</h2>
+    <p class="text-white/60"><code>ctx</code> is handed to <code>start</code>.</p>
+    <div class="mt-6 overflow-x-auto">
+      <table class="w-full border-collapse font-mono text-sm">
+        <thead>
+          <tr class="border-b border-white/20 text-left text-white/45">
+            <th class="py-3 pr-6 font-normal whitespace-nowrap">member</th>
+            <th class="py-3 font-normal">what it does</th>
+          </tr>
+        </thead>
+        <tbody class="text-white/70">
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.api</td>
+            <td class="py-3">host protocol revision. <code>1</code>.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.webapp</td>
+            <td class="py-3"><code>{'{ id, name, version }'}</code> from your manifest.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.dataDir</td>
+            <td class="py-3">a directory you can write to. the kv store lives in it.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.devices</td>
+            <td class="py-3">the connected car things, recomputed on read.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.device(id)</td>
+            <td class="py-3">
+              a handle for any id, connected or not. never throws. carries <code>id</code>, <code>name</code>,
+              <code>active</code>, <code>connected</code>, <code>config</code>, and <code>send</code>.
+            </td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.broadcast(msg)</td>
+            <td class="py-3">forward to every connected device where your webapp is the active one.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.config(device)</td>
+            <td class="py-3">that device's saved settings, keyed by manifest config key. values are strings.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.on('device')</td>
+            <td class="py-3">
+              <code>event.type</code> is <code>connected</code>, <code>disconnected</code>, or <code>active</code>.
+            </td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.on('message')</td>
+            <td class="py-3"><code>(device, message)</code> for forwards coming back from the webapp.</td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.on('config')</td>
+            <td class="py-3">
+              <code>(device, key, value)</code> when the settings page writes. <code>value</code> is
+              <code>null</code> when the key was cleared.
+            </td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.kv</td>
+            <td class="py-3">
+              <code>get</code> / <code>set</code> / <code>delete</code> / <code>list</code>, a persistent json store
+              scoped to you. <code>get</code> resolves <code>undefined</code> on a miss.
+            </td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.auth.authorize(url)</td>
+            <td class="py-3">
+              opens the system browser and resolves with the full callback url. see <a href="/docs/settings-pages#auth"
+                >connect an account</a
+              >.
+            </td>
+          </tr>
+          <tr class="border-b border-white/10">
+            <td class="py-3 pr-6 align-top whitespace-nowrap">ctx.log</td>
+            <td class="py-3">
+              <code>debug</code> / <code>info</code> / <code>warn</code> / <code>error</code> into the desktop app's log,
+              tagged with your webapp name.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 text-sm text-white/60">
+      failures from <code>kv</code> and <code>auth</code> reject with an <code>ExtensionError</code> carrying a
+      <code>kind</code> of <code>host-error</code>, <code>disconnected</code>, or <code>write-failed</code>.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e6 - the two halves talk over forward</h2>
+    <p class="text-white/60">
+      fire and forget in both directions, with three encodings: <code>text</code>, <code>json</code>, and
+      <code>binary</code>. correlate a reply with its request yourself.
+    </p>
+    <Snippet code={devicePage} />
+    <p class="mt-3 text-white/60">binary payloads arrive as a <code>Uint8Array</code>.</p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80"><code>capabilities.available.forward</code></strong> is true while a connected host
+        runs an extension for your webapp.
+      </li>
+      <li>
+        <strong class="text-white/80">a send to a backgrounded webapp is dropped.</strong> check <code
+          >device.active</code
+        >.
+      </li>
+    </ul>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e7 - the dev loop</h2>
+    <Snippet code={devLoop} lang="bash" />
+    <p class="mt-3 text-white/60">
+      the extension is bundled on every save and restarted under deno with the manifest's permissions. the dev server
+      links to the daemon over usb as an extension host and makes the webapp active so forwards route.
+    </p>
+    <p class="mt-4 text-white/60">
+      <code>ctx.log.*</code> prints in the vite terminal. the <code>deno</code> npm package is fetched into
+      <code>node_modules</code> on first use.
+    </p>
+    <p class="mt-4 text-white/60">
+      <code>ctx.auth.authorize</code> opens the browser, and the provider ends on bridgething.com's callback page. copy that
+      page's address and paste it at <code>http://localhost:5173/__extension/authorize</code>.
+    </p>
+    <p class="mt-4 text-white/60">
+      <code>bun run push</code> installs the webapp only. the desktop app runs the extension once the webapp is installed
+      there. disable it there while you develop, or the webapp hears both copies.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>e8 - publishing it</h2>
+    <p class="text-white/60">
+      the catalog entry mirrors the manifest block. see <a href="/docs/publishing-apps">publishing apps</a>.
+    </p>
+    <Snippet code={catalogBlock} lang="json" />
+    <p class="mt-3 text-white/60"><code>desktop</code> is always <code>true</code>.</p>
+  </section>
+
+  <section>
+    <h2 class={refdes}>e9 - a worked example: discord</h2>
+    <p class="text-white/60">
+      a discord app needs two things from outside the webapp: who you are, and what is happening in your voice channel.
+    </p>
+    <p class="mt-4 text-white/60">
+      <strong class="text-white/80">identity comes from the settings page.</strong> it builds the authorize url with scopes
+      <code>identify rpc</code>, calls <code>settings.auth.authorize</code>, exchanges the code with
+      <code>settings.fetch</code>, and writes the tokens with <code>settings.config.set</code>. the whole thing is in
+      <a href="/docs/settings-pages#auth">connect an account</a>.
+    </p>
+    <p class="mt-4 text-white/60">
+      ask for both scopes. discord refuses <code>AUTHENTICATE</code> and <code>SUBSCRIBE</code> on a token without
+      <code>rpc</code>.
+    </p>
+    <p class="mt-4 text-white/60">
+      <strong class="text-white/80">voice state comes from the extension</strong>, over a unix socket owned by the
+      discord desktop client:
+    </p>
+    <Snippet code={discordExtension} />
+    <p class="mt-3 text-white/60">when the socket ends, the next event reopens it. a cleared token closes it.</p>
+    <p class="mt-4 text-white/60">
+      permissions for this one are <code>env:XDG_RUNTIME_DIR</code> plus <code>read</code> and <code>write</code> on the socket
+      path. the desktop app spawns deno with <code>--no-prompt</code>, so a missing permission crashes the extension.
+    </p>
+  </section>
+</DocsLayout>

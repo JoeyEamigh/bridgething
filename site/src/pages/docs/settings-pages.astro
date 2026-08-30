@@ -32,17 +32,110 @@ client.doc.onChanged(c => applySelection(c.value));`;
 
 const buildSnippet = `// package.json: the scaffold ships this wiring
 "build": "vite build && vite build -c vite.settings.config.ts"`;
+
+const fetchSnippet = `// a real Response, executed natively by the host
+const res = await settings.fetch('https://api.example.com/things', {
+  headers: { authorization: \`Bearer \${token}\` },
+  timeoutMs: 30_000,
+});
+if (!res.ok) throw new Error(\`\${res.status}\`);
+const things = await res.json();`;
+
+const installFetchSnippet = `import { settings } from '@bridgething/client/settings';
+
+// third-party sdks that call fetch() now go through the host
+const restore = settings.installFetch();
+const client = new SomeVendorSdk({ token });
+// restore(); // put the page's own fetch back`;
+
+const fetchErrorSnippet = `import { SettingsFetchError } from '@bridgething/client/settings';
+
+try {
+  await settings.fetch(url);
+} catch (err) {
+  if (err instanceof SettingsFetchError) {
+    // err.kind: 'network' | 'timeout' | 'invalid_url'
+  }
+}`;
+
+const authSnippet = `import { settings } from '@bridgething/client/settings';
+
+const CLIENT_ID = '…';
+const REDIRECT = 'https://bridgething.com/oauth/callback';
+
+// 1. pkce, in the page. the verifier never leaves it.
+const verifier = crypto.randomUUID() + crypto.randomUUID();
+const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+  .replace(/\\+/g, '-')
+  .replace(/\\//g, '_')
+  .replace(/=+$/, '');
+const state = crypto.randomUUID();
+
+// 2. build the provider's authorize url yourself
+const authorize = new URL('https://discord.com/oauth2/authorize');
+authorize.search = new URLSearchParams({
+  client_id: CLIENT_ID,
+  response_type: 'code',
+  scope: 'identify rpc', // identify reads the account here; rpc is what the desktop extension needs
+  redirect_uri: REDIRECT,
+  code_challenge: challenge,
+  code_challenge_method: 'S256',
+  state,
+}).toString();
+
+// 3. hand it to the host. resolves with the full callback url.
+const callback = await settings.auth.authorize(authorize);
+if (callback.searchParams.get('state') !== state) throw new Error('state mismatch');
+
+// 4. exchange the code over settings.fetch
+const token = await settings
+  .fetch('https://discord.com/api/oauth2/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      grant_type: 'authorization_code',
+      code: callback.searchParams.get('code') ?? '',
+      redirect_uri: REDIRECT,
+      code_verifier: verifier,
+    }),
+  })
+  .then(r => r.json());
+
+// 5. store it. the device app reads config; the extension reads ctx.config.
+await settings.config.set('discord_access_token', token.access_token);
+await settings.config.set('discord_refresh_token', token.refresh_token);
+
+// 6. now you can actually use it
+const me = await settings
+  .fetch('https://discord.com/api/users/@me', {
+    headers: { authorization: \`Bearer \${token.access_token}\` },
+  })
+  .then(r => r.json());
+await settings.config.set('discord_user', me.username);`;
+
+const authErrorSnippet = `import { AuthorizeError } from '@bridgething/client/settings';
+
+try {
+  await settings.auth.authorize(url);
+} catch (err) {
+  if (err instanceof AuthorizeError) {
+    // err.kind: 'cancelled' | 'busy' | 'unsupported'
+  }
+}`;
 ---
 
 <DocsLayout
   title="settings pages"
-  description="give your webapp a rich companion-side settings ui: one self-contained html page rendered in the phone app."
+  description="give your webapp a rich companion-side settings ui: one self-contained html page rendered in the phone or desktop app, with a native fetch and oauth."
   current="settings-pages">
   <header class="mb-12">
     <h1>settings pages</h1>
     <p class="text-white/60">
-      typing a url or picking from many entities on the car screen is painful. a settings page moves that to the phone.
-      it is one self-contained html file in your bundle. the companion app renders it in a webview.
+      typing a url or picking from many entities on the car screen is painful. a settings page moves that to the phone,
+      or to the desktop app. it is one self-contained html file in your bundle, rendered in a webview with a bridge to
+      your app's config, a native fetch, and oauth.
     </p>
   </header>
 
@@ -74,34 +167,73 @@ const buildSnippet = `// package.json: the scaffold ships this wiring
     <Snippet code={deviceSnippet} />
   </section>
 
-  <section class="mb-14 scroll-mt-24" id="network">
-    <h2 class={refdes}>s3 - network: use websocket apis or permissive origins</h2>
+  <section class="mb-14 scroll-mt-24" id="fetch">
+    <h2 class={refdes}>s3 - fetching from the page</h2>
     <p class="text-white/60">
-      the page runs on the phone, so it has real internet. but it loads from a <code>file://</code> origin, and the webview
-      enforces cors on <code>fetch</code>/xhr from that origin. in practice:
+      the page has real internet, but it renders from a null origin, so the webview's own <code>fetch</code> is blocked by
+      cors against anything that does not send permissive headers. <code>settings.fetch</code> sidesteps that: the host makes
+      the request natively, outside the webview, and hands you back a real <code>Response</code>.
+    </p>
+    <Snippet code={fetchSnippet} />
+    <p class="mt-3 text-white/60">
+      third-party sdks call the global <code>fetch</code> and will not know about yours. <code>installFetch</code> swaps it
+      out and returns a function that puts the original back.
+    </p>
+    <Snippet code={installFetchSnippet} />
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80">1&nbsp;MiB, each way.</strong> request and response bodies are both capped. this is
+        for json and tokens, not for downloading anything.
+      </li>
+      <li>
+        <strong class="text-white/80">no streaming.</strong> the reply is buffered whole before you see it.
+      </li>
+      <li>
+        <strong class="text-white/80">websockets still work</strong> from the page directly
+      </li>
+    </ul>
+    <Snippet code={fetchErrorSnippet} />
+  </section>
+
+  <section class="mb-14 scroll-mt-24" id="auth">
+    <h2 class={refdes}>s4 - connect an account</h2>
+    <p class="text-white/60">
+      oauth works from <code>settings.auth.authorize</code>. it opens the provider in the real browser and resolves with
+      the callback url.
+    </p>
+    <p class="mt-4 text-white/60">
+      every provider uses <code>https://bridgething.com/oauth/callback</code> as the redirect uri. register that url with
+      your provider and it works from the phone app and the desktop app.
+    </p>
+    <p class="mt-4 text-white/60">
+      pkce happens in your page. the verifier stays in page memory and the exchange goes over
+      <code>settings.fetch</code>, so no secret needs to exist anywhere. providers that demand a client secret cannot be
+      done from a page; put that exchange in a <a href="/docs/extensions">desktop extension</a> or on a server you run.
+    </p>
+    <Snippet code={authSnippet} />
+    <p class="mt-3 text-white/60">
+      the token now lives in your app's config, which means the device webapp reads it over <code>client.config</code> and
+      a desktop extension reads it over <code>ctx.config(device)</code>. refresh it wherever you use it: the webapp
+      through <code>client.net</code>, the extension through its own <code>fetch</code>.
     </p>
     <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
       <li>
-        <strong class="text-white/80">websocket apis work.</strong> the ws handshake is not cors-gated.
+        <strong class="text-white/80">declare the keys you write</strong> in the manifest's <code>config</code>, as
+        <code>secret</code> fields for tokens. an undeclared key is rejected.
       </li>
       <li>
-        <strong class="text-white/80">plain http apis work only if the server sends permissive cors headers</strong>
-        (your requests arrive with <code>Origin: null</code> or <code>*</code>). most public apis are fine.
+        <strong class="text-white/80">one authorize at a time per host.</strong> a second while one is pending fails with
+        <code>busy</code>.
+      </li>
+      <li>
+        <strong class="text-white/80">check <code>state</code> yourself.</strong> the host hands you the url unread.
       </li>
     </ul>
-    <p class="mt-4 text-sm text-white/60">
-      rule of thumb: if the service has a websocket api, use it from the settings page. if it's http-only and
-      cors-strict, do the fetching in your on-device webapp via <code>client.net</code>, which tunnels through the phone
-      and is not origin-restricted.
-    </p>
+    <Snippet code={authErrorSnippet} />
   </section>
 
   <section>
-    <h2 class={refdes}>s4 - a worked example</h2>
-    <p class="text-white/60">
-      the home assistant example app ships a settings page. it dials your ha server over its websocket api. it lists
-      every entity, grouped and searchable. it saves your selection as a doc the device app applies live. the entity
-      picker never renders on the car screen.
-    </p>
+    <h2 class={refdes}>s5 - a worked example</h2>
+    <p class="text-white/60">the home assistant example app ships a settings page</p>
   </section>
 </DocsLayout>

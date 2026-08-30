@@ -80,163 +80,167 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
         <p class="text-accent m-0 mb-1 font-mono text-sm">routes</p>
         <div>
           <InstallRoute
-            name="terbium"
-            detail="we all love terbium"
+            name="terbium, in your browser"
+            detail="flashes over usb from the browser."
             note="chromium only."
             status="ready"
             href={terbiumUrl(defaultChannel)}
             cta="open terbium"
           />
           <InstallRoute
-            name="flashthing cli"
-            detail="for haxors"
+            name="flashthing, on the command line"
+            detail="the same flasher as a binary."
+            note="macos needs libusb. linux needs a udev rule: flashthing-cli --setup."
             status="ready"
             command="cargo install flashthing-cli"
           />
         </div>
       </SchematicSection>
 
-      <SchematicSection refdes="u2 - the companion app">
-        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">the part that makes it wireless</p>
+      <SchematicSection refdes="u2 - the mobile app">
+        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">
+          you can use with your phone via these apps. computer use below
 
-        <dl class="m-0 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div class="relative flex flex-col gap-3 border border-dashed border-white/25 p-6 pt-7">
-            <span class="bg-bg absolute -top-2.5 left-4 px-2 font-mono text-sm text-white/45">ios</span>
-            <dt class="font-display m-0 text-xl font-medium tracking-tight">testflight</dt>
-            <dd class="m-0 flex flex-1 flex-col gap-4">
-              <p class="m-0 text-base text-pretty text-white/60">ios 18 or newer.</p>
-              <div class="mt-auto">
-                <a href={SITE.testflight} class="btn btn-primary" rel="noopener"> get it on testflight </a>
-              </div>
-            </dd>
-          </div>
-
-          <div class="relative flex flex-col gap-3 border border-dashed border-white/25 p-6 pt-7">
-            <span class="bg-bg absolute -top-2.5 left-4 px-2 font-mono text-sm text-white/45">android</span>
-            <dt class="font-display m-0 text-xl font-medium tracking-tight">apk</dt>
-            <dd class="m-0 flex flex-1 flex-col gap-4">
-              <p class="m-0 text-base text-pretty text-white/60">sideload</p>
-              {
-                companion ? (
-                  <Fragment>
-                    <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs text-white/40">
-                      <dt class="m-0">version</dt>
-                      <dd class="m-0 text-white/70 tabular-nums">{companion.android.version}</dd>
-                      <dt class="m-0">size</dt>
-                      <dd class="m-0 text-white/70 tabular-nums">{formatSize(companion.android.size)}</dd>
-                      <dt class="m-0">sha256</dt>
-                      <dd class="m-0 truncate text-white/70">{companion.android.sha256}</dd>
-                    </dl>
-                    <div class="mt-auto">
-                      <a href={companion.android.url} class="btn btn-primary" rel="noopener">
-                        download apk
-                      </a>
-                    </div>
-                  </Fragment>
-                ) : (
-                  <div class="mt-auto">
-                    <span class="btn btn-soon">coming soon</span>
-                  </div>
-                )
-              }
-            </dd>
-          </div>
-        </dl>
-      </SchematicSection>
-
-      <SchematicSection refdes="u3 - the desktop app">
-        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">a tray app that manages the thing</p>
-
-        {
-          desktop ? (
-            <dl class="m-0 mb-8 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm text-white/40 sm:inline-grid">
-              <dt class="m-0">version</dt>
-              <dd class="m-0 text-white/70 tabular-nums">{desktop.version}</dd>
-              <dt class="m-0">released</dt>
-              <dd class="m-0 text-white/70 tabular-nums">
-                <time datetime={desktop.released_at}>{desktop.released_at.slice(0, 10)}</time>
+          <dl class="m-0 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div class="relative flex flex-col gap-3 border border-dashed border-white/25 p-6 pt-7">
+              <span class="bg-bg absolute -top-2.5 left-4 px-2 font-mono text-sm text-white/45">ios</span>
+              <dt class="font-display m-0 text-xl font-medium tracking-tight">testflight</dt>
+              <dd class="m-0 flex flex-1 flex-col gap-4">
+                <p class="m-0 text-base text-pretty text-white/60">ios 18 or newer via testflight</p>
+                <div class="mt-auto">
+                  <a href={SITE.testflight} class="btn btn-primary" rel="noopener"> get it on testflight </a>
+                </div>
               </dd>
-            </dl>
-          ) : (
-            <p class="m-0 mb-8 font-mono text-sm text-white/35">no desktop build published yet.</p>
-          )
-        }
+            </div>
 
-        <Download client:only="preact" rows={desktopBuilds} />
-
-        <p class="text-accent m-0 mt-10 mb-1 font-mono text-sm">every platform</p>
-        <div>
-          {
-            desktopBuilds.map(row => (
-              <div class="flex flex-wrap items-start gap-x-10 gap-y-3 border-b border-white/10 py-5 last:border-b-0">
-                <div class="flex min-w-0 flex-1 basis-72 flex-col gap-1.5">
-                  <h3 class="font-display m-0 text-lg font-medium">
-                    {row.os} {row.arch}
-                  </h3>
-                  <p class="m-0 font-mono text-xs text-white/35">
-                    {`${row.target} · ${row.artifact}${row.build ? ` · ${formatSize(row.build.size)}` : ''}`}
-                  </p>
-                  {row.build ? <p class="m-0 truncate font-mono text-xs text-white/25">{row.build.sha256}</p> : null}
-                </div>
-                <div class="flex shrink-0 items-center">
-                  {row.build ? (
-                    <a href={row.build.url} class="btn" rel="noopener">
-                      download
-                    </a>
+            <div class="relative flex flex-col gap-3 border border-dashed border-white/25 p-6 pt-7">
+              <span class="bg-bg absolute -top-2.5 left-4 px-2 font-mono text-sm text-white/45">android</span>
+              <dt class="font-display m-0 text-xl font-medium tracking-tight">apk</dt>
+              <dd class="m-0 flex flex-1 flex-col gap-4">
+                <p class="m-0 text-base text-pretty text-white/60">sideload</p>
+                {
+                  companion ? (
+                    <Fragment>
+                      <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs text-white/40">
+                        <dt class="m-0">version</dt>
+                        <dd class="m-0 text-white/70 tabular-nums">{companion.android.version}</dd>
+                        <dt class="m-0">size</dt>
+                        <dd class="m-0 text-white/70 tabular-nums">{formatSize(companion.android.size)}</dd>
+                        <dt class="m-0">sha256</dt>
+                        <dd class="m-0 truncate text-white/70">{companion.android.sha256}</dd>
+                      </dl>
+                      <div class="mt-auto">
+                        <a href={companion.android.url} class="btn btn-primary" rel="noopener">
+                          download apk
+                        </a>
+                      </div>
+                    </Fragment>
                   ) : (
-                    <span class="btn btn-soon">coming soon</span>
-                  )}
-                </div>
-              </div>
-            ))
+                    <div class="mt-auto">
+                      <span class="btn btn-soon">coming soon</span>
+                    </div>
+                  )
+                }
+              </dd>
+            </div>
+          </dl>
+        </p>
+
+        <SchematicSection refdes="u3 - the desktop app" class="mt-16">
+          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">
+            a tray app that connects when you plug a thing into your computer
+          </p>
+
+          {
+            desktop ? (
+              <dl class="m-0 mb-8 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm text-white/40 sm:inline-grid">
+                <dt class="m-0">version</dt>
+                <dd class="m-0 text-white/70 tabular-nums">{desktop.version}</dd>
+                <dt class="m-0">released</dt>
+                <dd class="m-0 text-white/70 tabular-nums">
+                  <time datetime={desktop.released_at}>{desktop.released_at.slice(0, 10)}</time>
+                </dd>
+              </dl>
+            ) : (
+              <p class="m-0 mb-8 font-mono text-sm text-white/35">no desktop build published yet.</p>
+            )
           }
-        </div>
-      </SchematicSection>
 
-      <SchematicSection refdes="u4 - already running bridgething">
-        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">how to get the latest features</p>
-        <div>
-          <InstallRoute
-            name="the companion app"
-            detail="the companion pushes updates over bluetooth automatically."
-            note="no cable, nothing to run. it is already doing this."
-            status="ready"
-          />
-          <InstallRoute
-            name="over the cable, from your browser"
-            detail="plug the thing in and update it straight from here. much faster than bluetooth."
-            note="chromium only, and it asks for local network access the first time."
-            status="ready"
-            href="/install/update"
-            cta="open updater"
-          />
-        </div>
-      </SchematicSection>
+          <Download client:only="preact" rows={desktopBuilds} />
 
-      <SchematicSection refdes="j2 - if it goes wrong">
-        <dl class="m-0 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div class="flex flex-col gap-2">
-            <dt class="font-display text-base font-medium">the usb port is flaky</dt>
-            <dd class="m-0 font-mono text-sm text-pretty text-white/50">
-              try different cables, usb ports, usb hubs, no usb hubs, computers, whatever. the thing is picky.
-            </dd>
+          <p class="text-accent m-0 mt-10 mb-1 font-mono text-sm">every platform</p>
+          <div>
+            {
+              desktopBuilds.map(row => (
+                <div class="flex flex-wrap items-start gap-x-10 gap-y-3 border-b border-white/10 py-5 last:border-b-0">
+                  <div class="flex min-w-0 flex-1 basis-72 flex-col gap-1.5">
+                    <h3 class="font-display m-0 text-lg font-medium">
+                      {row.os} {row.arch}
+                    </h3>
+                    <p class="m-0 font-mono text-xs text-white/35">
+                      {`${row.target} · ${row.artifact}${row.build ? ` · ${formatSize(row.build.size)}` : ''}`}
+                    </p>
+                    {row.build ? <p class="m-0 truncate font-mono text-xs text-white/25">{row.build.sha256}</p> : null}
+                  </div>
+                  <div class="flex shrink-0 items-center">
+                    {row.build ? (
+                      <a href={row.build.url} class="btn" rel="noopener">
+                        download
+                      </a>
+                    ) : (
+                      <span class="btn btn-soon">coming soon</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            }
           </div>
-          <div class="flex flex-col gap-2">
-            <dt class="font-display text-base font-medium">this thing is literally impossible to brick</dt>
-            <dd class="m-0 font-mono text-sm text-pretty text-white/50">
-              burn mode lives in rom. holding buttons 1 & 4 on boot always gets you to maskrom.
-            </dd>
+        </SchematicSection>
+
+        <SchematicSection refdes="u4 - already running bridgething" class="mt-16">
+          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">how to get the latest features</p>
+          <div>
+            <InstallRoute name="the companion app" detail="pushes every release over bluetooth." status="ready" />
+            <InstallRoute
+              name="over the cable, from your browser"
+              detail="plug the thing in and update over usb. faster than bluetooth."
+              note="chromium only. it asks for local network access the first time."
+              status="ready"
+              href="/install/update"
+              cta="open updater"
+            />
           </div>
-          <div class="flex flex-col gap-2">
-            <dt class="font-display text-base font-medium">updates roll back</dt>
-            <dd class="m-0 font-mono text-sm text-pretty text-white/50">
-              the image lands in the slot you are not booted from. a failed update boots the old one.
-            </dd>
-          </div>
-        </dl>
+        </SchematicSection>
+
+        <SchematicSection refdes="j2 - if it goes wrong" class="mt-16">
+          <dl class="m-0 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div class="flex flex-col gap-2">
+              <dt class="font-display text-base font-medium">the usb port is flaky</dt>
+              <dd class="m-0 font-mono text-sm text-pretty text-white/50">
+                try different cables, usb ports, usb hubs, no usb hubs, computers, whatever. the thing is picky.
+              </dd>
+            </div>
+            <div class="flex flex-col gap-2">
+              <dt class="font-display text-base font-medium">this thing is literally impossible to brick</dt>
+              <dd class="m-0 font-mono text-sm text-pretty text-white/50">
+                burn mode lives in rom. holding buttons 1 & 4 on boot always gets you to maskrom.
+              </dd>
+            </div>
+            <div class="flex flex-col gap-2">
+              <dt class="font-display text-base font-medium">updates roll back</dt>
+              <dd class="m-0 font-mono text-sm text-pretty text-white/50">
+                the image lands in the slot you are not booted from. a failed update boots the old one.
+              </dd>
+            </div>
+          </dl>
+          <p class="m-0 mt-8 font-mono text-sm text-white/45">
+            more in <a href="/docs/troubleshooting">troubleshooting</a>, or ask in{' '}
+            <a href={SITE.discord} rel="noreferrer noopener">discord</a>.
+          </p>
+        </SchematicSection>
       </SchematicSection>
     </div>
-  </main>
 
-  <Footer />
+    <Footer />
+  </main>
 </Layout>

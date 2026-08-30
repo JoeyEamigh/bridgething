@@ -1,19 +1,13 @@
-
 ## This project is a system overlay
 
-`manifest.json` declares `"overlay": "overlay.js"`. When this bundle holds the
-device's **overlay slot**, the daemon injects that file into every webapp's
-document as it loads. The page in `src/` is incidental: it only renders if
-someone launches this bundle from the hub.
+`manifest.json` declares `"overlay": "overlay.js"`. While this bundle holds the
+device's overlay slot, the daemon injects that file into every webapp's document
+as it loads. The page in `src/` renders when someone launches this bundle from
+the hub.
 
-`bun run push` claims the slot for you and reloads the kiosk, so the overlay
-appears over whatever app is showing. It deliberately does **not** switch to
-this bundle's own page - switching away from the app you are testing against is
-the opposite of what you want.
-
-`bun run push --release` hands the slot back to the daemon's built-in overlay.
-That is the recovery path when a build of yours misbehaves; the companion phone
-app can do the same thing.
+`bun run push` claims the overlay slot and reloads the kiosk, so the overlay
+appears over the webapp that is showing. `bun run push --release` hands the slot
+back to the built-in overlay, the recovery path when a build misbehaves.
 
 ### The contract
 
@@ -23,42 +17,34 @@ The daemon prepends one global before your bundle:
 window.__bridgethingOverlay = { origin: 'http://127.0.0.1:8891', surfaces: {...} };
 ```
 
-- **`surfaces`** is the active webapp's declared profile: `notifications`,
-  `call`, `pairing`, `connection`, `volume`. An app that draws its own volume
-  indicator declares `volume: false`. **Honor these.** The daemon cannot enforce
-  it, and ignoring them means the user sees two of everything on apps that draw
-  their own. If every surface is off, the daemon injects nothing at all.
-- **`origin`** is the kiosk origin. Check `location.origin` against it before
-  mounting so the bundle never runs in a page the daemon did not serve.
+`surfaces` is the active webapp's declared profile, a boolean each for
+`notifications`, `call`, `pairing`, `connection`, `volume`, and `voice`. Render
+only the surfaces set to true; an app that draws its own volume indicator
+declares `volume: false`. When every surface is false the daemon injects nothing.
 
-Everything else comes from `@bridgething/client` over the local websocket, the
-same SDK a normal webapp uses.
+`origin` is the kiosk origin. Compare `location.origin` against it before
+mounting. Everything else comes from `@bridgething/client` over the local
+websocket.
 
-### Constraints that are not style
+### Output constraints
 
-`overlay.js` must be **one self-contained file** under 512 KiB. It is injected as
-a script string into another app's document, so it cannot import a module graph,
-fetch assets, or reach a bundler at runtime. `vite.overlay.config.ts` builds it
-as a single inlined iife; keep it that way.
+`overlay.js` must be one self-contained file under 512 KiB. The daemon injects it
+as a script string into another app's document, so it carries its own code and
+styles and reaches nothing at runtime. `vite.overlay.config.ts` builds a single
+inlined iife; keep that shape.
 
-That is a constraint on the *output*, not on how you write it. Style
-`overlay/main.tsx` with tailwind classes exactly like the rest of the project.
-`overlay/style.css` is a real stylesheet; it is imported with vite's `?inline`
-so the compiled css lands in the bundle as a string and gets mounted into the
-shadow root. Add `@theme` tokens or plain rules there. Because the shadow root
-is closed, tailwind is told not to scan the project (`source(none)`) and only
-generates what `overlay/main.tsx` uses - if you split the overlay across more
-files, add each one with `@source`.
+Style `overlay/main.tsx` with tailwind classes like the rest of the project.
+`overlay/style.css` is imported with vite's `?inline`, so the compiled css mounts
+into the shadow root as a string. Tailwind scans only `overlay/main.tsx`
+(`source(none)`), so add an `@source` line for every file you split across.
 
-The starter encodes four things you should not drop:
+### Keep these four from the starter
 
-1. **Origin guard** before mounting.
-2. **`__bridgethingOverlayMounted`** guard, so a double injection is a no-op.
-3. **Closed shadow root**, so your styles and the host app's cannot reach each
-   other.
-4. **Escape-only, capture-phase key handling**, and only while something is
-   showing. Your overlay sits on top of every app on the device; swallowing keys
-   broadly breaks all of them.
+1. The origin guard before mounting.
+2. The `__bridgethingOverlayMounted` guard, so a second injection is a no-op.
+3. The closed shadow root, which keeps your styles and the host app's apart.
+4. Escape-only key handling on the capture phase, active only while something is
+   showing.
 
-You are running inside someone else's page. A crash, a fullscreen paint, or a
-greedy key handler takes down every webapp, not just this one.
+You run inside every webapp's page. A crash, a fullscreen paint, or a broad key
+handler takes down all of them.

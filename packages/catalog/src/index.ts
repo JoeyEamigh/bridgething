@@ -1,5 +1,6 @@
 export type {
   AppEntry,
+  AppExtension,
   AppVersion,
   Catalog,
   Download,
@@ -11,6 +12,17 @@ export type {
 
 export { CatalogValidationError, validate, validateInvariants, validateSchema } from './validate.ts';
 
+export {
+  EXTENSION_PERMISSION_PATTERN,
+  EXTENSION_SOURCE_PATTERN,
+  declaresExtension,
+  describeExtensionPermission,
+  describeExtensionPermissions,
+  extensionOf,
+  extensionRepoLabel,
+  isExtensionPermission,
+} from './extension.ts';
+
 export { releasedAtInstant, sortNewestFirst } from './versions.ts';
 
 export {
@@ -19,6 +31,7 @@ export {
   isListedWebapp,
   listedWebapps,
   newestCompatible,
+  offersApp,
   pinsFrom,
   recommendedSources,
   satisfies,
@@ -26,6 +39,7 @@ export {
   versionCompatible,
   type CatalogAppListing,
   type CatalogAppUpdate,
+  type ExtensionOffering,
   type InstalledWebapp,
 } from './resolve.ts';
 

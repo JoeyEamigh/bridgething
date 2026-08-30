@@ -1,8 +1,3 @@
-//! Notifications surface - modeled on iAP2 Notification family / Apple
-//! ANCS. Android's richer notification model maps down to this floor.
-//! Two action slots (positive + negative), both optional; no reply text
-//! input.
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -25,24 +20,17 @@ pub enum NotificationCategory {
   Entertainment,
 }
 
-/// Originating app metadata. `bundle_id` is platform-stable
-/// (`com.apple.MobileSMS`, `com.spotify.client`, etc.); `display_name`
-/// and `icon_asset_id` are best-effort and may be missing on Android
-/// gateways that don't surface them cheaply.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct NotificationApp {
+  /// For example `com.apple.MobileSMS`.
   pub bundle_id: String,
   pub display_name: Option<String>,
   pub icon_asset_id: Option<String>,
 }
 
-/// ANCS-shaped flags. `silent` mirrors the iOS "do not surface
-/// audibly" hint and `important` is the high-importance flag. Only
-/// notifications posted while the daemon is connected are surfaced, so
-/// there is no pre-existing/backfill marker.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -51,20 +39,16 @@ pub struct NotificationFlags {
   pub important: bool,
 }
 
-/// One ANCS-style action slot. `label` is the gateway-localized prompt
-/// the webapp renders on the action button.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct NotificationAction {
+  /// Button text, in the phone's language.
   pub label: String,
 }
 
-/// One notification surfaced from the connected companion's notification
-/// center. `id` is companion-stable for the lifetime of the notification
-/// - webapps pass it to `invokePositive`/`invokeNegative` and listen for
-/// `onNotificationRemoved`. Bodies (`title`/`subtitle`/`message`) are all
-/// optional because ANCS treats them as separate attribute fetches.
+/// `id` stays the same while the notification exists. Pass it to `invokePositive` and
+/// `invokeNegative`, and match it against `onRemoved`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -82,9 +66,7 @@ pub struct Notification {
   pub negative_action: Option<NotificationAction>,
 }
 
-/// Why a notification went away. `Acted` covers both positive and
-/// negative invokes; gateways that distinguish dismiss-vs-acted may
-/// surface both as `Acted`.
+/// `acted` covers both the positive and the negative action.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -94,38 +76,29 @@ pub enum DismissReason {
   RemoteDismissed,
 }
 
-/// Daemon-observed state of the ANCS GATT-client session against the
-/// connected iPhone. iOS-only; emitted on transitions so the companion
-/// app can confirm the LE-pair + ANCS authorization handshake completed.
-///
-/// State machine:
-/// - `Unknown`: pre-boot only (no iAP2 has ever attached this session).
-/// - `Probing`: a session task is running but no determination yet,
-///   OR iAP2 just detached and we expect to re-probe on reconnect.
-/// - `Authorized`: ANCS attribute fetches are succeeding.
-/// - `Unauthorized`: ANCS service hidden, or auth-gate detected.
+/// Whether the device can read notifications from a connected iPhone.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum AncsAuthState {
+  /// No iPhone has attached since the device booted.
   #[default]
   Unknown,
+  /// The device is still working out whether it has access.
   Probing,
   Authorized,
   Unauthorized,
 }
 
-/// Why a notification action slot could not be invoked. Both invoke verbs are
-/// fire-and-forget commands, so a refusal has no reply to ride on.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum NotificationsError {
-  /// The id is no longer in the companion's active notification set.
+  /// The notification is gone from the phone.
   NotFound { id: String },
-  /// The slot is absent on this notification, or the platform refused it.
+  /// The notification has no action in that slot, or the phone refused it.
   ActionRejected { reason: String },
-  /// No companion is connected, so there is nowhere to send the action.
+  /// No phone is connected.
   NoTarget,
 }

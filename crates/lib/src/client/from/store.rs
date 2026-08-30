@@ -2,7 +2,6 @@ use bridgething_macros::{BridgeEnum, WireRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Webapp request: read a value out of KV storage by key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -17,7 +16,6 @@ pub struct KVGet {
   pub key: String,
 }
 
-/// Webapp request: write a value to KV storage under `key`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -33,7 +31,6 @@ pub struct KVPut {
   pub value: String,
 }
 
-/// Webapp request: delete the KV storage entry at `key`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -53,9 +50,6 @@ pub struct KVDelete {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon KV storage surface (`client.store`). Storage is
-/// scoped per webapp: keys set by one webapp are invisible to others.
-/// `Get` / `Put` / `Delete` each reply with the resulting `StorageResponse`.
 pub enum ClientToBridgeStoreMsg {
   #[bridge_request]
   Get(KVGet),

@@ -3,8 +3,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-/// Webapp request: read an asset by id. Bridge replies with `Got` on hit
-/// or `NotFound` (domain) when neither cache nor companion has it.
+/// Returns the bytes for an asset id.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -18,29 +17,21 @@ use uuid::Uuid;
   error_variant = NotFound,
 )]
 pub struct AssetGet {
-  /// Opaque asset id, e.g. `iap2/art/<track-key>/<content-hash>` for iAP2 art
-  /// or a companion-defined shape like `spotify/img/<id>`.
   pub id: String,
-  /// Correlates the `Got` or `NotFound` reply back to this request.
+  /// Any uuid you choose.
   #[ts(type = "string")]
   pub request_id: Uuid,
 }
 
-/// Webapp hint to warm the asset cache for a set of ids so subsequent
-/// `Get` calls hit cache. Fire-and-forget; webapps observe completion
-/// via `Asset.Ready` events.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 pub struct AssetPreload {
-  /// Ids to prefetch, capped at 64 per call. Ids already cached and ids
-  /// under the `iap2/art/` prefix are skipped, since iAP2 art only ever
-  /// arrives via a push from the phone, not a pull request.
+  /// Only the first 64 are used.
   pub ids: Vec<String>,
 }
 
-/// Webapp-side asset operations: `get` fetches bytes by id, `preload` warms
-/// the cache ahead of time so a later `get` resolves instantly.
+/// Reads binary assets by id.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum, BridgeDispatch)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]

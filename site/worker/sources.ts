@@ -1,3 +1,4 @@
+import type { Catalog } from '@bridgething/catalog';
 import {
   clamp,
   DESCRIPTION_MAX_LEN,
@@ -11,7 +12,7 @@ import { probeSource } from './probe.ts';
 import { readSource, writeSource, type KvLike } from './store.ts';
 
 export type SubmitOutcome =
-  | { ok: true; created: boolean; record: SourceRecord }
+  | { ok: true; created: boolean; record: SourceRecord; catalog: Catalog }
   | { ok: false; status: number; reason: string };
 
 export async function submitSource(args: {
@@ -48,6 +49,7 @@ export async function submitSource(args: {
     status: existing?.status ?? 'quarantined',
     submitted_at: existing?.submitted_at ?? now,
     reviewed_at: existing?.reviewed_at ?? null,
+    reviewed_by: existing?.reviewed_by ?? null,
     app_count: catalog.apps.length,
     last_checked_at: now,
     last_check_ok: true,
@@ -57,7 +59,7 @@ export async function submitSource(args: {
   };
 
   await writeSource(kv, record);
-  return { ok: true, created: existing === null, record };
+  return { ok: true, created: existing === null, record, catalog };
 }
 
 export async function recheckSource(args: {
@@ -94,10 +96,11 @@ export async function setSourceStatus(args: {
   kv: KvLike;
   rawUrl: string;
   status: SourceStatus;
+  reviewedBy: string;
   note?: string | null;
   now: string;
 }): Promise<ModerateOutcome> {
-  const { kv, rawUrl, status, note, now } = args;
+  const { kv, rawUrl, status, reviewedBy, note, now } = args;
 
   let url: string;
   try {
@@ -114,6 +117,7 @@ export async function setSourceStatus(args: {
     ...existing,
     status,
     reviewed_at: now,
+    reviewed_by: reviewedBy,
     note: note === undefined ? existing.note : note,
   };
 

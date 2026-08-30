@@ -206,19 +206,16 @@ pub enum VoiceDispatchErrorCode {
   Internal,
 }
 
-/// Where the daemon actually routed a successful dispatch
+/// Where a recognized voice intent went.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum VoiceDispatchTarget {
-  /// Transport / playback effect
   Playback,
-  /// A daemon-local device action (discoverable, preset save, cancel).
+  /// A device action, such as pairing mode or saving a preset.
   Device,
-  /// Phone call control over the companion's phone surface.
   Phone,
-  /// Display-shaped intent handed to the active webapp to render.
+  /// The active webapp, which renders the intent.
   Display,
-  /// Switched the active webapp via OPEN_WEBAPP.
   WebappSwitch,
 }

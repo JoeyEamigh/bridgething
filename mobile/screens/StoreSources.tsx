@@ -76,6 +76,7 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
       <View className="mb-8">
         <SectionHeader title="add a source" />
         <Field
+          testID="source-url"
           label="source url"
           icon="Link"
           value={draft}

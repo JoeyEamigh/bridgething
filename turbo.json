@@ -15,13 +15,6 @@
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": [
-        "src/**",
-        "ts/**",
-        "scripts/**",
-        "tsconfig*.json",
-        "package.json"
-      ],
       "outputs": []
     },
     "test": {
@@ -34,6 +27,8 @@
         "src/**",
         "ts/**",
         "scripts/**",
+        "test/**",
+        "dev/**",
         "eslint.config.*",
         "tsconfig*.json",
         "package.json",
@@ -55,6 +50,41 @@
     "@bridgething/browser#typecheck": {
       "dependsOn": ["@bridgething/browser#build"],
       "inputs": ["src/**", "tsconfig*.json", "package.json"],
+      "outputs": []
+    },
+    "@bridgething/lib#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["ts/**", "scripts/**", "tsconfig*.json", "package.json"],
+      "outputs": ["dist/**"]
+    },
+    "@bridgething/lib#typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["ts/**", "tsconfig*.json", "package.json"],
+      "outputs": []
+    },
+    "@bridgething/companion-types#typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["ts/**", "tsconfig*.json", "package.json"],
+      "outputs": []
+    },
+    "@bridgething/companion-types#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["ts/**", "package.json"],
+      "outputs": []
+    },
+    "@bridgething/core-node#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["index.js", "index.d.ts", "package.json"],
+      "outputs": []
+    },
+    "@bridgething/desktop-frontend#typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!src-tauri/**"],
+      "outputs": []
+    },
+    "@bridgething/desktop-frontend#test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!src-tauri/**"],
       "outputs": []
     }
   }

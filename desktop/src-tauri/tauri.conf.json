@@ -43,6 +43,11 @@
     }
   },
   "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["bridgething"]
+      }
+    },
     "updater": {
       "endpoints": [
         "https://ota.bridgething.com/desktop/stable/{{target}}-{{arch}}.json"

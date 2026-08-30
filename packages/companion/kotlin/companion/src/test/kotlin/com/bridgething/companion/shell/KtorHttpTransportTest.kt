@@ -8,6 +8,7 @@ import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -58,7 +59,7 @@ private class RecordingDownloadSink : HttpDownloadSink(NoHandle) {
 }
 
 class KtorHttpTransportTest {
-    private fun request(url: String, method: HttpMethod = HttpMethod.GET, body: ByteArray = ByteArray(0)) =
+    private fun request(url: String, method: HttpMethod = HttpMethod.Get, body: ByteArray = ByteArray(0)) =
         HttpRequest(method = method, url = url, headers = emptyList(), body = body, timeoutMs = 5_000u)
 
     private fun server(build: io.ktor.server.routing.Routing.() -> Unit): Pair<EmbeddedServer<*, *>, Int> {
@@ -99,11 +100,35 @@ class KtorHttpTransportTest {
         try {
             val sink = RecordingHttpSink()
             KtorHttpTransport().execute(
-                request("http://127.0.0.1:$port/echo", HttpMethod.POST, byteArrayOf(4, 5, 6)),
+                request("http://127.0.0.1:$port/echo", HttpMethod.Post, byteArrayOf(4, 5, 6)),
                 sink,
             )
             assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
             assertArrayEquals(byteArrayOf(4, 5, 6), received.poll(1, TimeUnit.SECONDS))
+        } finally {
+            srv.stop(0, 0)
+        }
+    }
+
+    @Test
+    fun aVerbTheEnumDoesNotNameReachesTheServerVerbatim() {
+        val seen = LinkedBlockingQueue<String>()
+        val (srv, port) = server {
+            route("/dav", io.ktor.http.HttpMethod.parse("PROPFIND")) {
+                handle {
+                    seen.add(call.request.local.method.value)
+                    call.respondText("ok")
+                }
+            }
+        }
+        try {
+            val sink = RecordingHttpSink()
+            KtorHttpTransport().execute(
+                request("http://127.0.0.1:$port/dav", HttpMethod.Other("PROPFIND")),
+                sink,
+            )
+            assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
+            assertEquals("PROPFIND", seen.poll(1, TimeUnit.SECONDS))
         } finally {
             srv.stop(0, 0)
         }

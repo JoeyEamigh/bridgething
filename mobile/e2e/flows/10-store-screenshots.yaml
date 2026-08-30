@@ -1,0 +1,31 @@
+appId: com.bridgething.gateway
+name: a store listing shows the screenshots its catalog publishes
+---
+- runFlow: ../common/fresh-start.yaml
+- tapOn: "store"
+- scrollUntilVisible:
+    element: "manage sources"
+    direction: DOWN
+    centerElement: true
+    visibilityPercentage: 100
+- tapOn: "manage sources"
+- tapOn:
+    id: "source-url"
+- inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}/store/catalog.json"
+- hideKeyboard
+- tapOn: "add this source"
+- extendedWaitUntil:
+    visible: "Fixture Calendar"
+    timeout: 60000
+- tapOn: "Fixture Calendar"
+- extendedWaitUntil:
+    visible:
+      id: "app-screenshots"
+    timeout: 60000
+- assertVisible: "A store fixture with a screenshot."
+- swipe:
+    from:
+      id: "app-screenshots"
+    direction: LEFT
+- assertVisible:
+    id: "app-screenshots"

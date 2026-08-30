@@ -439,6 +439,7 @@ export function toWebappInfo(webapp: WireWebappInfo): api.WebappInfo {
     overlayHash: webapp.overlayHash,
     config: webapp.config.map(toConfigField),
     permissions: webapp.permissions,
+    extension: webapp.extension ?? null,
   };
 }
 

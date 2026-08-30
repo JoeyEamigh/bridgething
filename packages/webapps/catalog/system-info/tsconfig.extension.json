@@ -1,0 +1,7 @@
+{
+  "extends": "@bridgething/webapp-shared/tsconfig.json",
+  "compilerOptions": {
+    "types": ["@types/deno"]
+  },
+  "include": ["extension", "src/stats.ts", "src/memory.ts"]
+}

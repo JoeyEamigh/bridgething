@@ -210,6 +210,14 @@ pub struct ConfigField {
   pub default_value: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct ExtensionInfo {
+  pub permissions: Vec<String>,
+  pub api: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
@@ -226,6 +234,7 @@ pub struct WebappInfo {
   pub overlay_hash: Option<String>,
   pub config: Vec<ConfigField>,
   pub permissions: Vec<String>,
+  pub extension: Option<ExtensionInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -243,6 +252,7 @@ pub struct DeviceWebappsEntry {
   pub device_id: String,
   pub webapps: Vec<WebappInfo>,
   pub active: Option<ActiveWebapp>,
+  pub listed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]

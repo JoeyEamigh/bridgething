@@ -1,22 +1,26 @@
 # create-bridgething
 
-Scaffold a new [bridgething](https://github.com/JoeyEamigh/bridgething) webapp, a
-single-page app that runs on the kiosk chromium of a Spotify Car Thing and talks
-to the on-device daemon. The template ships React + Vite + Tailwind v4 with
-[`@bridgething/client`](https://www.npmjs.com/package/@bridgething/client)
-preinstalled.
+Scaffold a [bridgething](https://github.com/JoeyEamigh/bridgething) webapp for
+the Spotify Car Thing: React, Vite, Tailwind v4, and
+[`@bridgething/client`](https://www.npmjs.com/package/@bridgething/client).
 
 ```sh
 bun create bridgething my-app
 ```
 
-```sh
-npm create bridgething@latest my-app
-```
+| flag           | what you get                                  |
+| -------------- | --------------------------------------------- |
+| `--launcher`   | A replacement home screen                     |
+| `--overlay`    | System UI drawn over every webapp             |
+| `--extension`  | A desktop-side Deno process beside the webapp |
+| `--no-install` | Skip `bun install`                            |
+| `--no-git`     | Skip `git init`                               |
 
-The generated project includes `bun run push` to deploy the built webapp to a
-connected Car Thing, `bun run share` to share it with the community, and
-`bun run update` to bring the connected device to the latest bridgething release.
+`--extension` combines with `--launcher`, `--overlay`, or a plain webapp.
 
-- Full docs: <https://bridgething.com/docs>
+The project ships `bun run dev`, `build`, `push` (install on a connected Car
+Thing), `share` (zip for the store), and `update` (bring the device to the
+latest release).
+
+- Docs: <https://bridgething.com/docs>
 - Source: <https://github.com/JoeyEamigh/bridgething>

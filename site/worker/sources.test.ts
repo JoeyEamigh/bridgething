@@ -136,7 +136,7 @@ describe('submitSource', () => {
   test('a resubmit refreshes metadata but keeps the status an admin granted', async () => {
     const kv = fakeKv();
     await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', now: NOW });
+    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', reviewedBy: 'admin', now: NOW });
 
     const renamed = catalog({ repo: { name: 'renamed', description: 'x', homepage: null, icon: null } });
     const outcome = await submitSource({
@@ -157,7 +157,7 @@ describe('submitSource', () => {
   test('a rejected source cannot resubmit itself back into the directory', async () => {
     const kv = fakeKv();
     await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'rejected', now: NOW });
+    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'rejected', reviewedBy: 'admin', now: NOW });
 
     const outcome = await submitSource({ kv, rawUrl: CATALOG_URL, now: LATER, fetchImpl: stubFetch() });
 
@@ -170,7 +170,7 @@ describe('submitSource', () => {
   test('a source that is down leaves the existing record untouched', async () => {
     const kv = fakeKv();
     await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'listed', now: NOW });
+    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'listed', reviewedBy: 'admin', now: NOW });
 
     const outcome = await submitSource({
       kv,
@@ -204,7 +204,7 @@ describe('recheckSource', () => {
   test('records the failure without demoting a source that went dark', async () => {
     const kv = fakeKv();
     await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', now: NOW });
+    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', reviewedBy: 'admin', now: NOW });
 
     const record = (await readSource(kv, CATALOG_URL))!;
     const updated = await recheckSource({ kv, record, now: LATER, fetchImpl: stubFetch({ throws: true }) });
@@ -234,6 +234,7 @@ describe('setSourceStatus', () => {
       kv: fakeKv(),
       rawUrl: 'https://nobody.example/c.json',
       status: 'listed',
+      reviewedBy: 'admin',
       now: NOW,
     });
 
@@ -245,9 +246,22 @@ describe('setSourceStatus', () => {
   test('stamps the review time and keeps the note when none is given', async () => {
     const kv = fakeKv();
     await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'listed', note: 'looks fine', now: NOW });
+    await setSourceStatus({
+      kv,
+      rawUrl: CATALOG_URL,
+      status: 'listed',
+      reviewedBy: 'admin',
+      note: 'looks fine',
+      now: NOW,
+    });
 
-    const outcome = await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', now: LATER });
+    const outcome = await setSourceStatus({
+      kv,
+      rawUrl: CATALOG_URL,
+      status: 'attested',
+      reviewedBy: 'admin',
+      now: LATER,
+    });
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;

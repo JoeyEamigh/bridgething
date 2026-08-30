@@ -1,0 +1,184 @@
+---
+import Footer from '../components/Footer.astro';
+import Header from '../components/Header.astro';
+import SchematicSection from '../components/SchematicSection.astro';
+import TraceRail from '../components/TraceRail.astro';
+import { JamGallery } from '../components/jam/JamGallery';
+import { JamSubmitForm } from '../components/jam/JamSubmitForm';
+import Layout from '../layouts/Layout.astro';
+import {
+  githubAvatar,
+  githubProfile,
+  JAM_CATEGORIES,
+  JAM_PANEL,
+  JAM_PRIZE_POOL,
+  JAM_RULES,
+  JAM_SIDE_PRIZES,
+  JAM_TIMELINE,
+  jamDate,
+  jamPrizeLabel,
+} from '../lib/jam';
+import { SITE } from '../lib/site';
+---
+
+<Layout
+  title="app jam"
+  description={`build a web app for the spotify car thing and get paid for it. $${JAM_PRIZE_POOL} across five categories, judged on real hardware.`}>
+  <Header />
+
+  <main class="container-site relative w-full flex-1">
+    <TraceRail />
+
+    <div class="flex flex-col gap-20 py-16 pl-7 md:py-20 md:pl-12">
+      <SchematicSection class="flex flex-col items-start gap-7">
+        <p class="text-accent m-0 font-mono text-sm">j0 - the bridgething app jam</p>
+        <h1 class="m-0 text-5xl text-balance md:text-6xl">build an app for the car thing for $250 in prizes</h1>
+        <div class="flex flex-wrap items-center gap-4">
+          <a href="#enter" class="btn btn-primary btn-lg">enter the jam</a>
+          <a href="#start" class="btn btn-lg">how to start</a>
+          <a href={SITE.discord} class="btn btn-lg" rel="noreferrer noopener">discord</a>
+        </div>
+      </SchematicSection>
+
+      <SchematicSection refdes="s1 - how to start" class="scroll-mt-8" id="start">
+        <p class="m-0 mb-8 max-w-[62ch] text-lg text-pretty text-white/70">
+          the scaffold gives you react, vite, tailwind, the typed client
+        </p>
+
+        <ol class="m-0 grid list-none grid-cols-1 gap-0 p-0">
+          <li class="flex gap-5 border-t border-white/10 py-5">
+            <span class="text-accent shrink-0 font-mono tabular-nums">01</span>
+            <div class="min-w-0">
+              <p class="m-0 mb-2 flex items-center gap-2 font-mono text-base text-white/80">
+                <span class="text-accent">$</span> bun create bridgething
+              </p>
+              <p class="m-0 font-mono text-sm text-pretty text-white/45">scaffolds a new bridgething app</p>
+            </div>
+          </li>
+          <li class="flex gap-5 border-t border-white/10 py-5">
+            <span class="text-accent shrink-0 font-mono tabular-nums">02</span>
+            <div class="min-w-0">
+              <p class="m-0 mb-2 flex items-center gap-2 font-mono text-base text-white/80">
+                <span class="text-accent">$</span> bun run dev:device
+              </p>
+              <p class="m-0 font-mono text-sm text-pretty text-white/45">
+                run the app on your car thing with hot reload
+              </p>
+            </div>
+          </li>
+          <li class="flex gap-5 border-y border-white/10 py-5">
+            <span class="text-accent shrink-0 font-mono tabular-nums">03</span>
+            <div class="min-w-0">
+              <p class="m-0 mb-2 flex items-center gap-2 font-mono text-base text-white/80">
+                <span class="text-accent">$</span> bun run share
+              </p>
+              <p class="m-0 font-mono text-sm text-pretty text-white/45">get a zip to install on your car thing</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="mt-8 flex flex-wrap items-center gap-4">
+          <a href="/docs/sdk" class="btn">sdk reference</a>
+          <a href="/docs/publishing-apps" class="btn">publishing a catalog</a>
+        </div>
+      </SchematicSection>
+
+      <SchematicSection refdes="cat1-cat5 - categories">
+        <p class="m-0 mb-8 max-w-[62ch] text-lg text-pretty text-white/70">
+          five categories with prizes, first place / second place
+        </p>
+
+        <dl class="m-0 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {
+            JAM_CATEGORIES.map(category => (
+              <div class="relative flex flex-col border border-dashed border-white/25 p-6 pt-7">
+                <span class="bg-bg text-accent absolute -top-2.5 left-4 px-2 font-mono text-sm">
+                  {jamPrizeLabel(category)}
+                </span>
+                <dt class="font-display mb-2 text-xl font-medium tracking-tight">{category.label}</dt>
+                <dd class="m-0 flex flex-col gap-3">
+                  <span class="block text-base text-pretty text-white/75">{category.brief}</span>
+                  <span class="block font-mono text-sm text-pretty text-white/45">{category.detail}</span>
+                </dd>
+              </div>
+            ))
+          }
+        </dl>
+      </SchematicSection>
+
+      <SchematicSection refdes="r1 - rules">
+        <ol class="m-0 grid list-none grid-cols-1 gap-0 p-0 font-mono text-base max-sm:text-sm">
+          {
+            JAM_RULES.map((rule, index) => (
+              <li class="flex gap-4 border-b border-white/10 py-4">
+                <span class="text-accent shrink-0 tabular-nums">{String(index + 1).padStart(2, '0')}</span>
+                <span class="text-pretty text-white/70">{rule}</span>
+              </li>
+            ))
+          }
+        </ol>
+      </SchematicSection>
+
+      <SchematicSection refdes="p1 - the panel">
+        <p class="m-0 mb-8 max-w-[58ch] text-lg text-pretty text-white/70">
+          judges include the DeskThing, Nocturne, and bridgething teams
+        </p>
+        <ul role="list" class="m-0 grid list-none grid-cols-2 gap-4 p-0 sm:grid-cols-3 lg:grid-cols-6">
+          {
+            JAM_PANEL.map(handle => (
+              <li>
+                <a
+                  href={githubProfile(handle)}
+                  rel="noreferrer noopener"
+                  class="flex flex-col items-center gap-3 border-0 border-white/15 p-4 text-center inset-ring inset-ring-white/15 hover:inset-ring-white/40">
+                  <img
+                    src={githubAvatar(handle)}
+                    alt=""
+                    width="80"
+                    height="80"
+                    loading="lazy"
+                    class="size-16 rounded-full border border-white/15"
+                  />
+                  <span class="min-w-0 font-mono text-sm break-all text-white/70">@{handle}</span>
+                </a>
+              </li>
+            ))
+          }
+        </ul>
+      </SchematicSection>
+
+      <SchematicSection refdes="t1 - timeline">
+        <dl class="m-0 grid grid-cols-1 sm:grid-cols-3">
+          <div
+            class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-r sm:pl-10']}>
+            <dt class="font-mono text-sm text-white/45">submissions open</dt>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">August 30th, 2026</dd>
+          </div>
+          <div
+            class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-l sm:pl-10']}>
+            <dt class="font-mono text-sm text-white/45">submissions close</dt>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">September 13th, 2026</dd>
+          </div>
+          <div
+            class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-l sm:pl-10']}>
+            <dt class="font-mono text-sm text-white/45">winners announced</dt>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">soon after</dd>
+          </div>
+        </dl>
+      </SchematicSection>
+
+      <SchematicSection refdes="j1 - enter" class="scroll-mt-8" id="enter">
+        <h2 class="mt-0 mb-2">enter</h2>
+        <p class="m-0 mb-8 max-w-[62ch] text-pretty text-white/60">paste your store catalog url to submit your entry</p>
+        <JamSubmitForm client:load />
+      </SchematicSection>
+
+      <SchematicSection refdes="g1 - gallery" class="scroll-mt-8" id="gallery">
+        <h2 class="mt-0 mb-6">entries</h2>
+        <JamGallery client:load />
+      </SchematicSection>
+    </div>
+  </main>
+
+  <Footer />
+</Layout>

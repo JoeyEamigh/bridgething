@@ -41,7 +41,8 @@ export type Topic =
   | 'ota-available'
   | 'ota-poll'
   | 'logs'
-  | 'known-devices';
+  | 'known-devices'
+  | 'extensions';
 
 export type Invalidation = { topic: Topic; id: string | null };
 

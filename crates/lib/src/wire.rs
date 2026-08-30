@@ -1,18 +1,9 @@
-//! Wire-protocol primitives shared across the bridgething daemon's two
-//! transport surfaces:
-//!
-//! - **Gateway** (Bluetooth, msgpack+gzip-framed): companion <-> daemon over
-//!   RFCOMM, BLE, or iAP2 EA. Pair: `BridgeToGatewayMsgData` (daemon -> companion)
-//!   and `GatewayToBridgeMsgData` (companion -> daemon).
-//! - **Client** (local WebSocket, JSON): on-device webapp <-> daemon. Pair:
-//!   `BridgeToClientMsgData` (daemon -> webapp) and `ClientToBridgeMsgData`
-//!   (webapp -> daemon).
+//! Wire primitives. The companion app speaks msgpack over Bluetooth, a webapp JSON over a WebSocket.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-/// Correlation handle the responder echoes back so the requester's pending future can resolve.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "wire.ts")]
@@ -21,7 +12,6 @@ pub struct ResponseMeta {
   pub request_id: Uuid,
 }
 
-/// Intent the sender signals for each message
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "wire.ts")]
@@ -32,23 +22,24 @@ pub enum MsgMeta {
   Response(ResponseMeta),
 }
 
-/// Protocol-level failure the responder ships when a request could not be reached or dispatched
+/// A request failed before a handler could answer it.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "wire.ts")]
 pub enum WireError {
-  /// Receiver does not recognize this request variant, or recognizes it but cannot map the request to any operation it serves
+  /// The receiver serves no operation for this request.
   Unsupported,
-  /// Receiver recognizes the variant but the backend is not yet wired
+  /// The receiver knows this request but has no backend behind it.
   Unimplemented,
-  /// Receiver could not decode or validate the request payload
-  Malformed { reason: String },
-  /// Unexpected internal error while handling the request
-  HandlerFailed { reason: String },
+  Malformed {
+    reason: String,
+  },
+  HandlerFailed {
+    reason: String,
+  },
 }
 
-/// Failure modes a typed request can surface to the caller.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RequestError<E> {
   Domain(E),
@@ -56,13 +47,12 @@ pub enum RequestError<E> {
   ResponseMismatch,
 }
 
-/// A fire-and-forget event the sender ships to the receiver
+/// A one-way message the sender emits.
 pub trait WireEvent<W>: Into<W> {}
 
-/// A fire-and-forget command the receiver is expected to action
+/// A one-way message that asks the receiver to act.
 pub trait WireCommand<W>: Into<W> {}
 
-/// A typed request whose response shape is statically known
 pub trait WireRequest: Sized + Into<Self::Outbound> {
   type Outbound;
   type Inbound;

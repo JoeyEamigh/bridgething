@@ -20,6 +20,24 @@ const TEMPLATE_DIR = resolve(__dirname, '..', 'template');
 
 type Variant = 'app' | 'launcher' | 'overlay';
 
+const SELF_VERSION = (JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8')) as { version: string })
+  .version;
+
+const EXTENSION_PACKAGE_VERSION = `^${SELF_VERSION}`;
+const ESBUILD_VERSION = '^0.28.2';
+const DENO_VERSION = '2.9.6';
+
+const EXTENSION = {
+  dir: 'template-extension',
+  manifest: {
+    extension: { entry: 'extension/desktop.mjs', permissions: ['all'], api: 1 },
+    config: [{ type: 'string', data: { key: 'greeting', label: 'Greeting the extension sends on connect' } }],
+  },
+  dependencies: { '@bridgething/extension': EXTENSION_PACKAGE_VERSION },
+  devDependencies: { deno: DENO_VERSION, esbuild: ESBUILD_VERSION },
+  summary: 'native extension (a desktop-side Deno process)',
+};
+
 const VARIANTS: Record<
   Variant,
   {
@@ -50,6 +68,7 @@ type Args = {
   install: boolean;
   git: boolean;
   variant: Variant;
+  extension: boolean;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -57,11 +76,13 @@ function parseArgs(argv: string[]): Args {
   let install = true;
   let git = true;
   let variant: Variant = 'app';
+  let extension = false;
   for (const arg of argv) {
     if (arg === '--no-install') install = false;
     else if (arg === '--no-git') git = false;
     else if (arg === '--launcher') variant = 'launcher';
     else if (arg === '--overlay') variant = 'overlay';
+    else if (arg === '--extension') extension = true;
     else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -77,11 +98,11 @@ function parseArgs(argv: string[]): Args {
     printHelp();
     process.exit(1);
   }
-  return { target: positional[0], install, git, variant };
+  return { target: positional[0], install, git, variant, extension };
 }
 
 function printHelp(): void {
-  console.log(`Usage: create-bridgething <target-dir> [--launcher | --overlay] [--no-install] [--no-git]
+  console.log(`Usage: create-bridgething <target-dir> [--launcher | --overlay] [--extension] [--no-install] [--no-git]
 
 Scaffold a new bridgething webapp at <target-dir>.
 
@@ -91,6 +112,10 @@ Variants:
                 device's launcher slot, replacing the built-in hub.
   --overlay     A system overlay. Ships an 'overlay.js' the daemon injects
                 into every webapp, replacing the built-in one.
+
+Add-ons (combine with any variant):
+  --extension   A native extension: a Deno process the desktop app runs
+                alongside the webapp, with host access the manifest declares.
 
 Options:
   --no-install  Skip 'bun install' after copying.
@@ -103,23 +128,54 @@ function patchJson(path: string, patch: Record<string, unknown>): void {
   writeFileSync(path, `${JSON.stringify({ ...parsed, ...patch }, null, 2)}\n`);
 }
 
-function applyVariant(target: string, variant: Variant, subs: Substitutions): void {
-  const spec = VARIANTS[variant];
-  if (spec.dir) copyTemplate(resolve(__dirname, '..', spec.dir), target, subs);
+type PackagePatch = {
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+function patchPackage(target: string, patch: PackagePatch): void {
+  const path = join(target, 'package.json');
+  const pkg = JSON.parse(readFileSync(path, 'utf8')) as {
+    scripts: Record<string, string>;
+    dependencies: Record<string, string>;
+    devDependencies: Record<string, string>;
+  };
+  patchJson(path, {
+    scripts: { ...pkg.scripts, ...patch.scripts },
+    dependencies: sortKeys({ ...pkg.dependencies, ...patch.dependencies }),
+    devDependencies: sortKeys({ ...pkg.devDependencies, ...patch.devDependencies }),
+  });
+}
+
+function sortKeys(record: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+function overlayTemplate(target: string, dir: string, subs: Substitutions): void {
+  copyTemplate(resolve(__dirname, '..', dir), target, subs);
 
   const appendPath = join(target, '_claude_append.md');
-  if (existsSync(appendPath)) {
-    const claudePath = join(target, 'CLAUDE.md');
-    writeFileSync(claudePath, readFileSync(claudePath, 'utf8') + readFileSync(appendPath, 'utf8'));
-    rmSync(appendPath);
-  }
+  if (!existsSync(appendPath)) return;
+  const claudePath = join(target, 'CLAUDE.md');
+  writeFileSync(claudePath, `${readFileSync(claudePath, 'utf8').trimEnd()}\n\n${readFileSync(appendPath, 'utf8')}`);
+  rmSync(appendPath);
+}
 
+function applyVariant(target: string, variant: Variant, subs: Substitutions): void {
+  const spec = VARIANTS[variant];
+  if (spec.dir) overlayTemplate(target, spec.dir, subs);
   if (spec.manifest) patchJson(join(target, 'public', 'manifest.json'), spec.manifest);
-  if (spec.scripts) {
-    const pkgPath = join(target, 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { scripts: Record<string, string> };
-    patchJson(pkgPath, { scripts: { ...pkg.scripts, ...spec.scripts } });
-  }
+  if (spec.scripts) patchPackage(target, { scripts: spec.scripts });
+}
+
+function applyExtension(target: string, subs: Substitutions): void {
+  overlayTemplate(target, EXTENSION.dir, subs);
+  patchJson(join(target, 'public', 'manifest.json'), EXTENSION.manifest);
+  patchPackage(target, {
+    dependencies: EXTENSION.dependencies,
+    devDependencies: EXTENSION.devDependencies,
+  });
 }
 
 type Substitutions = {
@@ -212,7 +268,11 @@ function main(): void {
   console.log(`scaffolding ${projectName} (${webappUuid}) in ${target}`);
   copyTemplate(TEMPLATE_DIR, target, subs);
   applyVariant(target, args.variant, subs);
-  console.log(`  ✓ template copied (${VARIANTS[args.variant].summary})`);
+  if (args.extension) applyExtension(target, subs);
+  const shape = args.extension
+    ? `${VARIANTS[args.variant].summary} + ${EXTENSION.summary}`
+    : VARIANTS[args.variant].summary;
+  console.log(`  ✓ template copied (${shape})`);
 
   linkAgentAliases(target);
   console.log('  ✓ agent guides linked (CLAUDE.md, AGENTS.md, /bridgething skill)');
@@ -238,7 +298,8 @@ function main(): void {
 Done! Next steps:
 
   cd ${args.target}
-${args.install ? '' : '  bun install\n'}  bun run dev          # local dev server (http://localhost:5173/)
+${args.install ? '' : '  bun install\n'}  bun run dev          # local dev server (http://localhost:5173/) against the connected Car Thing
+  bun run dev:device   # the same server on the Car Thing's own screen, hot reload included
 
 Open this folder with your coding agent (Claude Code, Codex, opencode, ...).
 It reads CLAUDE.md / AGENTS.md and the /bridgething skill in .claude/skills
@@ -250,17 +311,28 @@ driving the app, and installing and sharing it.
   bun run share        # build first, then zip dist/ to hand to friends
   bun run update       # bring the connected Car Thing to the latest bridgething release
 ${
-  args.variant === 'app'
-    ? ''
-    : `
+  args.extension
+    ? `
+'extension/main.ts' is the desktop-side half: a Deno process the bridgething
+desktop app runs alongside this webapp, with the host access 'manifest.json'
+declares. 'bun run dev' and 'bun run dev:device' also run it, rebuilt on every
+save and wired to the connected Car Thing, so both halves iterate together.
+'bun run build' bundles it to dist/extension/desktop.mjs.
+`
+    : ''
+}${
+    args.variant === 'app'
+      ? ''
+      : `
 'bun run push' also claims the device's ${args.variant} slot, so this is live the
 moment it lands. 'bun run push --release' hands the slot back to the built-in
 ${args.variant === 'launcher' ? 'hub' : 'overlay'}, which is how you recover if a build of this wedges the screen.
 The companion phone app can do the same thing.
 `
-}
-The starter App connects to ws://127.0.0.1:8891/ on the device, and to
-ws://<device-ip>:8891/ in dev when you set VITE_BRIDGETHING_URL.
+  }
+The starter App connects to the daemon through daemonUrl() in src/daemon.ts: the
+local daemon on the device, and the dev server's proxy to the Car Thing over USB
+under bun run dev (SUPERBIRD_HOST picks another device).
 `);
 }
 

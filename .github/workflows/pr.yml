@@ -56,7 +56,15 @@ jobs:
             ts:
               - *shared
               - 'packages/**'
-              - 'package.json'
+              - 'site/**'
+              - 'desktop/**'
+              - 'mobile/**'
+              - 'crates/lib/ts/**'
+              - 'crates/lib/tsconfig*.json'
+              - 'crates/companion/ts/**'
+              - 'crates/companion/tsconfig*.json'
+              - 'scripts/*.ts'
+              - '**/package.json'
               - 'bun.lock'
               - 'turbo.json'
             kotlin:
@@ -140,8 +148,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
+
       - run: cargo build -p bridgething --features test-tap
-      - run: just test-desktop
+      - env:
+          BRIDGETHING_REQUIRE_DENO: "1"
+        run: just test-desktop
 
   windows:
     needs: scope
@@ -213,6 +227,9 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.6
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
@@ -220,6 +237,7 @@ jobs:
       - env:
           TURBO_SCM_BASE: origin/${{ github.base_ref }}
         run: bunx turbo run typecheck test --affected
+      - run: bun test ./scripts
 
   e2e-android:
     needs: scope

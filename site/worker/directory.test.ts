@@ -20,6 +20,7 @@ function record(url: string, status: SourceStatus, name = url): SourceRecord {
     status,
     submitted_at: '2026-07-01T00:00:00.000Z',
     reviewed_at: null,
+    reviewed_by: null,
     app_count: 2,
     last_checked_at: '2026-07-20T00:00:00.000Z',
     last_check_ok: true,

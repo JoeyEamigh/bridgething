@@ -2443,6 +2443,7 @@ mod tests {
       renders_voice_display: false,
       art: None,
       provenance: None,
+      extension: None,
     }
   }
 

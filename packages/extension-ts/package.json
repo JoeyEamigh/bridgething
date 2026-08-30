@@ -1,0 +1,47 @@
+{
+  "name": "@bridgething/extension",
+  "version": "0.4.0",
+  "description": "The client a bridgething extension uses to reach Car Things, settings, storage, and the user's browser from its Deno process.",
+  "license": "MIT",
+  "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
+  "homepage": "https://bridgething.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoeyEamigh/bridgething.git",
+    "directory": "packages/extension-ts"
+  },
+  "bugs": {
+    "url": "https://github.com/JoeyEamigh/bridgething/issues"
+  },
+  "keywords": ["bridgething", "spotify", "car-thing", "superbird", "extension", "deno"],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit && deno check --no-config --sloppy-imports --import-map=import_map.json src/index.ts",
+    "test": "bun test",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@bridgething/lib": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  },
+  "peerDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

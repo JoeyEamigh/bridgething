@@ -1,5 +1,6 @@
 mod asset;
 mod audio;
+mod forward;
 mod geo;
 mod library;
 mod lyrics;
@@ -15,6 +16,7 @@ mod webapp;
 
 pub use asset::*;
 pub use audio::*;
+pub use forward::*;
 pub use geo::*;
 pub use library::*;
 pub use lyrics::*;

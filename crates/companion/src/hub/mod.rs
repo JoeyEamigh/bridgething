@@ -283,6 +283,7 @@ impl Hub {
         audio_tts: flags.audio_tts,
         lyrics: true,
         playback_targets: supports_targets,
+        forward: false,
       },
       audio: AudioCapabilities::default(),
       music_provider: library

@@ -32,6 +32,7 @@ const TUNNEL_ACK_INTERVAL_BYTES: u32 = 16 * 1024;
 const TUNNEL_ACK_FLUSH: Duration = Duration::from_millis(300);
 
 const SOCKS_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+const DEV_HOST_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const SOCKS_VERSION: u8 = 0x05;
 const SOCKS_AUTH_NONE: u8 = 0x00;
 const SOCKS_AUTH_NO_ACCEPTABLE: u8 = 0xff;
@@ -95,6 +96,23 @@ async fn handle_session(
       return Ok(());
     }
   };
+
+  if let Some(dev) = state.chrome.dev_host()
+    && request.host.parse::<IpAddr>().is_ok_and(|ip| ip == dev)
+  {
+    match tokio::time::timeout(DEV_HOST_CONNECT_TIMEOUT, TcpStream::connect((dev, request.port))).await {
+      Ok(Ok(mut upstream)) => {
+        write_socks_reply(&mut stream, SOCKS_REP_OK).await?;
+        tracing::trace!(%peer, %dev, port = request.port, "SOCKS request served straight to the dev host");
+        let _ = tokio::io::copy_bidirectional(&mut stream, &mut upstream).await;
+        return Ok(());
+      }
+      Ok(Err(err)) => {
+        tracing::debug!(?err, %dev, port = request.port, "dev host refused a direct connection; tunnelling instead")
+      }
+      Err(_) => tracing::debug!(%dev, port = request.port, "dev host direct connect timed out; tunnelling instead"),
+    }
+  }
 
   if !state.active_webapp_has_permission(PROXY_PERMISSION).await {
     tracing::debug!(%peer, host = %request.host, port = request.port, "SOCKS request denied: active webapp lacks net.proxy permission");

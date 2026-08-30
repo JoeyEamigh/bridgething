@@ -1,3 +1,4 @@
+import { declaresExtension, EXTENSION_SOURCE_PATTERN, extensionOf, isExtensionPermission } from './extension.ts';
 import validateSchemaFn from './generated/schema.v1.validator.mjs';
 import type { Catalog } from './types.ts';
 
@@ -43,6 +44,20 @@ export function validateInvariants(catalog: Catalog): void {
       } else {
         seenVersions.add(v.version);
       }
+
+      for (const permission of extensionOf(v)?.permissions ?? []) {
+        if (!isExtensionPermission(permission)) {
+          errors.push(
+            `app "${app.name}" version "${v.version}" declares extension permission "${permission}", which is not a permission descriptor`,
+          );
+        }
+      }
+    }
+
+    if (declaresExtension(app) && !EXTENSION_SOURCE_PATTERN.test(app.source ?? '')) {
+      errors.push(
+        `app "${app.name}" ships a native extension, so its source must be a github.com repo url, not ${app.source === null ? 'null' : `"${app.source}"`}`,
+      );
     }
 
     for (let i = 1; i < app.versions.length; i++) {

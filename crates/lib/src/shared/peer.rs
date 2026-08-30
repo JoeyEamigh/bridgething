@@ -1,15 +1,3 @@
-//! Live runtime view of a paired or transient counterpart of the
-//! daemon. A `Peer` is the abstraction over "the thing on the other
-//! side" - a phone today, a desktop later - identified by its
-//! Bluetooth address and tracked through three orthogonal dimensions:
-//! BlueZ pairing, the iAP2 control session (iOS-only), and the
-//! bridgething companion app's gateway protocol.
-//!
-//! Persistence is separate. The daemon's `last_device` and known-
-//! device set survive restarts; this struct does not. On boot every
-//! peer starts unobserved; each transport's manager fills in its own
-//! axis as connections come up.
-
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -42,9 +30,7 @@ impl Peer {
     }
   }
 
-  /// True when this peer has any data channel actively producing
-  /// state for the daemon: iAP2 reaching Identified (NowPlaying
-  /// flowing) or the bridgething companion gateway being handshaked.
+  /// True when the peer's iAP2 session is identified or its companion app is connected.
   pub fn has_useful_link(&self) -> bool {
     matches!(self.iap2, PeerIap2Status::Identified) || matches!(self.companion, PeerCompanionStatus::Connected { .. })
   }

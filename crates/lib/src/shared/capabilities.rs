@@ -49,6 +49,8 @@ pub struct SurfaceAvailability {
   pub lyrics: bool,
   #[serde(default)]
   pub playback_targets: bool,
+  #[serde(default)]
+  pub forward: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]

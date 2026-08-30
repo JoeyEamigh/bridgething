@@ -18,6 +18,7 @@ import { PairNote } from '../components/PairNote';
 import { Pill } from '../components/Pill';
 import { Press } from '../components/Press';
 import { Progress } from '../components/Progress';
+import { Screenshots } from '../components/Screenshots';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { Spinner } from '../components/Spinner';
@@ -173,6 +174,8 @@ export function StoreAppScreen({ navigation, route }: Props) {
           </View>
         </View>
       </View>
+
+      <Screenshots urls={app.screenshots} name={app.name} />
 
       {newestCompatible?.provides_overlay ? (
         <Text className="mb-6 px-1 font-sans text-muted" style={TEXT.hint}>

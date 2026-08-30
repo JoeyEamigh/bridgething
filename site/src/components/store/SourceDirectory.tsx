@@ -1,4 +1,5 @@
 import type { DirectoryEntry, SourceStatus } from '../../lib/directory-client';
+import { webHref } from '../../lib/href';
 
 const PILL_FOR: Record<SourceStatus, string> = {
   attested: 'pill pill-stable',
@@ -33,6 +34,8 @@ function Health({ entry }: { entry: DirectoryEntry }) {
 }
 
 function SourceRow({ entry }: { entry: DirectoryEntry }) {
+  const homepage = webHref(entry.homepage);
+
   return (
     <li class="flex flex-col border border-white/15 p-4">
       <div class="flex items-start gap-3">
@@ -62,10 +65,10 @@ function SourceRow({ entry }: { entry: DirectoryEntry }) {
 
           <p class="m-0 mt-1 font-mono text-xs text-white/35">
             {entry.app_count} app{entry.app_count === 1 ? '' : 's'}
-            {entry.homepage ? (
+            {homepage ? (
               <>
                 {' · '}
-                <a href={entry.homepage} rel="noopener noreferrer nofollow" target="_blank">
+                <a href={homepage} rel="noopener noreferrer nofollow" target="_blank">
                   homepage
                 </a>
               </>

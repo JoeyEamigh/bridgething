@@ -4,7 +4,7 @@ use ts_rs::TS;
 
 pub const LIBBRIDGETHING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Bridge-side identity announce
+/// Identity and build information for the device.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireEvent)]
 #[wire(BridgeToGateway)]
@@ -17,7 +17,7 @@ pub struct BridgeThingMeta {
   pub nickname: Option<String>,
   pub app_version: String,
   pub daemon_sha256: Option<String>,
-  /// None when no wake word model resolved, or when the one that did carries no version stamp.
+  /// Null when no wake word model is loaded, or the loaded model carries no version.
   pub wakeword_model_version: Option<String>,
   pub os_name: String,
   pub os_version: String,
@@ -44,7 +44,7 @@ impl BridgeThingMeta {
   }
 }
 
-/// What the streamed bytes are going to be applied as
+/// What an update installs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -56,8 +56,7 @@ pub enum OtaKind {
   WakewordModel,
 }
 
-/// Stage of the OTA orchestrator. The phase set is shared between
-/// kinds, with non-image kinds emitting a subset
+/// Each kind emits the phases that apply to it.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -69,13 +68,13 @@ pub enum OtaPhase {
   Reboot,
 }
 
-/// Per-phase progress tick
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct OtaProgress {
   pub phase: OtaPhase,
+  /// 0 to 100, within the current phase.
   pub percent: u8,
   pub step: u8,
   pub nsteps: u8,
@@ -84,26 +83,24 @@ pub struct OtaProgress {
   pub eta_ms: Option<u32>,
 }
 
-/// Terminal error from the OTA orchestrator
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum OtaErrorCode {
-  /// Companion sent fragments for an `update_id` that was never begun
+  /// The update id does not match an update the device has begun.
   UnknownUpdate,
-  /// A fragment's offset did not match the daemon's `received`.
+  /// A fragment arrived at an offset the device was not expecting.
   OffsetMismatch,
-  /// Streamed total's sha256 did not match `OtaBegin.transfer.sha256`.
+  /// The transferred bytes do not match the declared sha256.
   HashMismatch,
-  /// Streamed total's byte length did not match `OtaBegin.transfer.total_size`.
+  /// The transferred bytes do not match the declared size.
   SizeMismatch,
-  /// `CancelUpdate` arrived during a cancelable phase.
   Cancelled,
-  /// libswupdate rejected the .swu (parse / handler / I/O failure).
+  /// The device rejected the payload while writing it.
   WriteFailed,
-  /// Slot-flip / try-counter reset failed after a successful write.
+  /// The update wrote successfully. The device could not mark the new slot bootable.
   ConfirmFailed,
-  /// Anything else (transfer-cache I/O, internal channel close, etc.).
+  /// An unexpected failure.
   Internal,
 }
 
@@ -114,14 +111,13 @@ pub enum OtaErrorCode {
 pub struct OtaError {
   pub code: OtaErrorCode,
   pub msg: String,
-  /// which update failed. a resume re-drives the same artifact, so this is NOT unique per attempt.
+  /// A resume of the same artifact reuses the id.
   pub update_id: Option<String>,
-  /// set only when the bridge is re-delivering a failure whose peer had already gone away
+  /// The device is redelivering a failure the phone missed.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub replayed: bool,
 }
 
-/// Terminal success from the OTA orchestrator, emitted for every `OtaKind`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -131,7 +127,7 @@ pub struct OtaFinished {
   pub update_id: String,
 }
 
-/// Half-open byte range the daemon's range proxy asks the companion to serve
+/// `start` is inclusive, `start + length` is exclusive.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -140,7 +136,6 @@ pub struct RangeSpec {
   pub length: u32,
 }
 
-/// Resolved range the companion is about to serve
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]

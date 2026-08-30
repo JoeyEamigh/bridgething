@@ -5,8 +5,8 @@ if [ $# -lt 1 ]; then
     cat <<EOF >&2
 usage: bridgething-push-webapp <local-path> [<remote-name>]
 
-Pushes <local-path> via rsync to /var/bridgething/webapps/<name>/ on the
-device (default name is the basename of <local-path>).
+Copies <local-path> into /var/bridgething/webapps/<name>/ on the device
+(default name is the basename of <local-path>), replacing what was there.
 EOF
     exit 2
 fi
@@ -20,8 +20,9 @@ if [ ! -e "$LOCAL" ]; then
 fi
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/device.sh"
-DEST="/var/bridgething/webapps/${NAME}"
+ROOT="/var/bridgething/webapps"
+STAGED=".push.${NAME}"
 
-exec rsync -avz --delete \
-    -e "$(device_rsh)" \
-    "${LOCAL%/}/" "root@${DEVICE_HOST}:${DEST}/"
+RECEIVE="set -e; cd ${ROOT}; rm -rf ${STAGED} .old.${NAME}; mkdir -p ${STAGED}; tar -xzf - -C ${STAGED}; if [ -d ${NAME} ]; then mv ${NAME} .old.${NAME}; fi; mv ${STAGED} ${NAME}; rm -rf .old.${NAME}"
+
+tar -czf - -C "${LOCAL%/}" . | $(device_rsh) "root@${DEVICE_HOST}" "$RECEIVE"

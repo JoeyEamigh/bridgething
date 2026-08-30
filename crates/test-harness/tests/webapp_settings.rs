@@ -5,8 +5,8 @@ use futures::StreamExt;
 use libbridgething::{
   client::{DocGet as ClientDocGet, DocSet as ClientDocSet},
   gateway::{
-    BridgeToGatewayTransferMsgEvent, BridgeToGatewayWebappMsgEvent, TransferAck, TransferBody, WebappDocGet,
-    WebappDocList, WebappDocSet, WebappResource, WebappResourceKind,
+    BridgeToGatewayTransferMsgEvent, BridgeToGatewayWebappMsgEvent, TransferAck, TransferBody, WebappConfigDelete,
+    WebappConfigSet, WebappDocGet, WebappDocList, WebappDocSet, WebappResource, WebappResourceKind,
   },
 };
 use sha2::{Digest, Sha256};
@@ -29,11 +29,14 @@ async fn plant_bundle(harness: &Harness, id: Uuid, settings_len: usize) -> (Vec<
   let icon = b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>".to_vec();
   std::fs::write(dir.join("icon.svg"), &icon).expect("icon");
   let settings: Vec<u8> = (0..settings_len).map(|i| (i % 251) as u8).collect();
+  let config = r#""config":[{"type":"string","data":{"key":"zip","label":"Zip"}}]"#;
   let manifest = if settings_len > 0 {
     std::fs::write(dir.join("settings.html"), &settings).expect("settings");
-    format!(r#"{{"id":"{id}","name":"planted","version":"0.1.0","icon":"icon.svg","settings":"settings.html"}}"#)
+    format!(
+      r#"{{"id":"{id}","name":"planted","version":"0.1.0","icon":"icon.svg","settings":"settings.html",{config}}}"#
+    )
   } else {
-    format!(r#"{{"id":"{id}","name":"planted","version":"0.1.0","icon":"icon.svg"}}"#)
+    format!(r#"{{"id":"{id}","name":"planted","version":"0.1.0","icon":"icon.svg",{config}}}"#)
   };
   std::fs::write(dir.join("manifest.json"), manifest).expect("manifest");
   harness.state().webapps.rescan().await;
@@ -208,6 +211,58 @@ async fn gateway_doc_write_reaches_the_active_webapp_live() {
     .await
     .expect("client doc get");
   assert_eq!(read_back.value.as_deref(), Some(r#"{"tiles":[1,2,3]}"#));
+}
+
+#[tokio::test]
+async fn a_config_write_is_announced_to_every_gateway_whether_or_not_the_webapp_is_active() {
+  let harness = Harness::start().await.expect("harness start");
+  let id = Uuid::now_v7();
+  plant_bundle(&harness, id, 0).await;
+
+  let writer = harness.connect_android().await.expect("connect writer");
+  let listener = harness.connect_android().await.expect("connect listener");
+  let mut webapp_events = Box::pin(listener.webapp().events());
+
+  writer
+    .webapp()
+    .config_set(WebappConfigSet {
+      id,
+      key: "zip".into(),
+      value: "10001".into(),
+    })
+    .await
+    .expect("config set");
+
+  let changed = loop {
+    let event = tokio::time::timeout(EVENT_WAIT, webapp_events.next())
+      .await
+      .expect("gateway config change event")
+      .expect("stream open");
+    if let BridgeToGatewayWebappMsgEvent::ConfigChanged(c) = event {
+      break c;
+    }
+  };
+  assert_eq!(changed.id, id);
+  assert_eq!(changed.key, "zip");
+  assert_eq!(changed.value.as_deref(), Some("10001"));
+
+  writer
+    .webapp()
+    .config_delete(WebappConfigDelete { id, key: "zip".into() })
+    .await
+    .expect("config delete");
+
+  let cleared = loop {
+    let event = tokio::time::timeout(EVENT_WAIT, webapp_events.next())
+      .await
+      .expect("gateway config reset event")
+      .expect("stream open");
+    if let BridgeToGatewayWebappMsgEvent::ConfigChanged(c) = event {
+      break c;
+    }
+  };
+  assert_eq!(cleared.key, "zip");
+  assert_eq!(cleared.value, None, "a reset with no default clears the key");
 }
 
 #[tokio::test]

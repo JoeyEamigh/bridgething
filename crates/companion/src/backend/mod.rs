@@ -1,6 +1,7 @@
 pub mod apple_music;
 pub mod audio;
 pub mod connectivity;
+pub mod extension;
 pub mod geo;
 pub mod host;
 pub mod image;
@@ -25,6 +26,7 @@ pub use apple_music::{
 };
 pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeInbox, VolumeLevel, VolumeMonitor};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
+pub use extension::{ExtensionConfigEntry, ExtensionHost, ExtensionHostInbox, ExtensionMessage, ExtensionOutbound};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};
 pub use host::{HostClock, HostEnvironment};
 pub use image::ImageScaler;

@@ -1063,6 +1063,7 @@ fn catalog_session(secrets: Arc<MemorySecrets>) -> Arc<Session> {
       transfer_policy: Some(Arc::new(Unmetered)),
       connectivity: None,
       device_waker: None,
+      extensions: None,
     },
     Arc::new(backends::Heard::default()),
     Arc::new(backends::Offline),

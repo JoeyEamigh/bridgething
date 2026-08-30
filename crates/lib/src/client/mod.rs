@@ -15,10 +15,7 @@ use crate::{
   wire::{MsgMeta, WireError},
 };
 
-/// client -> bridgething
-/// messages from the client (webapp) to bridgething.
-///
-/// these messages travel over the local websocket on port 8891.
+/// One message from a webapp to the daemon, sent over the local websocket on port 8891.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[ts(export, export_to = "client.ts")]
 pub struct ClientToBridgeMsg {
@@ -80,10 +77,7 @@ pub enum ClientToBridgeMsgData {
   LegacyStock(ClientLegacyStockCommand),
 }
 
-/// bridgething -> client
-/// messages from bridgething to the client (webapp).
-///
-/// these messages travel over the local websocket on port 8891.
+/// One message from the daemon to a webapp, sent over the local websocket on port 8891.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[ts(export, export_to = "client.ts")]
 pub struct BridgeToClientMsg {
@@ -142,8 +136,7 @@ pub enum BridgeToClientMsgData {
   Forward(ForwardMessage),
   #[from]
   Error(WireError),
-  /// response, command received and won't have a completion
+  /// The daemon accepted the command. No further reply follows.
   Ack,
-  /// response, command has been completed
   Done,
 }

@@ -1,10 +1,10 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "surfaces": [
     {
       "name": "asset",
       "title": "Asset",
-      "description": "Daemon-side asset events. `Got` and `NotFound` resolve a webapp `Get`\n(correlated by request_id). `Ready` broadcasts to all connected\nwebapps whenever the cache gains an asset, regardless of source\n(companion push, iAP2 FileTransfer, request fulfilment, lazy disk\nload). `Cleared` broadcasts on every eviction path - LRU pressure,\nTTL expiry, companion-issued Clear, daemon shutdown - so SDK\nconsumers can drop Blob URLs and refetch as needed.",
+      "description": "Binary assets such as cover art, addressed by an opaque id. `get` returns bytes, `preload` fetches\nahead of time, and `onReady` and `onCleared` track which ids are available.",
       "events": [
         {
           "method": "onReady",
@@ -20,7 +20,7 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp request: read an asset by id. Bridge replies with `Got` on hit\nor `NotFound` (domain) when neither cache nor companion has it.",
+          "description": "Returns the bytes for an asset id.",
           "payload": "AssetGet",
           "payload_ref": "AssetGet",
           "response": "AssetGot",
@@ -40,7 +40,7 @@
     {
       "name": "audio",
       "title": "Audio",
-      "description": "Daemon -> webapp audio events: TTS lifecycle notifications and\nvolume/mute changes.",
+      "description": "Volume, mute, speech, and short sounds on the device. `setVolume` and `setMute` set the output\nlevel, `onVolumeChanged` reports every change, and `tts` speaks text.",
       "events": [
         {
           "method": "onTtsStarted",
@@ -108,7 +108,7 @@
     {
       "name": "bluetooth",
       "title": "Bluetooth",
-      "description": "Daemon -> webapp bluetooth surface: connection status/events,\nin-flight pairing feedback, and the reply to `bluetooth.list`.",
+      "description": "Bluetooth pairing and connection state. `onStatus` and `onConnectedDevice` track the connected\nphone, `onPin` carries a code to show on screen, and `list` returns the paired devices.",
       "events": [
         {
           "method": "onStatus",
@@ -139,7 +139,7 @@
       "requests": [
         {
           "method": "list",
-          "description": "Marker request: webapp asks the bridge for the paired bluetooth\ndevices map. Pairs with `BridgeToClientBluetoothMsg::PairedDevices`.",
+          "description": "Returns the paired devices, keyed by MAC address.",
           "response": "PairedDevicesMap",
           "response_event": "onPairedDevices"
         }
@@ -172,7 +172,7 @@
     {
       "name": "capabilities",
       "title": "Capabilities",
-      "description": "Daemon -> webapp capabilities surface. `Update` is the broadcast event\nfired on connect + on every change; `Snapshot` is the typed reply to\n`CapabilitiesGet`. Webapps that auto-react to capability change\nlisten on `Update` and don't need to call `Get`.",
+      "description": "What the connected companion app can do. `get` reads it, `onUpdate` delivers it as it changes.",
       "events": [
         {
           "method": "onUpdate",
@@ -183,7 +183,6 @@
       "requests": [
         {
           "method": "get",
-          "description": "One-shot query: webapp asks the daemon for the current capabilities\nsnapshot. The daemon also broadcasts `Update` on every connect and\non every change, so most webapps don't need this.",
           "response": "CapabilitiesSnapshot",
           "response_event": "onSnapshot"
         }
@@ -194,7 +193,7 @@
     {
       "name": "config",
       "title": "Config",
-      "description": "Daemon -> webapp config replies and events. `Get` / `List` reply to\nthe matching requests. `Changed` broadcasts whenever the gateway\nwrites or deletes a value for the active webapp.",
+      "description": "Read-only settings the companion app holds for the active webapp. `get` and `list` read them,\n`onChanged` reports every write.",
       "events": [
         {
           "method": "onChanged",
@@ -205,7 +204,7 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp request: read one config value for the currently active webapp,\nas most recently set by the gateway. This surface is read-only; only\nthe gateway can write config.",
+          "description": "Returns one config value for the active webapp.",
           "payload": "ConfigGet",
           "payload_ref": "ConfigGet",
           "response": "ConfigGetReply",
@@ -213,7 +212,7 @@
         },
         {
           "method": "list",
-          "description": "Marker request: webapp asks for every config entry the gateway has\nset for the currently active webapp.",
+          "description": "Returns every config value set for the active webapp.",
           "response": "ConfigListReply",
           "response_event": "onList"
         }
@@ -224,7 +223,7 @@
     {
       "name": "doc",
       "title": "Doc",
-      "description": "Daemon -> webapp doc replies and events. `Changed` broadcasts whenever\nthe companion writes or deletes a doc value for the active webapp.",
+      "description": "Key/value state the active webapp shares with the companion app. `get`, `list`, `set`, and\n`delete` read and write it, and `onChanged` reports the writes the companion app makes.",
       "events": [
         {
           "method": "onChanged",
@@ -235,7 +234,7 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp request: read one doc value for the currently active webapp.",
+          "description": "Returns one doc value for the active webapp.",
           "payload": "DocGet",
           "payload_ref": "DocGet",
           "response": "DocGetReply",
@@ -243,13 +242,13 @@
         },
         {
           "method": "list",
-          "description": "Marker request: read every doc entry for the currently active webapp.",
+          "description": "Returns every doc value for the active webapp.",
           "response": "DocListReply",
           "response_event": "onList"
         },
         {
           "method": "set",
-          "description": "Webapp request: write a doc value. Last write wins against companion\nwrites on the same key; the companion hears the change as a gateway\n`webapp.docChanged` event.",
+          "description": "Writes a doc value. Keep it at or under 256 KiB.",
           "payload": "DocSet",
           "payload_ref": "DocSet",
           "response": "DocAck",
@@ -258,7 +257,6 @@
         },
         {
           "method": "delete",
-          "description": "Webapp request: delete the doc entry at `key`.",
           "payload": "DocDelete",
           "payload_ref": "DocDelete",
           "response": "DocAck",
@@ -271,7 +269,7 @@
     {
       "name": "geo",
       "title": "Geo",
-      "description": "Daemon -> webapp location surface: the `Position` stream a watch\nproduces, plus replies to `geo.watch` and `geo.getOnce`.",
+      "description": "Position fixes from the connected phone. `watch` subscribes and `getOnce` returns a single fix.\nDeclare the `geo` permission in the webapp manifest, or both fail.",
       "events": [
         {
           "method": "onPosition",
@@ -314,7 +312,7 @@
     {
       "name": "hardware",
       "title": "Hardware",
-      "description": "Daemon -> webapp hardware surface: ambient-light and backlight\nchange events, plus the reply to `hardware.stateGet`.",
+      "description": "The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive\nthe backlight, and `stateGet` reads the current state.",
       "events": [
         {
           "method": "onAmbientLightUpdate",
@@ -330,7 +328,6 @@
       "requests": [
         {
           "method": "stateGet",
-          "description": "Webapp asks for the current `HardwareState` snapshot (backlight mode\n/ level, ambient light reading).",
           "response": "HardwareStateReply",
           "response_event": "onStateReply"
         }
@@ -352,7 +349,7 @@
     {
       "name": "library",
       "title": "Library",
-      "description": "Daemon -> webapp replies and events for the library surface. `BrowseReply`, `SearchReply`,\n`RecommendationsReply`, `ResolveContextReply`, `FavoritesListReply`, and\n`FavoritesContainsReply` answer the\nmatching `ClientToBridgeLibraryMsg` request; `LibraryErrorReply` replaces the reply on\nfailure. `FavoriteChanged` is a live event broadcast to every connected webapp whenever a\nfavorite's status changes.",
+      "description": "The music library on the connected phone. `browse`, `search`, and `favoritesList` read it,\n`favoritesToggle` and `favoritesSet` edit saved state, and `onFavoriteChanged` reports every change.",
       "events": [
         {
           "method": "onFavoriteChanged",
@@ -361,6 +358,7 @@
         },
         {
           "method": "onErrorEvent",
+          "description": "A `favoritesToggle`, `favoritesSet`, or `favoritesSetMany` command failed.",
           "payload": "LibraryErrorReply",
           "payload_ref": "LibraryErrorReply"
         }
@@ -368,7 +366,7 @@
       "requests": [
         {
           "method": "browse",
-          "description": "Payload for the `browse` request: page through a folder in the library tree, or the root\nmenu when `node_id` is `None`. Root-level results are cached by the daemon for up to 5\nminutes, so a fresh call immediately after a library change on the gateway side may still\nreturn the previous shelf layout.",
+          "description": "Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.",
           "payload": "LibraryBrowse",
           "payload_ref": "LibraryBrowse",
           "response": "LibraryBrowseReply",
@@ -377,7 +375,6 @@
         },
         {
           "method": "search",
-          "description": "Payload for the `search` request: free-text search across the connected gateway's library.",
           "payload": "LibrarySearch",
           "payload_ref": "LibrarySearch",
           "response": "LibrarySearchReply",
@@ -386,7 +383,6 @@
         },
         {
           "method": "recommendations",
-          "description": "Recommendations seeded by up to 5 items. Spotify hard-caps at 5\ncombined seeds across tracks/artists/genres.",
           "payload": "LibraryRecommendations",
           "payload_ref": "LibraryRecommendations",
           "response": "LibraryRecommendationsReply",
@@ -395,7 +391,7 @@
         },
         {
           "method": "resolveContext",
-          "description": "Payload for the `resolveContext` request: turn a context uri into something renderable.\nThe uri a webapp holds is usually `PlayerState::context`, so this is what backs a\n\"playing from <playlist>\" line without having to browse for the containing entity.",
+          "description": "Resolves a context uri, such as `PlayerState.context.uri`, into a name and an artwork id.",
           "payload": "LibraryResolveContext",
           "payload_ref": "LibraryResolveContext",
           "response": "LibraryResolveContextReply",
@@ -404,7 +400,7 @@
         },
         {
           "method": "favoritesList",
-          "description": "Payload for the `favoritesList` request: page through the user's saved/liked library items,\nmixed across kinds.",
+          "description": "Pages the user's saved items, mixed across kinds.",
           "payload": "LibraryFavoritesList",
           "payload_ref": "LibraryFavoritesList",
           "response": "LibraryFavoritesListReply",
@@ -413,7 +409,7 @@
         },
         {
           "method": "favoritesContains",
-          "description": "Batch \"is each of these favorited?\" lookup. Reply `liked` is\nindex-aligned with the request `uris`, capped at 50 per call.",
+          "description": "Checks which uris the user has saved. The reply's `liked` lines up with `uris`.",
           "payload": "LibraryFavoritesContains",
           "payload_ref": "LibraryFavoritesContains",
           "response": "LibraryFavoritesContainsReply",
@@ -443,7 +439,7 @@
     {
       "name": "net",
       "title": "Net",
-      "description": "Daemon -> webapp network surface: replies to `fetch` and `ws.open`,\nWebSocket frame/close/error events, and the `Stream*` event trio\ndriven by `net.stream.open`.",
+      "description": "HTTP, WebSocket, and streaming network access for a webapp, proxied through the connected\ncompanion app. `fetch` returns one response, `wsOpen` opens a socket, and `streamOpen` delivers\na body as `onStreamBegin`, `onStreamChunk`, and `onStreamEnd`.",
       "events": [
         {
           "method": "onWsMessage",
@@ -484,7 +480,7 @@
       "requests": [
         {
           "method": "fetch",
-          "description": "Payload for `net.fetch`: a single proxied HTTP request/response\nround-trip through the connected companion's network stack.",
+          "description": "Sends one HTTP request through the connected companion app and returns the response.",
           "payload": "NetFetch",
           "payload_ref": "NetFetch",
           "response": "NetFetchReply",
@@ -527,7 +523,7 @@
     {
       "name": "notifications",
       "title": "Notifications",
-      "description": "Daemon -> webapp notification mirror. `Posted` fires for a new\nnotification, `Updated` when an existing one's content changes, and\n`Removed` when it is dismissed, acted on, or cleared remotely.",
+      "description": "Phone notifications mirrored to a webapp. `onPosted`, `onUpdated`, and `onRemoved` track the\nlist. `invokePositive` and `invokeNegative` run the actions a notification offers.",
       "events": [
         {
           "method": "onPosted",
@@ -568,7 +564,7 @@
     {
       "name": "peer",
       "title": "Peer",
-      "description": "Daemon -> webapp peer surface: a full snapshot of every known peer\n(paired, iAP2, and companion-gateway state), re-sent whenever any\npeer changes. There is no per-webapp request; a fresh snapshot\narrives on connect and after every change.",
+      "description": "Every device the daemon knows about, with its pairing and companion-app connection state.",
       "events": [
         {
           "method": "onSnapshot",
@@ -583,7 +579,7 @@
     {
       "name": "phone",
       "title": "Phone",
-      "description": "Daemon -> webapp telephony surface. `CallStarted`/`CallUpdated`/\n`CallEnded`/`CommunicationsChanged` are unsolicited broadcasts driven by\nthe connected companion's telephony state; `StateReply`/`ErrorReply`\nanswer webapp-issued requests and commands.",
+      "description": "Call state from the connected phone. `onCallStarted`, `onCallUpdated`, and `onCallEnded` track\neach call, and `onCommunicationsChanged` reports signal, registration, and usable commands.",
       "events": [
         {
           "method": "onCallStarted",
@@ -646,6 +642,7 @@
         },
         {
           "method": "hold",
+          "description": "Requires `holdAvailable` on `CommunicationsState`.",
           "payload": "PhoneCallAction",
           "payload_ref": "PhoneCallAction"
         },
@@ -660,10 +657,12 @@
           "payload_ref": "PhoneInitiateAction"
         },
         {
-          "method": "swap"
+          "method": "swap",
+          "description": "Requires `swapAvailable` on `CommunicationsState`."
         },
         {
-          "method": "merge"
+          "method": "merge",
+          "description": "Requires `mergeAvailable` on `CommunicationsState`."
         },
         {
           "method": "mute",
@@ -681,7 +680,7 @@
     {
       "name": "player",
       "title": "Player",
-      "description": "Daemon -> webapp player surface. `Snapshot` lands on connect with the\ncurrent player state; `Delta` is the `NowPlayingUpdate` stream the\nSDK auto-merges; `QueueChanged` fires when the queue mutates without\na track change. `StateReply`/`QueueReply` are the typed responses\nto the matching webapp queries.",
+      "description": "Playback state and transport for a webapp. `onSnapshot` delivers the full `PlayerState` after\nevery change. `stateGet`, `queueGet`, and `targetsGet` return the same shapes on demand.",
       "events": [
         {
           "method": "onSnapshot",
@@ -712,19 +711,17 @@
       "requests": [
         {
           "method": "stateGet",
-          "description": "Webapp asks for the current `PlayerState` snapshot. Most webapps\ndon't need this - the SDK auto-merges deltas into a cached state.",
           "response": "PlayerStateReply",
           "response_event": "onStateReply"
         },
         {
           "method": "queueGet",
-          "description": "Webapp asks for the current queue snapshot. Rarely needed - the SDK\ntracks the queue from `QueueChanged` events.",
           "response": "PlayerQueueReply",
           "response_event": "onQueueReply"
         },
         {
           "method": "targetsGet",
-          "description": "Webapp asks for the provider's remote endpoints",
+          "description": "Returns the playback targets the connected companion app can reach.",
           "response": "PlayerTargetsReply",
           "response_event": "onTargetsReply"
         }
@@ -732,73 +729,62 @@
       "commands": [
         {
           "method": "play",
-          "description": "Start playback of a uri, optionally within a context.",
+          "description": "Starts playback of a uri, optionally within a context.",
           "payload": "PlayUri",
           "payload_ref": "PlayUri"
         },
         {
           "method": "queue",
-          "description": "Add a uri to the queue.",
           "payload": "QueueUri",
           "payload_ref": "QueueUri"
         },
         {
-          "method": "pause",
-          "description": "Pause playback."
+          "method": "pause"
         },
         {
-          "method": "resume",
-          "description": "Resume playback."
+          "method": "resume"
         },
         {
-          "method": "skipNext",
-          "description": "Skip to the next track."
+          "method": "skipNext"
         },
         {
           "method": "skipPrev",
-          "description": "Skip to the previous track, or restart the current one.",
           "payload": "SkipPrev",
           "payload_ref": "SkipPrev"
         },
         {
           "method": "skipToIndex",
-          "description": "Jump to a specific queue index.",
           "payload": "SkipToIndex",
           "payload_ref": "SkipToIndex"
         },
         {
           "method": "seekTo",
-          "description": "Seek to an absolute position.",
           "payload": "SeekTo",
           "payload_ref": "SeekTo"
         },
         {
           "method": "setShuffle",
-          "description": "Toggle shuffle.",
           "payload": "SetShuffle",
           "payload_ref": "SetShuffle"
         },
         {
           "method": "setRepeat",
-          "description": "Set the repeat mode.",
           "payload": "SetRepeat",
           "payload_ref": "SetRepeat"
         },
         {
           "method": "setSpeed",
-          "description": "Change playback speed.",
+          "description": "Changes playback speed. The connected companion app must support rate control.",
           "payload": "SetSpeed",
           "payload_ref": "SetSpeed"
         },
         {
           "method": "setCrossfade",
-          "description": "Set the crossfade duration.",
           "payload": "SetCrossfade",
           "payload_ref": "SetCrossfade"
         },
         {
           "method": "transferTo",
-          "description": "Move playback to one of the provider's remote endpoints.",
           "payload": "TransferTo",
           "payload_ref": "TransferTo"
         }
@@ -808,7 +794,7 @@
     {
       "name": "system",
       "title": "System",
-      "description": "Daemon -> webapp system events and replies. `Version` replies to\n`VersionRequest` with the daemon's `BridgeThingMeta`. `DiagnosticsReply`,\n`LogsTailReply`, `LogsSubscribeReply`, and `DeviceNickname` are replies\nto their matching requests. `LogEntry` streams matching lines to a live\n`LogsSubscribe` subscription. `OtaProgress` / `OtaError` report OTA\norchestrator state. `DeviceNicknameChanged` broadcasts whenever the\nnickname mutates, including from another surface.",
+      "description": "Device identity, health, logs, and power control for a webapp. `versionRequest` and\n`diagnosticsGet` return the daemon version and a health snapshot, `logsTail` returns a batch of\nlog entries, and `logsSubscribe` streams them as `onLogEntry`. `onOtaProgress` and\n`onOtaFinished` track a software update.",
       "events": [
         {
           "method": "onLogEntry",
@@ -839,13 +825,13 @@
       "requests": [
         {
           "method": "versionRequest",
-          "description": "Marker request: webapp asks the bridge for its `BridgeThingMeta`.\nPairs with `BridgeToClientSystemMsg::Version`.",
+          "description": "Returns the daemon's version and identity as `BridgeThingMeta`.",
           "response": "BridgeThingMeta",
           "response_event": "onVersion"
         },
         {
           "method": "diagnosticsGet",
-          "description": "Marker request: webapp asks for a one-shot `Diagnostics` snapshot\n(disk/memory usage, uptime, SoC temp, load average, versions).\nPairs with `BridgeToClientSystemMsg::DiagnosticsReply`.",
+          "description": "Returns disk and memory use, uptime, SoC temperature, load average, and versions.",
           "response": "DiagnosticsReply",
           "response_event": "onDiagnosticsReply"
         },
@@ -890,7 +876,7 @@
     {
       "name": "time",
       "title": "Time",
-      "description": "Daemon -> webapp wall-clock surface: an initial snapshot at\nannounce, `Changed` events on tz/locale/clock updates, and the\nreply to `time.get`.",
+      "description": "Wall clock, locale, and timezone for a webapp. The connected phone supplies all three. `get`\nreturns them on demand and `onChanged` reports every later update.",
       "events": [
         {
           "method": "onChanged",
@@ -901,7 +887,7 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp asks for the current `TimeSnapshot` (wall clock + locale +\ntimezone). Most webapps don't need this - the daemon also pushes\n`Changed` events on the same shape whenever the source updates.",
+          "description": "Returns the current wall clock, locale, and timezone.",
           "response": "TimeSnapshot",
           "response_event": "onSnapshot"
         }
@@ -912,7 +898,7 @@
     {
       "name": "voice",
       "title": "Voice",
-      "description": "Daemon -> webapp voice/NLU surface",
+      "description": "Voice capture and intent results for a webapp. `onStateChanged` reports mic mute and capture\nstate, `onActivity` reports each step of a voice turn, and `onIntent` delivers a resolved intent.",
       "events": [
         {
           "method": "onStateChanged",
@@ -933,7 +919,7 @@
       "requests": [
         {
           "method": "stateGet",
-          "description": "Webapp asks for the current `VoiceState` (muted / capturing).",
+          "description": "Returns the current `VoiceState`.",
           "response": "VoiceStateReply",
           "response_event": "onStateReply"
         }
@@ -964,7 +950,7 @@
     {
       "name": "webapp",
       "title": "Webapp",
-      "description": "Daemon -> webapp replies and events for the webapp-management surface. `ListReply`,\n`CurrentReply`, `ActiveReply`, and `IconReply` answer the matching `ClientToBridgeWebappMsg`\nrequest; `WebappError` replaces the reply on failure. `WebappInstalled` is a live event\nbroadcast to every connected webapp whenever an installed-webapp transfer completes.",
+      "description": "The webapps installed on the device. `list` returns the ones a user can switch to, `current`\nreports which one is showing, `activate` switches to another, and `icon` returns icon bytes.\n`onActiveChanged`, `onWebappInstalled`, and `onWebappUninstalled` report changes as they happen.",
       "events": [
         {
           "method": "onActiveChanged",
@@ -973,7 +959,6 @@
         },
         {
           "method": "onWebappInstalled",
-          "description": "event: a webapp install completed successfully",
           "payload": "WebappInfo",
           "payload_ref": "WebappInfo"
         },
@@ -991,13 +976,12 @@
         },
         {
           "method": "current",
-          "description": "Webapp asks which webapp (if any) is currently active in the kiosk.",
           "response": "WebappCurrentReply",
           "response_event": "onCurrentReply"
         },
         {
           "method": "activate",
-          "description": "Payload for the `activate` request: switch the kiosk to the given webapp. The kiosk runs\nexactly one webapp at a time, so the daemon navigates it away from whatever was previously\nactive.",
+          "description": "Switches the device to another webapp. The device shows one webapp at a time.",
           "payload": "WebappActivate",
           "payload_ref": "WebappActivate",
           "response": "WebappActiveReply",
@@ -1006,7 +990,6 @@
         },
         {
           "method": "icon",
-          "description": "Fetch the icon bytes for an installed webapp. Returns the raw bytes\ndeclared by the manifest's `icon` field.",
           "payload": "WebappIcon",
           "payload_ref": "WebappIcon",
           "response": "WebappIconReply",
@@ -1045,7 +1028,7 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp asks for lyrics of whatever is playing right now. Deliberately payload-free: the\ndaemon builds the track identity from its own player state, so a webapp cannot disagree with\nit about what is playing.",
+          "description": "Returns the lyrics for the track that is playing.",
           "response": "LyricsReply",
           "error": "LyricsErrorReply",
           "response_event": "onLyricsReply"
@@ -1061,7 +1044,6 @@
       "requests": [
         {
           "method": "get",
-          "description": "Webapp request: read a value out of KV storage by key.",
           "payload": "KVGet",
           "payload_ref": "KVGet",
           "response": "StorageResponse",
@@ -1069,7 +1051,6 @@
         },
         {
           "method": "put",
-          "description": "Webapp request: write a value to KV storage under `key`.",
           "payload": "KVPut",
           "payload_ref": "KVPut",
           "response": "StorageResponse",
@@ -1077,7 +1058,6 @@
         },
         {
           "method": "delete",
-          "description": "Webapp request: delete the KV storage entry at `key`.",
           "payload": "KVDelete",
           "payload_ref": "KVDelete",
           "response": "StorageResponse",
@@ -1091,21 +1071,20 @@
   "types": {
     "AcceptCallAction": {
       "kind": "enum",
-      "description": "Direction the accessory wants iOS to take when answering an incoming\ncall while another call is active.",
+      "description": "What to do with an existing call when answering a new one.",
       "variants": [
         {
           "name": "Accept",
-          "description": "Answer the new call (placing any existing active call on hold if\ntelephony allows it)."
+          "description": "Answer the new call and hold the existing one."
         },
         {
           "name": "EndAndAccept",
-          "description": "End the existing active call and answer the new one."
+          "description": "End the existing call and answer the new one."
         }
       ]
     },
     "Album": {
       "kind": "struct",
-      "description": "An album reference.",
       "fields": [
         {
           "name": "id",
@@ -1119,13 +1098,13 @@
           "name": "artworkId",
           "type": "string",
           "optional": true,
-          "description": "Opaque artwork asset id (`asset.get`), when known."
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         }
       ]
     },
     "AmbientLightUpdate": {
       "kind": "struct",
-      "description": "0..=100 ambient-brightness indicator derived from the on-board ALS +\nbacklight curve. Low = dark room, high = bright room.",
+      "description": "Room brightness, `0` (dark) to `100` (bright).",
       "fields": [
         {
           "name": "ambientLevel",
@@ -1135,7 +1114,7 @@
     },
     "ArtProfile": {
       "kind": "struct",
-      "description": "Art render sizes a webapp declares so the companion warms exactly the\npixels it renders: hero (now-playing / detail views) and thumb (queue /\ngrid). Omitted in a manifest falls back to the canonical `{248, 96}`",
+      "description": "A manifest that omits it gets 248 for `heroPx` and 96 for `thumbPx`.",
       "fields": [
         {
           "name": "heroPx",
@@ -1149,7 +1128,6 @@
     },
     "Artist": {
       "kind": "struct",
-      "description": "An artist reference.",
       "fields": [
         {
           "name": "id",
@@ -1163,13 +1141,12 @@
           "name": "artworkId",
           "type": "string",
           "optional": true,
-          "description": "Opaque artwork asset id (`asset.get`), when known."
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         }
       ]
     },
     "AssetCleared": {
       "kind": "struct",
-      "description": "An asset was evicted from the cache; webapps should drop any cached\nBlob URL for it and refetch on next use.",
       "fields": [
         {
           "name": "id",
@@ -1179,77 +1156,67 @@
     },
     "AssetGet": {
       "kind": "struct",
-      "description": "Webapp request: read an asset by id. Bridge replies with `Got` on hit\nor `NotFound` (domain) when neither cache nor companion has it.",
+      "description": "Returns the bytes for an asset id.",
       "fields": [
         {
           "name": "id",
-          "type": "string",
-          "description": "Opaque asset id, e.g. `iap2/art/<track-key>/<content-hash>` for iAP2 art\nor a companion-defined shape like `spotify/img/<id>`."
+          "type": "string"
         },
         {
           "name": "requestId",
           "type": "string",
-          "description": "Correlates the `Got` or `NotFound` reply back to this request."
+          "description": "Any uuid you choose."
         }
       ]
     },
     "AssetGot": {
       "kind": "struct",
-      "description": "Successful reply to `AssetGet`: the requested bytes.",
       "fields": [
         {
           "name": "requestId",
-          "type": "string",
-          "description": "Echoes the `AssetGet.request_id` this reply resolves."
+          "type": "string"
         },
         {
           "name": "id",
-          "type": "string",
-          "description": "Echoes the requested asset id."
+          "type": "string"
         },
         {
           "name": "bytes",
-          "type": "Uint8Array",
-          "description": "Raw asset bytes, already reassembled if the companion sent them as a\nchunked BT transfer."
+          "type": "Uint8Array"
         },
         {
           "name": "mime",
           "type": "string",
           "optional": true,
-          "description": "Best-effort content type; `None` when the source didn't provide one."
+          "description": "Null when the source gives none."
         }
       ]
     },
     "AssetNotFound": {
       "kind": "struct",
-      "description": "Domain-error reply to `AssetGet`: neither the cache nor a connected\ncompanion has an asset for this id.",
       "fields": [
         {
           "name": "requestId",
-          "type": "string",
-          "description": "Echoes the `AssetGet.request_id` this reply resolves."
+          "type": "string"
         },
         {
           "name": "id",
-          "type": "string",
-          "description": "Echoes the requested asset id."
+          "type": "string"
         }
       ]
     },
     "AssetPreload": {
       "kind": "struct",
-      "description": "Webapp hint to warm the asset cache for a set of ids so subsequent\n`Get` calls hit cache. Fire-and-forget; webapps observe completion\nvia `Asset.Ready` events.",
       "fields": [
         {
           "name": "ids",
           "type": "string[]",
-          "description": "Ids to prefetch, capped at 64 per call. Ids already cached and ids\nunder the `iap2/art/` prefix are skipped, since iAP2 art only ever\narrives via a push from the phone, not a pull request."
+          "description": "Only the first 64 are used."
         }
       ]
     },
     "AssetReady": {
       "kind": "struct",
-      "description": "An asset became fetchable in the cache; a subsequent `AssetGet` for this\nid will resolve without a companion round trip.",
       "fields": [
         {
           "name": "id",
@@ -1300,7 +1267,7 @@
     },
     "BluetoothInterface": {
       "kind": "struct",
-      "description": "Describes the device's own bluetooth adapter. `interface` is the\nhost-side interface name (e.g. `hci0`).",
+      "description": "The device's own bluetooth adapter.",
       "fields": [
         {
           "name": "mac",
@@ -1312,13 +1279,13 @@
         },
         {
           "name": "interface",
-          "type": "string"
+          "type": "string",
+          "description": "For example `hci0`."
         }
       ]
     },
     "BluetoothPairingResult": {
       "kind": "struct",
-      "description": "Outcome of an in-flight pairing attempt initiated by a peer device.",
       "fields": [
         {
           "name": "success",
@@ -1328,7 +1295,6 @@
     },
     "BluetoothPin": {
       "kind": "struct",
-      "description": "A pairing PIN a peer device is displaying, for a webapp to show as\non-screen confirmation.",
       "fields": [
         {
           "name": "mac",
@@ -1346,7 +1312,6 @@
     },
     "BluetoothStatus": {
       "kind": "struct",
-      "description": "Whether a companion phone is currently connected over bluetooth.",
       "fields": [
         {
           "name": "connected",
@@ -1374,7 +1339,7 @@
     },
     "BridgeThingMeta": {
       "kind": "struct",
-      "description": "Bridge-side identity announce",
+      "description": "Identity and build information for the device.",
       "fields": [
         {
           "name": "bridgethingVersion",
@@ -1406,7 +1371,7 @@
           "name": "wakewordModelVersion",
           "type": "string",
           "optional": true,
-          "description": "None when no wake word model resolved, or when the one that did carries no version stamp."
+          "description": "Null when no wake word model is loaded, or the loaded model carries no version."
         },
         {
           "name": "osName",
@@ -1483,17 +1448,16 @@
       "variants": [
         {
           "name": "Auto",
-          "description": "Daemon drives backlight from the on-board ALS."
+          "description": "The device sets the backlight from its ambient light sensor."
         },
         {
           "name": "Manual",
-          "description": "Webapp drives backlight directly via `setLevel`."
+          "description": "`setLevel` sets the backlight."
         }
       ]
     },
     "BrightnessState": {
       "kind": "struct",
-      "description": "Backlight state. `level` is the user-set value (only respected in\n`Manual`); `effective_level` is what's actually on the panel - equal\nto `level` in `Manual`, ALS-derived in `Auto`.",
       "fields": [
         {
           "name": "mode",
@@ -1502,17 +1466,19 @@
         },
         {
           "name": "level",
-          "type": "number"
+          "type": "number",
+          "description": "0.0 to 1.0, as last set by `setLevel`."
         },
         {
           "name": "effectiveLevel",
-          "type": "number"
+          "type": "number",
+          "description": "0.0 to 1.0. Follows `level` in `manual` mode and the light sensor in `auto`."
         }
       ]
     },
     "BrowseEntry": {
       "kind": "enum",
-      "description": "One row in a `BrowseResult`: either a folder (drilldown) or a leaf\nitem the user can play / queue / favorite.",
+      "description": "A folder can be browsed further; an item can be played.",
       "tag": "type",
       "content": "data",
       "variants": [
@@ -1530,7 +1496,7 @@
     },
     "BrowseFolder": {
       "kind": "struct",
-      "description": "A drilldown node. `node_id` is opaque and gateway-defined; webapps\npass it back as the next `browse({ node_id })` to descend. `total` is\nthe count of children behind this folder when the gateway can cheaply\nexpose it. `preview_children` is an inline first-N slice of those\nchildren so home-shelf shapes don't need a separate drill round-trip;\ngateways populate it when cheap (Spotify Web API home shelves include\npreviews; Apple Music curated rails do too) and leave it `None`\notherwise.",
+      "description": "Pass its `nodeId` to `browse` to descend into it.",
       "fields": [
         {
           "name": "nodeId",
@@ -1553,19 +1519,21 @@
         {
           "name": "total",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the source reports no count."
         },
         {
           "name": "previewChildren",
           "type": "BrowseEntry[]",
           "optional": true,
-          "type_ref": "BrowseEntry"
+          "type_ref": "BrowseEntry",
+          "description": "The first few children, when the source returns them alongside the folder."
         }
       ]
     },
     "BrowseResult": {
       "kind": "struct",
-      "description": "Page of browse results. `total` is the count of items in the\nunderlying collection when the gateway can cheaply expose it (None\nmeans indeterminate). `has_more` is the authoritative end-of-data\nsignal - webapps paginate by raising `offset` until `has_more` is\nfalse rather than relying on `total`.",
+      "description": "Page by raising `offset` while `hasMore` is true.",
       "fields": [
         {
           "name": "entries",
@@ -1585,7 +1553,6 @@
     },
     "CallEndReason": {
       "kind": "enum",
-      "description": "Why a call ended, surfaced on `onPhoneCallEnded`. `Failed` carries a\nplatform-defined reason (network, busy, etc.).",
       "variants": [
         {
           "name": "Local"
@@ -1646,7 +1613,6 @@
     },
     "CapabilitiesSnapshot": {
       "kind": "struct",
-      "description": "Wrapper carrying one `Capabilities` snapshot; reply to `CapabilitiesGet`\nand payload of the `Update` broadcast event.",
       "fields": [
         {
           "name": "capabilities",
@@ -1657,7 +1623,7 @@
     },
     "CommunicationsState": {
       "kind": "struct",
-      "description": "What call-control verbs are currently legal. Webapps must gate UI on\nthese flags; sending an unavailable verb is a protocol violation, not\na no-op. All `None` = no signal received yet, treat as conservatively\nunavailable.",
+      "description": "Enable a call-control button only while its `*Available` flag is true. Treat a null flag as\nunavailable.",
       "fields": [
         {
           "name": "signalStrength",
@@ -1763,7 +1729,6 @@
     },
     "ConfigChanged": {
       "kind": "struct",
-      "description": "Broadcast when the gateway writes a new value for the active webapp.\n`value: None` means the entry was deleted; consumers should fall back\nto whatever default they declared.",
       "fields": [
         {
           "name": "key",
@@ -1772,13 +1737,14 @@
         {
           "name": "value",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Null when the entry was deleted."
         }
       ]
     },
     "ConfigEntry": {
       "kind": "struct",
-      "description": "One key/value pair as exposed by config read APIs. `value` is always a\nstring; consumers parse per the field's declared kind (number -> parseFloat,\nboolean -> \"true\"/\"false\", string/enum/secret -> as-is).",
+      "description": "`value` is always a string. Parse it by the field's kind; a boolean is `\"true\"` or `\"false\"`.",
       "fields": [
         {
           "name": "key",
@@ -1792,7 +1758,7 @@
     },
     "ConfigField": {
       "kind": "enum",
-      "description": "One declared user-tunable setting. Adjacent-tagged on the wire:\n`{\"type\":\"string\",\"data\":{\"key\":\"zip\",...}}`.",
+      "description": "One setting the user can tune. In `manifest.json` it reads\n`{\"type\":\"string\",\"data\":{\"key\":\"zip\",\"label\":\"ZIP code\"}}`.",
       "tag": "type",
       "content": "data",
       "variants": [
@@ -1825,7 +1791,7 @@
     },
     "ConfigGet": {
       "kind": "struct",
-      "description": "Webapp request: read one config value for the currently active webapp,\nas most recently set by the gateway. This surface is read-only; only\nthe gateway can write config.",
+      "description": "Returns one config value for the active webapp.",
       "fields": [
         {
           "name": "key",
@@ -1835,7 +1801,6 @@
     },
     "ConfigGetReply": {
       "kind": "struct",
-      "description": "Reply to `ConfigGet`.",
       "fields": [
         {
           "name": "key",
@@ -1845,13 +1810,12 @@
           "name": "value",
           "type": "string",
           "optional": true,
-          "description": "`None` when the gateway has never set this key, as opposed to an empty string."
+          "description": "Null when the key is unset."
         }
       ]
     },
     "ConfigListReply": {
       "kind": "struct",
-      "description": "Reply to `ConfigList`.",
       "fields": [
         {
           "name": "entries",
@@ -1862,7 +1826,6 @@
     },
     "ConnectBluetooth": {
       "kind": "struct",
-      "description": "Payload for `bluetooth.connect`: connect to an already-paired\ndevice by MAC.",
       "fields": [
         {
           "name": "mac",
@@ -1872,7 +1835,6 @@
     },
     "ConnectedDevice": {
       "kind": "struct",
-      "description": "The bluetooth device currently connected to the daemon.",
       "fields": [
         {
           "name": "name",
@@ -1886,12 +1848,12 @@
     },
     "CurrentlyActiveApplication": {
       "kind": "struct",
-      "description": "The foreground app driving playback, surfaced on iOS over iAP2.",
+      "description": "The app driving playback on the phone.",
       "fields": [
         {
           "name": "id",
           "type": "string",
-          "description": "Bundle identifier, e.g. `com.spotify.client`."
+          "description": "Bundle identifier, for example `com.spotify.client`."
         },
         {
           "name": "name",
@@ -1957,7 +1919,6 @@
     },
     "DiagnosticsReply": {
       "kind": "struct",
-      "description": "Reply to `DiagnosticsGet`.",
       "fields": [
         {
           "name": "diagnostics",
@@ -1968,7 +1929,7 @@
     },
     "DismissReason": {
       "kind": "enum",
-      "description": "Why a notification went away. `Acted` covers both positive and\nnegative invokes; gateways that distinguish dismiss-vs-acted may\nsurface both as `Acted`.",
+      "description": "`acted` covers both the positive and the negative action.",
       "variants": [
         {
           "name": "UserDismissed"
@@ -1983,18 +1944,17 @@
     },
     "DisplaySetLevel": {
       "kind": "struct",
-      "description": "Set the manual backlight level. Ignored unless `mode == Manual`;\ncallers should pair with `setMode({ Manual })` when forcing a level.",
+      "description": "Call `displaySetMode` with `manual` first, or the level is ignored.",
       "fields": [
         {
           "name": "level",
           "type": "number",
-          "description": "Backlight level in `[0.0, 1.0]`."
+          "description": "Backlight level, `0.0` (dimmest) to `1.0` (brightest)."
         }
       ]
     },
     "DisplaySetMode": {
       "kind": "struct",
-      "description": "Payload for `hardware.displaySetMode`: switch backlight control\nbetween daemon-driven (`Auto`, following the ALS) and webapp-driven\n(`Manual`, via `displaySetLevel`).",
       "fields": [
         {
           "name": "mode",
@@ -2005,7 +1965,7 @@
     },
     "DocAck": {
       "kind": "struct",
-      "description": "Ack for `DocSet` / `DocDelete`; echoes what's now stored.",
+      "description": "The stored value after a `set` or `delete`.",
       "fields": [
         {
           "name": "key",
@@ -2020,7 +1980,6 @@
     },
     "DocChanged": {
       "kind": "struct",
-      "description": "Broadcast when the COMPANION writes the active webapp's doc namespace.\nWebapp-origin writes are not echoed back (the writer already holds the\nack).",
       "fields": [
         {
           "name": "key",
@@ -2030,13 +1989,12 @@
           "name": "value",
           "type": "string",
           "optional": true,
-          "description": "`None` means the entry was deleted."
+          "description": "Null when the entry was deleted."
         }
       ]
     },
     "DocDelete": {
       "kind": "struct",
-      "description": "Webapp request: delete the doc entry at `key`.",
       "fields": [
         {
           "name": "key",
@@ -2046,7 +2004,7 @@
     },
     "DocEntry": {
       "kind": "struct",
-      "description": "One key/value pair from a webapp's doc namespace: shared structured\nstate writable from both the companion (gateway) and the webapp\nitself, last write wins. Values are strings; apps encode JSON as\nneeded.",
+      "description": "Both the webapp and the companion app write it, and the last write wins. Values are strings.",
       "fields": [
         {
           "name": "key",
@@ -2060,7 +2018,7 @@
     },
     "DocGet": {
       "kind": "struct",
-      "description": "Webapp request: read one doc value for the currently active webapp.",
+      "description": "Returns one doc value for the active webapp.",
       "fields": [
         {
           "name": "key",
@@ -2070,7 +2028,6 @@
     },
     "DocGetReply": {
       "kind": "struct",
-      "description": "Reply to `DocGet`.",
       "fields": [
         {
           "name": "key",
@@ -2080,13 +2037,12 @@
           "name": "value",
           "type": "string",
           "optional": true,
-          "description": "`None` when the key has never been written."
+          "description": "Null when the key is unset."
         }
       ]
     },
     "DocListReply": {
       "kind": "struct",
-      "description": "Reply to `DocList`.",
       "fields": [
         {
           "name": "entries",
@@ -2097,7 +2053,7 @@
     },
     "DocSet": {
       "kind": "struct",
-      "description": "Webapp request: write a doc value. Last write wins against companion\nwrites on the same key; the companion hears the change as a gateway\n`webapp.docChanged` event.",
+      "description": "Writes a doc value. Keep it at or under 256 KiB.",
       "fields": [
         {
           "name": "key",
@@ -2111,7 +2067,6 @@
     },
     "DtmfTone": {
       "kind": "enum",
-      "description": "DTMF tones the accessory can play during an active call.",
       "variants": [
         {
           "name": "D0"
@@ -2162,15 +2117,12 @@
     },
     "EndCallAction": {
       "kind": "enum",
-      "description": "Direction the accessory wants iOS to take when ending a call.",
       "variants": [
         {
-          "name": "End",
-          "description": "End / decline the call referenced by `CallUUID`."
+          "name": "End"
         },
         {
-          "name": "EndAll",
-          "description": "End every active call."
+          "name": "EndAll"
         }
       ]
     },
@@ -2196,6 +2148,19 @@
         }
       ]
     },
+    "ExtensionInfo": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "permissions",
+          "type": "string[]"
+        },
+        {
+          "name": "api",
+          "type": "number"
+        }
+      ]
+    },
     "FavoriteChanged": {
       "kind": "struct",
       "fields": [
@@ -2211,7 +2176,7 @@
     },
     "FavoritesPage": {
       "kind": "struct",
-      "description": "Page of the user's favorited / liked / saved library items. Mixed-kind\nbecause most platforms expose one \"Saved\" surface across kinds.",
+      "description": "Mixed kind. Page by raising `offset` while `hasMore` is true.",
       "fields": [
         {
           "name": "items",
@@ -2265,7 +2230,6 @@
     },
     "ForgetBluetooth": {
       "kind": "struct",
-      "description": "Payload for `bluetooth.forget`: unpair a device and drop it from\nthe daemon's known-device set.",
       "fields": [
         {
           "name": "mac",
@@ -2312,7 +2276,7 @@
     },
     "GeoAccuracy": {
       "kind": "enum",
-      "description": "Subscriber's accuracy preference. `Coarse` opts into the lower-power\ncity-block-grade fix on platforms that distinguish (iOS reduced\naccuracy, Android `PRIORITY_BALANCED_POWER_ACCURACY`). The daemon\naggregates across subscribers and forwards the most-demanding to the\ncompanion.",
+      "description": "`coarse` asks for a lower-power, less precise fix. Any open `fine` subscription raises it for all.",
       "variants": [
         {
           "name": "Coarse"
@@ -2327,19 +2291,19 @@
       "variants": [
         {
           "name": "PermissionDenied",
-          "description": "The user denied location to the companion app, or the OS gate\nrefuses (e.g. iOS Always/WhenInUse not granted)."
+          "description": "The phone denies location to the companion app."
         },
         {
           "name": "NotDeclared",
-          "description": "The running webapp's manifest does not list the `geo` permission, so\nthe daemon refused before involving the phone."
+          "description": "The active webapp must list `geo` in its manifest permissions."
         },
         {
           "name": "Unavailable",
-          "description": "Companion is connected but cannot produce a fix (no GPS, airplane\nmode, indoors with no fallback)."
+          "description": "The phone is connected but produced no fix."
         },
         {
           "name": "UnknownToken",
-          "description": "The supplied subscription token is unknown to the daemon."
+          "description": "The token does not match an open subscription."
         }
       ]
     },
@@ -2375,7 +2339,6 @@
     },
     "GeoUnwatch": {
       "kind": "struct",
-      "description": "Stop a previously-issued watch. `token` is the value returned in\n`GeoWatchReply.token`. The daemon refcounts watches across webapps;\nthe companion gets `Unwatch` only when the last token is released.",
       "fields": [
         {
           "name": "token",
@@ -2399,7 +2362,7 @@
     },
     "GeoWatchReply": {
       "kind": "struct",
-      "description": "Watch handle. Webapps pass the token back as\n`ClientToBridgeGeoMsg::Unwatch { token }` to release the watch.",
+      "description": "Pass `token` to `unwatch` to stop the watch.",
       "fields": [
         {
           "name": "token",
@@ -2409,7 +2372,6 @@
     },
     "HardwareState": {
       "kind": "struct",
-      "description": "Snapshot of the device's hardware-controlled surfaces. Sent on\n`hardware.state.get` and re-broadcast on any change. `ambient_level`\nis the 0-255 ambient light reading.",
       "fields": [
         {
           "name": "brightness",
@@ -2418,13 +2380,13 @@
         },
         {
           "name": "ambientLevel",
-          "type": "number"
+          "type": "number",
+          "description": "0 to 100."
         }
       ]
     },
     "HardwareStateReply": {
       "kind": "struct",
-      "description": "Response to `hardware.stateGet`.",
       "fields": [
         {
           "name": "state",
@@ -2435,7 +2397,6 @@
     },
     "HttpHeader": {
       "kind": "struct",
-      "description": "One header on an HTTP request or response. Key order is preserved\nacross serialize/deserialize.",
       "fields": [
         {
           "name": "name",
@@ -2475,7 +2436,6 @@
     },
     "InitiateCallType": {
       "kind": "enum",
-      "description": "What kind of outbound call the accessory wants placed.",
       "variants": [
         {
           "name": "Destination"
@@ -2490,7 +2450,7 @@
     },
     "ItemKind": {
       "kind": "enum",
-      "description": "Coarse type tag a webapp uses to filter or branch. Mirrors the variant\nnames of `LibraryItem`; kept separate so search/recommendations can\nconstrain by kind without having to construct a sample item.",
+      "description": "`search` and `recommendations` take a list of these to constrain their results.",
       "variants": [
         {
           "name": "Track"
@@ -2517,7 +2477,7 @@
     },
     "ItemRef": {
       "kind": "struct",
-      "description": "Stable URI + kind a webapp passes back to act on a library item\n(e.g. `player.play({ uri })`, `library.favorites.toggle({ item })`).\n`persistent_id` is the platform-stable id when the gateway has one;\nwebapps treat it as opaque.",
+      "description": "A reference to a library item. Pass it to `favoritesToggle`, or pass its `uri` to `player.play`.",
       "fields": [
         {
           "name": "uri",
@@ -2531,13 +2491,13 @@
         {
           "name": "persistentId",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Opaque. Null when the source has none."
         }
       ]
     },
     "KVDelete": {
       "kind": "struct",
-      "description": "Webapp request: delete the KV storage entry at `key`.",
       "fields": [
         {
           "name": "key",
@@ -2547,7 +2507,6 @@
     },
     "KVGet": {
       "kind": "struct",
-      "description": "Webapp request: read a value out of KV storage by key.",
       "fields": [
         {
           "name": "key",
@@ -2557,7 +2516,6 @@
     },
     "KVPut": {
       "kind": "struct",
-      "description": "Webapp request: write a value to KV storage under `key`.",
       "fields": [
         {
           "name": "key",
@@ -2571,18 +2529,18 @@
     },
     "LibraryBrowse": {
       "kind": "struct",
-      "description": "Payload for the `browse` request: page through a folder in the library tree, or the root\nmenu when `node_id` is `None`. Root-level results are cached by the daemon for up to 5\nminutes, so a fresh call immediately after a library change on the gateway side may still\nreturn the previous shelf layout.",
+      "description": "Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.",
       "fields": [
         {
           "name": "nodeId",
           "type": "string",
           "optional": true,
-          "description": "Folder to descend into, from a prior result's `BrowseFolder::node_id`. `None` browses the root."
+          "description": "A `nodeId` from an earlier result. Null browses the root."
         },
         {
           "name": "limit",
           "type": "number",
-          "description": "Requested page size; the daemon clamps this to 100 regardless of the value sent."
+          "description": "Capped at 100."
         },
         {
           "name": "offset",
@@ -2592,13 +2550,13 @@
           "name": "sections",
           "type": "number",
           "optional": true,
-          "description": "Root only: cap on the number of folders returned. `None` returns every folder."
+          "description": "Root only. Null returns every folder."
         },
         {
           "name": "preview",
           "type": "number",
           "optional": true,
-          "description": "Root only: preview children per folder. `None` is the gateway default; `0` skips preview\nhydration entirely and returns a cheap index of node ids, titles, and totals."
+          "description": "Root only. Preview children per folder; `0` returns ids and titles only."
         }
       ]
     },
@@ -2617,19 +2575,19 @@
       "variants": [
         {
           "name": "NotFound",
-          "description": "The named uri or node id does not exist in the gateway's library."
+          "description": "The uri or node id names nothing in the library."
         },
         {
           "name": "NotSupported",
-          "description": "The operation isn't supported by the underlying source (e.g. a\nplatform that exposes browse but not recommendations)."
+          "description": "The music source offers no such operation."
         },
         {
           "name": "Unauthorized",
-          "description": "User account / OAuth scope does not permit the operation."
+          "description": "The signed-in account permits no such operation."
         },
         {
           "name": "NoGateway",
-          "description": "No companion is connected to back the surface."
+          "description": "No phone is connected."
         }
       ]
     },
@@ -2645,12 +2603,12 @@
     },
     "LibraryFavoritesContains": {
       "kind": "struct",
-      "description": "Batch \"is each of these favorited?\" lookup. Reply `liked` is\nindex-aligned with the request `uris`, capped at 50 per call.",
+      "description": "Checks which uris the user has saved. The reply's `liked` lines up with `uris`.",
       "fields": [
         {
           "name": "uris",
           "type": "string[]",
-          "description": "Uris to check; the daemon truncates this to the first 50 regardless of the count sent."
+          "description": "Only the first 50 are used."
         }
       ]
     },
@@ -2660,18 +2618,18 @@
         {
           "name": "liked",
           "type": "boolean[]",
-          "description": "Index-aligned with the request's `uris`."
+          "description": "Lines up with the `uris` you sent."
         }
       ]
     },
     "LibraryFavoritesList": {
       "kind": "struct",
-      "description": "Payload for the `favoritesList` request: page through the user's saved/liked library items,\nmixed across kinds.",
+      "description": "Pages the user's saved items, mixed across kinds.",
       "fields": [
         {
           "name": "limit",
           "type": "number",
-          "description": "Requested page size; the daemon clamps this to 100 regardless of the value sent."
+          "description": "Capped at 100."
         },
         {
           "name": "offset",
@@ -2691,7 +2649,7 @@
     },
     "LibraryItem": {
       "kind": "enum",
-      "description": "One playable / browsable item from the library. Lean per-variant\npayload - gateways translate platform-specific extras down to these\nfields, rare per-platform fields just don't surface. Forward-compat:\nadding new variants or fields is an additive change webapps can\nbranch on.",
+      "description": "Branch on `type` to read the payload.",
       "tag": "type",
       "content": "data",
       "variants": [
@@ -2734,25 +2692,24 @@
     },
     "LibraryRecommendations": {
       "kind": "struct",
-      "description": "Recommendations seeded by up to 5 items. Spotify hard-caps at 5\ncombined seeds across tracks/artists/genres.",
       "fields": [
         {
           "name": "seeds",
           "type": "ItemRef[]",
           "type_ref": "ItemRef",
-          "description": "Seed items; the daemon truncates this to the first 5 regardless of the count sent."
+          "description": "Only the first 5 are used."
         },
         {
           "name": "kind",
           "type": "ItemKind",
           "optional": true,
           "type_ref": "ItemKind",
-          "description": "Restrict results to this item kind. `None` lets the gateway choose based on the seeds."
+          "description": "Null lets the companion app choose from the seeds."
         },
         {
           "name": "limit",
           "type": "number",
-          "description": "Requested page size; the daemon clamps this to 100 regardless of the value sent."
+          "description": "Capped at 100."
         },
         {
           "name": "offset",
@@ -2772,7 +2729,7 @@
     },
     "LibraryResolveContext": {
       "kind": "struct",
-      "description": "Payload for the `resolveContext` request: turn a context uri into something renderable.\nThe uri a webapp holds is usually `PlayerState::context`, so this is what backs a\n\"playing from <playlist>\" line without having to browse for the containing entity.",
+      "description": "Resolves a context uri, such as `PlayerState.context.uri`, into a name and an artwork id.",
       "fields": [
         {
           "name": "uri",
@@ -2782,7 +2739,7 @@
     },
     "LibraryResolveContextReply": {
       "kind": "struct",
-      "description": "Reply to `resolveContext`. Every field is best-effort: a gateway that recognises the uri but\ncannot cheaply name it answers with `None`s rather than failing the request.",
+      "description": "Fields are null when the companion app cannot name the uri.",
       "fields": [
         {
           "name": "name",
@@ -2803,7 +2760,6 @@
     },
     "LibrarySearch": {
       "kind": "struct",
-      "description": "Payload for the `search` request: free-text search across the connected gateway's library.",
       "fields": [
         {
           "name": "query",
@@ -2814,12 +2770,12 @@
           "type": "ItemKind[]",
           "optional": true,
           "type_ref": "ItemKind",
-          "description": "Restrict results to these item kinds. `None` searches every kind."
+          "description": "Null searches every kind."
         },
         {
           "name": "limit",
           "type": "number",
-          "description": "Requested page size; the daemon clamps this to 100 regardless of the value sent."
+          "description": "Capped at 100."
         },
         {
           "name": "offset",
@@ -2967,11 +2923,11 @@
     },
     "LyricLine": {
       "kind": "struct",
-      "description": "One timed line. `start_ms` is relative to track start, so a webapp highlights against the\nsame clock it draws the progress bar from.",
       "fields": [
         {
           "name": "startMs",
-          "type": "number"
+          "type": "number",
+          "description": "Offset from track start."
         },
         {
           "name": "text",
@@ -2981,7 +2937,7 @@
     },
     "Lyrics": {
       "kind": "struct",
-      "description": "Lyrics for one track. `synced` and `plain` are independent: a source may carry either, both,\nor neither. `source` names the provider so a webapp can attribute it.",
+      "description": "`synced` and `plain` are independent; either can be null.",
       "fields": [
         {
           "name": "synced",
@@ -3022,7 +2978,7 @@
     },
     "MediaItem": {
       "kind": "struct",
-      "description": "Currently-playing track, populated to the extent the gateway/iAP2\nstream has surfaced. All fields are optional because each one arrives\nas a separate attribute fetch on iAP2; the daemon accumulates and the\nsnapshot reflects whatever's known so far.",
+      "description": "A field stays null until the phone reports it.",
       "fields": [
         {
           "name": "uri",
@@ -3072,7 +3028,8 @@
         {
           "name": "artworkId",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         },
         {
           "name": "durationMs",
@@ -3119,7 +3076,7 @@
     },
     "MediaItemUpdate": {
       "kind": "struct",
-      "description": "Per-track attributes that vary per song. `persistent_id` is a stable\nper-platform identifier (iAP2 sends u64; we hex-encode it on the\nwire). `artwork_id` is an opaque asset id - webapps pass this value\nto `ClientToBridgeAssetMsg::Get` to retrieve the bytes. The id namespace\nis producer-defined: iAP2 emits `iap2/art/<track_key>/<content_hash>`, the\ncompanion picks whatever shape it wants (e.g. `spotify/track/<id>/image`).\nWebapps treat the value as opaque.",
+      "description": "Attributes that change when the track changes.",
       "fields": [
         {
           "name": "persistentId",
@@ -3164,7 +3121,8 @@
         {
           "name": "artworkId",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         },
         {
           "name": "durationMs",
@@ -3216,7 +3174,7 @@
     },
     "MediaType": {
       "kind": "enum",
-      "description": "The kind of media currently playing. Multi-typed: an item can be\ne.g. both `Podcast` and `AudioBook` (rare). Drives webapp UI choices\nlike skip-15s-vs-skip-track and chapter UI.",
+      "description": "An item can carry more than one kind.",
       "variants": [
         {
           "name": "Music"
@@ -3231,7 +3189,7 @@
     },
     "MicMute": {
       "kind": "struct",
-      "description": "Payload for `voice.muteMic`.",
+      "description": "`preserve` keeps a voice capture that is already running.",
       "fields": [
         {
           "name": "preserve",
@@ -3241,7 +3199,6 @@
     },
     "MicUnmute": {
       "kind": "struct",
-      "description": "Payload for `voice.unmuteMic`.",
       "fields": [
         {
           "name": "preserve",
@@ -3282,7 +3239,7 @@
     },
     "NetFetch": {
       "kind": "struct",
-      "description": "Payload for `net.fetch`: a single proxied HTTP request/response\nround-trip through the connected companion's network stack.",
+      "description": "Sends one HTTP request through the connected companion app and returns the response.",
       "fields": [
         {
           "name": "request",
@@ -3883,7 +3840,7 @@
     },
     "Notification": {
       "kind": "struct",
-      "description": "One notification surfaced from the connected companion's notification\ncenter. `id` is companion-stable for the lifetime of the notification\n- webapps pass it to `invokePositive`/`invokeNegative` and listen for\n`onNotificationRemoved`. Bodies (`title`/`subtitle`/`message`) are all\noptional because ANCS treats them as separate attribute fetches.",
+      "description": "`id` stays the same while the notification exists. Pass it to `invokePositive` and\n`invokeNegative`, and match it against `onRemoved`.",
       "fields": [
         {
           "name": "id",
@@ -3940,21 +3897,21 @@
     },
     "NotificationAction": {
       "kind": "struct",
-      "description": "One ANCS-style action slot. `label` is the gateway-localized prompt\nthe webapp renders on the action button.",
       "fields": [
         {
           "name": "label",
-          "type": "string"
+          "type": "string",
+          "description": "Button text, in the phone's language."
         }
       ]
     },
     "NotificationApp": {
       "kind": "struct",
-      "description": "Originating app metadata. `bundle_id` is platform-stable\n(`com.apple.MobileSMS`, `com.spotify.client`, etc.); `display_name`\nand `icon_asset_id` are best-effort and may be missing on Android\ngateways that don't surface them cheaply.",
       "fields": [
         {
           "name": "bundleId",
-          "type": "string"
+          "type": "string",
+          "description": "For example `com.apple.MobileSMS`."
         },
         {
           "name": "displayName",
@@ -4011,7 +3968,6 @@
     },
     "NotificationFlags": {
       "kind": "struct",
-      "description": "ANCS-shaped flags. `silent` mirrors the iOS \"do not surface\naudibly\" hint and `important` is the high-importance flag. Only\nnotifications posted while the daemon is connected are surfaced, so\nthere is no pre-existing/backfill marker.",
       "fields": [
         {
           "name": "silent",
@@ -4048,19 +4004,18 @@
     },
     "NotificationsError": {
       "kind": "enum",
-      "description": "Why a notification action slot could not be invoked. Both invoke verbs are\nfire-and-forget commands, so a refusal has no reply to ride on.",
       "variants": [
         {
           "name": "NotFound",
-          "description": "The id is no longer in the companion's active notification set."
+          "description": "The notification is gone from the phone."
         },
         {
           "name": "ActionRejected",
-          "description": "The slot is absent on this notification, or the platform refused it."
+          "description": "The notification has no action in that slot, or the phone refused it."
         },
         {
           "name": "NoTarget",
-          "description": "No companion is connected, so there is nowhere to send the action."
+          "description": "No phone is connected."
         }
       ]
     },
@@ -4076,7 +4031,6 @@
     },
     "NowPlayingUpdate": {
       "kind": "struct",
-      "description": "Delta event the companion or iAP2 stream emits whenever a player\nattribute changes. Every field is optional: producers send partial\nupdates populating only what changed, and fields left unset keep\ntheir prior value.",
       "fields": [
         {
           "name": "mediaItem",
@@ -4141,56 +4095,53 @@
           "name": "updateId",
           "type": "string",
           "optional": true,
-          "description": "which update failed. a resume re-drives the same artifact, so this is NOT unique per attempt."
+          "description": "A resume of the same artifact reuses the id."
         },
         {
           "name": "replayed",
           "type": "boolean",
-          "description": "set only when the bridge is re-delivering a failure whose peer had already gone away"
+          "description": "The device is redelivering a failure the phone missed."
         }
       ]
     },
     "OtaErrorCode": {
       "kind": "enum",
-      "description": "Terminal error from the OTA orchestrator",
       "variants": [
         {
           "name": "UnknownUpdate",
-          "description": "Companion sent fragments for an `update_id` that was never begun"
+          "description": "The update id does not match an update the device has begun."
         },
         {
           "name": "OffsetMismatch",
-          "description": "A fragment's offset did not match the daemon's `received`."
+          "description": "A fragment arrived at an offset the device was not expecting."
         },
         {
           "name": "HashMismatch",
-          "description": "Streamed total's sha256 did not match `OtaBegin.transfer.sha256`."
+          "description": "The transferred bytes do not match the declared sha256."
         },
         {
           "name": "SizeMismatch",
-          "description": "Streamed total's byte length did not match `OtaBegin.transfer.total_size`."
+          "description": "The transferred bytes do not match the declared size."
         },
         {
-          "name": "Cancelled",
-          "description": "`CancelUpdate` arrived during a cancelable phase."
+          "name": "Cancelled"
         },
         {
           "name": "WriteFailed",
-          "description": "libswupdate rejected the .swu (parse / handler / I/O failure)."
+          "description": "The device rejected the payload while writing it."
         },
         {
           "name": "ConfirmFailed",
-          "description": "Slot-flip / try-counter reset failed after a successful write."
+          "description": "The update wrote successfully. The device could not mark the new slot bootable."
         },
         {
           "name": "Internal",
-          "description": "Anything else (transfer-cache I/O, internal channel close, etc.)."
+          "description": "An unexpected failure."
         }
       ]
     },
     "OtaFinished": {
       "kind": "struct",
-      "description": "Terminal success from the OTA orchestrator, emitted for every `OtaKind`.",
       "fields": [
         {
           "name": "kind",
@@ -4205,7 +4156,7 @@
     },
     "OtaKind": {
       "kind": "enum",
-      "description": "What the streamed bytes are going to be applied as",
+      "description": "What an update installs.",
       "variants": [
         {
           "name": "Image"
@@ -4226,7 +4177,7 @@
     },
     "OtaPhase": {
       "kind": "enum",
-      "description": "Stage of the OTA orchestrator. The phase set is shared between\nkinds, with non-image kinds emitting a subset",
+      "description": "Each kind emits the phases that apply to it.",
       "variants": [
         {
           "name": "Streaming"
@@ -4247,7 +4198,6 @@
     },
     "OtaProgress": {
       "kind": "struct",
-      "description": "Per-phase progress tick",
       "fields": [
         {
           "name": "phase",
@@ -4256,7 +4206,8 @@
         },
         {
           "name": "percent",
-          "type": "number"
+          "type": "number",
+          "description": "0 to 100, within the current phase."
         },
         {
           "name": "step",
@@ -4283,12 +4234,12 @@
     },
     "PairedDevicesMap": {
       "kind": "struct",
-      "description": "Map of MAC string to `Device`.",
+      "description": "Paired devices keyed by MAC address.",
       "fields": []
     },
     "PeerSnapshotMap": {
       "kind": "struct",
-      "description": "Map of peer-id to `Peer`.",
+      "description": "Every known peer, keyed by peer id.",
       "fields": []
     },
     "PhoneAcceptAction": {
@@ -4307,7 +4258,7 @@
     },
     "PhoneCall": {
       "kind": "struct",
-      "description": "One telephony call. `call_id` is companion-stable for the call's\nlifetime; webapps pass it back to `answer`/`decline`/`end`/`hold`.\n`remote_id` is the raw E.164 (or platform raw); `display_name` is the\ngateway's resolved contact name when available.",
+      "description": "`callId` stays the same for the life of the call. Pass it to `answer`, `decline`, `end`, `hold`.",
       "fields": [
         {
           "name": "callId",
@@ -4315,7 +4266,8 @@
         },
         {
           "name": "remoteId",
-          "type": "string"
+          "type": "string",
+          "description": "E.164 form when the phone provides one."
         },
         {
           "name": "displayName",
@@ -4400,7 +4352,7 @@
     },
     "PhoneCallService": {
       "kind": "enum",
-      "description": "Call bearer / service kind. iAP2's `CallStateUpdateService` enum\nvalues, projected to our wire surface. Companion gateways that don't\ndistinguish bearers project all calls to `Telephony`.",
+      "description": "How the call is carried. A phone that does not distinguish bearers reports `telephony`.",
       "variants": [
         {
           "name": "Unknown"
@@ -4444,7 +4396,6 @@
     },
     "PhoneCommunicationsReply": {
       "kind": "struct",
-      "description": "Broadcast whenever `CommunicationsState` changes: signal, registration,\nor which call-control verbs are currently legal.",
       "fields": [
         {
           "name": "state",
@@ -4487,19 +4438,18 @@
       "variants": [
         {
           "name": "CallNotFound",
-          "description": "The supplied `call_id` is not in the daemon's active set."
+          "description": "The phone reports no call with this id."
         },
         {
-          "name": "ActionRejected",
-          "description": "The companion or platform refused the action (e.g. answer while no\nringing call exists, end on a remote-controlled conference leg)."
+          "name": "ActionRejected"
         },
         {
           "name": "NoTarget",
-          "description": "No iAP2 link or companion attached, so there's nowhere to send the\noutbound action."
+          "description": "No phone is connected."
         },
         {
           "name": "Unavailable",
-          "description": "`*Available` flag for this verb was false at action time."
+          "description": "The verb's `*Available` flag was false when the action ran."
         }
       ]
     },
@@ -4550,7 +4500,7 @@
     },
     "PhoneState": {
       "kind": "struct",
-      "description": "Snapshot of every active call known to the gateway. Multi-call is\npossible (call-waiting, conference) - webapps rendering only one\nactive call typically pick the first non-Held entry.",
+      "description": "Call waiting and conference calls produce more than one entry.",
       "fields": [
         {
           "name": "activeCalls",
@@ -4571,7 +4521,7 @@
     },
     "PlayContext": {
       "kind": "struct",
-      "description": "Optional context for `play({ uri })`. `context_uri` is the album /\nplaylist / show URI the track is being played from; gateways with\nplaylist support honor it for skip-next semantics. A row inside the\ncontext is addressed by playing that row's own uri within it, so there\nis no index here.",
+      "description": "`contextUri` is the album, playlist, or show the track plays from. It sets what `skipNext` does.",
       "fields": [
         {
           "name": "contextUri",
@@ -4596,7 +4546,7 @@
     },
     "Playback": {
       "kind": "struct",
-      "description": "Per-session playback snapshot: where in the song we are, what mode is\nengaged. `position_ms` is the live playhead at snapshot time; webapps\nextrapolate forward locally while `state == Playing`.\n\n`set_elapsed_time_available` gates scrub UI: when false, the foreground\napp refuses absolute-position seeks and webapps must disable the scrub\nthumb. `None` means unknown (no signal received yet); webapps treat\nunknown as \"available\" for backward compatibility with older gateways.",
+      "description": "`positionMs` is the playhead when the state was taken. Advance it locally while `state` is\n`playing`.",
       "fields": [
         {
           "name": "state",
@@ -4645,7 +4595,8 @@
         {
           "name": "setElapsedTimeAvailable",
           "type": "boolean",
-          "optional": true
+          "optional": true,
+          "description": "False when the app refuses absolute seeks. Null means no signal yet."
         },
         {
           "name": "queueListAvail",
@@ -4661,7 +4612,7 @@
     },
     "PlaybackContext": {
       "kind": "struct",
-      "description": "What the current track is playing from: the playlist / album / show /\nartist context. Webapps render \"playing from <name>\"; `uri` lets them\ndrill into it. `name` is `None` until the companion resolves it.",
+      "description": "What the current track plays from, such as a playlist, an album, or a show.",
       "fields": [
         {
           "name": "uri",
@@ -4670,19 +4621,21 @@
         {
           "name": "name",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Null until the phone resolves the name."
         }
       ]
     },
     "PlaybackState": {
       "kind": "enum",
-      "description": "Three-state playback. `Stopped` is the no-track-loaded resting state;\n`Paused` is \"track is loaded, position is held\"; `Playing` is the\nprogressing state.",
       "variants": [
         {
-          "name": "Stopped"
+          "name": "Stopped",
+          "description": "No track is loaded."
         },
         {
-          "name": "Paused"
+          "name": "Paused",
+          "description": "A track is loaded and its position is held."
         },
         {
           "name": "Playing"
@@ -4691,12 +4644,12 @@
     },
     "PlaybackTarget": {
       "kind": "struct",
-      "description": "A remote endpoint the current provider can move playback to. Only\nmeaningful when `SurfaceAvailability::playback_targets` is set.\n\n`volume_percent` is `None` when the endpoint does not report volume.",
+      "description": "`transferTo` moves playback here. Check `available.playbackTargets` in `Capabilities` first.",
       "fields": [
         {
           "name": "id",
           "type": "string",
-          "description": "Provider-opaque endpoint id; pass back to `transferTo`."
+          "description": "Opaque endpoint id. Pass it to `transferTo`."
         },
         {
           "name": "name",
@@ -4710,18 +4663,19 @@
         {
           "name": "isActive",
           "type": "boolean",
-          "description": "Whether this endpoint is the one currently playing."
+          "description": "True when this endpoint is the one playing."
         },
         {
           "name": "volumePercent",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the endpoint reports no volume."
         }
       ]
     },
     "PlaybackTargetKind": {
       "kind": "enum",
-      "description": "What kind of endpoint a `PlaybackTarget` is. Coarse on purpose: the\nprovider vocabularies (Spotify Connect, AirPlay, Cast) do not agree in\ntheir long tails, and webapps only pick an icon from this. Anything\nunrecognized maps to `Unknown` rather than leaking a provider string.",
+      "description": "An endpoint the source does not classify reports `unknown`.",
       "variants": [
         {
           "name": "Unknown"
@@ -4754,7 +4708,7 @@
     },
     "PlaybackUpdate": {
       "kind": "struct",
-      "description": "Per-playback-session attributes that vary regardless of track:\nplaying/paused, position, shuffle/repeat, and the iOS bundle\nidentifier of the app currently driving playback (e.g.\n`\"com.spotify.client\"`). `app_bundle` is null on the Android path\nsince it isn't a meaningful surface there.\n\n`set_elapsed_time_available` is the gate webapps must honor for\nscrub UI: when false, scrubbing is unsupported by the foreground\napp and the seek button must be disabled.",
+      "description": "Attributes that change without the track changing.",
       "fields": [
         {
           "name": "playing",
@@ -4786,7 +4740,8 @@
         {
           "name": "appBundle",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "For example `com.spotify.client`. Null on Android."
         },
         {
           "name": "appDisplayName",
@@ -4816,7 +4771,8 @@
         {
           "name": "setElapsedTimeAvailable",
           "type": "boolean",
-          "optional": true
+          "optional": true,
+          "description": "False when the app refuses absolute seeks. Null means no signal yet."
         },
         {
           "name": "queueListAvail",
@@ -4840,23 +4796,23 @@
       "variants": [
         {
           "name": "SchemeUnclaimed",
-          "description": "`play({uri})` was called with a scheme no connected gateway claims.\nReturned synchronously by the daemon without round-tripping."
+          "description": "No connected phone claims the uri's scheme."
         },
         {
           "name": "PlayFailed",
-          "description": "Gateway acknowledged the verb but couldn't fulfill it."
+          "description": "The phone accepted the command and then failed to carry it out."
         },
         {
           "name": "NoGateway",
-          "description": "No companion is connected."
+          "description": "No phone is connected."
         },
         {
           "name": "NotInQueue",
-          "description": "`skipToIndex` referenced a queue index that doesn't exist."
+          "description": "`skipToIndex` named an index outside the queue."
         },
         {
           "name": "UnknownTarget",
-          "description": "`transferTo` named an endpoint that is not in the current target list."
+          "description": "`transferTo` named an endpoint outside the current target list."
         }
       ]
     },
@@ -4872,7 +4828,6 @@
     },
     "PlayerOptions": {
       "kind": "struct",
-      "description": "User-tunable knobs that are not \"currently playing\" state.\n`crossfade_ms = None` is \"crossfade off\"; `Some(0)` is also off but\ndistinguishes \"user explicitly set zero\" from \"feature unsupported by\ngateway\".",
       "fields": [
         {
           "name": "speed",
@@ -4881,13 +4836,13 @@
         {
           "name": "crossfadeMs",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "0 turns crossfade off. Null when the source carries no crossfade setting."
         }
       ]
     },
     "PlayerQueueReply": {
       "kind": "struct",
-      "description": "Response to `queueGet`, also carried by the `QueueChanged` event.",
       "fields": [
         {
           "name": "current",
@@ -4912,7 +4867,7 @@
     },
     "PlayerState": {
       "kind": "struct",
-      "description": "Full player snapshot the daemon broadcasts to webapps. Initial value\narrives on `BridgeToClientPlayerMsg::StateChange` at connect time;\nsubsequent changes flow as `NowPlayingUpdate` deltas the client SDK\nmerges into the cached snapshot.",
+      "description": "`onSnapshot` delivers it, and the SDK merges later deltas into it.",
       "fields": [
         {
           "name": "track",
@@ -4951,7 +4906,6 @@
     },
     "PlayerStateReply": {
       "kind": "struct",
-      "description": "Response to `stateGet`, also carried by the `Snapshot` event.",
       "fields": [
         {
           "name": "state",
@@ -4963,13 +4917,12 @@
           "type": "CurrentlyActiveApplication",
           "optional": true,
           "type_ref": "CurrentlyActiveApplication",
-          "description": "The app currently driving playback, when known (iOS surfaces this over iAP2)."
+          "description": "The app driving playback, when the phone reports it."
         }
       ]
     },
     "PlayerTargetsReply": {
       "kind": "struct",
-      "description": "Response to `targetsGet`, also carried by the `TargetsChanged` event.",
       "fields": [
         {
           "name": "targets",
@@ -4980,7 +4933,6 @@
     },
     "Playlist": {
       "kind": "struct",
-      "description": "Lean cross-platform shape for a playlist. `uri` is what `player.play`\nwould route on; `track_count` is best-effort (some sources don't expose\nit cheaply); `owner_name` is whatever the source surfaces (Spotify\nowner, Apple Music curator, etc.).",
       "fields": [
         {
           "name": "uri",
@@ -4993,12 +4945,14 @@
         {
           "name": "ownerName",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Who the source credits, such as an owner or a curator."
         },
         {
           "name": "trackCount",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the source reports no count."
         },
         {
           "name": "artworkId",
@@ -5009,7 +4963,6 @@
     },
     "PodcastEpisode": {
       "kind": "struct",
-      "description": "One episode of a podcast. `show_name` mirrors what the gateway exposes\nat episode-level so a webapp can render show + episode without a\nseparate fetch. `published_at_ms` is best-effort; not every gateway\nsurfaces it.",
       "fields": [
         {
           "name": "uri",
@@ -5032,7 +4985,8 @@
         {
           "name": "publishedAtUnixS",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the source reports none."
         },
         {
           "name": "artworkId",
@@ -5043,7 +4997,6 @@
     },
     "Position": {
       "kind": "struct",
-      "description": "One position fix from the gateway. `accuracy_m` is the 1-sigma\nhorizontal radius. `speed_mps` and `heading_deg` are populated when\nthe underlying source provides them (CLLocation on iOS does for moving\nfixes; Android's FusedLocationProvider similar). `ts_ms` is the\ngateway-provided fix timestamp, not the wire-arrival time.",
       "fields": [
         {
           "name": "lat",
@@ -5060,7 +5013,8 @@
         },
         {
           "name": "accuracyM",
-          "type": "number"
+          "type": "number",
+          "description": "Uncertainty radius in meters."
         },
         {
           "name": "speedMps",
@@ -5074,13 +5028,13 @@
         },
         {
           "name": "tsUnixS",
-          "type": "number"
+          "type": "number",
+          "description": "Fix time, not arrival time."
         }
       ]
     },
     "QueueItem": {
       "kind": "struct",
-      "description": "One row in the player queue. Lean cross-platform shape - gateways\nthat have richer per-track data still surface what fields they have.\n`uri` is required because every queued item must be addressable for\n`skipToIndex`. `persistent_id` is the platform-stable id when\navailable; webapps treat it as opaque.",
       "fields": [
         {
           "name": "uri",
@@ -5114,7 +5068,8 @@
         {
           "name": "artworkId",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         },
         {
           "name": "durationMs",
@@ -5124,7 +5079,8 @@
         {
           "name": "persistentId",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "Opaque. Null when the source has none."
         },
         {
           "name": "queued",
@@ -5134,7 +5090,7 @@
     },
     "QueuePosition": {
       "kind": "enum",
-      "description": "Where in the queue a `queue({ uri })` should land. `Append` (default)\ngoes at the end; `Next` is play-next; `Index(n)` is an explicit 0-based slot\nin the upcoming list.",
+      "description": "Where a `queue` call puts the item.",
       "tag": "type",
       "content": "data",
       "variants": [
@@ -5142,12 +5098,14 @@
           "name": "Append"
         },
         {
-          "name": "Next"
+          "name": "Next",
+          "description": "Directly after the current track."
         },
         {
           "name": "Index",
           "payload": "u32",
-          "payload_ref": "u32"
+          "payload_ref": "u32",
+          "description": "At a 0-based slot in the upcoming list."
         }
       ]
     },
@@ -5167,7 +5125,7 @@
     },
     "RecommendationsResult": {
       "kind": "struct",
-      "description": "Page of recommendation results. Gateway decides how seed + kind\ninteract (Spotify uses radio-style seeding, Apple Music uses curated\nrails) - the daemon doesn't prescribe.",
+      "description": "Page by raising `offset` while `hasMore` is true.",
       "fields": [
         {
           "name": "items",
@@ -5189,22 +5147,19 @@
       "kind": "enum",
       "variants": [
         {
-          "name": "Follow",
-          "description": "Follow up to a gateway-defined cap (typically 5)."
+          "name": "Follow"
         },
         {
           "name": "Manual",
-          "description": "Surface the redirect status to the caller; do not follow."
+          "description": "Return the 3xx response to the caller."
         },
         {
-          "name": "Error",
-          "description": "Treat any 3xx as an error."
+          "name": "Error"
         }
       ]
     },
     "RegistrationStatus": {
       "kind": "enum",
-      "description": "Cellular registration state - populated from iAP2 `CommunicationsUpdate`\nor the companion's equivalent.",
       "variants": [
         {
           "name": "Unknown"
@@ -5231,7 +5186,6 @@
     },
     "RepeatMode": {
       "kind": "enum",
-      "description": "`repeat` is a typed enum (Off/All/One) shared across the player\nsurface and the iAP2 NowPlaying CSM / MediaSession backends, which\nall expose three repeat states.",
       "variants": [
         {
           "name": "Off"
@@ -5246,7 +5200,7 @@
     },
     "SearchResult": {
       "kind": "struct",
-      "description": "Page of search results. `kinds` is the constrained kinds the search\nhonored (echoed back so webapps can detect ignored constraints); items\nare ranked best-first.",
+      "description": "Ranked best first. Page by raising `offset` while `hasMore` is true.",
       "fields": [
         {
           "name": "items",
@@ -5256,7 +5210,8 @@
         {
           "name": "kinds",
           "type": "ItemKind[]",
-          "type_ref": "ItemKind"
+          "type_ref": "ItemKind",
+          "description": "The kinds the search honored. Compare it against the kinds you asked for."
         },
         {
           "name": "total",
@@ -5280,7 +5235,6 @@
     },
     "SetBluetoothAlias": {
       "kind": "struct",
-      "description": "Payload for `bluetooth.setAlias`: rename the device's own adapter\nas seen by peers during discovery and pairing.",
       "fields": [
         {
           "name": "name",
@@ -5346,7 +5300,6 @@
     },
     "Show": {
       "kind": "struct",
-      "description": "One podcast show (parent of `PodcastEpisode`). `episode_count` is\nbest-effort.",
       "fields": [
         {
           "name": "uri",
@@ -5364,7 +5317,8 @@
         {
           "name": "episodeCount",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the source reports no count."
         },
         {
           "name": "artworkId",
@@ -5375,7 +5329,7 @@
     },
     "ShuffleMode": {
       "kind": "enum",
-      "description": "Three-state shuffle. iAP2 and Apple Music distinguish track-level\nfrom album-level shuffle; companion gateways without that distinction\nproject to `Songs` when on. Webapps that just need an on/off signal\nread `shuffle_on` (None when the underlying mode is unknown).",
+      "description": "A phone that does not separate track from album shuffle reports `songs` while shuffle is on.",
       "variants": [
         {
           "name": "Off"
@@ -5390,12 +5344,11 @@
     },
     "SkipPrev": {
       "kind": "struct",
-      "description": "Payload for `skipPrev`: go to the previous track, or restart the current one.",
       "fields": [
         {
           "name": "allowSeeking",
           "type": "boolean",
-          "description": "When true, restart the current track if it is progressed past the restart threshold; otherwise always move to the previous track."
+          "description": "`true` restarts the current track once it is past the restart threshold."
         }
       ]
     },
@@ -5410,7 +5363,6 @@
     },
     "Station": {
       "kind": "struct",
-      "description": "Algorithmic / radio station. `seed` is the URI the station was seeded\nfrom when known (artist, track, etc.).",
       "fields": [
         {
           "name": "uri",
@@ -5423,7 +5375,8 @@
         {
           "name": "seed",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "URI the station was built from, such as an artist or a track."
         },
         {
           "name": "artworkId",
@@ -5434,7 +5387,6 @@
     },
     "StorageResponse": {
       "kind": "struct",
-      "description": "Reply to `KVGet`, `KVPut`, and `KVDelete` alike; the request that\nproduced it distinguishes which operation happened.",
       "fields": [
         {
           "name": "key",
@@ -5444,13 +5396,13 @@
           "name": "value",
           "type": "string",
           "optional": true,
-          "description": "`None` on a `Get` miss or after a `Delete`; `Put` always echoes back `Some` of what it just wrote."
+          "description": "`null` after a `delete`, or when `get` finds no entry."
         }
       ]
     },
     "StreamBegin": {
       "kind": "struct",
-      "description": "First event of an open stream. Carries the response status, headers,\nand (when known) total payload size so the consumer can preallocate\nor display progress. Subsequent `StreamChunk` and `StreamEnd` events\nfor the same `stream_id` follow.",
+      "description": "First event of a stream. `StreamChunk` and `StreamEnd` events with the same `streamId` follow.",
       "fields": [
         {
           "name": "streamId",
@@ -5468,13 +5420,13 @@
         {
           "name": "totalSize",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "Null when the server declares no length."
         }
       ]
     },
     "StreamChunk": {
       "kind": "struct",
-      "description": "One body chunk. Chunks arrive in order; `offset` is the byte\nposition of `bytes[0]` within the full body.",
       "fields": [
         {
           "name": "streamId",
@@ -5482,7 +5434,8 @@
         },
         {
           "name": "offset",
-          "type": "number"
+          "type": "number",
+          "description": "Byte position of `bytes[0]` in the full body. Chunks arrive in order."
         },
         {
           "name": "bytes",
@@ -5492,7 +5445,7 @@
     },
     "StreamEnd": {
       "kind": "struct",
-      "description": "Terminates a stream. After `End` no further chunks for `stream_id`\nare valid and the daemon clears its routing entry.",
+      "description": "The last event of a stream that finished.",
       "fields": [
         {
           "name": "streamId",
@@ -5502,7 +5455,7 @@
     },
     "StreamError": {
       "kind": "struct",
-      "description": "Stream failed mid-flight (or before the first byte). Terminal - the\ndaemon clears its routing entry. The `error` shape is shared with\n`fetch` since the failure modes are identical.",
+      "description": "The last event of a stream that failed.",
       "fields": [
         {
           "name": "streamId",
@@ -5534,12 +5487,14 @@
         {
           "name": "minLength",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "In characters."
         },
         {
           "name": "maxLength",
           "type": "number",
-          "optional": true
+          "optional": true,
+          "description": "In characters."
         },
         {
           "name": "default",
@@ -5578,17 +5533,22 @@
         {
           "name": "playbackTargets",
           "type": "boolean"
+        },
+        {
+          "name": "forward",
+          "type": "boolean"
         }
       ]
     },
     "TimeInfo": {
       "kind": "struct",
-      "description": "Wall clock + locale snapshot. `wall_clock_unix_s` is the gateway's\n(or iAP2 device's) claimed \"now\" in unix-epoch seconds - webapps\nreading time should use the device clock if any but use this as the\ntrust anchor on first arrival.\n\nTwo zone-identification paths coexist: companion gateways send\n`tz_iana` (an IANA zone identifier like `America/Denver`) while iAP2\n`DeviceTimeUpdate` only exposes numeric `utc_offset_minutes` plus a\nseparate `dst_offset_minutes`. Webapps prefer `tz_iana` when present\nand fall back to the offset pair.",
+      "description": "The device has no battery-backed clock, so the phone is the time authority. Read the zone from\n`tzIana`; when it is null, use `utcOffsetMinutes` plus `dstOffsetMinutes`.",
       "fields": [
         {
           "name": "tzIana",
           "type": "string",
-          "optional": true
+          "optional": true,
+          "description": "IANA zone identifier, for example `America/Denver`."
         },
         {
           "name": "locale",
@@ -5614,7 +5574,6 @@
     },
     "TimeSnapshot": {
       "kind": "struct",
-      "description": "Wraps `TimeInfo` for the wire; used as both the `time.get` reply and\nthe `Changed` event payload.",
       "fields": [
         {
           "name": "time",
@@ -5625,7 +5584,7 @@
     },
     "Track": {
       "kind": "struct",
-      "description": "A track with resolved album/artist metadata, used by library search\nand browse results. For live now-playing state see `MediaItem`.",
+      "description": "A track with its album and artist resolved. Library search and browse return these.",
       "fields": [
         {
           "name": "id",
@@ -5659,12 +5618,11 @@
         {
           "name": "imageId",
           "type": "string",
-          "description": "Opaque artwork asset id; pass to `asset.get` for the bytes."
+          "description": "Opaque artwork asset id. Pass it to `asset.get` for the bytes."
         },
         {
           "name": "saved",
-          "type": "boolean",
-          "description": "Whether the track is saved in the user's library."
+          "type": "boolean"
         }
       ]
     },
@@ -5728,7 +5686,7 @@
     },
     "VoiceActivity": {
       "kind": "struct",
-      "description": "One step of a voice turn, as it happens",
+      "description": "One step of a voice turn, reported as it happens.",
       "fields": [
         {
           "name": "phase",
@@ -5787,7 +5745,7 @@
     },
     "VoiceActivityError": {
       "kind": "struct",
-      "description": "Why a turn ended without dispatching.",
+      "description": "Why a voice turn ended early.",
       "fields": [
         {
           "name": "code",
@@ -5856,33 +5814,30 @@
     },
     "VoiceDispatchTarget": {
       "kind": "enum",
-      "description": "Where the daemon actually routed a successful dispatch",
+      "description": "Where a recognized voice intent went.",
       "variants": [
         {
-          "name": "Playback",
-          "description": "Transport / playback effect"
+          "name": "Playback"
         },
         {
           "name": "Device",
-          "description": "A daemon-local device action (discoverable, preset save, cancel)."
+          "description": "A device action, such as pairing mode or saving a preset."
         },
         {
-          "name": "Phone",
-          "description": "Phone call control over the companion's phone surface."
+          "name": "Phone"
         },
         {
           "name": "Display",
-          "description": "Display-shaped intent handed to the active webapp to render."
+          "description": "The active webapp, which renders the intent."
         },
         {
-          "name": "WebappSwitch",
-          "description": "Switched the active webapp via OPEN_WEBAPP."
+          "name": "WebappSwitch"
         }
       ]
     },
     "VoiceDisplayIntent": {
       "kind": "enum",
-      "description": "The display-shaped intents",
+      "description": "Intents that ask the webapp to change what it shows.",
       "variants": [
         {
           "name": "Search"
@@ -5897,7 +5852,6 @@
     },
     "VoiceIntent": {
       "kind": "struct",
-      "description": "A resolved display intent for the active webapp to render",
       "fields": [
         {
           "name": "intent",
@@ -5917,7 +5871,6 @@
     },
     "VoicePhase": {
       "kind": "enum",
-      "description": "Where a voice turn is in the pipeline",
       "variants": [
         {
           "name": "Idle"
@@ -5938,7 +5891,6 @@
     },
     "VoiceState": {
       "kind": "struct",
-      "description": "Current mic state.",
       "fields": [
         {
           "name": "muted",
@@ -5957,7 +5909,6 @@
     },
     "VoiceStateReply": {
       "kind": "struct",
-      "description": "Response to `voice.stateGet`.",
       "fields": [
         {
           "name": "state",
@@ -5981,12 +5932,12 @@
     },
     "WebappActivate": {
       "kind": "struct",
-      "description": "Payload for the `activate` request: switch the kiosk to the given webapp. The kiosk runs\nexactly one webapp at a time, so the daemon navigates it away from whatever was previously\nactive.",
+      "description": "Switches the device to another webapp. The device shows one webapp at a time.",
       "fields": [
         {
           "name": "id",
           "type": "string",
-          "description": "Id of an installed webapp, from `webapp.list`."
+          "description": "An `id` from `list`."
         }
       ]
     },
@@ -6015,8 +5966,7 @@
       "fields": [
         {
           "name": "id",
-          "type": "string | null",
-          "description": "Id of the webapp that was just activated."
+          "type": "string | null"
         },
         {
           "name": "name",
@@ -6031,7 +5981,7 @@
         {
           "name": "id",
           "type": "string | null",
-          "description": "`None` when no webapp is currently active in the kiosk."
+          "description": "`null` when the device shows no webapp."
         },
         {
           "name": "name",
@@ -6042,84 +5992,77 @@
     },
     "WebappError": {
       "kind": "enum",
-      "description": "Domain errors emitted by any webapp surface (gateway- or client-side).\nSingle catalog: both protocols speak the same variant set.",
       "variants": [
         {
-          "name": "WebappNotFound",
-          "description": "No installed webapp matches this id (uninstall / activate / icon / config target)."
+          "name": "WebappNotFound"
         },
         {
-          "name": "CannotUninstallBuiltin",
-          "description": "Built-in webapps cannot be uninstalled."
+          "name": "CannotUninstallBuiltin"
         },
         {
           "name": "IdReserved",
-          "description": "Install rejected: the manifest's id is in the reserved-uuid set\n(stock, hub, launcher, etc)."
+          "description": "The manifest id is one the device reserves. Give the webapp a different uuid."
         },
         {
           "name": "ExtractedTooLarge",
-          "description": "Extracted bundle exceeds the 1 GiB disk-protection cap."
+          "description": "The extracted bundle is over the 1 GiB cap."
         },
         {
           "name": "ProvenanceTooLong",
-          "description": "Install carried a provenance string over `WEBAPP_PROVENANCE_MAX_LEN`."
+          "description": "The provenance string is over 2048 bytes."
         },
         {
-          "name": "ZipMalformed",
-          "description": "Zip extraction failed: corrupt archive, unsafe entry names, etc."
+          "name": "ZipMalformed"
         },
         {
           "name": "MissingIndexHtml",
-          "description": "Bundle has no index.html at its root."
+          "description": "Put an `index.html` at the root of the bundle."
         },
         {
           "name": "InvalidManifest",
-          "description": "manifest.json missing, unparseable, or failed schema validation."
+          "description": "`manifest.json` is missing, unparseable, or failed validation. `reason` says which."
         },
         {
           "name": "ResourceNotAvailable",
-          "description": "The requested resource (icon / settings page / overlay) isn't declared\nby the webapp's manifest or its file is missing on disk."
+          "description": "The manifest must declare the resource and the file must exist in the bundle."
         },
         {
           "name": "NotALauncher",
-          "description": "Launcher slot rejected: the bundle does not declare `role: launcher`."
+          "description": "A bundle must declare `role` as `launcher` to take the launcher slot."
         },
         {
           "name": "NoOverlay",
-          "description": "Overlay slot rejected: the bundle declares no overlay entry."
+          "description": "A bundle must declare `overlay` to take the overlay slot."
         },
         {
           "name": "UnknownConfigKey",
-          "description": "Config key is not declared in the webapp's manifest schema."
+          "description": "The manifest declares no config field with this key."
         },
         {
           "name": "InvalidConfigValue",
-          "description": "Value failed schema validation (out of range, regex mismatch, not in enum)."
+          "description": "The value failed the field's declared constraints. `reason` says which."
         },
         {
           "name": "InvalidDocValue",
-          "description": "Doc value rejected (oversized)."
+          "description": "The doc value is over 256 KiB."
         },
         {
           "name": "Internal",
-          "description": "Catch-all for genuinely-unexpected failures (io errors, daemon-side\nbugs). Reason is human-readable; not a stable wire contract."
+          "description": "An unexpected failure."
         }
       ]
     },
     "WebappIcon": {
       "kind": "struct",
-      "description": "Fetch the icon bytes for an installed webapp. Returns the raw bytes\ndeclared by the manifest's `icon` field.",
       "fields": [
         {
           "name": "id",
-          "type": "string",
-          "description": "Id of an installed webapp, from `webapp.list`."
+          "type": "string"
         }
       ]
     },
     "WebappIconReply": {
       "kind": "struct",
-      "description": "Reply to the `icon` request: the raw icon bytes declared by the webapp's manifest.",
       "fields": [
         {
           "name": "bytes",
@@ -6129,7 +6072,7 @@
           "name": "mime",
           "type": "string",
           "optional": true,
-          "description": "MIME type declared by the manifest's icon; `None` if the manifest didn't declare one."
+          "description": "The icon's MIME type. `null` when the webapp declares none."
         }
       ]
     },
@@ -6201,6 +6144,12 @@
           "name": "provenance",
           "type": "string",
           "optional": true
+        },
+        {
+          "name": "extension",
+          "type": "ExtensionInfo",
+          "optional": true,
+          "type_ref": "ExtensionInfo"
         }
       ]
     },
@@ -6210,14 +6159,13 @@
         {
           "name": "webapps",
           "type": "WebappInfo[]",
-          "type_ref": "WebappInfo",
-          "description": "Excludes `Launcher`-role bundles used as alternate home screens."
+          "type_ref": "WebappInfo"
         }
       ]
     },
     "WebappRole": {
       "kind": "enum",
-      "description": "A webapp's launcher visibility. `Standard` shows up in user-facing\nlistings (the hub grid, etc); `Launcher` is itself a launcher and is\nhidden from those listings. The daemon filters `Launcher` bundles\nout of `client.webapp.list`; the gateway list keeps everything.\nDeclaring `Launcher` is also what makes a bundle eligible for the\ndevice's launcher slot.",
+      "description": "`launcher` makes the bundle eligible for the launcher slot and keeps it out of `webapp.list`.",
       "variants": [
         {
           "name": "Standard"
@@ -6240,7 +6188,6 @@
     },
     "WebappUninstalled": {
       "kind": "struct",
-      "description": "Broadcast when an installed webapp is removed; carries the removed webapp's name.",
       "fields": [
         {
           "name": "name",

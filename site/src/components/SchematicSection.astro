@@ -2,12 +2,13 @@
 export type Props = {
   refdes?: string;
   class?: string;
+  id?: string;
 };
 
-const { refdes, class: className } = Astro.props;
+const { refdes, class: className, id } = Astro.props;
 ---
 
-<section class:list={['relative', className]}>
+<section id={id} class:list={['relative', className]}>
   <span
     aria-hidden="true"
     class="border-accent bg-bg absolute top-1 -left-7.75 size-2.5 rounded-full border-2 md:-left-13"></span>

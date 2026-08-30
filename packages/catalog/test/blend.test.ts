@@ -63,6 +63,7 @@ function blend(args: {
     ],
     installed: args.installed ?? [],
     deviceLibVersion: 'v0.4.1',
+    extensions: 'listed',
     installs: args.installs ?? [],
     subscribed: args.subscribed ?? [OFFICIAL],
   });
@@ -136,5 +137,34 @@ describe('blendStoreListings', () => {
 
     expect(vouched.map(l => l.app.id)).toEqual([CALENDAR_ID]);
     expect(community).toHaveLength(0);
+  });
+
+  test('a host that omits extensions sees neither section list an app that ships one', () => {
+    const withExtension = (id: string, name: string) =>
+      app(id, name, [{ ...ver('0.1.0'), extension: { desktop: true, permissions: ['all'] } }]);
+    const merged_ = [
+      merged(OFFICIAL, 'the bridgething catalog', [withExtension(CALENDAR_ID, 'Calendar')], { official: true }),
+      merged(COMMUNITY, 'someone repo', [withExtension(RADIO_ID, 'Radio')]),
+    ];
+    const catalogs = [
+      { url: OFFICIAL, catalog: catalog('the bridgething catalog', [withExtension(CALENDAR_ID, 'Calendar')]) },
+    ];
+
+    const listed = blend({ catalogs, merged: merged_ });
+    expect(listed.vouched.map(l => l.app.id)).toEqual([CALENDAR_ID]);
+    expect(listed.community.map(l => l.app.id)).toEqual([RADIO_ID]);
+
+    const omitted = blendStoreListings({
+      catalogs,
+      merged: merged_,
+      installed: [],
+      deviceLibVersion: 'v0.4.1',
+      installs: [],
+      subscribed: [OFFICIAL],
+      extensions: 'omitted',
+    });
+    expect(omitted.vouched).toHaveLength(0);
+    expect(omitted.community).toHaveLength(0);
+    expect(omitted.sourceNames[COMMUNITY]).toBe('someone repo');
   });
 });

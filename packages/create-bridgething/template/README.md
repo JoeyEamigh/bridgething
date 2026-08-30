@@ -1,14 +1,13 @@
 # **PROJECT_NAME**
 
-A bridgething webapp scaffolded with `create-bridgething`.
+A bridgething webapp scaffolded with `create-bridgething`. It runs full-screen in
+the chromium kiosk on a Spotify Car Thing and talks to the on-device daemon
+through [`@bridgething/client`](https://github.com/JoeyEamigh/bridgething).
 
-Stack: React 19 + Vite + Tailwind v4 + TypeScript strict, with
-[`@bridgething/client`](https://github.com/JoeyEamigh/bridgething) preinstalled.
+Stack: React 19, Vite, Tailwind v4, TypeScript strict.
 
-## Building with an agent
-
-Open this folder with your coding agent (Claude Code, Codex, opencode, ...). It
-reads `CLAUDE.md` / `AGENTS.md` and the `/bridgething` skill.
+Open this folder with your coding agent. It reads `CLAUDE.md` or `AGENTS.md` and
+the `/bridgething` skill.
 
 ## Develop
 
@@ -17,54 +16,42 @@ bun install
 bun run dev
 ```
 
-Opens at http://localhost:5173/. The starter `App.tsx` connects to
-`ws://<host>/` (the daemon's local WebSocket on port 8891 of the device
-itself). To dev against a remote device, set:
+Vite serves at http://localhost:5173/ with hot reload, against the daemon on the
+Car Thing plugged in over USB. Set `SUPERBIRD_HOST` to target another device, or
+`BRIDGETHING_DAEMON_URL` to reach a daemon elsewhere.
 
 ```bash
-VITE_BRIDGETHING_URL=ws://<device-ip>:8891/ bun run dev
+bun run dev:device
 ```
 
-## Push to a device
+The same server, shown on the Car Thing's own screen, hot reload included.
+Ctrl-C hands the screen back to the installed build.
+
+When the project ships an extension (`extension/main.ts`), both commands bundle
+it on every save and run it under Deno with the permissions the manifest
+declares.
+
+## Push, share, update
 
 ```bash
-bun run push
-```
-
-`push` builds `dist/`, rsyncs it into `/var/bridgething/webapps/<manifest-id>/`
-on the Car Thing, and switches the kiosk to your app. Pass an IP address to target
-something other than `bridgething.local` over USB.
-
-## Share
-
-```bash
+bun run push     # build, copy to the Car Thing, switch the kiosk to it
 bun run build
-bun run share
+bun run share    # write <name>-<version>.zip from dist/
+bun run update   # bring the device to the latest bridgething release
 ```
 
-`share` writes `<name>-<version>.zip` from `dist/`. Anyone with a bridgething Car
-Thing installs it from the app.
-
-## Update the device
-
-```bash
-bun run update
-```
-
-`update` runs [`@bridgething/updater`](https://www.npmjs.com/package/@bridgething/updater)
-to bring the connected Car Thing to the latest bridgething release. Multiple devices: `bun run update -- --host ws://bridgething-<serial>.local:8892/`.
+`push` targets `bridgething.local` over USB; pass a host or IP address for
+another device. Anyone with a bridgething Car Thing installs the zip from the
+companion app. For one device out of several,
+`bun run update -- --host ws://bridgething-<serial>.local:8892/`.
 
 ## Layout
 
-- `src/App.tsx` - starter UI: subscribes to `client.player.onSnapshot`,
-  fetches artwork via `client.asset.get`, exposes transport controls.
-- `src/index.css` - `@import "tailwindcss";`.
-- `vite.config.ts` - vite + tailwind plugin, `es2022` target.
-- `index.html` - 800x480 viewport, no overscroll, no tap highlight.
-- `settings/` - the companion-side settings page (preact), built by
-  `vite.settings.config.ts` into a single self-contained `dist/settings.html`.
-  It reads and writes settings over `@bridgething/client/settings`.
-
-`bun run build` runs both configs: the main app into `dist/`, then the settings
-page as `dist/settings.html`. `manifest.json`'s `settings` field points the
-companion at it.
+- `src/App.tsx` subscribes to `client.player.onSnapshot`, fetches artwork through
+  `client.asset.get`, and draws transport controls.
+- `src/daemon.ts` returns the daemon URL.
+- `public/manifest.json` carries the webapp id, version, config schema, and
+  permissions.
+- `settings/` is the settings page the companion app renders, built to
+  `dist/settings.html`.
+- `index.html` and `vite.config.ts` fix the 800x480 viewport and the build target.

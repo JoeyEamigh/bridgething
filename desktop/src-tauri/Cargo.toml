@@ -1,7 +1,7 @@
 [package]
 name = "bridgething-desktop"
 rust-version.workspace = true
-version = "0.11.0"
+version = "0.12.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
@@ -25,9 +25,9 @@ tokio-tungstenite.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = ["test"] }
 tempfile = "3.27.0"
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [dependencies]
+base64 = "0.23.1"
 bridgething-companion = { path = "../../crates/companion", features = ["native-io"] }
 bridgething-delivery = { path = "../../crates/delivery/core" }
 bridgething-gateway = { path = "../../crates/gateway-rs", features = ["native-ws"] }
@@ -43,21 +43,24 @@ spotify = { path = "../../crates/spotify", features = ["native-io"] }
 tauri = { version = "2.11.5", features = ["tray-icon", "image-png"] }
 tauri-plugin-autostart = "2.5.1"
 tauri-plugin-clipboard-manager = "2.3.2"
+tauri-plugin-deep-link = "2.4.9"
 tauri-plugin-dialog = "2.7.2"
-tauri-plugin-single-instance = "2.4.3"
+tauri-plugin-opener = "2.5.4"
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 tauri-plugin-updater = "2.10.1"
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "fs", "process", "io-util"] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+url = "2.5.8"
 uuid = { workspace = true, features = ["v7"] }
 whisper-rs = { version = "0.16.0", features = ["tracing_backend"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-base64 = "0.23.1"
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
 objc2 = "0.6.4"
@@ -76,9 +79,7 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-base64 = "0.23.1"
 futures.workspace = true
-url = "2.5.8"
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]

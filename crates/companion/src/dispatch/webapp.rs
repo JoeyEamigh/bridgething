@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bridgething_gateway::WebappHandler;
 use libbridgething::{
   WebappInfo,
-  gateway::{WebappActiveChanged, WebappDocChanged},
+  gateway::{WebappActiveChanged, WebappConfigChanged, WebappDocChanged},
   wire::WireError,
 };
 
@@ -37,6 +37,10 @@ impl WebappDispatcher {
 impl WebappHandler for WebappDispatcher {
   async fn doc_changed(&self, payload: WebappDocChanged) -> Result<(), WireError> {
     self.observer.doc_changed(&self.device_id, payload);
+    Ok(())
+  }
+
+  async fn config_changed(&self, _payload: WebappConfigChanged) -> Result<(), WireError> {
     Ok(())
   }
 

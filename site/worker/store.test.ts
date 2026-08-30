@@ -1,7 +1,14 @@
-import { describe, expect, test } from 'bun:test';
-import { keyFor, type SourceRecord, type SourceStatus } from './directory.ts';
-import { fakeKv } from './kv-fake.ts';
-import { listSources, rebuildSources, takeRateLimitToken, writeSource } from './store.ts';
+import { describe, expect, spyOn, test } from 'bun:test';
+import { KEY_PREFIX, keyFor, type SourceRecord, type SourceStatus } from './directory.ts';
+import { fakeKv, withListLag, withRefusedPut, withRefusedWrites, withRivalWriter } from './kv-fake.ts';
+import {
+  listSources,
+  mergeIntoSnapshot,
+  rebuildSources,
+  SNAPSHOT_MERGE_ATTEMPTS,
+  takeRateLimitToken,
+  writeSource,
+} from './store.ts';
 
 function record(url: string, status: SourceStatus = 'quarantined'): SourceRecord {
   return {
@@ -13,6 +20,7 @@ function record(url: string, status: SourceStatus = 'quarantined'): SourceRecord
     status,
     submitted_at: '2026-07-01T00:00:00.000Z',
     reviewed_at: null,
+    reviewed_by: null,
     app_count: 1,
     last_checked_at: '2026-07-20T00:00:00.000Z',
     last_check_ok: true,
@@ -20,6 +28,14 @@ function record(url: string, status: SourceStatus = 'quarantined'): SourceRecord
     downloads_cors_ok: true,
     note: null,
   };
+}
+
+function captureWarnings() {
+  const lines: string[] = [];
+  const spy = spyOn(console, 'warn').mockImplementation((...args) => {
+    lines.push(args.map(arg => String(arg)).join(' '));
+  });
+  return { lines, restore: () => spy.mockRestore() };
 }
 
 async function seed(count: number) {
@@ -68,8 +84,22 @@ describe('listSources', () => {
     expect(found[0]!.status).toBe('attested');
   });
 
+  test('a just-written source is in the directory before kv list can enumerate it', async () => {
+    const kv = withListLag(await seed(2));
+    await writeSource(kv, record('https://fresh.example/catalog.json'));
+
+    expect((await listSources(kv)).map(r => r.url)).toContain('https://fresh.example/catalog.json');
+  });
+
+  test('the first source ever written lands in the directory with no snapshot to merge into', async () => {
+    const kv = withListLag(fakeKv());
+    await writeSource(kv, record('https://fresh.example/catalog.json'));
+
+    expect((await listSources(kv)).map(r => r.url)).toEqual(['https://fresh.example/catalog.json']);
+  });
+
   test('two writes that overlap both survive instead of one clobbering the other', async () => {
-    const kv = await seed(1);
+    const kv = withListLag(await seed(1));
 
     await Promise.all([
       writeSource(kv, record('https://a.example/catalog.json')),
@@ -81,6 +111,100 @@ describe('listSources', () => {
       'https://b.example/catalog.json',
       'https://s0.example/catalog.json',
     ]);
+  });
+});
+
+describe('mergeIntoSnapshot', () => {
+  test('a put that loses the race re-merges instead of leaving its record out of the snapshot', async () => {
+    const kv = withRivalWriter(fakeKv(), 'directory:snapshot', [record('https://b.example/catalog.json')], 1);
+
+    await mergeIntoSnapshot({
+      kv,
+      key: 'directory:snapshot',
+      prefix: KEY_PREFIX,
+      record: record('https://a.example/catalog.json'),
+      identity: held => held.url,
+    });
+
+    expect(kv.rivals).toBe(1);
+    expect((await listSources(kv)).map(r => r.url).sort()).toEqual([
+      'https://a.example/catalog.json',
+      'https://b.example/catalog.json',
+    ]);
+  });
+
+  test('gives up after a bounded number of attempts and invalidates the snapshot for a lazy rebuild', async () => {
+    const kv = withRivalWriter(fakeKv(), 'directory:snapshot', []);
+    const warnings = captureWarnings();
+
+    try {
+      await mergeIntoSnapshot({
+        kv,
+        key: 'directory:snapshot',
+        prefix: KEY_PREFIX,
+        record: record('https://a.example/catalog.json'),
+        identity: held => held.url,
+      });
+    } finally {
+      warnings.restore();
+    }
+
+    expect(kv.rivals).toBe(SNAPSHOT_MERGE_ATTEMPTS);
+    expect(kv.snapshot()['directory:snapshot']).toBeUndefined();
+    expect(warnings.lines).toHaveLength(1);
+    expect(warnings.lines[0]).toContain('directory:snapshot');
+    expect(warnings.lines[0]).toContain('https://a.example/catalog.json');
+  });
+
+  test('a refused snapshot put invalidates instead of unwinding into a 500', async () => {
+    const seeded = await seed(1);
+    const kv = withRefusedPut(seeded, 'directory:snapshot');
+    await kv.put(keyFor('https://a.example/catalog.json'), JSON.stringify(record('https://a.example/catalog.json')));
+    const warnings = captureWarnings();
+
+    try {
+      await mergeIntoSnapshot({
+        kv,
+        key: 'directory:snapshot',
+        prefix: KEY_PREFIX,
+        record: record('https://a.example/catalog.json'),
+        identity: held => held.url,
+      });
+    } finally {
+      warnings.restore();
+    }
+
+    expect(seeded.snapshot()['directory:snapshot']).toBeUndefined();
+    expect(warnings.lines).toHaveLength(1);
+    expect(warnings.lines[0]).toContain('directory:snapshot');
+    expect(warnings.lines[0]).toContain('https://a.example/catalog.json');
+    expect(warnings.lines[0]).toContain('kv put rate limit');
+    expect((await listSources(seeded)).map(r => r.url).sort()).toEqual([
+      'https://a.example/catalog.json',
+      'https://s0.example/catalog.json',
+    ]);
+  });
+
+  test('a refused invalidating delete is logged rather than raised at the caller', async () => {
+    const seeded = await seed(1);
+    const kv = withRefusedWrites(seeded, 'directory:snapshot');
+    const warnings = captureWarnings();
+
+    try {
+      await mergeIntoSnapshot({
+        kv,
+        key: 'directory:snapshot',
+        prefix: KEY_PREFIX,
+        record: record('https://a.example/catalog.json'),
+        identity: held => held.url,
+      });
+    } finally {
+      warnings.restore();
+    }
+
+    expect(warnings.lines).toHaveLength(2);
+    expect(warnings.lines[1]).toContain('delete refused');
+    expect(warnings.lines[1]).toContain('kv delete rate limit');
   });
 });
 
@@ -103,6 +227,27 @@ describe('rebuildSources', () => {
     await kv.put('rl:1.2.3.4', '3');
 
     expect(await rebuildSources(kv)).toHaveLength(1);
+  });
+
+  test('keeps a fresh source the snapshot holds but kv list cannot enumerate yet', async () => {
+    const kv = withListLag(await seed(1));
+    await writeSource(kv, record('https://fresh.example/catalog.json'));
+
+    expect((await rebuildSources(kv)).map(r => r.url).sort()).toEqual([
+      'https://fresh.example/catalog.json',
+      'https://s0.example/catalog.json',
+    ]);
+    expect((await listSources(kv)).map(r => r.url).sort()).toEqual([
+      'https://fresh.example/catalog.json',
+      'https://s0.example/catalog.json',
+    ]);
+  });
+
+  test('drops a snapshot item whose backing record is gone', async () => {
+    const kv = await seed(2);
+    await kv.delete(keyFor('https://s1.example/catalog.json'));
+
+    expect((await rebuildSources(kv)).map(r => r.url)).toEqual(['https://s0.example/catalog.json']);
   });
 
   test('the per-source records stay authoritative', async () => {

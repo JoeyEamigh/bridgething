@@ -627,6 +627,12 @@ impl PeerActor {
       }
     }
 
+    if let Some(addr) = diff.gateway_link_lost
+      && let Err(err) = self.capabilities.forget_extensions(addr).await
+    {
+      tracing::warn!(?err, "failed to clear the running extension set on gateway link loss");
+    }
+
     if let Some(addr) = diff.companion_lost {
       if let Err(err) = self.capabilities.clear_companion(addr).await {
         tracing::warn!(?err, "failed to clear companion capabilities on disconnect");
@@ -740,6 +746,7 @@ struct Diff {
   useful_link_transitioned_down: bool,
   useful_device: Option<Device>,
   companion_lost: Option<Address>,
+  gateway_link_lost: Option<Address>,
   removed: bool,
 }
 
@@ -773,6 +780,20 @@ impl Diff {
       None
     };
 
+    let was_gateway_linked = matches!(
+      prior.as_ref().map(|p| &p.companion),
+      Some(PeerCompanionStatus::Pending | PeerCompanionStatus::Connected(_))
+    );
+    let is_gateway_linked = matches!(
+      current.as_ref().map(|p| &p.companion),
+      Some(PeerCompanionStatus::Pending | PeerCompanionStatus::Connected(_))
+    );
+    let gateway_link_lost = if was_gateway_linked && !is_gateway_linked {
+      Some(mac)
+    } else {
+      None
+    };
+
     let snapshot = peers
       .iter()
       .map(|(addr, peer)| (addr.to_string(), peer.clone()))
@@ -791,6 +812,7 @@ impl Diff {
         None
       },
       companion_lost,
+      gateway_link_lost,
       removed: prior.is_some() && current.is_none(),
     }
   }

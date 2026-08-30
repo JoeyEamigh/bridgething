@@ -7,7 +7,7 @@ main = "worker/index.ts"
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "404-page"
-run_worker_first = ["/api/*", "/apps/*"]
+run_worker_first = ["/api/*", "/apps/*", "/oauth/callback"]
 
 [[kv_namespaces]]
 binding = "SOURCES"

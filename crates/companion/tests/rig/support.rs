@@ -8,8 +8,8 @@ use std::{
 };
 
 use bridgething_companion::{
-  api::{CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo, SessionEvent},
-  backend::{LinkDevice, LinkInbox, LinkTransport},
+  api::{CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, SessionEvent},
+  backend::{ExtensionHost, HttpTransport, LinkDevice, LinkInbox, LinkTransport},
   session::Session,
 };
 use bridgething_gateway::Gateway;
@@ -291,8 +291,16 @@ pub struct DeviceSaid {
   pub phases: Vec<OtaPhase>,
 }
 
+#[derive(Default)]
+pub struct Setup {
+  pub recording: bool,
+  pub extensions: Option<Arc<dyn ExtensionHost>>,
+  pub http: Option<Arc<dyn HttpTransport>>,
+}
+
 pub struct Rig {
   pub harness: Harness,
+  pub companion: Arc<CompanionSession>,
   pub session: Arc<Session>,
   pub heard: Arc<Heard>,
   tap: Arc<Tap>,
@@ -301,25 +309,45 @@ pub struct Rig {
 
 impl Rig {
   pub async fn start() -> Self {
-    Self::launch(false).await
+    Self::launch(Setup::default()).await
   }
 
   pub async fn recording() -> Self {
-    Self::launch(true).await
+    Self::launch(Setup {
+      recording: true,
+      ..Setup::default()
+    })
+    .await
   }
 
-  async fn launch(recording: bool) -> Self {
+  pub async fn with_extension_host(host: Arc<dyn ExtensionHost>) -> Self {
+    Self::launch(Setup {
+      extensions: Some(host),
+      ..Setup::default()
+    })
+    .await
+  }
+
+  pub async fn with_http(http: Arc<dyn HttpTransport>) -> Self {
+    Self::launch(Setup {
+      http: Some(http),
+      ..Setup::default()
+    })
+    .await
+  }
+
+  async fn launch(setup: Setup) -> Self {
     let harness = Harness::start().await.expect("the headless daemon boots");
     let io = harness.connect_android_io().await.expect("a link to the daemon");
     let spool = tempfile::tempdir().expect("a scratch directory");
     let heard = Arc::new(Heard::default());
     let tap = Arc::new(Tap::default());
-    tap.recording.store(recording, Ordering::Relaxed);
+    tap.recording.store(setup.recording, Ordering::Relaxed);
 
     let backends = CompanionBackends {
       link: Some(HarnessLink::new(io, tap.clone())),
       host: Arc::new(RigHost),
-      http: Arc::new(Offline),
+      http: setup.http.unwrap_or_else(|| Arc::new(Offline)),
       ws: Arc::new(Offline),
       secrets: Arc::new(MemorySecrets::default()),
       log: Arc::new(Quiet),
@@ -337,9 +365,10 @@ impl Rig {
       transfer_policy: None,
       connectivity: None,
       device_waker: None,
+      extensions: setup.extensions,
     };
 
-    let session = Session::new(
+    let companion = CompanionSession::create(
       CompanionConfig {
         host: HostInfo {
           app_name: "rig".into(),
@@ -363,12 +392,13 @@ impl Rig {
       },
       backends,
       heard.clone(),
-      Arc::new(Offline),
     );
+    let session = companion.session().clone();
     session.start();
 
     let rig = Rig {
       harness,
+      companion,
       session,
       heard,
       tap,

@@ -226,13 +226,8 @@ function ProviderRow({
 
   const signIn = async () => {
     setBusy(true);
-    try {
-      await session.connectProvider(provider.id);
-    } catch {
-      // the failure lands on the provider's authState
-    } finally {
-      setBusy(false);
-    }
+    await session.connectProvider(provider.id).catch(() => undefined);
+    setBusy(false);
   };
 
   if (!provider.connected) {

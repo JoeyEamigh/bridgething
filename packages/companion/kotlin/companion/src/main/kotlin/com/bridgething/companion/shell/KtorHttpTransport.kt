@@ -107,14 +107,15 @@ public class KtorHttpTransport : HttpTransport {
     }
 
     private fun io.ktor.client.request.HttpRequestBuilder.apply(request: HttpRequest) {
-        method = when (request.method) {
-            HttpMethod.GET -> KtorMethod.Get
-            HttpMethod.HEAD -> KtorMethod.Head
-            HttpMethod.POST -> KtorMethod.Post
-            HttpMethod.PUT -> KtorMethod.Put
-            HttpMethod.PATCH -> KtorMethod.Patch
-            HttpMethod.DELETE -> KtorMethod.Delete
-            HttpMethod.OPTIONS -> KtorMethod.Options
+        method = when (val verb = request.method) {
+            is HttpMethod.Get -> KtorMethod.Get
+            is HttpMethod.Head -> KtorMethod.Head
+            is HttpMethod.Post -> KtorMethod.Post
+            is HttpMethod.Put -> KtorMethod.Put
+            is HttpMethod.Patch -> KtorMethod.Patch
+            is HttpMethod.Delete -> KtorMethod.Delete
+            is HttpMethod.Options -> KtorMethod.Options
+            is HttpMethod.Other -> KtorMethod.parse(verb.verb)
         }
         for (h in request.headers) header(h.name, h.value)
         if (request.timeoutMs > 0u) {

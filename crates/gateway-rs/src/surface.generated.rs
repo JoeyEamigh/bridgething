@@ -60,6 +60,10 @@ impl Gateway {
   pub fn webapp(&self) -> WebappSurface<'_> {
     WebappSurface(self)
   }
+  /// The `Forward` surface.
+  pub fn forward(&self) -> ForwardSurface<'_> {
+    ForwardSurface(self)
+  }
   /// The `Asset` surface.
   pub fn asset(&self) -> AssetSurface<'_> {
     AssetSurface(self)
@@ -463,6 +467,33 @@ impl<'a> WebappSurface<'a> {
   }
 }
 
+/// Methods scoped to the `Forward` wire surface.
+pub struct ForwardSurface<'a>(&'a Gateway);
+
+impl<'a> ForwardSurface<'a> {
+  pub async fn routed(&self, payload: ForwardRouted) -> Result<(), SdkError> {
+    self.0.event(GatewayToBridgeForwardMsgEvent::Routed(payload)).await
+  }
+  pub async fn extensions_running(&self, payload: ExtensionsRunning) -> Result<(), SdkError> {
+    self
+      .0
+      .event(GatewayToBridgeForwardMsgEvent::ExtensionsRunning(payload))
+      .await
+  }
+  /// Stream of `Forward` events.
+  pub fn events(&self) -> impl Stream<Item = BridgeToGatewayForwardMsgEvent> + 'static {
+    BroadcastStream::new(self.0.events()).filter_map(|msg| {
+      ready(match msg {
+        Ok(msg) => match msg.data {
+          BridgeToGatewayMsgData::Forward(inner) => inner.into_event(),
+          _ => None,
+        },
+        Err(_) => None,
+      })
+    })
+  }
+}
+
 /// Methods scoped to the `Asset` wire surface.
 pub struct AssetSurface<'a>(&'a Gateway);
 
@@ -686,14 +717,13 @@ pub trait VoiceHandler {
 
 pub trait WebappHandler {
   fn doc_changed(&self, payload: WebappDocChanged) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn config_changed(&self, payload: WebappConfigChanged) -> impl Future<Output = Result<(), WireError>> + Send;
   fn webapp_installed(&self, payload: WebappInfo) -> impl Future<Output = Result<(), WireError>> + Send;
   fn active_changed(&self, payload: WebappActiveChanged) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
 pub trait ForwardHandler {
-  fn text(&self, payload: String) -> impl Future<Output = Result<(), WireError>> + Send;
-  fn json(&self, payload: serde_json::Value) -> impl Future<Output = Result<(), WireError>> + Send;
-  fn binary(&self, payload: Vec<u8>) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn routed(&self, payload: ForwardRouted) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
 pub trait EnvelopeHandler {
@@ -1738,6 +1768,17 @@ where
       }
       Ok(())
     }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::ConfigChanged(payload)) => {
+      if let Err(error) = <H as WebappHandler>::config_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "webapp",
+          variant = "configChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
     BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::WebappInstalled(payload)) => {
       if let Err(error) = <H as WebappHandler>::webapp_installed(handlers, payload).await {
         tracing::warn!(
@@ -1760,21 +1801,9 @@ where
       }
       Ok(())
     }
-    BridgeToGatewayMsgData::Forward(ForwardMessage::Text(payload)) => {
-      if let Err(error) = <H as ForwardHandler>::text(handlers, payload).await {
-        tracing::warn!(surface = "forward", variant = "text", ?error, "inbound not handled");
-      }
-      Ok(())
-    }
-    BridgeToGatewayMsgData::Forward(ForwardMessage::Json(payload)) => {
-      if let Err(error) = <H as ForwardHandler>::json(handlers, payload).await {
-        tracing::warn!(surface = "forward", variant = "json", ?error, "inbound not handled");
-      }
-      Ok(())
-    }
-    BridgeToGatewayMsgData::Forward(ForwardMessage::Binary(payload)) => {
-      if let Err(error) = <H as ForwardHandler>::binary(handlers, payload).await {
-        tracing::warn!(surface = "forward", variant = "binary", ?error, "inbound not handled");
+    BridgeToGatewayMsgData::Forward(BridgeToGatewayForwardMsg::Routed(payload)) => {
+      if let Err(error) = <H as ForwardHandler>::routed(handlers, payload).await {
+        tracing::warn!(surface = "forward", variant = "routed", ?error, "inbound not handled");
       }
       Ok(())
     }

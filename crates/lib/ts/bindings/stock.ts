@@ -3,9 +3,26 @@
 export type StockPreset = {
   context_uri: string;
   image_url: string | null;
+  /**
+   * Slot 1 to 4.
+   */
   slot_index: number;
   name: string | null;
   description: string | null;
 };
 
-export type StockSetPreset = { version: number; context_uri: string; slot_index: number; source: string };
+export type StockSetPreset = {
+  /**
+   * Payload version. Send 1.
+   */
+  version: number;
+  context_uri: string;
+  /**
+   * Slot 1 to 4. The daemon ignores others.
+   */
+  slot_index: number;
+  /**
+   * `tactile` or `voice`.
+   */
+  source: string;
+};

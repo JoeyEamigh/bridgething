@@ -2,7 +2,7 @@ use bridgething_macros::{BridgeEnum, WireRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Webapp request: read one doc value for the currently active webapp.
+/// Returns one doc value for the active webapp.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -17,7 +17,7 @@ pub struct DocGet {
   pub key: String,
 }
 
-/// Marker request: read every doc entry for the currently active webapp.
+/// Returns every doc value for the active webapp.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
   direction = ClientToBridge,
@@ -28,9 +28,7 @@ pub struct DocGet {
 )]
 pub struct DocList;
 
-/// Webapp request: write a doc value. Last write wins against companion
-/// writes on the same key; the companion hears the change as a gateway
-/// `webapp.docChanged` event.
+/// Writes a doc value. Keep it at or under 256 KiB.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -48,7 +46,6 @@ pub struct DocSet {
   pub value: String,
 }
 
-/// Webapp request: delete the doc entry at `key`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -68,11 +65,7 @@ pub struct DocDelete {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::ClientToBridgeMsgData)]
-/// Webapp -> daemon doc surface (`client.doc`). The doc namespace is
-/// shared structured state per webapp, writable from BOTH the webapp
-/// and the companion (which authors it from the app's settings page).
-/// Last write wins; the daemon broadcasts `BridgeToClientDocMsg::Changed`
-/// on companion-origin writes so the running app applies them live.
+/// Reads and writes the key/value state the active webapp shares with the companion app.
 pub enum ClientToBridgeDocMsg {
   #[bridge_request]
   Get(DocGet),

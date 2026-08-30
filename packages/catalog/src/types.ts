@@ -20,6 +20,7 @@ export type AppEntry = {
   description: string;
   author: string;
   icon: string | null;
+  screenshots?: string[];
   homepage: string | null;
   source: string | null;
   versions: AppVersion[];
@@ -32,8 +33,14 @@ export type AppVersion = {
   permissions: string[];
   role?: 'standard' | 'launcher';
   provides_overlay?: boolean;
+  extension?: AppExtension;
   min_libbridgething_version: string;
   changelog: string | null;
+};
+
+export type AppExtension = {
+  desktop: true;
+  permissions: string[];
 };
 
 export type Download = {

@@ -178,3 +178,32 @@ describe('webapp auto-update', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('webapp auto-update and native extensions', () => {
+  test('an app that ships a native extension is never updated from the phone', async () => {
+    const r = rig();
+    const entry = app('2.0.0');
+    serve({
+      [OFFICIAL]: {
+        ...catalog('2.0.0'),
+        apps: [
+          {
+            ...entry,
+            versions: entry.versions.map(version => ({
+              ...version,
+              extension: { desktop: true as const, permissions: ['all'] },
+            })),
+          },
+        ],
+      },
+    });
+    const calls = installs(r);
+    r.catalog.startWebappAutoUpdate();
+    connect(r, '1.0.0');
+
+    await r.catalog.refreshCatalog();
+    await tick();
+
+    expect(calls).toEqual([]);
+  });
+});

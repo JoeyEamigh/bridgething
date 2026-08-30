@@ -5,7 +5,7 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{AbortController, Headers, ReadableStreamDefaultReader, Request, RequestInit, Response};
 
-use crate::http::{HttpDownloadSink, HttpHeader, HttpMethod, HttpRequest, HttpResponse, HttpSink, HttpTransport};
+use crate::http::{HttpDownloadSink, HttpHeader, HttpRequest, HttpResponse, HttpSink, HttpTransport};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FetchTransport;
@@ -129,8 +129,9 @@ fn host_function(global: &JsValue, name: &str) -> Result<js_sys::Function, Strin
 }
 
 async fn send(request: HttpRequest) -> Result<(Response, Option<Deadline>), String> {
+  request.method.validate()?;
   let init = RequestInit::new();
-  init.set_method(method_of(request.method));
+  init.set_method(request.method.as_str());
   if !request.body.is_empty() {
     init.set_body(&Uint8Array::from(request.body.as_slice()).into());
   }
@@ -181,18 +182,6 @@ fn headers_of(response: &Response) -> Vec<HttpHeader> {
     }
   }
   out
-}
-
-fn method_of(method: HttpMethod) -> &'static str {
-  match method {
-    HttpMethod::Get => "GET",
-    HttpMethod::Head => "HEAD",
-    HttpMethod::Post => "POST",
-    HttpMethod::Put => "PUT",
-    HttpMethod::Patch => "PATCH",
-    HttpMethod::Delete => "DELETE",
-    HttpMethod::Options => "OPTIONS",
-  }
 }
 
 fn js_reason(context: &str, value: &JsValue) -> String {

@@ -20,7 +20,7 @@ const current = await client.webapp.current();
 const icon = await client.webapp.icon({ id: info.id });
 await client.webapp.activate({ id: info.id });
 
-// handle new installations and uninstalls
+// redraw when a webapp is installed or removed
 client.webapp.onWebappInstalled(reload);
 client.webapp.onWebappUninstalled(reload);`;
 
@@ -41,9 +41,20 @@ window.__bridgethingOverlay = {
     call: true,
     pairing: true,
     connection: true,
-    volume: false, // this app draws its own volume indicator
+    voice: true,
+    volume: false, // this webapp draws its own volume indicator
   },
 };`;
+
+const overlayOptOut = `{
+  "id": "…",
+  "name": "My App",
+  "version": "0.1.0",
+  "overlays": {
+    "volume": false,
+    "notifications": false
+  }
+}`;
 
 const overlayBoot = `const cfg = window.__bridgethingOverlay;
 if (!cfg || !location.origin.startsWith(cfg.origin)) return; // not a page the daemon served
@@ -56,90 +67,93 @@ if (cfg.surfaces.pairing) wirePairing(client);`;
 
 <DocsLayout
   title="launchers and overlays"
-  description="replace the built-in hub with your own home screen, and the built-in system overlay with your own."
+  description="build your own home screen for the device's launcher slot, and your own system overlay."
   current="launchers-and-overlays">
   <header class="mb-12">
     <h1>launchers and overlays</h1>
-    <p class="text-white/60">
-      the hub and the system overlay are just webapps. you can build your own and mark them as launchers and overlays.
-    </p>
+    <p class="text-white/60">the hub and the system overlay are webapps.</p>
   </header>
 
   <section class="mb-14">
     <h2 class={refdes}>s1 - two slots</h2>
-    <p class="text-white/60">a slot names one installed bundle for a system role. there are two:</p>
+    <p class="text-white/60">a slot names one installed bundle for a system role:</p>
     <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
       <li>
-        <strong class="text-white/80">launcher</strong> - the home screen, accessed by pressing the menu button 5 times.
+        <strong class="text-white/80">launcher.</strong> the home screen. press the menu button 5 times to reach it.
       </li>
       <li>
-        <strong class="text-white/80">overlay</strong> - the ui drawn on top of <em>every</em> webapp: notification toasts,
-        the call banner, the pairing pin, the disconnected banner, the volume indicator.
+        <strong class="text-white/80">overlay.</strong> the ui drawn on top of every webapp: notification toasts, the call
+        banner, the pairing pin, the disconnected banner, the voice indicator, and the volume indicator.
       </li>
     </ul>
+    <p class="mt-4 text-white/60">you set both from the companion app. an empty slot uses the built-in one.</p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>s2 - what every webapp gets for free</h2>
+    <p class="text-white/60">
+      overlays default <strong class="text-white/80">on</strong>. a webapp that declares nothing gets all six.
+    </p>
     <p class="mt-4 text-white/60">
-      you set both from the companion phone app. an unset slot means the built-in provider.
+      turn one off in the manifest's <code>overlays</code> block when you draw it yourself. an omitted key stays on, so list
+      only what you take over.
+    </p>
+    <Snippet code={overlayOptOut} lang="json" />
+    <p class="mt-3 text-white/60">
+      the six keys are <code>notifications</code>, <code>call</code>, <code>pairing</code>, <code>connection</code>,
+      <code>voice</code>, and <code>volume</code>. a key gates the drawn ui only; the events still reach your webapp.
     </p>
   </section>
 
   <section class="mb-14">
-    <h2 class={refdes}>s2 - build a launcher</h2>
+    <h2 class={refdes}>s3 - build a launcher</h2>
     <Snippet code={launcherScaffold} lang="bash" />
     <p class="mt-3 text-white/60">
-      the scaffold declares <code>"role": "launcher"</code>. that does two things: the daemon hides the bundle from
-      <code>client.webapp.list</code>, and it makes the bundle eligible for the launcher slot.
+      <code>"role": "launcher"</code> hides the bundle from <code>client.webapp.list</code> and makes it eligible for the
+      launcher slot.
     </p>
     <Snippet code={launcherManifest} lang="json" />
-    <p class="mt-3 text-white/60">
-      everything a home screen needs is on the normal client sdk. the grid is four calls and two events:
-    </p>
+    <p class="mt-3 text-white/60">everything a home screen needs is on the normal client:</p>
     <Snippet code={launcherSdk} />
     <p class="mt-3 text-white/60">
-      the built-in hub also does bluetooth bonds and pairing name, display brightness, system health, power, and ota
-      progress - we recommend yours does as well.
+      the built-in hub also handles bluetooth bonds and the pairing name, display brightness, system health, power, and
+      ota progress.
     </p>
   </section>
 
   <section class="mb-14">
-    <h2 class={refdes}>s3 - build an overlay</h2>
+    <h2 class={refdes}>s4 - build an overlay</h2>
     <Snippet code={overlayScaffold} lang="bash" />
     <Snippet code={overlayManifest} lang="json" />
     <p class="mt-3 text-white/60">
-      <code>overlay</code> points at one self-contained script. when your bundle holds the overlay slot, the daemon injects
-      that file into every webapp's document as it loads. any bundle can carry an overlay, but it's usually something a hub
-      would do.
+      while your bundle holds the overlay slot, the daemon injects <code>overlay.js</code> into every webapp's document as
+      it loads.
     </p>
-    <p class="mt-4 text-white/60">the daemon prepends one global before your code:</p>
     <Snippet code={overlayGlobal} />
     <p class="mt-3 text-white/60">
-      <strong class="text-white/80">honor <code>surfaces</code>.</strong> an app that draws its own volume indicator sets
-      <code>volume: false</code>. the daemon cannot enforce this, but you will get duplicate ui if you ignore it.
+      <strong class="text-white/80">honor <code>surfaces</code>.</strong> draw only what its keys allow, or the screen shows
+      that ui twice.
     </p>
-    <p class="mt-4 text-white/60">the starter encodes four things worth keeping:</p>
     <Snippet code={overlayBoot} />
     <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
-      <li><strong class="text-white/80">origin guard</strong> - never run in a page the daemon did not serve.</li>
-      <li><strong class="text-white/80">mount guard</strong> - a second injection must be a no-op.</li>
+      <li><strong class="text-white/80">origin guard.</strong> run only in a page the daemon served.</li>
+      <li><strong class="text-white/80">mount guard.</strong> a second injection must do nothing.</li>
       <li>
-        <strong class="text-white/80">closed shadow root</strong> - so your styles and the host app's cannot reach each other.
+        <strong class="text-white/80">closed shadow root.</strong> it keeps your styles and the webapp's apart.
       </li>
       <li>
-        <strong class="text-white/80">escape-only, capture-phase keys</strong>, and only while something is showing.
+        <strong class="text-white/80">escape-only, capture-phase keys.</strong> bind them only while something is showing.
       </li>
     </ul>
     <p class="mt-4 text-sm text-white/60">
-      the hard constraint: <code>overlay.js</code> must be <strong class="text-white/80">one self-contained file</strong
-      >
-      under 512&nbsp;KiB.
+      <code>overlay.js</code> must be <strong class="text-white/80">one self-contained file</strong> under 512&nbsp;KiB.
     </p>
   </section>
 
   <section>
-    <h2 class={refdes}>s4 - assign it, and get back</h2>
-    <p class="text-white/60">
-      install your bundle the usual way, then open the companion app and pick it under home screen and overlay.
-    </p>
-    <p class="mt-4 text-white/60">there are three ways back to the built-in:</p>
+    <h2 class={refdes}>s5 - assign it, and get back</h2>
+    <p class="text-white/60">install the bundle, then pick it in the companion app under home screen or overlay.</p>
+    <p class="mt-4 text-white/60">to get back to the built-in:</p>
     <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
       <li><strong class="text-white/80">clear the slot</strong> in the companion app.</li>
       <li><strong class="text-white/80">uninstall the bundle</strong></li>

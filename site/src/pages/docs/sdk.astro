@@ -33,22 +33,158 @@ const wireErrorShape = `type WireError =
   | { type: 'malformed'; data: { reason: string } }
   | { type: 'handlerFailed'; data: { reason: string } };`;
 
+const overlayOptOut = `{
+  "overlays": { "volume": false }
+}`;
+
+const voiceActivity = `client.voice.onActivity(a => {
+  // a.phase     'idle' | 'listening' | 'thinking' | 'done' | 'failed'
+  // a.transcript the recognized text, once there is one
+  // a.intent     the resolved intent name, e.g. 'PAUSE'
+  // a.slots      its parsed arguments
+  // a.stage      'fastPath' | 'model' | 'rejectedNoIntent' | 'rejectedClarify' | 'noModel'
+  // a.target     'playback' | 'device' | 'phone' | 'display' | 'webappSwitch'
+  // a.error      { code, msg } when the turn ended without dispatching
+  render(a);
+});`;
+
+const voiceIntent = `client.voice.onIntent(i => {
+  // the spoken words are i.transcript. i.slots.target is the entity the nlu
+  // found in them, when it found one.
+  if (i.intent === 'search') return showSearch(i.slots.target ?? i.transcript, i.slots.targetType);
+  if (i.intent === 'showView') return navigate(i.slots.view);
+  if (i.intent === 'moreLikeThis') return showSimilar(i.slots);
+});`;
+
+const voiceManifest = `{
+  "rendersVoiceDisplay": true
+}`;
+
+const voiceControls = `await client.voice.pushToTalk(); // start a turn
+await client.voice.release();    // stop capturing, let the turn finish
+await client.voice.cancel();     // drop the turn
+
+await client.voice.muteMic({ preserve: true });
+await client.voice.unmuteMic({ preserve: true });
+
+const res = await client.voice.stateGet();
+client.voice.onStateChanged(s => setMic(s.muted, s.capturing, s.phase));`;
+
+type Row = {
+  surface: string;
+  ios: boolean;
+  android: boolean;
+  macos: boolean;
+  linux: boolean;
+  windows: boolean;
+  note?: string;
+};
+
+const availability: Row[] = [
+  { surface: 'asset', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'audio', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'bluetooth', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'capabilities', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'config', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'doc', ios: true, android: true, macos: true, linux: true, windows: true },
+  {
+    surface: 'forward',
+    ios: false,
+    android: false,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: '<code>available.forward</code> is true while an extension for the active webapp is running.',
+  },
+  {
+    surface: 'geo',
+    ios: true,
+    android: true,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: '<code>available.geo</code> reflects the location grant on the companion.',
+  },
+  { surface: 'hardware', ios: true, android: true, macos: true, linux: true, windows: true },
+  {
+    surface: 'library',
+    ios: true,
+    android: true,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: 'spotify everywhere, apple music on ios. <code>capabilities.musicProvider</code> names the one in use.',
+  },
+  {
+    surface: 'lyrics',
+    ios: true,
+    android: true,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: 'resolves through the music provider, so a lookup can answer <code>notSupported</code>.',
+  },
+  { surface: 'net', ios: true, android: true, macos: true, linux: true, windows: true },
+  {
+    surface: 'notifications',
+    ios: true,
+    android: true,
+    macos: false,
+    linux: true,
+    windows: false,
+    note: 'ancs on ios, the notification listener on android, freedesktop on linux.',
+  },
+  { surface: 'peer', ios: true, android: true, macos: true, linux: true, windows: true },
+  {
+    surface: 'phone',
+    ios: true,
+    android: true,
+    macos: false,
+    linux: false,
+    windows: false,
+  },
+  {
+    surface: 'player',
+    ios: true,
+    android: true,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: '<code>transferTo</code> needs <code>available.playbackTargets</code>, which depends on the music provider.',
+  },
+  { surface: 'store', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'system', ios: true, android: true, macos: true, linux: true, windows: true },
+  { surface: 'time', ios: true, android: true, macos: true, linux: true, windows: true },
+  {
+    surface: 'voice',
+    ios: true,
+    android: true,
+    macos: true,
+    linux: true,
+    windows: true,
+    note: 'a turn resolves with <code>stage: noModel</code> until the companion has the voice model installed.',
+  },
+  { surface: 'webapp', ios: true, android: true, macos: true, linux: true, windows: true },
+];
+
+const platforms = ['ios', 'android', 'macos', 'linux', 'windows'] as const;
+
 const shapes = [
   {
     label: 'events',
-    body: 'the daemon pushes, you subscribe. onXxx returns an unsubscribe function.',
+    body: 'the daemon pushes, you subscribe.',
     code: `const off = client.player.onSnapshot(r => render(r.state));
 off(); // stop listening`,
   },
   {
     label: 'requests',
-    body: 'you ask, the daemon answers. returns a tagged result.',
+    body: 'you ask, the daemon answers with a tagged result.',
     code: `const res = await client.player.stateGet();
 if (res.ok) render(res.response.state);`,
   },
   {
     label: 'commands',
-    body: 'fire-and-forget. resolves once the daemon has taken the message.',
+    body: 'resolves once the daemon has the message.',
     code: `await client.player.skipNext();`,
   },
 ];
@@ -61,45 +197,59 @@ if (res.ok) render(res.response.state);`,
   <header class="mb-12">
     <h1>webapp sdk</h1>
     <p class="text-white/60">
-      a bridgething webapp is a single-page ui. it runs full-screen in the car thing's chromium kiosk. it reaches the
-      on-device daemon through one typed client,
-      <a href="https://www.npmjs.com/package/@bridgething/client">@bridgething/client</a>. this reference is generated
-      from the daemon's wire types.
+      a webapp is one page in the car thing's kiosk. it reaches the daemon through one typed client,
+      <a href="https://www.npmjs.com/package/@bridgething/client">@bridgething/client</a>.
     </p>
   </header>
 
   <section class="mb-14">
     <h2 class={refdes}>d1 - start a project</h2>
-    <p class="text-white/60">scaffold a webapp. react, vite, tailwind, and this client come preinstalled.</p>
+    <p class="text-white/60">react, vite, tailwind, and this client come preinstalled.</p>
     <Snippet code="bun create bridgething my-app" lang="bash" />
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <code class="text-white/80">--launcher</code> scaffolds a home screen for the device's launcher slot. see
+        <a href="/docs/launchers-and-overlays">launchers and overlays</a>.
+      </li>
+      <li>
+        <code class="text-white/80">--overlay</code> scaffolds a system overlay, drawn over every webapp.
+      </li>
+      <li>
+        <code class="text-white/80">--extension</code> adds a deno process on the desktop. combines with either. see
+        <a href="/docs/extensions">extensions</a>.
+      </li>
+      <li><code class="text-white/80">--no-install</code>, <code class="text-white/80">--no-git</code></li>
+    </ul>
+    <p class="mt-4 text-white/60">
+      every system overlay is on by default. turn one off in the manifest when you draw it yourself.
+    </p>
+    <Snippet code={overlayOptOut} lang="json" />
     <p class="mt-3 text-sm text-white/45">
       source and issues on <a href={`${SITE.github}/bridgething`}>github</a>.
     </p>
   </section>
 
   <section class="mb-14">
-    <h2 class={refdes}>d2 - settings pages</h2>
+    <h2 class={refdes}>d2 - settings pages and extensions</h2>
     <p class="text-white/60">
-      apps can ship a companion-side settings ui. it is one self-contained html page rendered in the phone app, with its
-      own tiny bridge sdk for config and shared state. see <a href="/docs/settings-pages">settings pages</a>, including
-      the <a href="/docs/settings-pages#network">network caveat</a>.
+      a <strong class="text-white/80"><a href="/docs/settings-pages">settings page</a></strong> is one html file in your bundle
+      that the companion app or the desktop app renders, with its own sdk for config,
+      <a href="/docs/settings-pages#fetch">fetch</a>, and <a href="/docs/settings-pages#auth">oauth</a>.
+    </p>
+    <p class="mt-4 text-white/60">
+      an <strong class="text-white/80"><a href="/docs/extensions">extension</a></strong> is a deno process the desktop app
+      runs for your webapp, with host access. your webapp reaches it over <code>client.forward</code>.
     </p>
   </section>
 
   <section class="mb-14">
     <h2 class={refdes}>d3 - connect</h2>
-    <p class="text-white/60">
-      construct the client once and reuse it. the daemon is the sole peer. you never open sockets or address anything
-      (unless you are using the web proxy feature).
-    </p>
+    <p class="text-white/60">construct the client once and reuse it.</p>
     <Snippet code={connectSnippet} />
   </section>
 
   <section class="mb-16">
     <h2 class={refdes}>d4 - the three call shapes</h2>
-    <p class="mb-6 text-white/60">
-      every surface method is one of three shapes. learn these and the whole sdk reads the same way.
-    </p>
     {
       shapes.map(s => (
         <div class="mb-6">
@@ -114,41 +264,88 @@ if (res.ok) render(res.response.state);`,
   <section class="mb-16 scroll-mt-24" id="request-results">
     <h2 class={refdes}>d5 - request results</h2>
     <p class="text-white/60">
-      a request never returns its payload directly and never throws. it resolves to a tagged result. narrow it on
-      <code>ok</code>. this is the <code>TypedRequestResult&lt;Response, Error&gt;</code> in every request's signature:
+      a request resolves to a tagged result. narrow it on <code>ok</code>.
     </p>
     <Snippet code={resultShape} />
     <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
       <li>
-        <code class="text-white/80">ok</code>: the discriminant. <code>true</code> means success; <code>response</code> holds
-        the reply.
-      </li>
-      <li>
-        <code class="text-white/80">response</code>: the typed reply payload (the <code>Response</code> in the method's signature).
-        only present when <code>ok</code>.
-      </li>
-      <li>
-        <code class="text-white/80">kind</code>: on failure, <code>'domain'</code> (an expected, operation-specific failure,
-        e.g. an asset that isn't found) or <code>'protocol'</code> (the request could not be reached or dispatched).
-      </li>
-      <li>
-        <code class="text-white/80">error</code>: the failure detail. your operation's error type when <code>kind</code> is
-        <code>'domain'</code>, a <code>WireError</code> when <code>'protocol'</code>.
+        <code class="text-white/80">kind</code> is <code>'domain'</code> for a failure the operation defines, such as an asset
+        that is missing, or <code>'protocol'</code> when the daemon could not dispatch the request.
       </li>
     </ul>
     <p class="mt-4 text-sm text-white/60">
       every request also accepts an optional second argument <code>{'{ timeoutMs }'}</code>.
     </p>
-    <p class="mt-6 mb-2 text-sm text-white/60">
-      the <code>'protocol'</code> failure carries a <code>WireError</code>: the request was malformed, unsupported, or
-      the handler threw.
-    </p>
     <Snippet code={wireErrorShape} />
+  </section>
+
+  <section class="mb-16 scroll-mt-24" id="availability">
+    <h2 class={refdes}>d6 - what is available where</h2>
+    <p class="text-white/60">some surfaces depend on the connected companion app, and companions differ.</p>
+    <p class="mt-4 text-white/60">
+      branch on <code>client.capabilities</code>, which reports what the connected companion supplies.
+    </p>
+    <div class="mt-6 overflow-x-auto">
+      <table class="w-full border-collapse font-mono text-sm">
+        <thead>
+          <tr class="border-b border-white/20 text-left text-white/45">
+            <th class="py-3 pr-4 font-normal whitespace-nowrap">surface</th>
+            {platforms.map(p => <th class="py-3 pr-4 font-normal whitespace-nowrap">{p}</th>)}
+            <th class="py-3 font-normal">notes</th>
+          </tr>
+        </thead>
+        <tbody class="text-white/70">
+          {
+            availability.map(row => (
+              <tr class="border-b border-white/10">
+                <td class="py-3 pr-4 align-top whitespace-nowrap">
+                  <a href={`/docs/${row.surface}`}>{row.surface}</a>
+                </td>
+                {platforms.map(p => (
+                  <td class:list={['py-3 pr-4 align-top', row[p] ? 'text-accent' : 'text-white/25']}>
+                    {row[p] ? 'yes' : 'no'}
+                  </td>
+                ))}
+                <td class="py-3 align-top text-white/50" set:html={row.note ?? ''} />
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 text-sm text-white/45">
+      macos, linux, and windows are the bridgething desktop app. ios and android are the companion phone app.
+    </p>
+  </section>
+
+  <section class="mb-16 scroll-mt-24" id="voice">
+    <h2 class={refdes}>d7 - voice</h2>
+    <p class="text-white/60">the companion app transcribes the mic and resolves an intent. the daemon dispatches it.</p>
+    <Snippet code={voiceActivity} />
+
+    <h3 class="font-display mt-8 mb-1 text-base font-medium">display intents</h3>
+    <p class="text-white/60">
+      the daemon hands three intents to the active webapp to draw: <code>search</code>, <code>showView</code>, and
+      <code>moreLikeThis</code>.
+    </p>
+    <Snippet code={voiceIntent} />
+    <p class="mt-3 text-white/60">
+      declare <code>rendersVoiceDisplay</code> in your manifest to receive them. otherwise the turn fails with
+      <code>error.code: 'notDispatchable'</code>.
+    </p>
+    <Snippet code={voiceManifest} lang="json" />
+
+    <h3 class="font-display mt-8 mb-1 text-base font-medium">driving the mic</h3>
+    <Snippet code={voiceControls} />
+    <p class="mt-3 text-sm text-white/60">
+      <code>preserve</code> keeps the mute in place after the turn ends. see
+      <a href="/docs/voice">client.voice</a> for the full signatures.
+    </p>
   </section>
 
   <section>
     <div class="mb-1 border-b border-white/20 pb-2">
-      <h2 class={refdes.replace('mb-4', 'mb-1')}>d6 - surfaces</h2>
+      <h2 class={refdes.replace('mb-4', 'mb-1')}>d8 - surfaces</h2>
       <p class="m-0 font-mono text-sm text-white/45">{surfaces.length} surfaces on <code>client.&lt;name&gt;</code></p>
     </div>
     {

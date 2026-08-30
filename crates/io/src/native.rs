@@ -82,7 +82,7 @@ impl HttpTransport for ReqwestTransport {
     tokio::spawn(async move {
       match reqwest_execute(&client, request).await {
         Ok(resp) => sink.complete(resp),
-        Err(e) => sink.fail(e.to_string()),
+        Err(reason) => sink.fail(reason),
       }
     });
   }
@@ -97,8 +97,8 @@ impl HttpTransport for ReqwestTransport {
   }
 }
 
-fn reqwest_builder(client: &reqwest::Client, request: &HttpRequest) -> reqwest::RequestBuilder {
-  let method = match request.method {
+fn reqwest_builder(client: &reqwest::Client, request: &HttpRequest) -> Result<reqwest::RequestBuilder, String> {
+  let method = match &request.method {
     HttpMethod::Get => reqwest::Method::GET,
     HttpMethod::Head => reqwest::Method::HEAD,
     HttpMethod::Post => reqwest::Method::POST,
@@ -106,6 +106,9 @@ fn reqwest_builder(client: &reqwest::Client, request: &HttpRequest) -> reqwest::
     HttpMethod::Patch => reqwest::Method::PATCH,
     HttpMethod::Delete => reqwest::Method::DELETE,
     HttpMethod::Options => reqwest::Method::OPTIONS,
+    HttpMethod::Other(verb) => {
+      reqwest::Method::from_bytes(verb.as_bytes()).map_err(|_| format!("http method {verb:?} is not a token"))?
+    }
   };
   let mut rb = client.request(method, request.url.as_str());
   for h in &request.headers {
@@ -114,18 +117,18 @@ fn reqwest_builder(client: &reqwest::Client, request: &HttpRequest) -> reqwest::
   if request.timeout_ms > 0 {
     rb = rb.timeout(Duration::from_millis(request.timeout_ms as u64));
   }
-  rb
+  Ok(rb)
 }
 
-async fn reqwest_execute(client: &reqwest::Client, request: HttpRequest) -> Result<HttpResponse, reqwest::Error> {
-  let mut rb = reqwest_builder(client, &request);
+async fn reqwest_execute(client: &reqwest::Client, request: HttpRequest) -> Result<HttpResponse, String> {
+  let mut rb = reqwest_builder(client, &request)?;
   if !request.body.is_empty() {
     rb = rb.body(request.body);
   }
-  let resp = rb.send().await?;
+  let resp = rb.send().await.map_err(|e| e.to_string())?;
   let status = resp.status().as_u16();
   let headers = header_vec(resp.headers());
-  let body = resp.bytes().await?.to_vec();
+  let body = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
   Ok(HttpResponse { status, headers, body })
 }
 
@@ -134,7 +137,7 @@ async fn reqwest_download(
   request: HttpRequest,
   sink: Arc<HttpDownloadSink>,
 ) -> Result<(), String> {
-  let mut rb = reqwest_builder(client, &request);
+  let mut rb = reqwest_builder(client, &request)?;
   if !request.body.is_empty() {
     rb = rb.body(request.body);
   }

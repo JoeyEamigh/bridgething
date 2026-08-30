@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   net::SocketAddr,
   sync::{
     Arc, RwLock,
@@ -11,6 +11,7 @@ use libbridgething::{
   Capabilities, CompanionAuthorityScope, GatewayCapabilities, SurfaceAvailability,
   client::{BridgeToClientCapabilitiesMsgEvent, CapabilitiesSnapshot},
 };
+use uuid::Uuid;
 
 use crate::{
   authority::AuthorityRegistry,
@@ -27,6 +28,8 @@ pub struct CapabilitiesRegistry {
 struct Inner {
   snapshot: RwLock<Capabilities>,
   announces: RwLock<HashMap<Address, Announce>>,
+  extensions: RwLock<HashMap<Address, HashSet<Uuid>>>,
+  active_webapp: RwLock<Option<Uuid>>,
   announce_seq: AtomicU64,
   bus: WireEventBus,
   authority: AuthorityRegistry,
@@ -44,6 +47,8 @@ impl CapabilitiesRegistry {
       inner: Arc::new(Inner {
         snapshot: RwLock::new(Capabilities::default()),
         announces: RwLock::new(HashMap::new()),
+        extensions: RwLock::new(HashMap::new()),
+        active_webapp: RwLock::new(None),
         announce_seq: AtomicU64::new(0),
         bus,
         authority,
@@ -74,8 +79,56 @@ impl CapabilitiesRegistry {
       let mut guard = self.inner.announces.write().expect("announces lock poisoned");
       guard.remove(&addr);
     }
+    self.drop_extensions(addr);
     self.inner.authority.drop_for(addr);
     self.rebuild_and_broadcast().await
+  }
+
+  pub async fn set_extensions_running(&self, addr: Address, webapps: Vec<Uuid>) -> WSResult<()> {
+    {
+      let mut guard = self.inner.extensions.write().expect("extensions lock poisoned");
+      if webapps.is_empty() {
+        guard.remove(&addr);
+      } else {
+        guard.insert(addr, webapps.into_iter().collect());
+      }
+    }
+    self.rebuild_and_broadcast().await
+  }
+
+  pub async fn set_active_webapp(&self, active: Option<Uuid>) -> WSResult<()> {
+    *self.inner.active_webapp.write().expect("active webapp lock poisoned") = active;
+    self.rebuild_and_broadcast().await
+  }
+
+  pub async fn forget_extensions(&self, addr: Address) -> WSResult<()> {
+    if !self.drop_extensions(addr) {
+      return Ok(());
+    }
+    self.rebuild_and_broadcast().await
+  }
+
+  fn drop_extensions(&self, addr: Address) -> bool {
+    self
+      .inner
+      .extensions
+      .write()
+      .expect("extensions lock poisoned")
+      .remove(&addr)
+      .is_some()
+  }
+
+  fn forward_available(&self) -> bool {
+    let Some(active) = *self.inner.active_webapp.read().expect("active webapp lock poisoned") else {
+      return false;
+    };
+    self
+      .inner
+      .extensions
+      .read()
+      .expect("extensions lock poisoned")
+      .values()
+      .any(|running| running.contains(&active))
   }
 
   pub async fn claim_authority(
@@ -115,6 +168,7 @@ impl CapabilitiesRegistry {
   }
 
   fn build_snapshot(&self) -> Capabilities {
+    let forward = self.forward_available();
     let announces = self.inner.announces.read().expect("announces lock poisoned");
     let primary = self
       .elect_addr(&announces)
@@ -125,7 +179,10 @@ impl CapabilitiesRegistry {
     match primary {
       Some(caps) => Capabilities {
         gateway: Some(caps.gateway.clone()),
-        available: caps.available,
+        available: SurfaceAvailability {
+          forward,
+          ..caps.available
+        },
         authority,
         uri_schemes: caps.uri_schemes.clone(),
         network: caps.network,
@@ -134,7 +191,10 @@ impl CapabilitiesRegistry {
       },
       None => Capabilities {
         gateway: None,
-        available: SurfaceAvailability::default(),
+        available: SurfaceAvailability {
+          forward,
+          ..Default::default()
+        },
         authority,
         uri_schemes: Vec::new(),
         network: Default::default(),
@@ -257,6 +317,7 @@ mod tests {
       audio_tts: true,
       lyrics: true,
       playback_targets: true,
+      forward: false,
     };
     let caps = caps_with(vec!["spotify:", "Apple-Music"], claimed);
     let _ = reg.set_announce(addr, caps).await;
@@ -286,6 +347,51 @@ mod tests {
       .release_authority(addr, CompanionAuthorityScope::NowPlayingMetadata)
       .await;
     assert!(reg.snapshot().authority.is_empty());
+  }
+
+  #[tokio::test]
+  async fn a_running_set_report_never_moves_the_webapp_forward_is_derived_against() {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let bus = WireEventBus::new(client_man);
+    let auth = AuthorityRegistry::new();
+    let reg = CapabilitiesRegistry::new(bus, auth);
+
+    let addr: Address = "00:11:22:33:44:55".parse().unwrap();
+    let stale = Uuid::now_v7();
+    let active = Uuid::now_v7();
+    let _ = reg.set_active_webapp(Some(active)).await;
+
+    let _ = reg.set_extensions_running(addr, vec![stale]).await;
+    assert!(
+      !reg.snapshot().available.forward,
+      "a report about another webapp must not become the webapp forward is derived against"
+    );
+
+    let _ = reg.set_extensions_running(addr, vec![stale, active]).await;
+    assert!(
+      reg.snapshot().available.forward,
+      "the active webapp is in the running set now"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_running_set_dies_with_its_gateway_link_without_an_announce() {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let bus = WireEventBus::new(client_man);
+    let auth = AuthorityRegistry::new();
+    let reg = CapabilitiesRegistry::new(bus, auth);
+
+    let addr: Address = "00:11:22:33:44:55".parse().unwrap();
+    let active = Uuid::now_v7();
+    let _ = reg.set_active_webapp(Some(active)).await;
+    let _ = reg.set_extensions_running(addr, vec![active]).await;
+    assert!(reg.snapshot().available.forward);
+
+    let _ = reg.forget_extensions(addr).await;
+    assert!(
+      !reg.snapshot().available.forward,
+      "nothing announced, so nothing but the link teardown can clear this"
+    );
   }
 
   #[tokio::test]

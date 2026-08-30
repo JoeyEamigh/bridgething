@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import type { SourceRecord, SourceStatus } from './directory.ts';
 import { installKeyFor, listInstalls, rebuildInstalls, recordInstall, toInstallCounts } from './installs.ts';
-import { fakeKv, type FakeKv } from './kv-fake.ts';
+import { fakeKv, withListLag, type FakeKv } from './kv-fake.ts';
 import { listSources, writeSource } from './store.ts';
 
 const CALENDAR_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
@@ -23,6 +23,7 @@ function record(url: string, status: SourceStatus): SourceRecord {
     status,
     submitted_at: '2026-07-01T00:00:00.000Z',
     reviewed_at: null,
+    reviewed_by: null,
     app_count: 1,
     last_checked_at: '2026-07-20T00:00:00.000Z',
     last_check_ok: true,
@@ -76,6 +77,29 @@ describe('recordInstall', () => {
     await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
 
     expect(await listInstalls(kv)).toHaveLength(1);
+  });
+
+  test('a fresh tally is served before kv list can enumerate the record behind it', async () => {
+    const kv = withListLag(await directory());
+
+    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([{ app_id: WEATHER_ID, source_url: LISTED_URL, count: 1 }]);
+  });
+
+  test('two installs recorded at once both land in the tally under list lag', async () => {
+    const kv = withListLag(await directory());
+
+    await Promise.all([
+      recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW }),
+      recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW }),
+    ]);
+
+    expect(
+      toInstallCounts(await listInstalls(kv))
+        .map(entry => entry.app_id)
+        .sort(),
+    ).toEqual([CALENDAR_ID, WEATHER_ID].sort());
   });
 
   test('a warm tally reads with one kv get, not one per app', async () => {
@@ -237,6 +261,29 @@ describe('rebuildInstalls', () => {
 
     await kv.put('directory:installs', 'not json');
     expect(await listInstalls(kv)).toHaveLength(1);
+  });
+
+  test('keeps a fresh tally the snapshot holds but kv list cannot enumerate yet', async () => {
+    const kv = withListLag(await directory());
+    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+
+    expect(toInstallCounts(await rebuildInstalls(kv))).toEqual([
+      { app_id: WEATHER_ID, source_url: LISTED_URL, count: 1 },
+      { app_id: CALENDAR_ID, source_url: LISTED_URL, count: 1 },
+    ]);
+    expect(toInstallCounts(await listInstalls(kv))).toHaveLength(2);
+  });
+
+  test('drops a snapshot tally whose backing record is gone', async () => {
+    const kv = await directory();
+    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await kv.delete(installKeyFor(WEATHER_ID, LISTED_URL));
+
+    expect(toInstallCounts(await rebuildInstalls(kv))).toEqual([
+      { app_id: CALENDAR_ID, source_url: LISTED_URL, count: 1 },
+    ]);
   });
 
   test('leaves the source directory alone', async () => {

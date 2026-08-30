@@ -126,6 +126,7 @@ describe('provenance', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [installed(CALENDAR_ID, '0.1.5')],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     const cal = listings.find(l => l.app.id === CALENDAR_ID)!;
     expect(cal.sourceUrl).toBe(SOURCE_A);
@@ -200,6 +201,7 @@ describe('aggregate', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [installed(CALENDAR_ID, '0.1.5', { provenance: SOURCE_B })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(listings).toHaveLength(2);
     const cal = listings.find(l => l.app.id === CALENDAR_ID)!;
@@ -221,6 +223,7 @@ describe('aggregate', () => {
       orderedCatalogs: [{ url: SOURCE_A, catalog: a }],
       installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_A })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(listings[0]!.updateAvailable).toBe(true);
   });
@@ -231,12 +234,18 @@ describe('aggregate', () => {
       orderedCatalogs: [{ url: SOURCE_A, catalog: a }],
       installed: [installed(CALENDAR_ID, '0.2.0', { provenance: SOURCE_A })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(listings[0]!.updateAvailable).toBe(false);
   });
 
   test('defaults to first source when unpinned', () => {
-    const listings = aggregate({ orderedCatalogs: orderedCatalogs(), installed: [], deviceLibVersion: 'v0.4.1' });
+    const listings = aggregate({
+      orderedCatalogs: orderedCatalogs(),
+      installed: [],
+      deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
+    });
     const cal = listings.find(l => l.app.id === CALENDAR_ID)!;
     expect(cal.sourceUrl).toBe(SOURCE_A);
     expect(cal.newestCompatible?.version).toBe('0.2.0');
@@ -253,6 +262,7 @@ describe('aggregate', () => {
       ],
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
 
     expect(listings).toHaveLength(1);
@@ -270,6 +280,7 @@ describe('aggregate', () => {
       ],
       installed: [installed(CALENDAR_ID, '0.1.5', { provenance: SOURCE_B })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
 
     expect(listings).toHaveLength(1);
@@ -283,6 +294,7 @@ describe('aggregate', () => {
       orderedCatalogs: [{ url: SOURCE_A, catalog: a }],
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(listings[0]!.newestCompatible).toBeNull();
   });
@@ -293,6 +305,7 @@ describe('aggregate', () => {
       orderedCatalogs: [{ url: SOURCE_A, catalog: a }],
       installed: [],
       deviceLibVersion: null,
+      extensions: 'listed',
     });
     expect(listings[0]!.newestCompatible?.version).toBe('0.3.0');
   });
@@ -303,10 +316,30 @@ describe('aggregate', () => {
       orderedCatalogs: [{ url: SOURCE_A, catalog: a }],
       installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_B })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     const cal = listings.find(l => l.app.id === CALENDAR_ID)!;
     expect(cal.installedVersion).toBe('0.1.0');
     expect(cal.sourceUrl).toBe(SOURCE_A);
+  });
+
+  test('an app that ships a native extension is offered only where an extension can run', () => {
+    const a = catalog([
+      app(CALENDAR_ID, 'Calendar', [ver('0.2.0')]),
+      app(WEATHER_ID, 'Stats', [{ ...ver('0.1.0'), extension: { desktop: true, permissions: ['all'] } }]),
+    ]);
+    const orderedCatalogs = [{ url: SOURCE_A, catalog: a }];
+
+    const listed = aggregate({ orderedCatalogs, installed: [], deviceLibVersion: 'v0.4.1', extensions: 'listed' });
+    expect(listed.map(l => l.app.id)).toEqual([CALENDAR_ID, WEATHER_ID]);
+
+    const omitted = aggregate({
+      orderedCatalogs,
+      installed: [installed(WEATHER_ID, '0.0.9', { provenance: SOURCE_A })],
+      deviceLibVersion: 'v0.4.1',
+      extensions: 'omitted',
+    });
+    expect(omitted.map(l => l.app.id)).toEqual([CALENDAR_ID]);
   });
 });
 
@@ -327,6 +360,7 @@ describe('updates', () => {
       catalogs,
       installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_A })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(found).toHaveLength(1);
     expect(found[0]!.target.version).toBe('0.2.0');
@@ -339,13 +373,19 @@ describe('updates', () => {
     const catalogs = new Map([[SOURCE_A, a]]);
 
     expect(
-      updates({ catalogs, installed: [installed(CALENDAR_ID, '0.1.0')], deviceLibVersion: 'v0.4.1' }),
+      updates({
+        catalogs,
+        installed: [installed(CALENDAR_ID, '0.1.0')],
+        deviceLibVersion: 'v0.4.1',
+        extensions: 'listed',
+      }),
     ).toHaveLength(0);
     expect(
       updates({
         catalogs,
         installed: [installed(CALENDAR_ID, '0.1.0', { source: 'builtin', provenance: SOURCE_A })],
         deviceLibVersion: 'v0.4.1',
+        extensions: 'listed',
       }),
     ).toHaveLength(0);
     expect(
@@ -353,8 +393,23 @@ describe('updates', () => {
         catalogs,
         installed: [installed(CALENDAR_ID, '0.2.0', { provenance: SOURCE_A })],
         deviceLibVersion: 'v0.4.1',
+        extensions: 'listed',
       }),
     ).toHaveLength(0);
+  });
+
+  test('an installed app that ships a native extension is never updated from a host that cannot run one', () => {
+    const a = catalog([
+      app(CALENDAR_ID, 'Calendar', [{ ...ver('0.2.0'), extension: { desktop: true, permissions: ['all'] } }]),
+    ]);
+    const args = {
+      catalogs: new Map([[SOURCE_A, a]]),
+      installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_A })],
+      deviceLibVersion: 'v0.4.1',
+    };
+
+    expect(updates({ ...args, extensions: 'listed' })).toHaveLength(1);
+    expect(updates({ ...args, extensions: 'omitted' })).toHaveLength(0);
   });
 
   test('a dead pinned source offers nothing but does not throw', () => {
@@ -364,6 +419,7 @@ describe('updates', () => {
         catalogs,
         installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_B })],
         deviceLibVersion: 'v0.4.1',
+        extensions: 'listed',
       }),
     ).toHaveLength(0);
   });
@@ -379,6 +435,7 @@ describe('updates', () => {
       catalogs: new Map([[SOURCE_A, a]]),
       installed: [installed(CALENDAR_ID, '0.2.0', { provenance: SOURCE_A })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(found).toHaveLength(0);
   });
@@ -389,6 +446,7 @@ describe('updates', () => {
       catalogs: new Map([[SOURCE_A, a]]),
       installed: [installed(CALENDAR_ID, '0.1.0', { provenance: SOURCE_A })],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
     });
     expect(found).toHaveLength(1);
     expect(found[0]!.target.version).toBe('0.2.0');
@@ -405,6 +463,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([[WEATHER_ID, SOURCE_B, 12]]),
     });
 
@@ -417,6 +476,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([[WEATHER_ID, SOURCE_B, 1]]),
     });
 
@@ -429,6 +489,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([
         [CALENDAR_ID, SOURCE_A, 3],
         [CALENDAR_ID, SOURCE_B, 4],
@@ -445,6 +506,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([[WEATHER_ID.toUpperCase(), SOURCE_B, 9]]),
     });
 
@@ -456,6 +518,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([['019e6701-13f8-71b5-ba04-0000000000ff', SOURCE_A, 400]]),
     });
 
@@ -468,6 +531,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: [
         { app_id: WEATHER_ID, source_url: SOURCE_B, count: Number.NaN },
         { app_id: CALENDAR_ID, source_url: SOURCE_A, count: -50 },
@@ -483,6 +547,7 @@ describe('popularity', () => {
       orderedCatalogs: orderedCatalogs(),
       installed: [],
       deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
       installs: counts([
         [CALENDAR_ID, SOURCE_A, 6],
         [WEATHER_ID, SOURCE_B, 6],
@@ -493,7 +558,12 @@ describe('popularity', () => {
   });
 
   test('a caller that knows no counts still gets the alphabetical listing it always had', () => {
-    const listings = aggregate({ orderedCatalogs: orderedCatalogs(), installed: [], deviceLibVersion: 'v0.4.1' });
+    const listings = aggregate({
+      orderedCatalogs: orderedCatalogs(),
+      installed: [],
+      deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
+    });
 
     expect(listings.map(l => l.app.name)).toEqual(['Calendar', 'Weather']);
     expect(listings.every(l => l.installs === 0)).toBe(true);

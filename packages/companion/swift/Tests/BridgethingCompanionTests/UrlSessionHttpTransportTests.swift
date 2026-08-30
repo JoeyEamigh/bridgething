@@ -133,6 +133,24 @@ final class UrlSessionHttpTransportTests: XCTestCase {
         XCTAssertEqual(receivedBody.get(), Data([4, 5, 6]))
     }
 
+    func testAVerbTheEnumDoesNotNameReachesTheServerVerbatim() throws {
+        let seen = LockedBox<String>()
+        let server = try XCTUnwrap(MiniHttpServer { method, _, _ in
+            seen.set(method)
+            return (207, [], Data("ok".utf8))
+        })
+        defer { server.stop() }
+
+        let sink = RecordingHttpSink()
+        UrlSessionHttpTransport().execute(
+            request: request("http://127.0.0.1:\(server.port)/dav", method: .other(verb: "PROPFIND")),
+            sink: sink
+        )
+        let response = try XCTUnwrap(sink.wait()).get()
+        XCTAssertEqual(response.status, 207)
+        XCTAssertEqual(seen.get(), "PROPFIND")
+    }
+
     func testAConnectFailureLandsAsFailNeverAHang() throws {
         let port = MiniHttpServer.unusedPort()
         let sink = RecordingHttpSink()

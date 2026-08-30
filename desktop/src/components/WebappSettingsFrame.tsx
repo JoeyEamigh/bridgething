@@ -1,6 +1,7 @@
 import type { WebappInfo } from '@bridgething/companion-types';
 import { Button, describeError, Spinner } from '@bridgething/ui';
 import { useSignalEffect } from '@preact/signals';
+import { invoke } from '@tauri-apps/api/core';
 import type { VNode } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
@@ -11,6 +12,16 @@ import { peers, webappDocFor } from '../stores/session.ts';
 import { ErrorNote } from './Screen.tsx';
 
 type BridgeRequest = { id: number; verb: string; payload?: Record<string, unknown> };
+type WireBody = { kind: 'text' | 'base64'; data: string };
+type WireHeader = [name: string, value: string];
+type FetchVerbRequest = {
+  url: string;
+  method?: string;
+  headers?: WireHeader[];
+  body?: WireBody;
+  timeoutMs?: number;
+};
+type FetchVerbReply = { status: number; headers: WireHeader[]; body: WireBody };
 
 export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; onClose: () => void }): VNode {
   const session = useDesktop();
@@ -80,6 +91,12 @@ export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; o
         case 'doc.delete':
           await session.deleteWebappDoc(webapp.id, key);
           return { key, value: null };
+        case 'fetch':
+          return invoke<FetchVerbReply>('settings_fetch', { request: payload as FetchVerbRequest });
+        case 'auth.authorize':
+          return invoke<{ url: string }>('settings_authorize', {
+            url: typeof payload.url === 'string' ? payload.url : '',
+          });
         default:
           throw new Error(`unknown settings bridge verb: ${verb}`);
       }

@@ -1,4 +1,4 @@
-import type { Download, RecommendedSource, Repo } from '@bridgething/catalog';
+import type { AppExtension, Download, RecommendedSource, Repo } from '@bridgething/catalog';
 
 export type CatalogCuration = {
   repo: Repo;
@@ -11,6 +11,7 @@ export type AppCurationEntry = {
   name?: string;
   description?: string;
   icon?: string | null;
+  screenshots?: string[];
   homepage?: string | null;
   source?: string | null;
 };
@@ -36,6 +37,7 @@ export type AppConfigEntry = {
   description: string;
   author: string;
   icon: string | null;
+  screenshots?: string[];
   homepage?: string | null;
   source?: string | null;
   versions: AppVersionConfig[];
@@ -46,6 +48,9 @@ export type AppVersionConfig = {
   released_at: string;
   download: Download;
   permissions: string[];
+  role?: 'standard' | 'launcher';
+  provides_overlay?: boolean;
+  extension?: AppExtension;
   min_libbridgething_version: string;
   changelog?: string | null;
 };

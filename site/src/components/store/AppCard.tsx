@@ -1,5 +1,7 @@
-import type { CatalogAppListing } from '@bridgething/catalog';
+import { extensionOf, type CatalogAppListing } from '@bridgething/catalog';
 import { appDetailPath } from '../../lib/app-routes';
+import { webHref } from '../../lib/href';
+import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import type { StoreSource } from '../../lib/store-sources';
 
@@ -25,11 +27,26 @@ function SourceBadge({ source }: { source: StoreSource }) {
 
 export function AppCard({ listing, source }: { listing: CatalogAppListing; source: StoreSource | null }) {
   const newest = listing.newestCompatible;
+  const extension = extensionOf(newest);
   const unpublished = newest === null || isPlaceholderDownload(newest.download);
   const sizeKb = newest ? (newest.download.size / 1024).toFixed(0) : null;
+  const shot = webHref(listing.app.screenshots?.[0] ?? null);
 
   return (
     <article class="flex flex-col gap-3 border border-white/15 p-5">
+      {shot ? (
+        <a href={appDetailPath(listing.app.id)} class="-m-5 mb-0 block border-b-0">
+          <img
+            src={shot}
+            alt={`${listing.app.name} running on a car thing`}
+            width="800"
+            height="480"
+            loading="lazy"
+            class="aspect-[5/3] w-full border-b border-white/15 object-cover"
+            onError={event => (event.currentTarget as HTMLImageElement).remove()}
+          />
+        </a>
+      ) : null}
       <header class="flex items-start gap-3">
         <div class="size-10 shrink-0 border border-dashed border-white/25" aria-hidden="true">
           {listing.app.icon ? (
@@ -57,6 +74,8 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
       </header>
 
       <p class="m-0 flex-1 text-sm text-white/65">{listing.app.description}</p>
+
+      {extension ? <ExtensionBadge /> : null}
 
       {unpublished ? (
         <p class="text-warn m-0 font-mono text-xs">not published yet</p>
@@ -94,6 +113,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
             </>
           ) : null}
         </div>
+        {extension ? <ExtensionNote extension={extension} source={listing.app.source} compact /> : null}
         {source ? <SourceBadge source={source} /> : null}
         {listing.alsoAvailableFrom.length > 0 ? (
           <span class="text-white/30">

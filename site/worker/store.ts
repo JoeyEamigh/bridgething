@@ -20,29 +20,51 @@ export async function readRecord<T>(kv: KvLike, key: string): Promise<T | null> 
   }
 }
 
-export async function readList<T>(kv: KvLike, key: string): Promise<T[] | null> {
+type Snapshot<T> = { version: number; writer: string; items: T[] };
+
+export const SNAPSHOT_MERGE_ATTEMPTS = 4;
+
+function isSnapshot<T>(value: unknown): value is Snapshot<T> {
+  if (typeof value !== 'object' || value === null) return false;
+  const held = value as Partial<Snapshot<T>>;
+  return typeof held.version === 'number' && typeof held.writer === 'string' && Array.isArray(held.items);
+}
+
+export async function readSnapshot<T>(kv: KvLike, key: string): Promise<Snapshot<T> | null> {
   const parsed = await readRecord<unknown>(kv, key);
-  return Array.isArray(parsed) ? (parsed as T[]) : null;
+  return isSnapshot<T>(parsed) ? parsed : null;
 }
 
-export async function putList<T>(kv: KvLike, key: string, records: T[]): Promise<void> {
-  await kv.put(key, JSON.stringify(records));
+async function stamp<T>(kv: KvLike, key: string, held: Snapshot<T> | null, items: T[]): Promise<string> {
+  const writer = crypto.randomUUID();
+  await kv.put(key, JSON.stringify({ version: (held?.version ?? 0) + 1, writer, items } satisfies Snapshot<T>));
+  return writer;
 }
 
-export async function walkRecords<T>(kv: KvLike, prefix: string): Promise<T[]> {
-  const out: T[] = [];
+export async function writeSnapshot<T>(kv: KvLike, key: string, items: T[]): Promise<void> {
+  await stamp(kv, key, await readSnapshot<T>(kv, key), items);
+}
+
+export type KeyedRecord<T> = { key: string; record: T };
+
+export async function walkEntries<T>(kv: KvLike, prefix: string): Promise<KeyedRecord<T>[]> {
+  const out: KeyedRecord<T>[] = [];
   let cursor: string | undefined;
 
   do {
     const page = await kv.list({ prefix, cursor });
     for (const { name } of page.keys) {
       const record = await readRecord<T>(kv, name);
-      if (record !== null) out.push(record);
+      if (record !== null) out.push({ key: name, record });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
 
   return out;
+}
+
+export async function walkRecords<T>(kv: KvLike, prefix: string): Promise<T[]> {
+  return (await walkEntries<T>(kv, prefix)).map(entry => entry.record);
 }
 
 const SOURCE_SNAPSHOT_KEY = 'directory:snapshot';
@@ -51,20 +73,89 @@ export async function readSource(kv: KvLike, url: string): Promise<SourceRecord 
   return readRecord<SourceRecord>(kv, keyFor(url));
 }
 
-export async function writeSource(kv: KvLike, record: SourceRecord): Promise<void> {
-  await kv.put(keyFor(record.url), JSON.stringify(record));
-  // kv has no cas: editing the snapshot here drops a concurrent write, so invalidate and let listSources rebuild it.
-  await kv.delete(SOURCE_SNAPSHOT_KEY);
+function messageOf(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
-export async function rebuildSources(kv: KvLike): Promise<SourceRecord[]> {
-  const records = await walkRecords<SourceRecord>(kv, KEY_PREFIX);
-  await putList(kv, SOURCE_SNAPSHOT_KEY, records);
+async function invalidateSnapshot(kv: KvLike, key: string, name: string, reason: string): Promise<void> {
+  console.warn(`snapshot ${key} not updated for ${name}: ${reason}; deleting it for a lazy rebuild`);
+  try {
+    await kv.delete(key);
+  } catch (refused) {
+    console.warn(`snapshot ${key} delete refused for ${name}: ${messageOf(refused)}`);
+  }
+}
+
+export async function mergeIntoSnapshot<T>(args: {
+  kv: KvLike;
+  key: string;
+  prefix: string;
+  record: T;
+  identity: (record: T) => string;
+}): Promise<void> {
+  const { kv, key, prefix, record, identity } = args;
+  const listed = await walkRecords<T>(kv, prefix);
+  const name = identity(record);
+
+  for (let attempt = 0; attempt < SNAPSHOT_MERGE_ATTEMPTS; attempt += 1) {
+    const held = await readSnapshot<T>(kv, key);
+
+    const merged = new Map<string, T>();
+    for (const each of held?.items ?? []) merged.set(identity(each), each);
+    for (const each of listed) merged.set(identity(each), each);
+    merged.set(name, record);
+
+    let writer: string;
+    try {
+      writer = await stamp(kv, key, held, [...merged.values()]);
+    } catch (refused) {
+      return invalidateSnapshot(kv, key, name, `put refused: ${messageOf(refused)}`);
+    }
+
+    if ((await readSnapshot<T>(kv, key))?.writer === writer) return;
+  }
+
+  await invalidateSnapshot(kv, key, name, `lost ${SNAPSHOT_MERGE_ATTEMPTS} merge races`);
+}
+
+export async function writeSource(kv: KvLike, record: SourceRecord): Promise<void> {
+  await kv.put(keyFor(record.url), JSON.stringify(record));
+  await mergeIntoSnapshot({ kv, key: SOURCE_SNAPSHOT_KEY, prefix: KEY_PREFIX, record, identity: held => held.url });
+}
+
+export async function rebuildSnapshot<T>(args: {
+  kv: KvLike;
+  key: string;
+  prefix: string;
+  keyOf: (record: T) => string;
+}): Promise<T[]> {
+  const { kv, key, prefix, keyOf } = args;
+  const held = await readSnapshot<T>(kv, key);
+  const merged = new Map<string, T>((await walkEntries<T>(kv, prefix)).map(entry => [entry.key, entry.record]));
+
+  for (const item of held?.items ?? []) {
+    const backing = keyOf(item);
+    if (merged.has(backing)) continue;
+    const record = await readRecord<T>(kv, backing);
+    if (record !== null) merged.set(backing, record);
+  }
+
+  const records = [...merged.values()];
+  await writeSnapshot(kv, key, records);
   return records;
 }
 
+export async function rebuildSources(kv: KvLike): Promise<SourceRecord[]> {
+  return rebuildSnapshot<SourceRecord>({
+    kv,
+    key: SOURCE_SNAPSHOT_KEY,
+    prefix: KEY_PREFIX,
+    keyOf: record => keyFor(record.url),
+  });
+}
+
 export async function listSources(kv: KvLike): Promise<SourceRecord[]> {
-  return (await readList<SourceRecord>(kv, SOURCE_SNAPSHOT_KEY)) ?? (await rebuildSources(kv));
+  return (await readSnapshot<SourceRecord>(kv, SOURCE_SNAPSHOT_KEY))?.items ?? (await rebuildSources(kv));
 }
 
 const RATE_LIMIT_PREFIX = 'rl:';

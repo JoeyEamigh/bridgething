@@ -1,7 +1,7 @@
 {
   "name": "@bridgething/updater",
   "version": "0.4.0",
-  "description": "Update a Spotify Car Thing from the command line, over its network gateway.",
+  "description": "Command-line updater that brings a bridgething Spotify Car Thing to a release on a channel.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
   "homepage": "https://bridgething.com",

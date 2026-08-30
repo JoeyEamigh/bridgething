@@ -57,6 +57,67 @@ describe('generate()', () => {
     expect(catalog.apps[0]!.versions.map(v => v.version)).toEqual(['0.2.0', '0.1.0']);
   });
 
+  test('carries the bundle traits the publish payload recorded', () => {
+    const catalog = run([
+      app({
+        source: 'https://github.com/JoeyEamigh/bridgething-discord',
+        versions: [
+          {
+            ...version('0.1.0', '2026-05-31T00:00:00Z'),
+            role: 'launcher' as const,
+            provides_overlay: true,
+            extension: { desktop: true as const, permissions: ['all'] },
+          },
+        ],
+      }),
+    ]);
+
+    const v = catalog.apps[0]!.versions[0]!;
+    expect(v.role).toBe('launcher');
+    expect(v.provides_overlay).toBe(true);
+    expect(v.extension).toEqual({ desktop: true, permissions: ['all'] });
+  });
+
+  test('omits the trait keys entirely when a version declares none', () => {
+    const v = run([app()]).apps[0]!.versions[0]! as Record<string, unknown>;
+
+    expect('role' in v).toBe(false);
+    expect('provides_overlay' in v).toBe(false);
+    expect('extension' in v).toBe(false);
+  });
+
+  test('refuses an extension app whose source is not a github repo', () => {
+    expect(() =>
+      run([
+        app({
+          source: 'https://example.com/code',
+          versions: [
+            {
+              ...version('0.1.0', '2026-05-31T00:00:00Z'),
+              extension: { desktop: true as const, permissions: ['all'] },
+            },
+          ],
+        }),
+      ]),
+    ).toThrow(/must be a github\.com repo url/);
+  });
+
+  test('refuses an extension permission outside the descriptor grammar', () => {
+    expect(() =>
+      run([
+        app({
+          source: 'https://github.com/JoeyEamigh/bridgething-discord',
+          versions: [
+            {
+              ...version('0.1.0', '2026-05-31T00:00:00Z'),
+              extension: { desktop: true as const, permissions: ['hid'] },
+            },
+          ],
+        }),
+      ]),
+    ).toThrow(/not a permission descriptor/);
+  });
+
   test('carries recommended sources through', () => {
     const catalog = generate({
       repo: REPO,
@@ -148,5 +209,24 @@ describe('mergeApps()', () => {
     const merged = mergeApps({ repo: REPO, apps: [{ slug: 'weather', author: 'someone' }] }, PUBLISHED);
 
     expect(merged.map(a => a.slug)).toEqual(['calendar']);
+  });
+});
+
+describe('screenshots', () => {
+  test('curation screenshots reach the generated catalog', () => {
+    const merged = mergeApps(
+      { repo: REPO, apps: [{ slug: 'calendar', screenshots: ['https://bridgething.com/shots/calendar.png'] }] },
+      PUBLISHED,
+    );
+
+    expect(merged[0]?.screenshots).toEqual(['https://bridgething.com/shots/calendar.png']);
+    expect(run(merged).apps[0]?.screenshots).toEqual(['https://bridgething.com/shots/calendar.png']);
+  });
+
+  test('an app with no curated screenshots omits the key rather than sending an empty array', () => {
+    const merged = mergeApps({ repo: REPO, apps: [] }, PUBLISHED);
+
+    expect(merged[0]).not.toHaveProperty('screenshots');
+    expect(run(merged).apps[0]).not.toHaveProperty('screenshots');
   });
 });

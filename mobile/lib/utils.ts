@@ -5,6 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const HTTP_URL = /^https?:\/\//i;
+
+export function isHttpUrl(raw: unknown): raw is string {
+  return typeof raw === 'string' && HTTP_URL.test(raw);
+}
+
 export function formatStamp(atMs: number): string {
   const d = new Date(atMs);
   const pad = (n: number) => String(n).padStart(2, '0');

@@ -1,9 +1,6 @@
 import { BridgethingClient, type WebappInfo } from '@bridgething/client';
 import { useEffect, useMemo, useState } from 'react';
-
-const wsUrl =
-  import.meta.env.VITE_BRIDGETHING_URL ??
-  (typeof window !== 'undefined' ? `ws://${window.location.host}/` : 'ws://127.0.0.1:8891/');
+import { daemonUrl } from './daemon';
 
 type Entry = {
   info: WebappInfo;
@@ -11,7 +8,7 @@ type Entry = {
 };
 
 export default function App() {
-  const client = useMemo(() => new BridgethingClient({ url: wsUrl }), []);
+  const client = useMemo(() => new BridgethingClient({ url: daemonUrl() }), []);
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activating, setActivating] = useState<string | null>(null);

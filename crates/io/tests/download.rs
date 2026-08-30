@@ -292,3 +292,67 @@ async fn headers_the_response_carried_are_available_on_the_outcome() {
     }]
   );
 }
+
+struct NeverReached;
+
+impl HttpTransport for NeverReached {
+  fn execute(&self, request: HttpRequest, _sink: Arc<HttpSink>) {
+    unreachable!("a request the executor should have refused reached the transport: {request:?}");
+  }
+
+  fn download(&self, request: HttpRequest, _sink: Arc<HttpDownloadSink>) {
+    unreachable!("a request the executor should have refused reached the transport: {request:?}");
+  }
+}
+
+fn with_verb(verb: &str) -> HttpRequest {
+  HttpRequest {
+    method: HttpMethod::Other(verb.to_string()),
+    ..request("http://127.0.0.1:1/anything")
+  }
+}
+
+#[tokio::test]
+async fn a_verb_that_is_not_a_token_is_refused_rather_than_sent_as_something_else() {
+  let exec = HttpExecutor::new(Arc::new(NeverReached));
+
+  for verb in ["PROP FIND", "GET\r\nX-Smuggled: 1", "GET\u{7f}", ""] {
+    let refused = exec.execute(with_verb(verb)).await;
+    assert!(
+      matches!(refused, Err(HttpError::InvalidRequest(_))),
+      "{verb:?} must be an invalid request, got {refused:?}"
+    );
+
+    let refused = exec
+      .download(
+        with_verb(verb),
+        Box::new(RecordingBody {
+          chunks: Arc::new(Mutex::new(Vec::new())),
+          fail_at: None,
+          takes_any_status: true,
+        }),
+      )
+      .await;
+    assert!(
+      matches!(refused, Err(HttpError::InvalidRequest(_))),
+      "{verb:?} must be an invalid download too, got {refused:?}"
+    );
+  }
+}
+
+#[tokio::test]
+async fn a_verb_that_is_a_token_still_reaches_the_transport() {
+  let exec = HttpExecutor::new(streaming(vec![vec![1, 2, 3]]));
+  let outcome = exec
+    .download(
+      with_verb("PROPFIND"),
+      Box::new(RecordingBody {
+        chunks: Arc::new(Mutex::new(Vec::new())),
+        fail_at: None,
+        takes_any_status: true,
+      }),
+    )
+    .await
+    .expect("a well formed custom verb is not the executor's business to refuse");
+  assert_eq!(outcome.received, 3);
+}

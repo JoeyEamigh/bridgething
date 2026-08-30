@@ -1,142 +1,108 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!--
-      Bluetooth + internet perms are declared in the session-rn library
-      manifest and merged in. The host app adds nothing on top of that.
-    -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+  <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+  <uses-permission
+    android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+  <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+  <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_WATCH" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!--
-      connectedDevice foreground service keeps the rfcomm link + net/tunnel
-      pumps alive in the background; the companion-presence perms let the
-      presence service wake it from cold when the Car Thing appears.
-    -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
-    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
-    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
-    <!--
-      Required to request the WATCH companion device profile in the CDM
-      AssociationRequest. Normal protection level (auto-granted on declare, no
-      runtime prompt). The profile's role is what grants the phone/call-log/
-      contacts/notifications/MANAGE_ONGOING_CALLS bundle + PHONE_STATE delivery.
-    -->
-    <uses-permission android:name="android.permission.REQUEST_COMPANION_PROFILE_WATCH" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="spotify" />
+    </intent>
+  </queries>
 
-    <!--
-      package visibility (android 11+): lets the pending-auth flow probe whether
-      the spotify app is installed before handing the pair url off to it.
-    -->
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="spotify" />
-        </intent>
-    </queries>
-
-    <application
-      android:name=".MainApplication"
+  <application
+    android:name=".MainApplication"
+    android:label="@string/app_name"
+    android:icon="@mipmap/ic_launcher"
+    android:roundIcon="@mipmap/ic_launcher_round"
+    android:allowBackup="false"
+    android:theme="@style/AppTheme"
+    android:usesCleartextTraffic="${usesCleartextTraffic}"
+    android:supportsRtl="true">
+    <activity
+      android:name=".MainActivity"
       android:label="@string/app_name"
-      android:icon="@mipmap/ic_launcher"
-      android:roundIcon="@mipmap/ic_launcher_round"
-      android:allowBackup="false"
-      android:theme="@style/AppTheme"
-      android:usesCleartextTraffic="${usesCleartextTraffic}"
-      android:supportsRtl="true">
-      <activity
-        android:name=".MainActivity"
-        android:label="@string/app_name"
-        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
-        android:launchMode="singleTask"
-        android:windowSoftInputMode="adjustResize"
-        android:exported="true">
-        <intent-filter>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent-filter>
-        <!--
-          Dialer eligibility. Telecom only offers the default-dialer role to
-          packages with an ACTION_DIAL activity; holding that role is what lets
-          the OS bind the companion's InCallService for the phone surface.
-        -->
-        <intent-filter>
-            <action android:name="android.intent.action.DIAL" />
-            <category android:name="android.intent.category.DEFAULT" />
-        </intent-filter>
-        <intent-filter>
-            <action android:name="android.intent.action.DIAL" />
-            <category android:name="android.intent.category.DEFAULT" />
-            <data android:scheme="tel" />
-        </intent-filter>
-        <intent-filter>
-            <action android:name="android.intent.action.VIEW" />
-            <action android:name="android.intent.action.DIAL" />
-            <category android:name="android.intent.category.DEFAULT" />
-            <category android:name="android.intent.category.BROWSABLE" />
-            <data android:scheme="tel" />
-        </intent-filter>
-      </activity>
+      android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+      android:launchMode="singleTask"
+      android:windowSoftInputMode="adjustResize"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="bridgething" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.DIAL" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.DIAL" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:scheme="tel" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <action android:name="android.intent.action.DIAL" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="tel" />
+      </intent-filter>
+    </activity>
 
-      <!--
-        Notification listener service. The user has to toggle this app on
-        under Settings > Notifications > Device & app notifications before
-        the OS will bind to it. android:exported is required for the
-        platform's BIND_NOTIFICATION_LISTENER_SERVICE handshake.
-      -->
-      <service
-        android:name=".BridgethingNotificationListener"
-        android:label="@string/app_name"
-        android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-        android:exported="true">
-        <intent-filter>
-          <action android:name="android.service.notification.NotificationListenerService" />
-        </intent-filter>
-      </service>
+    <service
+      android:name=".BridgethingNotificationListener"
+      android:label="@string/app_name"
+      android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.service.notification.NotificationListenerService" />
+      </intent-filter>
+    </service>
 
-      <service
-        android:name=".BridgethingConnectionService"
-        android:exported="false"
-        android:foregroundServiceType="connectedDevice" />
+    <service
+      android:name=".BridgethingConnectionService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice" />
 
-      <!--
-        Bound by the system on associated-device presence (API 31+).
-        BIND_COMPANION_DEVICE_SERVICE + the action are the platform handshake.
-      -->
-      <service
-        android:name=".BridgethingPresenceService"
-        android:exported="true"
-        android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
-        <intent-filter>
-          <action android:name="android.companion.CompanionDeviceService" />
-        </intent-filter>
-      </service>
+    <service
+      android:name=".BridgethingPresenceService"
+      android:exported="true"
+      android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+      <intent-filter>
+        <action android:name="android.companion.CompanionDeviceService" />
+      </intent-filter>
+    </service>
 
-      <!--
-        Grants transient read access to exported log bundles so the share sheet
-        can hand one to another app. exported=false + grantUriPermissions means
-        only recipients we explicitly grant can read, and only that one URI.
-      -->
-      <provider
-        android:name="androidx.core.content.FileProvider"
-        android:authorities="${applicationId}.fileprovider"
-        android:exported="false"
-        android:grantUriPermissions="true">
-        <meta-data
-          android:name="android.support.FILE_PROVIDER_PATHS"
-          android:resource="@xml/file_paths" />
-      </provider>
+    <provider
+      android:name="androidx.core.content.FileProvider"
+      android:authorities="${applicationId}.fileprovider"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+    </provider>
 
-      <!-- re-arms presence observation after reboot; BOOT_COMPLETED is system-only so exported is safe. -->
-      <receiver
-        android:name=".BootReceiver"
-        android:exported="true">
-        <intent-filter>
-          <action android:name="android.intent.action.BOOT_COMPLETED" />
-        </intent-filter>
-      </receiver>
-    </application>
+    <receiver
+      android:name=".BootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+    </receiver>
+  </application>
 </manifest>

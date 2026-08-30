@@ -1,5 +1,6 @@
 use std::{
-  sync::{Arc, atomic::AtomicBool},
+  net::{IpAddr, SocketAddr},
+  sync::{Arc, RwLock, atomic::AtomicBool},
   time::Duration,
 };
 
@@ -24,6 +25,8 @@ const CHROME_CONNECT_BACKOFF: Duration = Duration::from_secs(1);
 const ERROR_URL_PREFIX: &str = "chrome-error://";
 const BLANK_URL_PREFIX: &str = "about:blank";
 const STRANDED_CONFIRMATIONS: u8 = 2;
+const DEV_HOST_PROBE_TIMEOUT: Duration = Duration::from_secs(1);
+const DEV_HOST_LOST_CONFIRMATIONS: u8 = 3;
 
 fn looks_stranded(uri: &str, serving: bool) -> bool {
   uri.starts_with(ERROR_URL_PREFIX) || (serving && uri.starts_with(BLANK_URL_PREFIX))
@@ -34,6 +37,17 @@ fn is_web_page(url: &str) -> bool {
     || url.starts_with("chrome-extension://")
     || url.starts_with("chrome-untrusted://")
     || url.starts_with("devtools://"))
+}
+
+fn dev_host_of(url: &str) -> Option<SocketAddr> {
+  let parsed = url::Url::parse(url).ok()?;
+  let ip = match parsed.host()? {
+    url::Host::Ipv4(ip) => IpAddr::V4(ip),
+    url::Host::Ipv6(ip) => IpAddr::V6(ip),
+    url::Host::Domain(_) => return None,
+  };
+  let port = parsed.port_or_known_default()?;
+  (!ip.is_loopback() && !ip.is_unspecified()).then_some(SocketAddr::new(ip, port))
 }
 
 #[cfg(not(debug_assertions))]
@@ -84,10 +98,13 @@ impl std::fmt::Debug for OverlayScript {
   }
 }
 
+type DevHost = Arc<RwLock<Option<SocketAddr>>>;
+
 #[derive(Debug)]
 pub struct Chrome {
   connected: Arc<AtomicBool>,
   external: Arc<AtomicBool>,
+  dev_host: DevHost,
   tx: ChromeTx,
 
   cancel_token: tokio_util::sync::CancellationToken,
@@ -100,13 +117,22 @@ impl Chrome {
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     let connected = Arc::new(AtomicBool::new(false));
     let external = Arc::new(AtomicBool::new(false));
+    let dev_host: DevHost = Arc::new(RwLock::new(None));
 
     let cancel_token = tokio_util::sync::CancellationToken::new();
-    let mut worker = ChromeWorker::new(connected.clone(), external.clone(), rx, cancel_token.clone(), home_url)?;
+    let mut worker = ChromeWorker::new(
+      connected.clone(),
+      external.clone(),
+      dev_host.clone(),
+      rx,
+      cancel_token.clone(),
+      home_url,
+    )?;
 
     Ok(Self {
       connected: connected.clone(),
       external,
+      dev_host,
       tx,
 
       cancel_token: cancel_token.clone(),
@@ -122,6 +148,14 @@ impl Chrome {
     self.external.load(std::sync::atomic::Ordering::SeqCst)
   }
 
+  pub fn dev_host(&self) -> Option<IpAddr> {
+    self
+      .dev_host
+      .read()
+      .unwrap_or_else(|poisoned| poisoned.into_inner())
+      .map(|target| target.ip())
+  }
+
   pub async fn send(&self, command: ChromeCommand) -> Result<()> {
     tracing::debug!("sending command to chrome: {:?}", command);
     Ok(self.tx.send(command).await?)
@@ -135,6 +169,7 @@ impl Chrome {
 struct ChromeWorker {
   connected: Arc<AtomicBool>,
   external: Arc<AtomicBool>,
+  dev_host: DevHost,
   serving: bool,
   browser: Option<Browser>,
   http: reqwest::Client,
@@ -144,6 +179,7 @@ struct ChromeWorker {
   home_url: String,
   settled: bool,
   stranded_streak: u8,
+  dev_host_misses: u8,
 
   rx: ChromeRx,
   cancel_token: CancellationToken,
@@ -153,6 +189,7 @@ impl ChromeWorker {
   fn new(
     connected: Arc<AtomicBool>,
     external: Arc<AtomicBool>,
+    dev_host: DevHost,
     rx: ChromeRx,
     cancel_token: CancellationToken,
     home_url: String,
@@ -166,6 +203,7 @@ impl ChromeWorker {
     Ok(Self {
       connected,
       external,
+      dev_host,
       serving: false,
       browser: None,
       http,
@@ -175,6 +213,7 @@ impl ChromeWorker {
       home_url,
       settled: false,
       stranded_streak: 0,
+      dev_host_misses: 0,
 
       rx,
       cancel_token,
@@ -187,15 +226,20 @@ impl ChromeWorker {
 
     loop {
       tokio::select! {
-        _ = retry.tick() => self.reconcile().await,
+        _ = retry.tick() => {
+          self.reconcile().await;
+          self.watch_dev_host().await;
+        }
         Some(message) = self.rx.recv() => {
           match message {
             ChromeCommand::Navigate(url) => {
               self.external.store(false, std::sync::atomic::Ordering::SeqCst);
+              self.set_dev_host(dev_host_of(&url));
               self.handle_navigate(url).await
             }
             ChromeCommand::NavigateExternal(url) => {
               self.external.store(true, std::sync::atomic::Ordering::SeqCst);
+              self.set_dev_host(None);
               self.handle_navigate(url).await
             }
             ChromeCommand::HistoryBack => self.handle_history(false).await,
@@ -220,6 +264,47 @@ impl ChromeWorker {
         }
       }
     }
+  }
+
+  fn dev_target(&self) -> Option<SocketAddr> {
+    *self.dev_host.read().unwrap_or_else(|poisoned| poisoned.into_inner())
+  }
+
+  async fn watch_dev_host(&mut self) {
+    let Some(target) = self.dev_target() else {
+      self.dev_host_misses = 0;
+      return;
+    };
+    let answered = tokio::time::timeout(DEV_HOST_PROBE_TIMEOUT, tokio::net::TcpStream::connect(target))
+      .await
+      .is_ok_and(|connected| connected.is_ok());
+    if answered {
+      self.dev_host_misses = 0;
+      return;
+    }
+    self.dev_host_misses = self.dev_host_misses.saturating_add(1);
+    if self.dev_host_misses < DEV_HOST_LOST_CONFIRMATIONS {
+      return;
+    }
+    self.dev_host_misses = 0;
+    tracing::info!(%target, "dev host stopped answering; handing the screen back");
+    self.set_dev_host(None);
+    let home = self.home_url.clone();
+    self
+      .with_first_tab("leave-dev-host", move |tab| tab.navigate_to(&home).map(|_| ()))
+      .await;
+  }
+
+  fn set_dev_host(&self, next: Option<SocketAddr>) {
+    let mut held = self.dev_host.write().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if *held == next {
+      return;
+    }
+    match next {
+      Some(target) => tracing::info!(%target, "kiosk pointed at a dev host; the socks proxy reaches it directly"),
+      None => tracing::info!("kiosk left the dev host"),
+    }
+    *held = next;
   }
 
   async fn handle_reload(&mut self) {
@@ -357,6 +442,7 @@ impl ChromeWorker {
       return true;
     }
     self.stranded_streak = 0;
+    self.set_dev_host(None);
 
     let home = self.home_url.clone();
     let target = home.clone();
@@ -526,6 +612,29 @@ mod tests {
   fn a_loaded_page_is_never_stranded() {
     assert!(!looks_stranded("http://127.0.0.1:8891/", false));
     assert!(!looks_stranded("http://127.0.0.1:8891/", true));
+  }
+
+  #[test]
+  fn only_an_off_device_ip_literal_names_a_dev_host() {
+    assert_eq!(
+      dev_host_of("http://10.42.1.116:5173/"),
+      Some("10.42.1.116:5173".parse().unwrap())
+    );
+    assert_eq!(
+      dev_host_of("http://10.42.1.116/"),
+      Some("10.42.1.116:80".parse().unwrap())
+    );
+    assert_eq!(
+      dev_host_of("http://[fe80::1]:5173/"),
+      Some("[fe80::1]:5173".parse().unwrap())
+    );
+    assert_eq!(dev_host_of("http://127.0.0.1:8891/"), None);
+    assert_eq!(dev_host_of("http://127.0.0.1:8891/_hub/abc/"), None);
+    assert_eq!(dev_host_of("http://0.0.0.0:5173/"), None);
+    assert_eq!(dev_host_of("http://bridgething.local:5173/"), None);
+    assert_eq!(dev_host_of("https://example.com/"), None);
+    assert_eq!(dev_host_of("about:blank"), None);
+    assert_eq!(dev_host_of("not a url"), None);
   }
 
   #[test]

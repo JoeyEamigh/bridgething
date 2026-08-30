@@ -1,49 +1,35 @@
 # @bridgething/updater
 
-CLI that brings a [bridgething](https://github.com/JoeyEamigh/bridgething) Spotify
-Car Thing to a release on a channel.
-
-It updates the **device** (daemon binary and/or full image), not a webapp. To
-install or share a webapp, use [`@bridgething/client`](https://www.npmjs.com/package/@bridgething/client)
-and the `push`/`share` scripts a [`create-bridgething`](https://www.npmjs.com/package/create-bridgething)
-project ships.
+Bring a [bridgething](https://github.com/JoeyEamigh/bridgething) Spotify Car
+Thing to the latest release on its channel.
 
 ```sh
 bunx @bridgething/updater
 ```
 
-Connects to a Car Thing over the daemon's network gateway (the USB-gadget link by
-default), reads the discover manifest, resolves the target channel's `latest`
-composite version, and applies it. If the image half of the version changed it
-pushes a full image OTA, otherwise it pushes just the daemon binary, preferring a
-published delta over a full artifact. A release that is yanked or deprecated is
-refused.
+The updater connects over the daemon's network gateway, reads the release
+manifest, and installs the daemon binary, plus the system image when the image
+half of the version changed. It refuses a yanked or deprecated release.
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `--root <url>` | `https://ota.bridgething.com` | Manifest + artifact root. |
-| `--channel <name>` | the channel the device reports | Channel to track. |
-| `--host <ws-url>` | `ws://bridgething.local:8892/` | Daemon network gateway. |
-| `--cache-dir <path>` | a directory under the OS tmpdir | Artifact download cache. |
-| `--version <ver>` | the channel's `latest` | Composite version to install. |
+| flag                 | default                         | meaning                      |
+| -------------------- | ------------------------------- | ---------------------------- |
+| `--root <url>`       | `https://ota.bridgething.com`   | Manifest and artifact root   |
+| `--channel <name>`   | the channel the device reports  | Channel to track             |
+| `--host <ws-url>`    | `ws://bridgething.local:8892/`  | Daemon network gateway       |
+| `--cache-dir <path>` | a directory under the OS tmpdir | Artifact download cache      |
+| `--version <ver>`    | the channel's `latest`          | Composite version to install |
 
-Multiple devices on the network resolve to distinct mDNS names; point `--host` at
-the one you mean:
+The network gateway has no authentication. Run the updater over the USB link or
+a trusted LAN. With several devices, point `--host` at one:
 
 ```sh
 bunx @bridgething/updater --host ws://bridgething-<serial>.local:8892/
 ```
 
-## What it is built on
+The same update logic is available from Node through
+[`@bridgething/core-node`](https://www.npmjs.com/package/@bridgething/core-node)
+and from a web page through
+[`@bridgething/browser`](https://www.npmjs.com/package/@bridgething/browser).
 
-Everything below the flags - the wire protocol, transfer pacing, delta selection,
-artifact downloads, and the OTA state machine - runs in the Rust delivery core,
-reached through [`@bridgething/core-node`](https://www.npmjs.com/package/@bridgething/core-node).
-Drive updates from your own program by using that package directly. For the same
-thing in a browser, use [`@bridgething/browser`](https://www.npmjs.com/package/@bridgething/browser).
-
-## Posture
-
-The network gateway has no auth, matching the project posture. Treat the update
-path like a debug interface: run it over the USB-CDC-ECM gadget link or a trusted
-LAN, not an exposed one.
+- Docs: <https://bridgething.com/docs>
+- Source: <https://github.com/JoeyEamigh/bridgething>

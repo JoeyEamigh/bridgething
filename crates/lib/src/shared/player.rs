@@ -13,8 +13,7 @@ pub const THUMBNAIL_SIZE: usize = 96;
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
-/// A track with resolved album/artist metadata, used by library search
-/// and browse results. For live now-playing state see `MediaItem`.
+/// A track with its album and artist resolved. Library search and browse return these.
 pub struct Track {
   pub id: String,
   pub name: String,
@@ -24,9 +23,8 @@ pub struct Track {
   /// All credited artists, in order.
   pub artists: Vec<Artist>,
   pub duration_ms: u32,
-  /// Opaque artwork asset id; pass to `asset.get` for the bytes.
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub image_id: String,
-  /// Whether the track is saved in the user's library.
   pub saved: bool,
 }
 
@@ -35,8 +33,7 @@ pub struct Track {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
-/// An image delivered either as an opaque asset id (fetch via `asset.get`)
-/// or as inline bytes.
+/// An image, either an opaque asset id to pass to `asset.get`, or inline bytes.
 pub enum Image {
   Id(String),
   Bytes(
@@ -50,11 +47,10 @@ pub enum Image {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
-/// An album reference.
 pub struct Album {
   pub id: String,
   pub name: String,
-  /// Opaque artwork asset id (`asset.get`), when known.
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub artwork_id: Option<String>,
 }
 
@@ -72,11 +68,10 @@ impl From<String> for Album {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
-/// An artist reference.
 pub struct Artist {
   pub id: String,
   pub name: String,
-  /// Opaque artwork asset id (`asset.get`), when known.
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub artwork_id: Option<String>,
 }
 
@@ -93,9 +88,9 @@ impl From<String> for Artist {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[ts(export, export_to = "shared.ts")]
-/// The foreground app driving playback, surfaced on iOS over iAP2.
+/// The app driving playback on the phone.
 pub struct CurrentlyActiveApplication {
-  /// Bundle identifier, e.g. `com.spotify.client`.
+  /// Bundle identifier, for example `com.spotify.client`.
   pub id: String,
   pub name: String,
 }
@@ -103,7 +98,6 @@ pub struct CurrentlyActiveApplication {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[ts(export, export_to = "shared.ts")]
-/// Repeat and shuffle toggle state.
 pub struct PlaybackOptions {
   pub repeat: RepeatMode,
   pub shuffle: bool,
@@ -113,8 +107,7 @@ pub struct PlaybackOptions {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
-/// Which player controls the current source supports; webapps disable the
-/// UI for any capability that is `false`.
+/// What the current source allows. Disable the control for any flag that is false.
 pub struct PlaybackRestrictions {
   pub can_repeat_context: bool,
   pub can_repeat_track: bool,
@@ -166,34 +159,27 @@ impl Default for PlaybackRestrictions {
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[ts(export, export_to = "shared.ts")]
-/// A resolved queue: the current track flanked by upcoming and previous tracks.
+/// The current track with the tracks before and after it.
 pub struct PlaybackQueue {
   pub next: Vec<Track>,
   pub current: Track,
   pub previous: Vec<Track>,
 }
 
-/// Three-state playback. `Stopped` is the no-track-loaded resting state;
-/// `Paused` is "track is loaded, position is held"; `Playing` is the
-/// progressing state.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum PlaybackState {
+  /// No track is loaded.
   #[default]
   Stopped,
+  /// A track is loaded and its position is held.
   Paused,
   Playing,
 }
 
-/// Per-session playback snapshot: where in the song we are, what mode is
-/// engaged. `position_ms` is the live playhead at snapshot time; webapps
-/// extrapolate forward locally while `state == Playing`.
-///
-/// `set_elapsed_time_available` gates scrub UI: when false, the foreground
-/// app refuses absolute-position seeks and webapps must disable the scrub
-/// thumb. `None` means unknown (no signal received yet); webapps treat
-/// unknown as "available" for backward compatibility with older gateways.
+/// `positionMs` is the playhead when the state was taken. Advance it locally while `state` is
+/// `playing`.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -208,21 +194,19 @@ pub struct Playback {
   pub queue_index: Option<u32>,
   pub queue_count: Option<u32>,
   pub queue_chapter_index: Option<u32>,
+  /// False when the app refuses absolute seeks. Null means no signal yet.
   pub set_elapsed_time_available: Option<bool>,
   pub queue_list_avail: Option<bool>,
   pub apple_music_radio_ad: Option<bool>,
 }
 
-/// User-tunable knobs that are not "currently playing" state.
-/// `crossfade_ms = None` is "crossfade off"; `Some(0)` is also off but
-/// distinguishes "user explicitly set zero" from "feature unsupported by
-/// gateway".
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct PlayerOptions {
   pub speed: f32,
+  /// 0 turns crossfade off. Null when the source carries no crossfade setting.
   pub crossfade_ms: Option<u32>,
 }
 
@@ -235,11 +219,7 @@ impl Default for PlayerOptions {
   }
 }
 
-/// Optional context for `play({ uri })`. `context_uri` is the album /
-/// playlist / show URI the track is being played from; gateways with
-/// playlist support honor it for skip-next semantics. A row inside the
-/// context is addressed by playing that row's own uri within it, so there
-/// is no index here.
+/// `contextUri` is the album, playlist, or show the track plays from. It sets what `skipNext` does.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -248,24 +228,19 @@ pub struct PlayContext {
   pub context_uri: String,
 }
 
-/// Where in the queue a `queue({ uri })` should land. `Append` (default)
-/// goes at the end; `Next` is play-next; `Index(n)` is an explicit 0-based slot
-/// in the upcoming list.
+/// Where a `queue` call puts the item.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum QueuePosition {
   #[default]
   Append,
+  /// Directly after the current track.
   Next,
+  /// At a 0-based slot in the upcoming list.
   Index(u32),
 }
 
-/// One row in the player queue. Lean cross-platform shape - gateways
-/// that have richer per-track data still surface what fields they have.
-/// `uri` is required because every queued item must be addressable for
-/// `skipToIndex`. `persistent_id` is the platform-stable id when
-/// available; webapps treat it as opaque.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -277,8 +252,10 @@ pub struct QueueItem {
   pub artist_uri: Option<String>,
   pub album: Option<String>,
   pub album_uri: Option<String>,
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub artwork_id: Option<String>,
   pub duration_ms: Option<u32>,
+  /// Opaque. Null when the source has none.
   pub persistent_id: Option<String>,
   #[serde(default, deserialize_with = "bool_absent_or_null_is_false")]
   pub queued: bool,
@@ -288,22 +265,18 @@ fn bool_absent_or_null_is_false<'de, D: serde::Deserializer<'de>>(d: D) -> Resul
   Ok(Option::<bool>::deserialize(d)?.unwrap_or_default())
 }
 
-/// What the current track is playing from: the playlist / album / show /
-/// artist context. Webapps render "playing from <name>"; `uri` lets them
-/// drill into it. `name` is `None` until the companion resolves it.
+/// What the current track plays from, such as a playlist, an album, or a show.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct PlaybackContext {
   pub uri: String,
+  /// Null until the phone resolves the name.
   pub name: Option<String>,
 }
 
-/// What kind of endpoint a `PlaybackTarget` is. Coarse on purpose: the
-/// provider vocabularies (Spotify Connect, AirPlay, Cast) do not agree in
-/// their long tails, and webapps only pick an icon from this. Anything
-/// unrecognized maps to `Unknown` rather than leaking a provider string.
+/// An endpoint the source does not classify reports `unknown`.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -320,28 +293,23 @@ pub enum PlaybackTargetKind {
   Wearable,
 }
 
-/// A remote endpoint the current provider can move playback to. Only
-/// meaningful when `SurfaceAvailability::playback_targets` is set.
-///
-/// `volume_percent` is `None` when the endpoint does not report volume.
+/// `transferTo` moves playback here. Check `available.playbackTargets` in `Capabilities` first.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub struct PlaybackTarget {
-  /// Provider-opaque endpoint id; pass back to `transferTo`.
+  /// Opaque endpoint id. Pass it to `transferTo`.
   pub id: String,
   pub name: String,
   pub kind: PlaybackTargetKind,
-  /// Whether this endpoint is the one currently playing.
+  /// True when this endpoint is the one playing.
   pub is_active: bool,
+  /// Null when the endpoint reports no volume.
   pub volume_percent: Option<u32>,
 }
 
-/// Full player snapshot the daemon broadcasts to webapps. Initial value
-/// arrives on `BridgeToClientPlayerMsg::StateChange` at connect time;
-/// subsequent changes flow as `NowPlayingUpdate` deltas the client SDK
-/// merges into the cached snapshot.
+/// `onSnapshot` delivers it, and the SDK merges later deltas into it.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -356,10 +324,7 @@ pub struct PlayerState {
   pub target: Option<PlaybackTarget>,
 }
 
-/// Currently-playing track, populated to the extent the gateway/iAP2
-/// stream has surfaced. All fields are optional because each one arrives
-/// as a separate attribute fetch on iAP2; the daemon accumulates and the
-/// snapshot reflects whatever's known so far.
+/// A field stays null until the phone reports it.
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -374,6 +339,7 @@ pub struct MediaItem {
   pub artist: Option<String>,
   pub artist_uri: Option<String>,
   pub liked: Option<bool>,
+  /// Opaque artwork asset id. Pass it to `asset.get` for the bytes.
   pub artwork_id: Option<String>,
   pub duration_ms: Option<u32>,
   pub media_types: Option<Vec<MediaType>>,
@@ -390,16 +356,15 @@ pub struct MediaItem {
 #[serde(tag = "type", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum PlayerError {
-  /// `play({uri})` was called with a scheme no connected gateway claims.
-  /// Returned synchronously by the daemon without round-tripping.
+  /// No connected phone claims the uri's scheme.
   SchemeUnclaimed { scheme: String },
-  /// Gateway acknowledged the verb but couldn't fulfill it.
+  /// The phone accepted the command and then failed to carry it out.
   PlayFailed { reason: String },
-  /// No companion is connected.
+  /// No phone is connected.
   NoGateway,
-  /// `skipToIndex` referenced a queue index that doesn't exist.
+  /// `skipToIndex` named an index outside the queue.
   NotInQueue { index: u32 },
-  /// `transferTo` named an endpoint that is not in the current target list.
+  /// `transferTo` named an endpoint outside the current target list.
   UnknownTarget { target_id: String },
 }
 

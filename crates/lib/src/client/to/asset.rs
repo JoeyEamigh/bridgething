@@ -9,19 +9,14 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Successful reply to `AssetGet`: the requested bytes.
 pub struct AssetGot {
-  /// Echoes the `AssetGet.request_id` this reply resolves.
   #[ts(type = "string")]
   pub request_id: Uuid,
-  /// Echoes the requested asset id.
   pub id: String,
-  /// Raw asset bytes, already reassembled if the companion sent them as a
-  /// chunked BT transfer.
   #[debug(skip)]
   #[ts(type = "Uint8Array")]
   pub bytes: Bytes,
-  /// Best-effort content type; `None` when the source didn't provide one.
+  /// Null when the source gives none.
   pub mime: Option<String>,
 }
 
@@ -29,13 +24,9 @@ pub struct AssetGot {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Domain-error reply to `AssetGet`: neither the cache nor a connected
-/// companion has an asset for this id.
 pub struct AssetNotFound {
-  /// Echoes the `AssetGet.request_id` this reply resolves.
   #[ts(type = "string")]
   pub request_id: Uuid,
-  /// Echoes the requested asset id.
   pub id: String,
 }
 
@@ -43,8 +34,6 @@ pub struct AssetNotFound {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// An asset became fetchable in the cache; a subsequent `AssetGet` for this
-/// id will resolve without a companion round trip.
 pub struct AssetReady {
   pub id: String,
 }
@@ -53,19 +42,12 @@ pub struct AssetReady {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// An asset was evicted from the cache; webapps should drop any cached
-/// Blob URL for it and refetch on next use.
 pub struct AssetCleared {
   pub id: String,
 }
 
-/// Daemon-side asset events. `Got` and `NotFound` resolve a webapp `Get`
-/// (correlated by request_id). `Ready` broadcasts to all connected
-/// webapps whenever the cache gains an asset, regardless of source
-/// (companion push, iAP2 FileTransfer, request fulfilment, lazy disk
-/// load). `Cleared` broadcasts on every eviction path - LRU pressure,
-/// TTL expiry, companion-issued Clear, daemon shutdown - so SDK
-/// consumers can drop Blob URLs and refetch as needed.
+/// Binary assets such as cover art, addressed by an opaque id. `get` returns bytes, `preload` fetches
+/// ahead of time, and `onReady` and `onCleared` track which ids are available.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]

@@ -32,8 +32,7 @@ pub struct LibraryRecommendationsReply {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Reply to `resolveContext`. Every field is best-effort: a gateway that recognises the uri but
-/// cannot cheaply name it answers with `None`s rather than failing the request.
+/// Fields are null when the companion app cannot name the uri.
 pub struct LibraryResolveContextReply {
   pub name: Option<String>,
   pub artwork_id: Option<String>,
@@ -53,7 +52,7 @@ pub struct LibraryFavoritesListReply {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 pub struct LibraryFavoritesContainsReply {
-  /// Index-aligned with the request's `uris`.
+  /// Lines up with the `uris` you sent.
   pub liked: Vec<bool>,
 }
 
@@ -68,9 +67,7 @@ pub struct LibraryErrorReply {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Event: a library item's favorited status changed. Fired for changes made through this
-/// client's own `favoritesToggle`/`favoritesSet`/`favoritesSetMany` calls as well as changes
-/// made natively on the connected phone (e.g. in the Spotify or Apple Music app).
+/// Fires for changes made through this client and for changes made in the phone's own music app.
 pub struct FavoriteChanged {
   pub uri: String,
   pub liked: bool,
@@ -81,12 +78,8 @@ pub struct FavoriteChanged {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp replies and events for the library surface. `BrowseReply`, `SearchReply`,
-/// `RecommendationsReply`, `ResolveContextReply`, `FavoritesListReply`, and
-/// `FavoritesContainsReply` answer the
-/// matching `ClientToBridgeLibraryMsg` request; `LibraryErrorReply` replaces the reply on
-/// failure. `FavoriteChanged` is a live event broadcast to every connected webapp whenever a
-/// favorite's status changes.
+/// The music library on the connected phone. `browse`, `search`, and `favoritesList` read it,
+/// `favoritesToggle` and `favoritesSet` edit saved state, and `onFavoriteChanged` reports every change.
 pub enum BridgeToClientLibraryMsg {
   #[bridge_response]
   BrowseReply(LibraryBrowseReply),
@@ -105,5 +98,6 @@ pub enum BridgeToClientLibraryMsg {
   #[bridge_event]
   FavoriteChanged(FavoriteChanged),
   #[bridge_event]
+  /// A `favoritesToggle`, `favoritesSet`, or `favoritesSetMany` command failed.
   ErrorEvent(LibraryErrorReply),
 }

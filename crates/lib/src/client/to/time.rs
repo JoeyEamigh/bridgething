@@ -8,8 +8,6 @@ use crate::TimeInfo;
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
-/// Wraps `TimeInfo` for the wire; used as both the `time.get` reply and
-/// the `Changed` event payload.
 pub struct TimeSnapshot {
   pub time: TimeInfo,
 }
@@ -19,9 +17,8 @@ pub struct TimeSnapshot {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// Daemon -> webapp wall-clock surface: an initial snapshot at
-/// announce, `Changed` events on tz/locale/clock updates, and the
-/// reply to `time.get`.
+/// Wall clock, locale, and timezone for a webapp. The connected phone supplies all three. `get`
+/// returns them on demand and `onChanged` reports every later update.
 pub enum BridgeToClientTimeMsg {
   #[bridge_event]
   Changed(TimeSnapshot),

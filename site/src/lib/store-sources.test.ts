@@ -62,6 +62,7 @@ describe('orderedByTrust', () => {
       orderedCatalogs: orderedByTrust([squatter, OFFICIAL]),
       installed: [],
       deviceLibVersion: null,
+      extensions: 'listed',
     });
 
     const calendar = listings.find(listing => listing.app.id === CALENDAR_ID)!;

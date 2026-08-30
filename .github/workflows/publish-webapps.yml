@@ -104,7 +104,7 @@ jobs:
               --arg slug "$slug" \
               --arg url "${PUBLIC_BASE}/${key}" \
               --argjson icon "$iconUrl" \
-              '{slug: $slug, id, name, description, version, permissions, role, provides_overlay,
+              '{slug: $slug, id, name, description, version, permissions, role, provides_overlay, extension,
                 icon: $icon,
                 download: {url: $url, size, sha256}}' <<<"$meta")
             published=$(jq -c ". + [$entry]" <<<"$published")

@@ -1,6 +1,6 @@
 import { OFFICIAL_CATALOG_URL, type InstallCount } from '@bridgething/catalog';
 import { isPublished, normalizeSourceUrl, SourceUrlError } from './directory.ts';
-import { putList, readList, readRecord, readSource, walkRecords, type KvLike } from './store.ts';
+import { mergeIntoSnapshot, readRecord, readSnapshot, readSource, rebuildSnapshot, type KvLike } from './store.ts';
 
 const INSTALL_PREFIX = 'install:';
 const INSTALL_SNAPSHOT_KEY = 'directory:installs';
@@ -23,13 +23,16 @@ export function installKeyFor(appId: string, sourceUrl: string): string {
 }
 
 export async function rebuildInstalls(kv: KvLike): Promise<InstallRecord[]> {
-  const records = await walkRecords<InstallRecord>(kv, INSTALL_PREFIX);
-  await putList(kv, INSTALL_SNAPSHOT_KEY, records);
-  return records;
+  return rebuildSnapshot<InstallRecord>({
+    kv,
+    key: INSTALL_SNAPSHOT_KEY,
+    prefix: INSTALL_PREFIX,
+    keyOf: record => installKeyFor(record.app_id, record.source_url),
+  });
 }
 
 export async function listInstalls(kv: KvLike): Promise<InstallRecord[]> {
-  return (await readList<InstallRecord>(kv, INSTALL_SNAPSHOT_KEY)) ?? (await rebuildInstalls(kv));
+  return (await readSnapshot<InstallRecord>(kv, INSTALL_SNAPSHOT_KEY))?.items ?? (await rebuildInstalls(kv));
 }
 
 export function toInstallCounts(records: InstallRecord[]): InstallCount[] {
@@ -99,7 +102,13 @@ async function bump(
     last_version: args.version,
   };
   await kv.put(key, JSON.stringify(next));
-  await kv.delete(INSTALL_SNAPSHOT_KEY);
+  await mergeIntoSnapshot({
+    kv,
+    key: INSTALL_SNAPSHOT_KEY,
+    prefix: INSTALL_PREFIX,
+    record: next,
+    identity: held => installKeyFor(held.app_id, held.source_url),
+  });
 
   return next;
 }

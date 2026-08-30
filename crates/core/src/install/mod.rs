@@ -69,7 +69,7 @@ async fn broadcast_installed(bus: &WireEventBus, bluetooth: &BluetoothMan, info:
   let gateway_event = BridgeToGatewayWebappMsgEvent::WebappInstalled(info.clone());
   bluetooth.gateway_man.broadcast(gateway_event).await;
 
-  let client_event = BridgeToClientWebappMsgEvent::WebappInstalled(info);
+  let client_event = BridgeToClientWebappMsgEvent::WebappInstalled(Box::new(info));
   if let Err(errs) = bus.broadcast_event(client_event).await {
     tracing::debug!(count = errs.len(), "webapp installed client broadcast non-fatal errors");
   }

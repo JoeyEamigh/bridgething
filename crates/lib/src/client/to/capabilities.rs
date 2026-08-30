@@ -4,8 +4,6 @@ use ts_rs::TS;
 
 use crate::Capabilities;
 
-/// Wrapper carrying one `Capabilities` snapshot; reply to `CapabilitiesGet`
-/// and payload of the `Update` broadcast event.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -13,10 +11,7 @@ pub struct CapabilitiesSnapshot {
   pub capabilities: Capabilities,
 }
 
-/// Daemon -> webapp capabilities surface. `Update` is the broadcast event
-/// fired on connect + on every change; `Snapshot` is the typed reply to
-/// `CapabilitiesGet`. Webapps that auto-react to capability change
-/// listen on `Update` and don't need to call `Get`.
+/// What the connected companion app can do. `get` reads it, `onUpdate` delivers it as it changes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]

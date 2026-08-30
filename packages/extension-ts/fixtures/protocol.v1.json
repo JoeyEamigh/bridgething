@@ -1,0 +1,100 @@
+{
+  "api": 1,
+  "hostToExtension": {
+    "hello": {
+      "t": "hello",
+      "api": 1,
+      "webapp": {
+        "id": "019e6701-13f8-71b5-ba04-85d326630e98",
+        "name": "weather",
+        "version": "1.2.0"
+      },
+      "dataDir": "/data/weather"
+    },
+    "device.connected": {
+      "t": "device.connected",
+      "device": "0f3ab21c",
+      "name": "car thing",
+      "config": { "zip": "10001" },
+      "active": true
+    },
+    "device.disconnected": { "t": "device.disconnected", "device": "0f3ab21c" },
+    "device.active": {
+      "t": "device.active",
+      "device": "0f3ab21c",
+      "active": false
+    },
+    "device.message.text": {
+      "t": "device.message",
+      "device": "0f3ab21c",
+      "message": { "encoding": "text", "data": "pong" }
+    },
+    "device.message.json": {
+      "t": "device.message",
+      "device": "0f3ab21c",
+      "message": { "encoding": "json", "data": { "ok": true } }
+    },
+    "device.message.binary": {
+      "t": "device.message",
+      "device": "0f3ab21c",
+      "message": { "encoding": "binary", "data": "AAEC+v8=" }
+    },
+    "config.changed.set": {
+      "t": "config.changed",
+      "device": "0f3ab21c",
+      "key": "zip",
+      "value": "10001"
+    },
+    "config.changed.reset": {
+      "t": "config.changed",
+      "device": "0f3ab21c",
+      "key": "zip",
+      "value": null
+    },
+    "reply.ok": {
+      "t": "reply",
+      "id": "1",
+      "ok": true,
+      "value": { "token": "abc" }
+    },
+    "reply.error": {
+      "t": "reply",
+      "id": "1",
+      "ok": false,
+      "error": "the host refused"
+    },
+    "stop": { "t": "stop" }
+  },
+  "extensionToHost": {
+    "ready": { "t": "ready" },
+    "log": { "t": "log", "level": "info", "message": "listening" },
+    "device.send.text": {
+      "t": "device.send",
+      "device": "0f3ab21c",
+      "message": { "encoding": "text", "data": "ping" }
+    },
+    "device.send.broadcast": {
+      "t": "device.send",
+      "message": { "encoding": "json", "data": { "cmd": "refresh" } }
+    },
+    "device.send.binary": {
+      "t": "device.send",
+      "device": "0f3ab21c",
+      "message": { "encoding": "binary", "data": "AAEC+v8=" }
+    },
+    "kv.get": { "t": "kv.get", "id": "1", "key": "creds" },
+    "kv.set": {
+      "t": "kv.set",
+      "id": "2",
+      "key": "creds",
+      "value": { "token": "abc" }
+    },
+    "kv.delete": { "t": "kv.delete", "id": "3", "key": "creds" },
+    "kv.list": { "t": "kv.list", "id": "4" },
+    "auth.authorize": {
+      "t": "auth.authorize",
+      "id": "5",
+      "url": "https://example.test/authorize"
+    }
+  }
+}
