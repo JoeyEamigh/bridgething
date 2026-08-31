@@ -13,6 +13,15 @@ export const SITE = {
     'open firmware for the spotify car thing. a full system image, daemon, and companion app to restore your thing to its former glory.',
 } as const;
 
+export type OgImage = { src: string; width: number; height: number; alt: string };
+
+export const DEFAULT_OG: OgImage = {
+  src: '/og.png',
+  width: 2400,
+  height: 1260,
+  alt: 'bridgething - open firmware for the spotify car thing',
+};
+
 export const TERBIUM = {
   base: 'https://terbium.app/',
   manifestParam: 'manifest',

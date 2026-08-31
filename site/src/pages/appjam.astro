@@ -15,15 +15,45 @@ import {
   JAM_RULES,
   JAM_SIDE_PRIZES,
   JAM_TIMELINE,
-  jamDate,
+  jamDateLong,
   jamPrizeLabel,
 } from '../lib/jam';
-import { SITE } from '../lib/site';
+import { SITE, type OgImage } from '../lib/site';
+
+const description = `build a web app for the spotify car thing and get paid for it. $${JAM_PRIZE_POOL} across five categories, judged on real hardware.`;
+
+const image: OgImage = {
+  src: '/appjam-og.png',
+  width: 2400,
+  height: 1260,
+  alt: 'the bridgething app jam - build an app for the spotify car thing, august 30 to september 13',
+};
+
+const origin = Astro.site ?? new URL(`https://${SITE.domain}`);
+const url = new URL(Astro.url.pathname, origin).href;
+
+const event = {
+  '@context': 'https://schema.org',
+  '@type': 'Event',
+  name: 'bridgething app jam',
+  description,
+  url,
+  image: [new URL(image.src, origin).href],
+  eventStatus: 'https://schema.org/EventScheduled',
+  eventAttendanceMode: 'https://schema.org/OnlineEventAttendanceMode',
+  isAccessibleForFree: true,
+  location: { '@type': 'VirtualLocation', url },
+  organizer: { '@type': 'Organization', name: 'bridgething', url: origin.href },
+  ...(JAM_TIMELINE.opensAt === null ? {} : { startDate: JAM_TIMELINE.opensAt }),
+  ...(JAM_TIMELINE.closesAt === null ? {} : { endDate: JAM_TIMELINE.closesAt }),
+};
 ---
 
-<Layout
-  title="app jam"
-  description={`build a web app for the spotify car thing and get paid for it. $${JAM_PRIZE_POOL} across five categories, judged on real hardware.`}>
+<Layout title="app jam" description={description} image={image}>
+  <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(event)} is:inline />
+  </Fragment>
+
   <Header />
 
   <main class="container-site relative w-full flex-1">
@@ -152,17 +182,19 @@ import { SITE } from '../lib/site';
           <div
             class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-r sm:pl-10']}>
             <dt class="font-mono text-sm text-white/45">submissions open</dt>
-            <dd class="font-display m-0 text-2xl font-medium tracking-tight">August 30th, 2026</dd>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">{jamDateLong(JAM_TIMELINE.opensAt)}</dd>
           </div>
           <div
             class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-l sm:pl-10']}>
             <dt class="font-mono text-sm text-white/45">submissions close</dt>
-            <dd class="font-display m-0 text-2xl font-medium tracking-tight">September 13th, 2026</dd>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">{jamDateLong(JAM_TIMELINE.closesAt)}</dd>
           </div>
           <div
             class:list={['flex flex-col gap-1 border-white/10 py-4 max-sm:border-b sm:pr-10', 'sm:border-l sm:pl-10']}>
             <dt class="font-mono text-sm text-white/45">winners announced</dt>
-            <dd class="font-display m-0 text-2xl font-medium tracking-tight">soon after</dd>
+            <dd class="font-display m-0 text-2xl font-medium tracking-tight">
+              {JAM_TIMELINE.resultsAt === null ? 'soon after' : jamDateLong(JAM_TIMELINE.resultsAt)}
+            </dd>
           </div>
         </dl>
       </SchematicSection>

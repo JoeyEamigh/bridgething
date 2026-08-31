@@ -1,19 +1,20 @@
 ---
 import '../styles/global.css';
-import { SITE } from '../lib/site';
+import { DEFAULT_OG, SITE, type OgImage } from '../lib/site';
 
 export type Props = {
   title?: string;
   description?: string;
   noindex?: boolean;
+  image?: OgImage;
 };
 
-const { title, description = SITE.pitch, noindex = false } = Astro.props;
+const { title, description = SITE.pitch, noindex = false, image = DEFAULT_OG } = Astro.props;
 const fullTitle = title ? `${title} | bridgething` : 'bridgething';
 
 const origin = Astro.site ?? new URL(`https://${SITE.domain}`);
 const canonical = new URL(Astro.url.pathname, origin).href;
-const ogImage = new URL('/og.png', origin).href;
+const ogImage = new URL(image.src, origin).href;
 ---
 
 <!doctype html>
@@ -38,15 +39,18 @@ const ogImage = new URL('/og.png', origin).href;
     <meta property="og:url" content={canonical} />
     <meta property="og:locale" content="en_US" />
     <meta property="og:image" content={ogImage} />
+    <meta property="og:image:secure_url" content={ogImage} />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="2400" />
-    <meta property="og:image:height" content="1260" />
-    <meta property="og:image:alt" content="bridgething - open firmware for the spotify car thing" />
+    <meta property="og:image:width" content={String(image.width)} />
+    <meta property="og:image:height" content={String(image.height)} />
+    <meta property="og:image:alt" content={image.alt} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={image.alt} />
     <title>{fullTitle}</title>
+    <slot name="head" />
   </head>
   <body>
     <div class="isolate flex min-h-dvh flex-col overflow-x-clip">

@@ -160,8 +160,8 @@ export type JamTimeline = {
 };
 
 export const JAM_TIMELINE: JamTimeline = {
-  opensAt: null,
-  closesAt: null,
+  opensAt: '2026-08-30T00:00:00.000Z',
+  closesAt: '2026-09-13T23:59:59.999Z',
   resultsAt: null,
 };
 
@@ -172,6 +172,29 @@ export function jamDate(iso: string | null): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return JAM_DATE_PENDING;
   return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function ordinal(day: number): string {
+  const teens = day % 100;
+  if (teens >= 11 && teens <= 13) return `${day}th`;
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
+}
+
+export function jamDateLong(iso: string | null): string {
+  if (iso === null) return JAM_DATE_PENDING;
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return JAM_DATE_PENDING;
+  const month = at.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  return `${month} ${ordinal(at.getUTCDate())}, ${at.getUTCFullYear()}`;
 }
 
 export type JamWindow = { open: true } | { open: false; reason: 'before' | 'after' };
