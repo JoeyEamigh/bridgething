@@ -7,10 +7,12 @@ import {
   newestCompatible,
   pinsFrom,
   satisfies,
+  settingsOrigin,
+  settingsOriginFor,
   updates,
   versionCompatible,
 } from '../src/resolve.ts';
-import type { AppEntry, AppVersion, Catalog } from '../src/types.ts';
+import type { AppEntry, AppVersion, Catalog, Download } from '../src/types.ts';
 
 const CALENDAR_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
 const WEATHER_ID = '019e6701-13f8-71b5-ba04-81f347137de2';
@@ -567,5 +569,87 @@ describe('popularity', () => {
 
     expect(listings.map(l => l.app.name)).toEqual(['Calendar', 'Weather']);
     expect(listings.every(l => l.installs === 0)).toBe(true);
+  });
+});
+
+describe('settingsOrigin', () => {
+  const DIGEST = 'a'.repeat(64);
+  const OTHER = 'b'.repeat(64);
+  const hosted = { url: 'https://apps.example.com/s/x.html', size: 26909, sha256: DIGEST };
+
+  function appWith(settings: Download | undefined, sha = DIGEST) {
+    const v = {
+      version: '1.0.0',
+      released_at: '2026-08-01T00:00:00Z',
+      download: { url: 'https://apps.example.com/r/x.zip', size: 1, sha256: sha },
+      permissions: [],
+      min_libbridgething_version: '0.5.0',
+      changelog: null,
+    } as AppEntry['versions'][number];
+    if (settings) v.settings = settings;
+    return {
+      id: '019e6701-13f8-71b5-ba04-85d326630e98',
+      name: 'x',
+      description: 'x',
+      author: 'x',
+      icon: null,
+      homepage: null,
+      source: null,
+      versions: [v],
+    } as AppEntry;
+  }
+
+  test('offers the hosted copy when it hashes to what the device installed', () => {
+    expect(settingsOrigin(appWith(hosted), DIGEST)).toEqual(hosted);
+  });
+
+  test('refuses a hosted copy whose bytes are not the installed ones', () => {
+    expect(settingsOrigin(appWith(hosted), OTHER)).toBeNull();
+  });
+
+  test('is null when the source publishes no settings page', () => {
+    expect(settingsOrigin(appWith(undefined), DIGEST)).toBeNull();
+  });
+
+  test('is null when the device reports no settings page', () => {
+    expect(settingsOrigin(appWith(hosted), null)).toBeNull();
+  });
+
+  test('matches case-insensitively, since a digest is hex either way', () => {
+    expect(settingsOrigin(appWith({ ...hosted, sha256: DIGEST.toUpperCase() }), DIGEST)).not.toBeNull();
+  });
+});
+
+describe('settingsOriginFor', () => {
+  const hosted: Download = { url: 'https://example.test/s/page.html', size: 240, sha256: 'c'.repeat(64) };
+
+  function withSettings(): AppEntry {
+    const version = ver('1.0.0');
+    version.settings = hosted;
+    return app(CALENDAR_ID, 'Fixture', [version]);
+  }
+
+  const sources = (apps: AppEntry[]) => [{ url: SOURCE_A, catalog: catalog(apps) }];
+
+  test('an id that differs only in case still resolves', () => {
+    expect(settingsOriginFor(sources([withSettings()]), SOURCE_A, CALENDAR_ID.toUpperCase(), hosted.sha256)).toEqual(
+      hosted,
+    );
+  });
+
+  test('a provenance no held catalog matches resolves to nothing', () => {
+    expect(settingsOriginFor(sources([withSettings()]), SOURCE_B, CALENDAR_ID, hosted.sha256)).toBeNull();
+  });
+
+  test('a device hash the catalog does not publish resolves to nothing', () => {
+    expect(settingsOriginFor(sources([withSettings()]), SOURCE_A, CALENDAR_ID, 'd'.repeat(64))).toBeNull();
+  });
+
+  test('an app the catalog does not carry resolves to nothing', () => {
+    expect(settingsOriginFor(sources([withSettings()]), SOURCE_A, WEATHER_ID, hosted.sha256)).toBeNull();
+  });
+
+  test('no provenance resolves to nothing', () => {
+    expect(settingsOriginFor(sources([withSettings()]), null, CALENDAR_ID, hosted.sha256)).toBeNull();
   });
 });

@@ -70,7 +70,7 @@ export default function App() {
             <div className="mt-6 flex gap-4">
               <button
                 className="border border-edge px-6 py-3 font-mono text-row text-near transition active:bg-neutral-soft"
-                onClick={() => client.player.skipPrev()}>
+                onClick={() => client.player.skipPrev({ allowSeeking: true })}>
                 ◀◀
               </button>
               <button

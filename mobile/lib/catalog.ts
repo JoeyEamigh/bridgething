@@ -9,6 +9,8 @@ import {
   aggregate,
   recommendedSources as resolveRecommended,
   reportInstall,
+  SETTINGS_PAGE_MIME,
+  settingsOriginFor,
   updates as resolveUpdates,
   type AppVersion,
   type Catalog,
@@ -22,7 +24,10 @@ import {
   type SourceFailure,
   type StoreListings,
 } from '@bridgething/catalog';
-import type { BridgethingWebappInfo } from '@bridgething/session-react-native';
+import type {
+  BridgethingResourceOrigin,
+  BridgethingWebappInfo,
+} from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useMemo } from 'react';
 import { create } from 'zustand';
@@ -429,4 +434,27 @@ export function startWebappAutoUpdate(): void {
   useSessionStore.subscribe(check);
   useOtaStore.subscribe(check);
   check();
+}
+
+export function useSettingsOrigin(
+  webapp: BridgethingWebappInfo | null,
+): BridgethingResourceOrigin | undefined {
+  const catalogs = useCatalogStore(state => state.catalogs);
+  const merged = useCatalogStore(state => state.merged);
+  const provenance = webapp?.provenance ?? null;
+  const settingsHash = webapp?.settingsHash ?? null;
+  const webappId = webapp?.id ?? null;
+
+  return useMemo(() => {
+    if (!provenance || !settingsHash || !webappId) return undefined;
+    const known = [...catalogs, ...merged];
+    const hosted = settingsOriginFor(known, provenance, webappId, settingsHash);
+    if (!hosted) return undefined;
+    return {
+      url: hosted.url,
+      sha256: hosted.sha256,
+      size: hosted.size,
+      mime: SETTINGS_PAGE_MIME,
+    };
+  }, [catalogs, merged, provenance, settingsHash, webappId]);
 }

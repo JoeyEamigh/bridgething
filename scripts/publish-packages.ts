@@ -5,14 +5,16 @@ import { join } from 'node:path';
 const ROOT = join(import.meta.dir, '..');
 
 type Manifest = { name: string; dir: string };
-export type Pkg = Manifest & { scoped: boolean };
+export type Pkg = Manifest & { scoped: boolean; daemonDerived?: true };
 
 export const PACKAGES: Pkg[] = [
-  { name: '@bridgething/lib', dir: 'crates/lib', scoped: true },
+  { name: '@bridgething/lib', dir: 'crates/lib', scoped: true, daemonDerived: true },
+  { name: '@bridgething/catalog', dir: 'packages/catalog', scoped: true },
   { name: '@bridgething/browser', dir: 'packages/browser', scoped: true },
   { name: '@bridgething/updater', dir: 'packages/updater', scoped: true },
   { name: '@bridgething/client', dir: 'packages/client-ts', scoped: true },
   { name: '@bridgething/extension', dir: 'packages/extension-ts', scoped: true },
+  { name: '@bridgething/source', dir: 'packages/source', scoped: true },
   { name: 'create-bridgething', dir: 'packages/create-bridgething', scoped: false },
 ];
 
@@ -22,12 +24,11 @@ const BOOTSTRAP_PENDING = ['@bridgething/session-react-native', '@bridgething/we
 
 const SCAFFOLD = 'create-bridgething';
 
-const SCAFFOLD_DEPENDENCIES = ['@bridgething/client', '@bridgething/extension'];
+export const SCAFFOLD_DEPENDENCIES = ['@bridgething/client', '@bridgething/extension', '@bridgething/source'];
 
-const TEMPLATE_MANIFEST = 'packages/create-bridgething/template/package.json';
-const TEMPLATE_DEP = '@bridgething/client';
+const SCAFFOLD_PINS = 'packages/create-bridgething/template-versions.json';
 
-function daemonVersion(): string {
+export function daemonVersion(): string {
   const cargo = readFileSync(join(ROOT, 'Cargo.toml'), 'utf8');
   const version = cargo.match(/^\s*version\s*=\s*["']([^"']+)["']/m)?.[1];
   if (!version) {
@@ -46,25 +47,24 @@ function setVersion(manifestPath: string, version: string): string | null {
   return current;
 }
 
-function setTemplateDep(version: string): string | null {
-  const full = join(ROOT, TEMPLATE_MANIFEST);
-  const src = readFileSync(full, 'utf8');
-  const re = new RegExp(`("${TEMPLATE_DEP.replace('/', '\\/')}"\\s*:\\s*")([^"]+)(")`);
-  const current = src.match(re)?.[2] ?? null;
-  const next = src.replace(re, `$1^${version}$3`);
-  if (next !== src) writeFileSync(full, next);
-  return current;
-}
-
 function reEscape(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
-function patchLockfile(version: string): void {
+export function packageVersion(dir: string): string {
+  const { version } = JSON.parse(readFileSync(join(ROOT, dir, 'package.json'), 'utf8')) as { version?: string };
+  if (version) return version;
+  console.error(`${dir}/package.json has no version`);
+  process.exit(1);
+}
+
+function patchLockfile(versions: Map<string, string>): void {
   const full = join(ROOT, 'bun.lock');
   if (!existsSync(full)) return;
   let src = readFileSync(full, 'utf8');
   for (const p of [...PACKAGES, ...VERSION_ONLY]) {
+    const version = versions.get(p.name);
+    if (!version) continue;
     const re = new RegExp(
       `("${reEscape(p.dir)}":\\s*\\{\\s*"name":\\s*"${reEscape(p.name)}",\\s*"version":\\s*")[^"]+(")`,
     );
@@ -96,6 +96,19 @@ export function scaffoldBlockers(plan: Map<string, Disposition>): string[] {
   return SCAFFOLD_DEPENDENCIES.filter(name => plan.get(name) === 'needs-bootstrap');
 }
 
+export function strandedPins(plan: Map<string, Disposition>): string[] {
+  if (plan.get(SCAFFOLD) === 'publish') return [];
+  return SCAFFOLD_DEPENDENCIES.filter(name => plan.get(name) === 'publish');
+}
+
+export function stalePins(versions: Map<string, string>): string[] {
+  const pins = JSON.parse(readFileSync(join(ROOT, SCAFFOLD_PINS), 'utf8')) as Record<string, string>;
+  return SCAFFOLD_DEPENDENCIES.flatMap(name => {
+    const want = `^${versions.get(name)}`;
+    return pins[name] === want ? [] : [`${name}: pinned ${pins[name] ?? '(absent)'}, publishing ${want}`];
+  });
+}
+
 export function publishable(packages: Pkg[], plan: Map<string, Disposition>): Pkg[] {
   const blocked = scaffoldBlockers(plan).length > 0;
   return packages.filter(p => plan.get(p.name) === 'publish' && !(blocked && p.name === SCAFFOLD));
@@ -104,6 +117,14 @@ export function publishable(packages: Pkg[], plan: Map<string, Disposition>): Pk
 async function disposition(pkg: Pkg, version: string): Promise<Disposition> {
   if (!(await npmViewOk(pkg.name))) return 'needs-bootstrap';
   return (await npmViewOk(`${pkg.name}@${version}`)) ? 'already-published' : 'publish';
+}
+
+export function resolveVersions(): Map<string, string> {
+  const daemon = daemonVersion();
+  const versions = new Map<string, string>();
+  for (const p of PACKAGES) versions.set(p.name, p.daemonDerived ? daemon : packageVersion(p.dir));
+  for (const p of VERSION_ONLY) versions.set(p.name, daemon);
+  return versions;
 }
 
 async function capture(cmd: string, args: string[], cwd: string): Promise<string> {
@@ -121,23 +142,23 @@ async function capture(cmd: string, args: string[], cwd: string): Promise<string
 
 async function main(): Promise<void> {
   const doPublish = process.argv.includes('--publish');
-  const version = daemonVersion();
-  console.log(`daemon version: ${version}`);
+  const versions = resolveVersions();
+  console.log(`daemon version: ${daemonVersion()}`);
   console.log(doPublish ? 'mode: PUBLISH (real)\n' : 'mode: dry run (pass --publish to publish for real)\n');
 
-  console.log('aligning package versions:');
-  for (const p of [...PACKAGES, ...VERSION_ONLY]) {
+  console.log('aligning crate mirrors to the daemon:');
+  for (const p of [...PACKAGES.filter(p => p.daemonDerived), ...VERSION_ONLY]) {
+    const version = versions.get(p.name)!;
     const prev = setVersion(`${p.dir}/package.json`, version);
     console.log(`  ${p.name}: ${prev} -> ${version}`);
   }
-  const prevDep = setTemplateDep(version);
-  console.log(`  template dep ${TEMPLATE_DEP}: ${prevDep ?? '(none)'} -> ^${version}`);
-  patchLockfile(version);
+  patchLockfile(versions);
   console.log('  bun.lock: workspace members synced');
 
   console.log('\nregistry check:');
   const plan = new Map<string, Disposition>();
   for (const p of PACKAGES) {
+    const version = versions.get(p.name)!;
     const d = await disposition(p, version);
     plan.set(p.name, d);
     const note = {
@@ -145,7 +166,7 @@ async function main(): Promise<void> {
       'already-published': `${version} already on registry, skipping`,
       'needs-bootstrap': 'NOT on registry - needs a manual first publish, skipping',
     }[d];
-    console.log(`  ${p.name}: ${note}`);
+    console.log(`  ${p.name} ${version}: ${note}`);
   }
   if (BOOTSTRAP_PENDING.length > 0) {
     console.log(`\nnot yet publishable (never published, no trusted publisher possible):`);
@@ -158,6 +179,22 @@ async function main(): Promise<void> {
       `\nrefusing to publish ${SCAFFOLD}: it scaffolds a dependency on ${blockers.join(', ')}, which needs a manual first publish.`,
     );
     console.error('a scaffold pinning an unpublished package fails at bun install with a 404.');
+  }
+
+  const stale = stalePins(versions);
+  if (stale.length > 0) {
+    console.error(`\nrefusing to publish: ${SCAFFOLD_PINS} does not match what is going out:`);
+    for (const line of stale) console.error(`  ${line}`);
+    console.error('run bun scripts/version-packages.ts to resync, then re-run.');
+    process.exit(1);
+  }
+
+  const stranded = strandedPins(plan);
+  if (stranded.length > 0) {
+    console.error(`\nrefusing to publish: ${stranded.join(', ')} ships but ${SCAFFOLD} does not.`);
+    console.error(`the published ${SCAFFOLD} would keep pinning a range that excludes the new version.`);
+    console.error(`run bun scripts/version-packages.ts ${SCAFFOLD} patch, then re-run.`);
+    process.exit(1);
   }
 
   const toPublish = publishable(PACKAGES, plan);
@@ -199,12 +236,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const names = toPublish.map(p => p.name).join(', ');
-  console.log(
-    doPublish
-      ? `\npublished ${names} at ${version}`
-      : `\ndry run complete. re-run with --publish to publish ${names} at ${version}`,
-  );
+  const names = toPublish.map(p => `${p.name}@${versions.get(p.name)}`).join(', ');
+  console.log(doPublish ? `\npublished ${names}` : `\ndry run complete. re-run with --publish to publish ${names}`);
 }
 
 if (import.meta.main) await main();

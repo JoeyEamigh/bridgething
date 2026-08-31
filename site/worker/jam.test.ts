@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { AppEntry, Catalog } from '@bridgething/catalog';
 import { fakeKv, withListLag, type FakeKv } from './kv-fake.ts';
+import { JAM_CATEGORIES } from '../src/lib/jam.ts';
 import { installKeyFor } from './installs.ts';
 import {
   entryKeyFor,
@@ -752,7 +753,7 @@ describe('jamTally', () => {
 
   test('every category comes back even when nothing scored in it', async () => {
     const tally = await jamTally({ kv: fakeKv(), fetchImpl: stubFetch() });
-    expect(tally.map(row => row.category)).toEqual(['launcher', 'music', 'utility', 'desk', 'cursed']);
+    expect(tally.map(row => row.category)).toEqual(JAM_CATEGORIES.map(category => category.id));
   });
 });
 

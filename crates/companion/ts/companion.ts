@@ -453,6 +453,8 @@ export type WebappResourceFile = { path: string; mime: string | null };
 
 export type WebappResourceKind = 'icon' | 'settings' | 'overlay';
 
+export type WebappResourceOrigin = { url: string; sha256: string; size: number; mime: string | null };
+
 export type WebappRole = 'standard' | 'launcher';
 
 export type WebappSlot = 'launcher' | 'overlay';

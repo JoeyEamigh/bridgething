@@ -208,6 +208,10 @@
         "download": {
           "$ref": "#/$defs/Download"
         },
+        "settings": {
+          "$ref": "#/$defs/Download",
+          "description": "The bundle's settings page, hosted separately so a companion can fetch it over the internet instead of pulling it off the device over Bluetooth. Its sha256 MUST be the digest of the same bytes the bundle ships, which is what the device reports as settings_hash; a client verifies against the device's hash and falls back to the device when they disagree. Absent when the version ships no settings page."
+        },
         "permissions": {
           "type": "array",
           "items": {
@@ -279,7 +283,7 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "Direct download URL for the webapp zip."
+          "description": "Direct download URL for the artifact."
         },
         "size": {
           "type": "integer",

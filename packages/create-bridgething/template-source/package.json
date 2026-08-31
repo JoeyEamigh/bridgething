@@ -1,0 +1,27 @@
+{
+  "name": "__REPO_NAME__",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "new": "bunx create-bridgething",
+    "dev": "bridgething-source run dev",
+    "dev:device": "bridgething-source run dev:device",
+    "build": "bridgething-source run build",
+    "push": "bridgething-source run push",
+    "share": "bridgething-source run share",
+    "check": "bridgething-source check",
+    "bump": "bridgething-source bump",
+    "shot": "bridgething-source shot",
+    "catalog": "bridgething-source catalog",
+    "publish": "bridgething-source publish",
+    "skills": "bridgething-source skills",
+    "format": "prettier --write \"*.json\" \"*.js\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3"
+  }
+}

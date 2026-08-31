@@ -21,6 +21,7 @@ pub enum Compress {
   Auto,
   Never,
   Always,
+  IfSmaller,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

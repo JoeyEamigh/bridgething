@@ -14,7 +14,7 @@ apps:
           url: https://apps.bridgething.com/r/019e6701-13f8-71b5-ba04-85d326630e98/0.1.0.zip
         permissions:
           - net.fetch
-        min_libbridgething_version: 0.4.0
+        min_libbridgething_version: 0.12.0
         changelog: Initial release.
   - slug: weather
     id: 019e6701-13f8-71b5-ba04-81f347137de2
@@ -31,7 +31,7 @@ apps:
         permissions:
           - net.fetch
           - geo
-        min_libbridgething_version: 0.4.0
+        min_libbridgething_version: 0.12.0
         changelog: Initial release.
   - slug: home-assistant
     id: 019e7f1a-bcea-7187-a438-4e182be86a33
@@ -47,7 +47,7 @@ apps:
           url: https://apps.bridgething.com/r/019e7f1a-bcea-7187-a438-4e182be86a33/0.1.1.zip
         permissions:
           - net.ws
-        min_libbridgething_version: 0.4.0
+        min_libbridgething_version: 0.12.0
         changelog: null
       - version: 0.1.0
         released_at: 2026-07-26T06:48:02Z
@@ -57,5 +57,5 @@ apps:
           url: https://apps.bridgething.com/r/019e7f1a-bcea-7187-a438-4e182be86a33/0.1.0.zip
         permissions:
           - net.ws
-        min_libbridgething_version: 0.4.0
+        min_libbridgething_version: 0.12.0
         changelog: null

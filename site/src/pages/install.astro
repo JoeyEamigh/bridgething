@@ -36,7 +36,7 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
       <SchematicSection>
         <h1 class="m-0 mb-4 text-5xl md:text-6xl">install</h1>
         <p class="m-0 max-w-[52ch] text-lg text-pretty text-white/70">
-          install the image on the thing and the companion app on your phone.
+          you need to install a companion app (mobile or desktop) and flash bridgething
         </p>
         <div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-sm text-white/60 max-sm:text-xs">
           <span class="border border-white/25 px-3 py-1.5">flash the thing</span>
@@ -50,7 +50,7 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
       </SchematicSection>
 
       <SchematicSection refdes="u1 - flash the thing">
-        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">install the bridgething image</p>
+        <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">install bridgething</p>
 
         <dl class="m-0 mb-10 grid grid-cols-1 gap-6 md:grid-cols-2">
           {
@@ -90,7 +90,7 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
           <InstallRoute
             name="flashthing, on the command line"
             detail="the same flasher as a binary."
-            note="macos needs libusb. linux needs a udev rule: flashthing-cli --setup."
+            note="macos needs libusb. linux needs a udev rule"
             status="ready"
             command="cargo install flashthing-cli"
           />
@@ -99,7 +99,7 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
 
       <SchematicSection refdes="u2 - the mobile app">
         <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">
-          you can use with your phone via these apps. computer use below
+          connect to your phone with the bridgething companion app. desktop connector below
 
           <dl class="m-0 grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div class="relative flex flex-col gap-3 border border-dashed border-white/25 p-6 pt-7">
@@ -147,9 +147,7 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
         </p>
 
         <SchematicSection refdes="u3 - the desktop app" class="mt-16">
-          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">
-            a tray app that connects when you plug a thing into your computer
-          </p>
+          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">desktop connector for the desk-inclined</p>
 
           {
             desktop ? (
@@ -198,13 +196,17 @@ const defaultChannel = channels.find(channel => channel.default)?.slug;
         </SchematicSection>
 
         <SchematicSection refdes="u4 - already running bridgething" class="mt-16">
-          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">how to get the latest features</p>
+          <p class="m-0 mb-8 max-w-[60ch] text-lg text-pretty text-white/70">how to update</p>
           <div>
-            <InstallRoute name="the companion app" detail="pushes every release over bluetooth." status="ready" />
             <InstallRoute
-              name="over the cable, from your browser"
-              detail="plug the thing in and update over usb. faster than bluetooth."
-              note="chromium only. it asks for local network access the first time."
+              name="the companion app"
+              detail="installs updates automatically when connected"
+              status="ready"
+            />
+            <InstallRoute
+              name="in the browser"
+              detail="faster than bluetooth if you are having issues with companion ota"
+              note="chromium only"
               status="ready"
               href="/install/update"
               cta="open updater"

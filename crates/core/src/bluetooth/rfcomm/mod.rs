@@ -123,10 +123,10 @@ impl Connection {
     }
   }
 
-  async fn send(&self, msg: &BridgeToGatewayMsg, priority: Priority) -> BluetoothResult<()> {
+  async fn send(&self, msg: &BridgeToGatewayMsg, priority: Priority, compress: Compress) -> BluetoothResult<()> {
     tracing::trace!(target: "bridgething::rfcomm::frame", "({}) sending rfcomm message ({:?}): {:?}", self.address, priority, msg);
     let mut buf = BytesMut::new();
-    encode_frame(priority, Compress::Auto, msg, &mut buf)?;
+    encode_frame(priority, compress, msg, &mut buf)?;
     if !self.lanes.send(priority, buf.freeze()).await {
       tracing::debug!("({}) rfcomm writer lane closed; dropping frame", self.address);
     }
@@ -264,10 +264,10 @@ impl RfcommGateway {
         },
         Some(data) = self.send_rx.recv() => {
           tracing::trace!(target: "bridgething::rfcomm::frame", "rfcomm gateway received message: {:?}", data);
-          let OutboundGatewayMessage { address, priority, msg } = data;
+          let OutboundGatewayMessage { address, priority, compress, msg } = data;
           if let Some(address) = address {
             if let Some(conn) = self.connections.get(&address) {
-              if let Err(e) = conn.send(&msg, priority).await {
+              if let Err(e) = conn.send(&msg, priority, compress).await {
                 tracing::error!("failed to send rfcomm frame: {:?}", e);
               }
             } else {
@@ -275,7 +275,7 @@ impl RfcommGateway {
             }
           } else {
             for conn in self.connections.values() {
-              if let Err(e) = conn.send(&msg, priority).await {
+              if let Err(e) = conn.send(&msg, priority, compress).await {
                 tracing::error!("failed to send rfcomm frame: {:?}", e);
               }
             }
@@ -298,7 +298,7 @@ impl RfcommGateway {
             ConnectionMessage::DecodeFailed(probe) => {
               if let Some(nack) = auto_nack_for_failed_decode(&probe)
                 && let Some(conn) = self.connections.get(&address)
-                  && let Err(e) = conn.send(&nack, Priority::Normal).await {
+                  && let Err(e) = conn.send(&nack, Priority::Normal, Compress::Auto).await {
                     tracing::error!("({address}) failed to send auto-nack: {:?}", e);
                   }
             }
@@ -318,7 +318,7 @@ impl RfcommGateway {
       meta: MsgMeta::Event,
       data: self.meta.snapshot().into(),
     };
-    connection.send(&version, Priority::Normal).await?;
+    connection.send(&version, Priority::Normal, Compress::Auto).await?;
 
     self.connections.insert(address, connection);
     self.peer_owners.register(address, GatewayType::Rfcomm);

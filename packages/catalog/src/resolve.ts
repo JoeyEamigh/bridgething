@@ -1,5 +1,13 @@
 import { declaresExtension } from './extension.ts';
-import type { AppEntry, AppVersion, Catalog, InstallCount, RecommendedSource, SourceCatalog } from './types.ts';
+import type {
+  AppEntry,
+  AppVersion,
+  Catalog,
+  Download,
+  InstallCount,
+  RecommendedSource,
+  SourceCatalog,
+} from './types.ts';
 import { sortNewestFirst } from './versions.ts';
 
 export type ExtensionOffering = 'listed' | 'omitted';
@@ -199,4 +207,28 @@ export function recommendedSources(args: {
   }
 
   return [...byUrl.values()].sort((a, b) => Number(b.attested) - Number(a.attested) || a.name.localeCompare(b.name));
+}
+
+export const SETTINGS_PAGE_MIME = 'text/html; charset=utf-8';
+
+export function settingsOriginFor(
+  catalogs: SourceCatalog[],
+  provenance: string | null,
+  webappId: string,
+  deviceSettingsHash: string | null,
+): Download | null {
+  if (!provenance) return null;
+  const catalog = catalogs.find(source => source.url === provenance)?.catalog ?? null;
+  if (!catalog) return null;
+  const id = webappId.toLowerCase();
+  return settingsOrigin(catalog.apps.find(app => app.id.toLowerCase() === id) ?? null, deviceSettingsHash);
+}
+
+export function settingsOrigin(app: AppEntry | null, deviceSettingsHash: string | null): Download | null {
+  if (!app || !deviceSettingsHash) return null;
+  const wanted = deviceSettingsHash.toLowerCase();
+  for (const version of app.versions) {
+    if (version.settings?.sha256.toLowerCase() === wanted) return version.settings;
+  }
+  return null;
 }

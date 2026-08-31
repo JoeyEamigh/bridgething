@@ -86,6 +86,7 @@ async function main() {
     icon?: string;
     role?: string;
     overlay?: string;
+    settings?: string;
     permissions?: string[];
     extension?: { entry?: string; permissions?: string[]; api?: number };
   };
@@ -112,6 +113,18 @@ async function main() {
   const size = (await stat(out)).size;
   const digest = await sha256(out);
 
+  let settings: { path: string; size: number; sha256: string } | null = null;
+  if (manifest.settings) {
+    const page = join(dist, manifest.settings);
+    const found = await stat(page).catch(() => null);
+    if (!found?.isFile()) {
+      throw new Error(
+        `${dist}/manifest.json declares settings page "${manifest.settings}", which is not in the bundle`,
+      );
+    }
+    settings = { path: page, size: found.size, sha256: await sha256(page) };
+  }
+
   const summary = {
     id: manifest.id,
     name: manifest.name,
@@ -123,6 +136,7 @@ async function main() {
     extension: manifest.extension ?? null,
     icon: manifest.icon ?? null,
     iconPath: manifest.icon ? join(dist, manifest.icon) : null,
+    settings,
     size,
     sha256: digest,
     output: out,

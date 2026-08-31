@@ -54,3 +54,4 @@ appId: com.bridgething.gateway
 - extendedWaitUntil:
     visible: ".*dev gateway, connected.*"
     timeout: 180000
+- runFlow: dismiss-logbox.yaml

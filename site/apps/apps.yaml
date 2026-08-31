@@ -24,5 +24,7 @@ apps:
     source: https://github.com/JoeyEamigh/bridgething
   - slug: system-info
     author: JoeyEamigh
+    screenshots:
+      - https://bridgething.com/screenshots/device-system-info.png
     homepage: https://bridgething.com/apps
     source: https://github.com/JoeyEamigh/bridgething

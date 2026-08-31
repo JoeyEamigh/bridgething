@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-companion"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "async-trait",
  "bridgething-delivery",
@@ -234,7 +234,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "async-trait",
  "bridgething-gateway",
@@ -258,7 +258,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -279,7 +279,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "thiserror 2.0.20",
  "tokio",
@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "bytes",
  "futures",
@@ -1360,7 +1360,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libbridgething"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "bridgething-macros",
  "bytes",
@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "nlu"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "spotify"
-version = "0.11.0"
+version = "0.12.1"
 dependencies = [
  "base64 0.22.1",
  "bridgething-io",

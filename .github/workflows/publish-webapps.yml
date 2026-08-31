@@ -100,12 +100,23 @@ jobs:
               iconUrl="\"${PUBLIC_BASE}/icons/${id}.${ext}\""
             fi
 
+            settingsJson=null
+            settingsPath=$(jq -r '.settings.path // empty' <<<"$meta")
+            if [[ -n "$settingsPath" ]]; then
+              settingsKey="s/${id}/${version}.html"
+              scripts/r2-put "$settingsPath" "$settingsKey" "text/html; charset=utf-8"
+              settingsJson=$(jq -c --arg url "${PUBLIC_BASE}/${settingsKey}" \
+                '{url: $url, size: .settings.size, sha256: .settings.sha256}' <<<"$meta")
+            fi
+
             entry=$(jq -c \
               --arg slug "$slug" \
               --arg url "${PUBLIC_BASE}/${key}" \
               --argjson icon "$iconUrl" \
+              --argjson settings "$settingsJson" \
               '{slug: $slug, id, name, description, version, permissions, role, provides_overlay, extension,
                 icon: $icon,
+                settings: $settings,
                 download: {url: $url, size, sha256}}' <<<"$meta")
             published=$(jq -c ". + [$entry]" <<<"$published")
             echo "::endgroup::"

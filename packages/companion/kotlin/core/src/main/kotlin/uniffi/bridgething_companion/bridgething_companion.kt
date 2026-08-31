@@ -3153,6 +3153,7 @@ internal object UniffiLib {
         `deviceId`: RustBuffer.ByValue,
         `id`: RustBuffer.ByValue,
         `kind`: RustBuffer.ByValue,
+        `origin`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_webapp_slots(
@@ -5334,7 +5335,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_voice_model_paths() != 45257) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_webapp_resource() != 11233) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_webapp_resource() != 54617) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots() != 15167) {
@@ -5550,7 +5551,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_deliver() != 22605) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 6431) {
+    if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 47175) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected() != 43849) {
@@ -11127,6 +11128,7 @@ public interface CompanionSessionInterface {
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
         `kind`: WebappResourceKind,
+        `origin`: WebappResourceOrigin?,
     ): WebappResourceFile
 
     suspend fun `webappSlots`(`deviceId`: kotlin.String): WebappSlots
@@ -12204,6 +12206,7 @@ open class CompanionSession :
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
         `kind`: WebappResourceKind,
+        `origin`: WebappResourceOrigin?,
     ): WebappResourceFile =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -12212,6 +12215,7 @@ open class CompanionSession :
                     FfiConverterString.lower(`deviceId`),
                     FfiConverterString.lower(`id`),
                     FfiConverterTypeWebappResourceKind.lower(`kind`),
+                    FfiConverterOptionalTypeWebappResourceOrigin.lower(`origin`),
                 )
             },
             {
@@ -13509,10 +13513,6 @@ public object FfiConverterTypeEarconSink : FfiConverter<EarconSink, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-/**
- * The seam a native extension host plugs into. Desktop supplies one; phones
- * pass `None` and every extension surface stays unsupported there.
- */
 public interface ExtensionHost {
     fun `start`(`inbox`: ExtensionHostInbox)
 
@@ -13524,13 +13524,6 @@ public interface ExtensionHost {
         `message`: ExtensionMessage,
     )
 
-    /**
-     * `webapps` is what `config` was actually read for: everything running when
-     * the link itself came up, or the extensions that just started and missed
-     * that announce. A host must not tell an extension outside that list the
-     * device connected, and must not tell one inside it twice without a
-     * disconnect in between.
-     */
     fun `deviceConnected`(
         `device`: kotlin.String,
         `name`: kotlin.String,
@@ -13556,10 +13549,6 @@ public interface ExtensionHost {
     companion object
 }
 
-/**
- * The seam a native extension host plugs into. Desktop supplies one; phones
- * pass `None` and every extension surface stays unsupported there.
- */
 open class ExtensionHostImpl :
     Disposable,
     AutoCloseable,
@@ -13701,13 +13690,6 @@ open class ExtensionHostImpl :
         }
     }
 
-    /**
-     * `webapps` is what `config` was actually read for: everything running when
-     * the link itself came up, or the extensions that just started and missed
-     * that announce. A host must not tell an extension outside that list the
-     * device connected, and must not tell one inside it twice without a
-     * disconnect in between.
-     */
     override fun `deviceConnected`(
         `device`: kotlin.String,
         `name`: kotlin.String,
@@ -24941,22 +24923,12 @@ public object FfiConverterTypeVolumeMonitor : FfiConverter<VolumeMonitor, Long> 
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-/**
- * Handed the downloaded bundle once it has verified and landed on the device,
- * while the artifact is still on disk. A host that keeps something out of the
- * zip hooks in here rather than composing the fetch and the install itself.
- */
 public interface WebappBundleSink {
     fun `installed`(`bundle`: kotlin.String)
 
     companion object
 }
 
-/**
- * Handed the downloaded bundle once it has verified and landed on the device,
- * while the artifact is still on disk. A host that keeps something out of the
- * zip hooks in here rather than composing the fetch and the install itself.
- */
 open class WebappBundleSinkImpl :
     Disposable,
     AutoCloseable,
@@ -26992,11 +26964,6 @@ data class DeviceWebappsEntry(
     var `deviceId`: kotlin.String,
     var `webapps`: List<WebappInfo>,
     var `active`: ActiveWebapp?,
-    /**
-     * Whether this is a full inventory read off the device. Install and
-     * active-webapp pushes can land before the listing does, and an entry that
-     * has never been listed says nothing about what the device holds.
-     */
     var `listed`: kotlin.Boolean,
 ) {
     companion object
@@ -27065,9 +27032,6 @@ public object FfiConverterTypeDocEntry : FfiConverterRustBuffer<DocEntry> {
     }
 }
 
-/**
- * One config value the host hands to the extension owning `webapp`.
- */
 data class ExtensionConfigEntry(
     var `webapp`: kotlin.String,
     var `key`: kotlin.String,
@@ -27104,10 +27068,6 @@ public object FfiConverterTypeExtensionConfigEntry : FfiConverterRustBuffer<Exte
     }
 }
 
-/**
- * The extension block a webapp declares, as every surface that renders an
- * installed app sees it. Permissions are the plain Deno descriptor strings.
- */
 data class ExtensionInfo(
     var `permissions`: List<kotlin.String>,
     var `api`: kotlin.UInt,
@@ -29644,6 +29604,51 @@ public object FfiConverterTypeWebappResourceFile : FfiConverterRustBuffer<Webapp
     }
 }
 
+/**
+ * A copy of a webapp resource hosted somewhere reachable over the internet, from the catalog entry
+ * the app is pinned to. `sha256` is what the device reports for the installed bundle, so bytes that
+ * hash to anything else are refused and the resource comes off the link instead.
+ */
+data class WebappResourceOrigin(
+    var `url`: kotlin.String,
+    var `sha256`: kotlin.String,
+    var `size`: kotlin.ULong,
+    var `mime`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeWebappResourceOrigin : FfiConverterRustBuffer<WebappResourceOrigin> {
+    override fun read(buf: ByteBuffer): WebappResourceOrigin =
+        WebappResourceOrigin(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: WebappResourceOrigin) =
+        (
+            FfiConverterString.allocationSize(value.`url`) +
+                FfiConverterString.allocationSize(value.`sha256`) +
+                FfiConverterULong.allocationSize(value.`size`) +
+                FfiConverterOptionalString.allocationSize(value.`mime`)
+        )
+
+    override fun write(
+        value: WebappResourceOrigin,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`url`, buf)
+        FfiConverterString.write(value.`sha256`, buf)
+        FfiConverterULong.write(value.`size`, buf)
+        FfiConverterOptionalString.write(value.`mime`, buf)
+    }
+}
+
 data class WebappSlots(
     var `launcher`: kotlin.String?,
     var `overlay`: kotlin.String?,
@@ -30613,10 +30618,6 @@ public object FfiConverterTypeEndCallAction : FfiConverterRustBuffer<EndCallActi
     }
 }
 
-/**
- * A forward payload across the FFI. `Json` carries the serialized document
- * because uniffi has no JSON value type.
- */
 sealed class ExtensionMessage {
     data class Text(
         val `text`: kotlin.String,
@@ -30796,9 +30797,6 @@ sealed class HttpMethod {
 
     object Options : HttpMethod()
 
-    /**
-     * A verb this enum does not name, handed to the platform transport verbatim.
-     */
     data class Other(
         val `verb`: kotlin.String,
     ) : HttpMethod() {
@@ -35532,6 +35530,38 @@ public object FfiConverterOptionalTypeSpotifyProviderConfig : FfiConverterRustBu
         } else {
             buf.put(1)
             FfiConverterTypeSpotifyProviderConfig.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeWebappResourceOrigin : FfiConverterRustBuffer<WebappResourceOrigin?> {
+    override fun read(buf: ByteBuffer): WebappResourceOrigin? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeWebappResourceOrigin.read(buf)
+    }
+
+    override fun allocationSize(value: WebappResourceOrigin?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeWebappResourceOrigin.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: WebappResourceOrigin?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeWebappResourceOrigin.write(value, buf)
         }
     }
 }

@@ -10,7 +10,8 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "publish:packages": "bun scripts/publish-packages.ts",
-    "mobile": "cd mobile && bun run"
+    "mobile": "cd mobile && bun run",
+    "version:packages": "bun scripts/version-packages.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

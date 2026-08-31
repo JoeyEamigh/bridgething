@@ -1,13 +1,15 @@
+import { SETTINGS_PAGE_MIME, settingsOriginFor } from '@bridgething/catalog';
 import type { WebappInfo } from '@bridgething/companion-types';
 import { Button, describeError, Spinner } from '@bridgething/ui';
 import { useSignalEffect } from '@preact/signals';
 import { invoke } from '@tauri-apps/api/core';
 import type { VNode } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 
 import { useDesktop } from '../desktop.ts';
 import { toWireConfigField } from '../lib/config-field.ts';
 import { Icon } from '../lib/icons.tsx';
+import { catalogFor } from '../stores/catalog.ts';
 import { peers, webappDocFor } from '../stores/session.ts';
 import { ErrorNote } from './Screen.tsx';
 
@@ -32,11 +34,20 @@ export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; o
   const docs = webappDocFor(webapp.id);
   const known = useRef<Map<string, string> | null>(null);
 
+  const pinned = webapp.provenance ? catalogFor(webapp.provenance) : null;
+  const resolving = pinned?.pending.value ?? false;
+  const source = pinned?.data.value ?? null;
+  const sources = source && webapp.provenance ? [{ url: webapp.provenance, catalog: source }] : [];
+  const hosted = settingsOriginFor(sources, webapp.provenance ?? null, webapp.id, webapp.settingsHash ?? null);
+  const origin = useMemo(() => (hosted ? { ...hosted, mime: SETTINGS_PAGE_MIME } : null), [hosted]);
+
   const deliver = (payload: unknown): void => {
     frame.current?.contentWindow?.postMessage(JSON.stringify(payload), '*');
   };
 
   useEffect(() => {
+    if (resolving) return;
+
     let held: string | null = null;
     let live = true;
     known.current = null;
@@ -45,7 +56,7 @@ export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; o
 
     void (async () => {
       try {
-        const resource = await session.webappResource(webapp.id, 'settings');
+        const resource = await session.webappResource(webapp.id, 'settings', origin);
         if (!live) return;
         held = URL.createObjectURL(new Blob([Uint8Array.from(resource.bytes)], { type: resource.mime ?? 'text/html' }));
         setPage(held);
@@ -58,7 +69,7 @@ export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; o
       live = false;
       if (held) URL.revokeObjectURL(held);
     };
-  }, [session, webapp.id, webapp.settingsHash]);
+  }, [origin, resolving, session, webapp.id, webapp.settingsHash]);
 
   useEffect(() => {
     const deviceId = peers.value.find(peer => peer.status === 'connected')?.id ?? '';

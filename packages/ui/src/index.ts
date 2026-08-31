@@ -8,6 +8,7 @@ export {
   type DeviceSession,
   type Endpoint,
   type Invalidation,
+  type ResourceOrigin,
   type Tier,
   type Topic,
   type WebappResource,

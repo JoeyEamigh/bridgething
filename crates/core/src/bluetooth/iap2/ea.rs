@@ -222,7 +222,9 @@ impl Iap2EaGateway {
       meta: MsgMeta::Event,
       data: self.meta.snapshot().into(),
     };
-    self.send_to_stream(key, &version, Priority::Normal).await;
+    self
+      .send_to_stream(key, &version, Priority::Normal, Compress::Auto)
+      .await;
 
     self.peer_owners.register(address, GatewayType::Iap2Ea);
     let _ = self.peers.set_companion(address, PeerCompanionStatus::Pending).await;
@@ -230,7 +232,12 @@ impl Iap2EaGateway {
   }
 
   async fn dispatch_outbound(&mut self, message: OutboundGatewayMessage) {
-    let OutboundGatewayMessage { address, priority, msg } = message;
+    let OutboundGatewayMessage {
+      address,
+      priority,
+      compress,
+      msg,
+    } = message;
     if let Some(address) = address {
       let keys: Vec<Key> = self.conns.keys().copied().filter(|(a, _)| *a == address).collect();
       if keys.is_empty() {
@@ -238,20 +245,20 @@ impl Iap2EaGateway {
         return;
       }
       for key in keys {
-        self.send_to_stream(key, &msg, priority).await;
+        self.send_to_stream(key, &msg, priority, compress).await;
       }
     } else {
       let keys: Vec<Key> = self.conns.keys().copied().collect();
       for key in keys {
-        self.send_to_stream(key, &msg, priority).await;
+        self.send_to_stream(key, &msg, priority, compress).await;
       }
     }
   }
 
-  async fn send_to_stream(&mut self, key: Key, msg: &BridgeToGatewayMsg, priority: Priority) {
+  async fn send_to_stream(&mut self, key: Key, msg: &BridgeToGatewayMsg, priority: Priority, compress: Compress) {
     let Some(conn) = self.conns.get(&key) else { return };
     let mut buf = BytesMut::new();
-    if let Err(err) = encode_frame(priority, Compress::Auto, msg, &mut buf) {
+    if let Err(err) = encode_frame(priority, compress, msg, &mut buf) {
       tracing::error!(stream_id = key.1, ?err, "iap2 ea gateway: encode failed");
       return;
     }

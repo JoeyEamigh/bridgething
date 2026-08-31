@@ -10,17 +10,14 @@ import { SITE } from '../../lib/site.ts';
 const initial = [{ url: SITE.officialCatalog, official: true, attested: true, catalog: catalog as Catalog }];
 ---
 
-<Layout
-  title="apps"
-  description="browse installable webapps for bridgething, from the official catalog and every community source in the directory.">
+<Layout title="apps" description="browse installable webapps for bridgething">
   <Header />
   <main class="container-site w-full flex-1 py-12 md:py-16">
     <header class="mb-12 max-w-2xl">
       <h1 class="mb-1">apps</h1>
-      <p class="text-white/60">webapps you can install onto a bridgething device</p>
+      <p class="text-white/60">bridgething apps from the community</p>
       <p class="mt-4 font-mono text-sm text-white/40">
-        installing needs a device. connect one on <a href="/device">device</a>, or install from the bridgething app on
-        your phone.
+        install from the bridgething app or the <a href="/device">device</a> page.
       </p>
     </header>
 

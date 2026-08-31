@@ -1,6 +1,6 @@
 import { settings, type ConfigField, type SettingsContext } from '@bridgething/client/settings';
-import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, type FormEvent, type InputEvent } from 'react';
+import { createRoot } from 'react-dom/client';
 import './style.css';
 
 function fieldMeta(field: ConfigField): { key: string; label: string } {
@@ -26,7 +26,7 @@ function Settings() {
     })();
   }, []);
 
-  async function saveConfig(event: Event) {
+  async function saveConfig(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus('saving...');
     try {
@@ -53,17 +53,18 @@ function Settings() {
   return (
     <main>
       <h1>{ctx?.name ?? '__PROJECT_NAME__'} settings</h1>
-      <p class="hint">{ctx ? `${ctx.webappId} on ${ctx.deviceId}` : 'connecting to the companion host...'}</p>
+      <p className="hint">{ctx ? `${ctx.webappId} on ${ctx.deviceId}` : 'connecting to the companion host...'}</p>
 
       <form onSubmit={saveConfig}>
-        {fields.length === 0 && <p class="hint">this webapp declares no config fields yet.</p>}
+        {fields.length === 0 && <p className="hint">this webapp declares no config fields yet.</p>}
         {fields.map(field => {
           const { key, label } = fieldMeta(field);
           const value = values[key] ?? '';
-          const onInput = (e: Event) => setValues({ ...values, [key]: (e.target as HTMLInputElement).value });
+          const onInput = (e: InputEvent<HTMLInputElement | HTMLSelectElement>) =>
+            setValues({ ...values, [key]: (e.target as HTMLInputElement).value });
           return (
-            <div class="field" key={key}>
-              <label for={key}>{label}</label>
+            <div className="field" key={key}>
+              <label htmlFor={key}>{label}</label>
               {field.type === 'enum' ? (
                 <select id={key} value={value} onInput={onInput}>
                   {field.data.choices.map(choice => (
@@ -84,20 +85,20 @@ function Settings() {
           );
         })}
 
-        <div class="row">
+        <div className="row">
           <button type="submit">Save settings</button>
-          <button type="button" class="secondary" onClick={saveToDevice}>
+          <button type="button" className="secondary" onClick={saveToDevice}>
             Save to device
           </button>
-          <button type="button" class="secondary" onClick={() => settings.done()}>
+          <button type="button" className="secondary" onClick={() => settings.done()}>
             Done
           </button>
         </div>
       </form>
 
-      <p class="status">{status}</p>
+      <p className="status">{status}</p>
     </main>
   );
 }
 
-render(<Settings />, document.getElementById('root')!);
+createRoot(document.getElementById('root')!).render(<Settings />);

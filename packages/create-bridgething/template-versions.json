@@ -1,0 +1,6 @@
+{
+  "@bridgething/client": "^0.12.1",
+  "@bridgething/extension": "^0.12.1",
+  "@bridgething/source": "^0.12.1",
+  "libbridgething": "0.12.1"
+}

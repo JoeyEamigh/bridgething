@@ -30,6 +30,7 @@ export type AppVersion = {
   version: string;
   released_at: string;
   download: Download;
+  settings?: Download;
   permissions: string[];
   role?: 'standard' | 'launcher';
   provides_overlay?: boolean;

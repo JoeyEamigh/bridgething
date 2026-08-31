@@ -411,7 +411,7 @@ public class HybridBridgethingSessionImpl(
 
     override suspend fun webappIcon(deviceId: String, id: String): BridgethingWebappIcon? {
         val resolved = try {
-            requireSession().webappResource(deviceId, id, WebappResourceKind.ICON)
+            requireSession().webappResource(deviceId, id, WebappResourceKind.ICON, null)
         } catch (e: CompanionException.ResourceNotAvailable) {
             return null
         }
@@ -423,8 +423,18 @@ public class HybridBridgethingSessionImpl(
         }
     }
 
-    override suspend fun webappSettingsMarkup(deviceId: String, id: String): String {
-        val resolved = requireSession().webappResource(deviceId, id, WebappResourceKind.SETTINGS)
+    override suspend fun webappSettingsMarkup(
+        deviceId: String,
+        id: String,
+        origin: BridgethingResourceOrigin?,
+    ): String {
+        val resolved =
+            requireSession().webappResource(
+                deviceId,
+                id,
+                WebappResourceKind.SETTINGS,
+                origin?.let { WebappResourceOrigin(it.url, it.sha256, it.size.toULong(), it.mime) },
+            )
         return File(resolved.path).readText()
     }
 

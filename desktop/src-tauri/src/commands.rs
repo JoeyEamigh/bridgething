@@ -14,6 +14,7 @@ use bridgething_delivery::{
   ota::{event::OtaPhaseSnapshot, service::WebappInstallResult, stream::FileSource},
   seam::BlobStore,
   transfer::FragmentSource,
+  webapp::ResourceOrigin,
 };
 use libbridgething::{ExtensionPermission, gateway::WebappResourceKind};
 use serde::Serialize;
@@ -249,12 +250,13 @@ pub async fn webapp_resource(
   shell: State<'_, Arc<Shell>>,
   id: String,
   kind: WebappResourceKind,
+  origin: Option<ResourceOrigin>,
 ) -> Answer<WebappResource> {
   let id = webapp_id(&id)?;
   let link = shell.link()?;
   let cached = shell
     .resources()?
-    .fetch(&link, id, kind)
+    .fetch(&link, id, kind, origin.as_ref())
     .await
     .map_err(|error| CommandError::Device(format!("{error:?}")))?;
   let bytes = shell

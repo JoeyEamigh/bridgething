@@ -482,7 +482,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     public func webappIcon(deviceId: String, id: String) async throws -> BridgethingWebappIcon? {
         let resolved: WebappResourceFile
         do {
-            resolved = try await requireSession().webappResource(deviceId: deviceId, id: id, kind: .icon)
+            resolved = try await requireSession().webappResource(deviceId: deviceId, id: id, kind: .icon, origin: nil)
         } catch CompanionError.ResourceNotAvailable {
             return nil
         }
@@ -493,8 +493,15 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         return BridgethingWebappIcon(fileUri: file.absoluteString, svg: nil, mime: resolved.mime)
     }
 
-    public func webappSettingsMarkup(deviceId: String, id: String) async throws -> String {
-        let resolved = try await requireSession().webappResource(deviceId: deviceId, id: id, kind: .settings)
+    public func webappSettingsMarkup(deviceId: String, id: String, origin: BridgethingResourceOrigin?) async throws -> String {
+        let resolved = try await requireSession().webappResource(
+            deviceId: deviceId,
+            id: id,
+            kind: .settings,
+            origin: origin.map {
+                WebappResourceOrigin(url: $0.url, sha256: $0.sha256, size: UInt64($0.size), mime: $0.mime)
+            }
+        )
         return try String(contentsOf: URL(fileURLWithPath: resolved.path), encoding: .utf8)
     }
 

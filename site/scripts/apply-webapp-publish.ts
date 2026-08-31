@@ -15,12 +15,13 @@ type PublishedApp = {
   extension?: { entry?: string; permissions?: string[]; api?: number } | null;
   icon: string | null;
   download: { url: string; size: number; sha256: string };
+  settings?: { url: string; size: number; sha256: string } | null;
 };
 
 type VersionRow = { version: string; released_at: string; [k: string]: unknown };
 type AppRow = { slug: string; versions: VersionRow[]; [k: string]: unknown };
 
-const DEFAULT_MIN_LIB = '0.4.0';
+const DEFAULT_MIN_LIB = '0.12.0';
 
 function applyBundleTraits(row: VersionRow, app: PublishedApp): void {
   if (app.role === 'launcher') row['role'] = 'launcher';
@@ -29,6 +30,8 @@ function applyBundleTraits(row: VersionRow, app: PublishedApp): void {
   else delete row['provides_overlay'];
   if (app.extension) row['extension'] = { desktop: true, permissions: app.extension.permissions ?? [] };
   else delete row['extension'];
+  if (app.settings) row['settings'] = app.settings;
+  else delete row['settings'];
 }
 
 function parseArgs(argv: string[]): { payload: string; statePath: string; releasedAt: string } {

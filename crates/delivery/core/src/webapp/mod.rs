@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use bridgething_gateway::Gateway;
 use bridgething_sdk_runtime::RequestFailure;
@@ -11,7 +11,11 @@ use uuid::Uuid;
 
 pub use crate::seam::CachedResource;
 use crate::{
-  blob::digest_of,
+  blob::{digest_of, is_digest},
+  bundle::{
+    ArtifactDigest,
+    fetch::{ArtifactFetch, DownloadRequest},
+  },
   seam::{BlobStore, SlotIndex},
   transfer::{TransferReceiveError, TransferReceiver},
 };
@@ -43,11 +47,21 @@ pub enum WebappResourceError {
   Store(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceOrigin {
+  pub url: String,
+  pub sha256: String,
+  pub size: u64,
+  pub mime: Option<String>,
+}
+
 pub struct WebappResourceService {
   blobs: Arc<dyn BlobStore>,
   slots: Arc<dyn SlotIndex>,
   receiver: Arc<TransferReceiver>,
   timeout: Duration,
+  fetch: Option<(Arc<dyn ArtifactFetch>, PathBuf)>,
 }
 
 impl WebappResourceService {
@@ -66,7 +80,13 @@ impl WebappResourceService {
       slots,
       receiver,
       timeout,
+      fetch: None,
     }
+  }
+
+  pub fn with_fetch(mut self, fetch: Arc<dyn ArtifactFetch>, scratch: PathBuf) -> Self {
+    self.fetch = Some((fetch, scratch));
+    self
   }
 
   pub fn cached(&self, webapp_id: Uuid, kind: WebappResourceKind) -> Option<CachedResource> {
@@ -88,8 +108,24 @@ impl WebappResourceService {
     gateway: &Gateway,
     webapp_id: Uuid,
     kind: WebappResourceKind,
+    origin: Option<&ResourceOrigin>,
   ) -> Result<CachedResource, WebappResourceError> {
     let cached = self.cached(webapp_id, kind);
+
+    let origin = origin.filter(|_| kind == WebappResourceKind::Settings);
+
+    if let Some(origin) = origin {
+      if let Some(hit) = cached
+        .as_ref()
+        .filter(|resource| resource.digest.eq_ignore_ascii_case(&origin.sha256))
+      {
+        return Ok(hit.clone());
+      }
+      if let Some(resource) = self.fetch_from_origin(webapp_id, kind, origin).await {
+        return Ok(resource);
+      }
+    }
+
     let reply = gateway
       .webapp()
       .resource(WebappResource {
@@ -147,6 +183,60 @@ impl WebappResourceService {
       let _ = self.blobs.remove(&stale);
     }
     Ok(resource)
+  }
+
+  async fn fetch_from_origin(
+    &self,
+    webapp_id: Uuid,
+    kind: WebappResourceKind,
+    origin: &ResourceOrigin,
+  ) -> Option<CachedResource> {
+    let (fetch, scratch) = self.fetch.as_ref()?;
+    let sha256 = origin.sha256.to_lowercase();
+    if !is_digest(&sha256) {
+      tracing::warn!(%webapp_id, "hosted resource digest is not a sha256, refusing to fetch it");
+      return None;
+    }
+    let path = fetch
+      .download(DownloadRequest {
+        url: origin.url.clone(),
+        dir: scratch.clone(),
+        filename: format!("{webapp_id}-{sha256}"),
+        asset: "webapp resource".into(),
+        expected: Some(ArtifactDigest {
+          size: origin.size,
+          sha256: sha256.clone(),
+        }),
+        progress: None,
+      })
+      .await
+      .inspect_err(|error| tracing::debug!(%webapp_id, url = %origin.url, %error, "hosted resource unusable"))
+      .ok()?;
+
+    let bytes = std::fs::read(&path)
+      .inspect_err(|error| tracing::warn!(%error, "could not read the downloaded resource"))
+      .ok();
+    let _ = std::fs::remove_file(&path);
+    let bytes = bytes?;
+
+    let digest = digest_of(&bytes);
+    if digest != sha256 {
+      tracing::warn!(%webapp_id, "hosted resource hashed to {digest}, not the {sha256} the device reports");
+      return None;
+    }
+    if let Err(reason) = self.blobs.put(&digest, &bytes) {
+      tracing::warn!(%reason, "could not store the hosted resource");
+      return None;
+    }
+
+    let resource = CachedResource {
+      digest,
+      mime: origin.mime.clone(),
+    };
+    if let Some(stale) = self.remember(webapp_id, kind, &resource) {
+      let _ = self.blobs.remove(&stale);
+    }
+    Some(resource)
   }
 
   fn remember(&self, webapp_id: Uuid, kind: WebappResourceKind, resource: &CachedResource) -> Option<String> {

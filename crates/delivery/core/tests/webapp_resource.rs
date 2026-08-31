@@ -5,9 +5,10 @@ use std::{
 
 use bridgething_delivery::{
   blob::{FsBlobStore, FsSlotIndex, digest_of},
+  bundle::fetch::{ArtifactFetch, DigestField, DownloadRequest, FetchError},
   seam::{BlobStore, Clock, SlotIndex, SystemClock},
   transfer::{AckSink, TransferReceiver},
-  webapp::{WebappResourceError, WebappResourceService},
+  webapp::{ResourceOrigin, WebappResourceError, WebappResourceService},
 };
 use bridgething_gateway::Gateway;
 use bytes::Bytes;
@@ -110,6 +111,10 @@ struct Rig {
 }
 
 impl Rig {
+  fn scratch(&self) -> std::path::PathBuf {
+    self._cache.path().join("downloads")
+  }
+
   fn reopened(&self) -> WebappResourceService {
     WebappResourceService::new(
       self.blobs.clone(),
@@ -195,7 +200,9 @@ async fn an_inline_body_lands_in_the_store_and_the_next_fetch_offers_its_digest(
   let body = ramp(2048);
   let digest = digest_of(&body);
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, request) = rig.device.next_resource_request().await;
     assert_eq!(request.id, webapp_id);
@@ -223,7 +230,9 @@ async fn an_inline_body_lands_in_the_store_and_the_next_fetch_offers_its_digest(
     "the body is what the store holds under its digest"
   );
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, request) = rig.device.next_resource_request().await;
     assert_eq!(
@@ -257,7 +266,9 @@ async fn a_streamed_body_reassembles_behind_the_reply_and_lands_in_the_store() {
   let digest = digest_of(&body);
   let transfer_id = Uuid::now_v7();
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, None);
   let driving = async {
     let (id, request) = rig.device.next_resource_request().await;
     assert_eq!(request.kind, WebappResourceKind::Settings);
@@ -290,7 +301,9 @@ async fn a_domain_rejection_keeps_its_cause() {
   let mut rig = rig();
   let webapp_id = Uuid::now_v7();
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
     rig.device.reject(id, not_available(webapp_id));
@@ -310,7 +323,7 @@ async fn a_protocol_refusal_keeps_its_cause() {
 
   let fetching = rig
     .service
-    .fetch(&rig.gateway, Uuid::now_v7(), WebappResourceKind::Icon);
+    .fetch(&rig.gateway, Uuid::now_v7(), WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
     rig.device.refuse(id, WireError::Unsupported);
@@ -328,7 +341,9 @@ async fn a_body_less_reply_with_nothing_cached_is_a_stale_cache_failure() {
   let mut rig = rig();
   let webapp_id = Uuid::now_v7();
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
     rig.device.respond(
@@ -360,7 +375,9 @@ async fn a_body_that_does_not_match_the_replys_digest_fails_typed_and_stores_not
   let body = vec![1u8; 512];
   let claimed = digest_of(&vec![2u8; 512]);
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
     rig.device.respond(
@@ -400,7 +417,9 @@ async fn a_stream_that_never_arrives_times_the_fetch_out_rather_than_hanging_it(
   let webapp_id = Uuid::now_v7();
   let transfer_id = Uuid::now_v7();
 
-  let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings);
+  let fetching = rig
+    .service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
     rig.device.respond(
@@ -441,7 +460,9 @@ async fn a_replaced_resource_drops_the_digest_it_displaced() {
   let seen = Arc::new(Mutex::new(Vec::new()));
 
   for (body, digest) in [(&first, &first_digest), (&second, &second_digest)] {
-    let fetching = rig.service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Overlay);
+    let fetching = rig
+      .service
+      .fetch(&rig.gateway, webapp_id, WebappResourceKind::Overlay, None);
     let seen = seen.clone();
     let driving = async {
       let (id, request) = rig.device.next_resource_request().await;
@@ -483,7 +504,7 @@ async fn fetch_once(
   mime: &str,
 ) -> (Option<String>, String) {
   let digest = digest_of(body);
-  let fetching = service.fetch(gateway, webapp_id, kind);
+  let fetching = service.fetch(gateway, webapp_id, kind, None);
   let offered = Arc::new(Mutex::new(None));
   let seen = offered.clone();
   let driving = async {
@@ -652,4 +673,194 @@ async fn an_index_that_does_not_parse_costs_a_refetch_and_nothing_else() {
     Some(digest),
     "and the index is writable again from there"
   );
+}
+
+struct HostedPage {
+  bytes: Vec<u8>,
+  hits: Arc<Mutex<usize>>,
+}
+
+#[async_trait::async_trait]
+impl ArtifactFetch for HostedPage {
+  async fn text(&self, _url: &str) -> Result<String, FetchError> {
+    Err(FetchError::Transport("the rig only serves downloads".into()))
+  }
+
+  async fn download(&self, request: DownloadRequest) -> Result<std::path::PathBuf, FetchError> {
+    *self.hits.lock().unwrap() += 1;
+    if let Some(expected) = &request.expected
+      && expected.size != self.bytes.len() as u64
+    {
+      return Err(FetchError::DigestMismatch {
+        asset: request.asset,
+        field: DigestField::Size,
+      });
+    }
+    std::fs::create_dir_all(&request.dir).map_err(|e| FetchError::Io(e.to_string()))?;
+    let path = request.dir.join(&request.filename);
+    std::fs::write(&path, &self.bytes).map_err(|e| FetchError::Io(e.to_string()))?;
+    Ok(path)
+  }
+}
+
+fn hosting(rig: &Rig, bytes: Vec<u8>) -> (WebappResourceService, Arc<Mutex<usize>>) {
+  let hits = Arc::new(Mutex::new(0));
+  let service = rig.reopened().with_fetch(
+    Arc::new(HostedPage {
+      bytes,
+      hits: hits.clone(),
+    }),
+    rig.scratch(),
+  );
+  (service, hits)
+}
+
+fn origin_for(bytes: &[u8]) -> ResourceOrigin {
+  ResourceOrigin {
+    url: "https://apps.example.com/s/page.html".into(),
+    sha256: digest_of(bytes),
+    size: bytes.len() as u64,
+    mime: Some("text/html".into()),
+  }
+}
+
+#[tokio::test]
+async fn a_hosted_page_that_matches_the_declared_digest_is_served_without_asking_the_device() {
+  let rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let body = ramp(40_000);
+  let (service, hits) = hosting(&rig, body.clone());
+
+  let resource = service
+    .fetch(
+      &rig.gateway,
+      webapp_id,
+      WebappResourceKind::Settings,
+      Some(&origin_for(&body)),
+    )
+    .await
+    .expect("bytes matching the declared digest are taken as the page");
+
+  assert_eq!(resource.digest, digest_of(&body));
+  assert_eq!(*hits.lock().unwrap(), 1, "one download, no round trip to the device");
+  assert_eq!(rig.blobs.get(&resource.digest).expect("stored").unwrap(), body);
+}
+
+#[tokio::test]
+async fn a_second_open_reads_the_cache_without_the_network_or_the_device() {
+  let rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let body = ramp(40_000);
+  let origin = origin_for(&body);
+  let (service, hits) = hosting(&rig, body.clone());
+
+  service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin))
+    .await
+    .expect("first open");
+  let again = service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin))
+    .await
+    .expect("second open");
+
+  assert_eq!(again.digest, digest_of(&body));
+  assert_eq!(
+    *hits.lock().unwrap(),
+    1,
+    "the cached digest already matches what the device reports"
+  );
+}
+
+#[tokio::test]
+async fn an_overlay_ignores_a_hosted_origin_and_takes_the_bytes_off_the_device() {
+  let mut rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let hosted = ramp(4096);
+  let (service, hits) = hosting(&rig, hosted.clone());
+  let origin = origin_for(&hosted);
+
+  let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Overlay, Some(&origin));
+  let driving = async {
+    let (id, request) = rig.device.next_resource_request().await;
+    assert_eq!(request.kind, WebappResourceKind::Overlay);
+    rig.device.respond(
+      id,
+      WebappResourceReply {
+        id: webapp_id,
+        kind: WebappResourceKind::Overlay,
+        sha256: digest_of(&installed),
+        mime: Some("text/javascript".into()),
+        body: Some(TransferBody::Inline(installed.clone())),
+      },
+    );
+  };
+  let (resource, ()) = tokio::join!(fetching, driving);
+
+  assert_eq!(
+    resource.expect("the overlay comes off the device").digest,
+    digest_of(&installed),
+    "injected javascript is never taken from a catalog url"
+  );
+  assert_eq!(*hits.lock().unwrap(), 0, "and the hosted url was never opened");
+}
+
+#[tokio::test]
+async fn an_origin_the_device_never_vouched_for_is_still_served_to_the_caller_that_supplied_it() {
+  let rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let elsewhere = ramp(4096);
+  let origin = origin_for(&elsewhere);
+  let (service, hits) = hosting(&rig, elsewhere.clone());
+
+  let resource = service
+    .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin))
+    .await
+    .expect("the service trusts the digest it was handed");
+
+  assert_eq!(resource.digest, digest_of(&elsewhere));
+  assert_ne!(
+    resource.digest,
+    digest_of(&installed),
+    "bytes the device never reported are served when a caller vouches for them"
+  );
+  assert_eq!(
+    *hits.lock().unwrap(),
+    1,
+    "and the device is never consulted to contradict it"
+  );
+}
+
+#[tokio::test]
+async fn a_hosted_page_that_is_not_the_installed_one_falls_back_to_the_device() {
+  let mut rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let impostor = ramp(3072);
+  let mut origin = origin_for(&installed);
+  origin.size = impostor.len() as u64;
+  let (service, hits) = hosting(&rig, impostor);
+
+  let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin));
+  let driving = async {
+    let (id, _) = rig.device.next_resource_request().await;
+    rig.device.respond(
+      id,
+      WebappResourceReply {
+        id: webapp_id,
+        kind: WebappResourceKind::Settings,
+        sha256: digest_of(&installed),
+        mime: Some("text/html".into()),
+        body: Some(TransferBody::Inline(installed.clone())),
+      },
+    );
+  };
+  let (resource, ()) = tokio::join!(fetching, driving);
+
+  assert_eq!(
+    resource.expect("the link still has the real page").digest,
+    digest_of(&installed)
+  );
+  assert_eq!(*hits.lock().unwrap(), 1, "the hosted copy was tried once and refused");
 }

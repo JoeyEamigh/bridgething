@@ -1,5 +1,5 @@
 import type * as api from '@bridgething/companion-types';
-import type { CompanionSession, Endpoint, Invalidation, Topic, WebappResource } from '@bridgething/ui';
+import type { CompanionSession, Endpoint, Invalidation, ResourceOrigin, Topic, WebappResource } from '@bridgething/ui';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -118,8 +118,8 @@ export class TauriSession implements CompanionSession {
       provenance: provenance ?? null,
       confirmed: confirmed ?? null,
     });
-  webappResource = (id: string, kind: api.WebappResourceKind) =>
-    invoke<WebappResource>('webapp_resource', { id, kind });
+  webappResource = (id: string, kind: api.WebappResourceKind, origin?: ResourceOrigin | null) =>
+    invoke<WebappResource>('webapp_resource', { id, kind, origin: origin ?? null });
 
   webappConfig = (id: string) => invoke<api.ConfigEntry[]>('webapp_config', { id });
   setWebappConfigField = (id: string, key: string, value: string) =>

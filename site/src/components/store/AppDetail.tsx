@@ -56,7 +56,7 @@ function Trust({ source }: { source: StoreSource | null }) {
         source: {href ? <a href={href}>{source.name}</a> : source.name}
       </p>
       {source.official || source.attested ? null : (
-        <p class="m-0 mt-2 text-sm text-white/50">this source is listed in the directory but unreviewed.</p>
+        <p class="m-0 mt-2 text-sm text-white/50">this source is unreviewed</p>
       )}
     </>
   );
@@ -139,15 +139,10 @@ function Detail({ listing, source }: Resolved) {
         <div>
           <h2 class="mb-3 border-b border-white/20 pb-2 text-base">install</h2>
           {unpublished ? (
-            <p class="mb-4 text-white/65">
-              this version is in the catalog but its bundle has not been published yet, so there is nothing to install.
-            </p>
+            <p class="mb-4 text-white/65">this version is in the catalog but has no installation candidate</p>
           ) : (
             <>
-              <p class="mb-4 text-white/65">
-                installs over the cable or bluetooth from the <a href="/device">device page</a>. you can also install
-                from the bridgething app on your phone.
-              </p>
+              <p class="mb-4 text-white/65">install from the bridgething app or your browser</p>
               <button type="button" class="btn btn-primary mb-4" onClick={() => installListing(listing)}>
                 install {newest!.version}
               </button>
@@ -157,7 +152,7 @@ function Detail({ listing, source }: Resolved) {
           {listing.alsoAvailableFrom.length > 0 ? (
             <p class="m-0 mt-2 font-mono text-sm text-white/35">
               also offered by {listing.alsoAvailableFrom.length} other source
-              {listing.alsoAvailableFrom.length === 1 ? '' : 's'}
+              {listing.alsoAvailableFrom.length === 1 ? '' : 's'}. this is unusual
             </p>
           ) : null}
         </div>
@@ -277,11 +272,7 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
         no app id in this url. pick one from the <a href="/apps">apps page</a>.
       </Notice>
     );
-  if (failed) return <Notice>could not reach the catalog just now. reload to try again.</Notice>;
+  if (failed) return <Notice>could not reach the catalog. try reloading the page.</Notice>;
 
-  return (
-    <Notice>
-      no source in the directory lists an app with this id. it may only be published by a source you add yourself.
-    </Notice>
-  );
+  return <Notice>no source in the directory lists an app with this id.</Notice>;
 }

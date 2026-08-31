@@ -35,7 +35,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setWebappSlot(deviceId: String, slot: BridgethingWebappSlot, id: String?) async throws
         -> BridgethingWebappSlots
     func webappIcon(deviceId: String, id: String) async throws -> BridgethingWebappIcon?
-    func webappSettingsMarkup(deviceId: String, id: String) async throws -> String
+    func webappSettingsMarkup(deviceId: String, id: String, origin: BridgethingResourceOrigin?) async throws
+        -> String
     func listWebappConfig(deviceId: String, id: String) async throws -> [BridgethingConfigEntry]
     func setWebappConfigField(deviceId: String, id: String, key: String, value: String) async throws
     func deleteWebappConfigField(deviceId: String, id: String, key: String) async throws
@@ -387,9 +388,11 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         }
     }
 
-    public func webappSettingsMarkup(deviceId: String, id: String) throws -> Promise<String> {
+    public func webappSettingsMarkup(
+        deviceId: String, id: String, origin: BridgethingResourceOrigin?
+    ) throws -> Promise<String> {
         Promise.async {
-            try await Self.backend().webappSettingsMarkup(deviceId: deviceId, id: id)
+            try await Self.backend().webappSettingsMarkup(deviceId: deviceId, id: id, origin: origin)
         }
     }
 

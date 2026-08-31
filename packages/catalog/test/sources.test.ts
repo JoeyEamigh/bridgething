@@ -110,6 +110,33 @@ describe('parseSourceUrl', () => {
 });
 
 describe('fetchCatalog', () => {
+  test('a source with no caller signal still gets one, so a stall cannot wait forever', async () => {
+    let handed: AbortSignal | null | undefined;
+    await withFetch(
+      ((_url: string, init?: RequestInit) => {
+        handed = init?.signal;
+        return Promise.resolve(new Response(JSON.stringify(catalog('third'))));
+      }) as typeof fetch,
+      () => fetchCatalog(THIRD_PARTY),
+    );
+
+    expect(handed).toBeInstanceOf(AbortSignal);
+  });
+
+  test('a caller supplied signal is used instead of the default deadline', async () => {
+    const mine = new AbortController();
+    let handed: AbortSignal | null | undefined;
+    await withFetch(
+      ((_url: string, init?: RequestInit) => {
+        handed = init?.signal;
+        return Promise.resolve(new Response(JSON.stringify(catalog('third'))));
+      }) as typeof fetch,
+      () => fetchCatalog(THIRD_PARTY, { signal: mine.signal }),
+    );
+
+    expect(handed).toBe(mine.signal);
+  });
+
   test('a served catalog comes back validated', async () => {
     const fetched = await withFetch(serve({ [THIRD_PARTY]: catalog('third') }), () => fetchCatalog(THIRD_PARTY));
 

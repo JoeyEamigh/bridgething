@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/extension",
-  "version": "0.4.0",
+  "version": "0.12.1",
   "description": "The client a bridgething extension uses to reach Car Things, settings, storage, and the user's browser from its Deno process.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

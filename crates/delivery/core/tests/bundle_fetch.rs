@@ -136,6 +136,64 @@ async fn a_verified_artifact_lands_under_its_content_address() {
 }
 
 #[tokio::test]
+async fn a_body_that_runs_past_the_declared_size_is_cut_off_mid_stream() {
+  let scratch = TempDir::new().unwrap();
+  let flood = payload(4 * CHUNK);
+  let budget = (CHUNK + CHUNK / 2) as u64;
+  let ticks: Arc<Mutex<Vec<(u64, u64)>>> = Arc::new(Mutex::new(Vec::new()));
+  let sink = ticks.clone();
+
+  let mut request = download_of(
+    scratch.path(),
+    Some(ArtifactDigest {
+      size: budget,
+      sha256: sha256_hex(&flood),
+    }),
+  );
+  request.progress = Some(watching(move |received, total| {
+    sink.lock().unwrap().push((received, total));
+  }));
+
+  let err = fetcher(StubServer::serving(flood)).download(request).await.unwrap_err();
+
+  assert!(
+    matches!(&err, FetchError::Io(reason) if reason.contains("ran past the declared")),
+    "the write is refused as the body streams, not after it lands: {err:?}"
+  );
+  let seen = ticks.lock().unwrap();
+  assert_eq!(
+    seen.iter().map(|(received, _)| *received).max(),
+    Some(CHUNK as u64),
+    "one chunk landed and the next was refused, so the disk never held more than the budget"
+  );
+  assert!(
+    entries(scratch.path()).is_empty(),
+    "and the oversized staging file is not left on disk"
+  );
+}
+
+#[tokio::test]
+async fn a_body_that_stops_short_of_the_declared_size_still_fails_on_size() {
+  let scratch = TempDir::new().unwrap();
+  let short = payload(2048);
+  let mut claimed = digest(&short);
+  claimed.size = 4096;
+
+  let err = fetcher(StubServer::serving(short))
+    .download(download_of(scratch.path(), Some(claimed)))
+    .await
+    .unwrap_err();
+
+  assert!(matches!(
+    err,
+    FetchError::DigestMismatch {
+      field: DigestField::Size,
+      ..
+    }
+  ));
+}
+
+#[tokio::test]
 async fn a_sha_mismatch_refuses_to_land_the_artifact() {
   let scratch = TempDir::new().unwrap();
   let bytes = payload(4096);

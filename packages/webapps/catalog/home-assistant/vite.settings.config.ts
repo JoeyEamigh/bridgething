@@ -26,14 +26,14 @@ function sizeGuard(): Plugin {
             '',
             '========================================================================',
             `  settings.html is ${kib} KiB.`,
-            `  the companion hard-rejects settings pages over ${HARD_CAP} at install.`,
-            '  trim dependencies or inline assets before this page stops installing.',
+            `  the device refuses to install a bundle whose settings page is over ${HARD_CAP}.`,
+            '  trim dependencies or inline assets; the whole install fails, not just this page.',
             '========================================================================',
             '',
           ].join('\n'),
         );
       } else if (bytes > WARN_BYTES) {
-        console.warn(`settings.html is ${kib} KiB; keep it lean (install hard cap is ${HARD_CAP}).`);
+        console.warn(`settings.html is ${kib} KiB; keep it lean (install fails over ${HARD_CAP}).`);
       }
     },
   };

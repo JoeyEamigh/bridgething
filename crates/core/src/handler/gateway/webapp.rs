@@ -9,6 +9,7 @@ use libbridgething::{
     WebappResource, WebappResourceKind, WebappResourceReply, WebappSetSlot, WebappSlot, WebappSwitchTo,
     WebappUninstall,
   },
+  protocol::Compress,
 };
 use uuid::Uuid;
 
@@ -221,7 +222,7 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
     let transfer_id = self.handle.id;
     tokio::spawn(async move {
       outbound
-        .send_stream(&bluetooth, address, transfer_id, bytes.into())
+        .send_stream(&bluetooth, address, transfer_id, bytes.into(), Compress::IfSmaller)
         .await;
     });
     Ok(())

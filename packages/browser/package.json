@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/browser",
-  "version": "0.4.0",
+  "version": "0.12.1",
   "description": "Drive a Spotify Car Thing from the browser: the bridgething delivery core compiled to wasm, plus the Web Serial and network transports.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

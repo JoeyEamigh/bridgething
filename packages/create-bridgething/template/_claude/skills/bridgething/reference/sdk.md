@@ -116,6 +116,19 @@ fetch and XHR. WebSocket APIs work. Plain HTTP APIs work when the server sends
 permissive CORS headers, since requests arrive with `Origin: null`. For a
 CORS-strict HTTP-only service, fetch through `client.net` instead.
 
+Write it in react like the rest of the app. `react` and `react-dom/client`
+imports, `className`, `htmlFor`, react's event types. The build runs it on
+preact through `@preact/preset-vite`, which is most of what keeps the page
+small, so keep the react-flavoured source and leave the preset alone. One
+tsconfig covers `src`, `settings` and `extension`, so `bun run typecheck`
+checks all three.
+
+Keep the page small. It builds to one self-contained HTML file, and the device
+refuses to install a bundle whose declared settings page is over 1 MiB, failing
+the whole install with an invalid-manifest error. The build warns past 200 KiB
+and again past 500 KiB. A heavy dependency in `settings/` is the usual way
+there.
+
 `client.net` tunnels HTTP, websockets, and a SOCKS proxy through the phone. The
 SOCKS proxy needs `"net.proxy"` in the manifest's `permissions`. Read the
 `NetSurface` block in the `.d.ts` for the request shapes.

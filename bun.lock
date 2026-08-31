@@ -25,14 +25,14 @@
     },
     "crates/delivery/napi": {
       "name": "@bridgething/core-node",
-      "version": "0.9.0",
+      "version": "0.12.1",
       "devDependencies": {
         "@napi-rs/cli": "^3.8.5",
       },
     },
     "crates/lib": {
       "name": "@bridgething/lib",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "dependencies": {
         "uuid": "^14.0.0",
       },
@@ -69,7 +69,7 @@
     },
     "mobile": {
       "name": "@bridgething/mobile",
-      "version": "0.11.0",
+      "version": "0.12.1",
       "dependencies": {
         "@bottom-tabs/react-navigation": "^1.4.0",
         "@bridgething/catalog": "workspace:*",
@@ -138,7 +138,7 @@
     },
     "packages/browser": {
       "name": "@bridgething/browser",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
       },
@@ -148,19 +148,19 @@
     },
     "packages/catalog": {
       "name": "@bridgething/catalog",
-      "version": "0.1.0",
-      "dependencies": {
-        "@babel/runtime": "^7.29.2",
-      },
+      "version": "0.12.1",
       "devDependencies": {
         "@types/bun": "^1.3.14",
         "ajv": "^8.20.0",
         "ajv-formats": "^3.0.1",
       },
+      "peerDependencies": {
+        "typescript": "^6.0.3",
+      },
     },
     "packages/client-ts": {
       "name": "@bridgething/client",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
         "@msgpack/msgpack": "^3.1.3",
@@ -174,7 +174,7 @@
     },
     "packages/create-bridgething": {
       "name": "create-bridgething",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "bin": {
         "create-bridgething": "./dist/index.mjs",
       },
@@ -196,7 +196,7 @@
     },
     "packages/extension-ts": {
       "name": "@bridgething/extension",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
       },
@@ -240,6 +240,22 @@
         "react-native-nitro-modules": "*",
       },
     },
+    "packages/source": {
+      "name": "@bridgething/source",
+      "version": "0.12.1",
+      "bin": {
+        "bridgething-source": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@bridgething/catalog": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/node": "^26.1.1",
+      },
+      "peerDependencies": {
+        "typescript": "^6.0.3",
+      },
+    },
     "packages/ui": {
       "name": "@bridgething/ui",
       "dependencies": {
@@ -258,7 +274,7 @@
     },
     "packages/updater": {
       "name": "@bridgething/updater",
-      "version": "0.4.0",
+      "version": "0.12.1",
       "bin": {
         "bridgething-updater": "./dist/cli.js",
       },
@@ -797,6 +813,8 @@
     "@bridgething/session-react-native": ["@bridgething/session-react-native@workspace:packages/session-rn"],
 
     "@bridgething/site": ["@bridgething/site@workspace:site"],
+
+    "@bridgething/source": ["@bridgething/source@workspace:packages/source"],
 
     "@bridgething/ui": ["@bridgething/ui@workspace:packages/ui"],
 

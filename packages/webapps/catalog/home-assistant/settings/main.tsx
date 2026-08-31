@@ -1,6 +1,6 @@
 import { settings, type SettingsContext } from '@bridgething/client/settings';
-import { render } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 import { domainOf, fetchStates, friendlyName, HaAuthError, type HaEntity } from './ha-ws';
 import './style.css';
 
@@ -114,14 +114,14 @@ function Settings() {
     <main>
       <header>
         <h1>{ctx?.name ?? 'Home Assistant'} settings</h1>
-        <p class="hint">
+        <p className="hint">
           {ctx ? `${selected.size} selected on ${ctx.deviceId}` : 'connecting to the companion host...'}
         </p>
       </header>
 
-      <section class="creds">
-        <div class="field">
-          <label for="base_url">Home Assistant URL</label>
+      <section className="creds">
+        <div className="field">
+          <label htmlFor="base_url">Home Assistant URL</label>
           <input
             id="base_url"
             type="url"
@@ -130,8 +130,8 @@ function Settings() {
             onInput={e => setBaseUrl((e.target as HTMLInputElement).value)}
           />
         </div>
-        <div class="field">
-          <label for="token">Long-Lived Access Token</label>
+        <div className="field">
+          <label htmlFor="token">Long-Lived Access Token</label>
           <input
             id="token"
             type="password"
@@ -140,19 +140,19 @@ function Settings() {
             onInput={e => setToken((e.target as HTMLInputElement).value)}
           />
         </div>
-        <div class="row">
+        <div className="row">
           <button type="button" onClick={connect} disabled={conn.kind === 'connecting'}>
             {conn.kind === 'connecting' ? 'connecting...' : conn.kind === 'loaded' ? 'reconnect' : 'connect'}
           </button>
-          <span class="status">{status}</span>
+          <span className="status">{status}</span>
         </div>
       </section>
 
-      {conn.kind === 'error' && <p class="error">{conn.message}</p>}
+      {conn.kind === 'error' && <p className="error">{conn.message}</p>}
 
       {conn.kind === 'loaded' && (
         <>
-          <div class="search">
+          <div className="search">
             <input
               type="search"
               placeholder="search entities..."
@@ -161,16 +161,16 @@ function Settings() {
             />
           </div>
 
-          <div class="list">
-            {groups.length === 0 && <p class="hint">no entities match "{query}".</p>}
+          <div className="list">
+            {groups.length === 0 && <p className="hint">no entities match "{query}".</p>}
             {groups.map(group => (
-              <div class="group" key={group.domain}>
-                <div class="group-head">{group.domain}</div>
+              <div className="group" key={group.domain}>
+                <div className="group-head">{group.domain}</div>
                 {group.entities.map(e => (
-                  <label class="entity" key={e.entityId}>
+                  <label className="entity" key={e.entityId}>
                     <input type="checkbox" checked={selected.has(e.entityId)} onChange={() => toggle(e.entityId)} />
-                    <span class="name">{friendlyName(e)}</span>
-                    <span class="eid">{e.entityId}</span>
+                    <span className="name">{friendlyName(e)}</span>
+                    <span className="eid">{e.entityId}</span>
                   </label>
                 ))}
               </div>
@@ -181,7 +181,7 @@ function Settings() {
             <button type="button" onClick={saveSelection}>
               Save selection
             </button>
-            <button type="button" class="secondary" onClick={() => settings.done()}>
+            <button type="button" className="secondary" onClick={() => settings.done()}>
               Done
             </button>
           </footer>
@@ -190,7 +190,7 @@ function Settings() {
 
       {conn.kind !== 'loaded' && (
         <footer>
-          <button type="button" class="secondary" onClick={() => settings.done()}>
+          <button type="button" className="secondary" onClick={() => settings.done()}>
             Done
           </button>
         </footer>
@@ -210,4 +210,4 @@ function errText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-render(<Settings />, document.getElementById('root')!);
+createRoot(document.getElementById('root')!).render(<Settings />);

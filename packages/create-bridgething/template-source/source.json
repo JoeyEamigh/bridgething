@@ -1,0 +1,8 @@
+{
+  "name": "__SOURCE_NAME__",
+  "description": "__SOURCE_DESCRIPTION__",
+  "homepage": "https://github.com/__REPO_OWNER__/__REPO_NAME__",
+  "icon": null,
+  "base_url": "https://__REPO_OWNER_LOWER__.github.io/__REPO_NAME__",
+  "recommended_sources": []
+}

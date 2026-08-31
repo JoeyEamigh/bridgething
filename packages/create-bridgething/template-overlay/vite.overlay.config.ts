@@ -18,7 +18,7 @@ function sizeGuard(): Plugin {
         return;
       }
       if (bytes > WARN_BYTES) {
-        console.warn(`overlay.js is ${(bytes / 1024).toFixed(1)} KiB; the daemon ignores overlays over ${HARD_CAP}.`);
+        console.warn(`overlay.js is ${(bytes / 1024).toFixed(1)} KiB; install fails over ${HARD_CAP}.`);
       }
     },
   };

@@ -143,12 +143,13 @@ try {
     <h2 class={refdes}>s1 - declare it</h2>
     <p class="text-white/60">
       point <code>manifest.json</code> at the built file. it must be a single self-contained html file, all js and css inlined.
-      the cap is 1&nbsp;MiB at install. keep it lean.
+      the device refuses to install a bundle whose settings page is over 1&nbsp;MiB, and the whole install fails. keep it
+      lean.
     </p>
     <Snippet code={manifestSnippet} lang="json" />
     <p class="mt-3 text-sm text-white/60">
-      <code>bun create bridgething</code> scaffolds all of this: a preact page under <code>settings/</code>, a
-      single-file vite build with size warnings at 200&nbsp;KiB, and the manifest entry.
+      <code>bun create bridgething</code> scaffolds all of this. a react page under <code>settings/</code> that builds on
+      preact, a single-file vite build with size warnings at 200&nbsp;KiB, and the manifest entry.
     </p>
     <Snippet code={buildSnippet} lang="json" />
   </section>

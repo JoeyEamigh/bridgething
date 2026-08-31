@@ -1,7 +1,7 @@
 import { extensionOf, type CatalogAppListing } from '@bridgething/catalog';
 import { appDetailPath } from '../../lib/app-routes';
 import { webHref } from '../../lib/href';
-import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
+import { ExtensionBadge } from './ExtensionNote';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import type { StoreSource } from '../../lib/store-sources';
 
@@ -42,7 +42,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
             width="800"
             height="480"
             loading="lazy"
-            class="aspect-[5/3] w-full border-b border-white/15 object-cover"
+            class="aspect-5/3 w-full border-b border-white/15 object-cover"
             onError={event => (event.currentTarget as HTMLImageElement).remove()}
           />
         </a>
@@ -91,13 +91,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
           {newest ? (
             <>
               <span class="opacity-50">·</span>
-              <span>needs lib {newest.min_libbridgething_version}</span>
-            </>
-          ) : null}
-          {newest && newest.permissions.length > 0 ? (
-            <>
-              <span class="opacity-50">·</span>
-              <span>{newest.permissions.join(', ')}</span>
+              <span>lib {newest.min_libbridgething_version}</span>
             </>
           ) : null}
           {newest?.role === 'launcher' ? (
@@ -113,7 +107,6 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
             </>
           ) : null}
         </div>
-        {extension ? <ExtensionNote extension={extension} source={listing.app.source} compact /> : null}
         {source ? <SourceBadge source={source} /> : null}
         {listing.alsoAvailableFrom.length > 0 ? (
           <span class="text-white/30">

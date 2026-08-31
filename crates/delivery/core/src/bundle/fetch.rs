@@ -248,6 +248,9 @@ impl DownloadBody for SpoolWriter {
   }
 
   fn write(&mut self, chunk: &[u8]) -> Result<(), String> {
+    if self.total > 0 && self.received + chunk.len() as u64 > self.total {
+      return Err(format!("body ran past the declared {} bytes", self.total));
+    }
     self.file.write_all(chunk).map_err(|e| e.to_string())?;
     self.received += chunk.len() as u64;
     if let Some(progress) = &self.progress {

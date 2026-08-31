@@ -6,14 +6,17 @@ on:
     paths:
       - "Cargo.toml"
       - "crates/lib/**"
+      - "packages/catalog/**"
       - "packages/browser/**"
       - "crates/delivery/wasm/**"
       - "crates/delivery/napi/**"
       - "packages/updater/**"
       - "packages/client-ts/**"
       - "packages/extension-ts/**"
+      - "packages/source/**"
       - "packages/create-bridgething/**"
       - "scripts/publish-packages.ts"
+      - "scripts/version-packages.ts"
       - ".github/workflows/publish-packages.yml"
       - ".github/workflows/publish-core-node.yml"
   workflow_dispatch:

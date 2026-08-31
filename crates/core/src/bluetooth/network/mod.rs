@@ -101,10 +101,10 @@ impl Connection {
     }
   }
 
-  async fn send(&self, msg: &BridgeToGatewayMsg, priority: Priority) -> BluetoothResult<()> {
+  async fn send(&self, msg: &BridgeToGatewayMsg, priority: Priority, compress: Compress) -> BluetoothResult<()> {
     tracing::trace!("({}) sending network message ({:?}): {:?}", self.address, priority, msg);
     let mut buf = BytesMut::new();
-    encode_frame(priority, Compress::Auto, msg, &mut buf)?;
+    encode_frame(priority, compress, msg, &mut buf)?;
     if !self.lanes.send(priority, buf.freeze()).await {
       tracing::debug!("({}) network writer lane closed; dropping frame", self.address);
     }
@@ -324,7 +324,7 @@ impl NetworkGateway {
             ConnectionMessage::DecodeFailed(probe) => {
               if let Some(nack) = auto_nack_for_failed_decode(&probe)
                 && let Some(conn) = self.connections.get(&address)
-                  && let Err(e) = conn.send(&nack, Priority::Normal).await {
+                  && let Err(e) = conn.send(&nack, Priority::Normal, Compress::Auto).await {
                     tracing::error!("({address}) failed to send auto-nack: {:?}", e);
                   }
             }
@@ -339,10 +339,15 @@ impl NetworkGateway {
   }
 
   async fn dispatch_outbound(&self, data: OutboundGatewayMessage) {
-    let OutboundGatewayMessage { address, priority, msg } = data;
+    let OutboundGatewayMessage {
+      address,
+      priority,
+      compress,
+      msg,
+    } = data;
     if let Some(address) = address {
       if let Some(conn) = self.connections.get(&address) {
-        if let Err(e) = conn.send(&msg, priority).await {
+        if let Err(e) = conn.send(&msg, priority, compress).await {
           tracing::error!("failed to send network frame: {:?}", e);
         }
       } else {
@@ -350,7 +355,7 @@ impl NetworkGateway {
       }
     } else {
       for conn in self.connections.values() {
-        if let Err(e) = conn.send(&msg, priority).await {
+        if let Err(e) = conn.send(&msg, priority, compress).await {
           tracing::error!("failed to send network frame: {:?}", e);
         }
       }
@@ -368,7 +373,7 @@ impl NetworkGateway {
       meta: MsgMeta::Event,
       data: self.meta.snapshot().into(),
     };
-    if let Err(err) = connection.send(&version, Priority::Normal).await {
+    if let Err(err) = connection.send(&version, Priority::Normal, Compress::Auto).await {
       tracing::warn!("({address}) failed to send initial Version: {err:?}");
     }
 

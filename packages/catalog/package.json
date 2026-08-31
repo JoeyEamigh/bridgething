@@ -1,9 +1,33 @@
 {
   "name": "@bridgething/catalog",
+  "version": "0.12.1",
+  "description": "The catalog.v1 schema, validator and resolution rules for the bridgething webapp store. Use it to publish a source or to write a client that reads one.",
+  "license": "MIT",
+  "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
+  "homepage": "https://bridgething.com/docs/publishing-apps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoeyEamigh/bridgething.git",
+    "directory": "packages/catalog"
+  },
+  "bugs": {
+    "url": "https://github.com/JoeyEamigh/bridgething/issues"
+  },
+  "keywords": [
+    "bridgething",
+    "spotify",
+    "car-thing",
+    "superbird",
+    "catalog",
+    "appstore",
+    "schema"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
-  "private": false,
-  "version": "0.1.0",
-  "description": "catalog.v1 schema, validator, and resolution rules for the bridgething webapp appstore",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -11,7 +35,12 @@
     },
     "./schema.v1.json": "./schema.v1.json"
   },
-  "files": ["dist", "schema.v1.json"],
+  "files": [
+    "dist",
+    "schema.v1.json",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "prebuild": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json && mkdir -p dist/generated && cp src/generated/schema.v1.validator.mjs src/generated/schema.v1.validator.d.mts dist/generated/",
@@ -24,7 +53,7 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1"
   },
-  "dependencies": {
-    "@babel/runtime": "^7.29.2"
+  "peerDependencies": {
+    "typescript": "^6.0.3"
   }
 }

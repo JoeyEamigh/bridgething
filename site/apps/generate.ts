@@ -34,6 +34,7 @@ export function generate(input: GenerateInput): Catalog {
         version: v.version,
         released_at: v.released_at,
         download: v.download,
+        ...(v.settings ? { settings: v.settings } : {}),
         permissions: v.permissions,
         ...(v.role === 'launcher' ? { role: v.role } : {}),
         ...(v.provides_overlay ? { provides_overlay: true } : {}),

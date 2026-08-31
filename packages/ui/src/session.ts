@@ -55,6 +55,8 @@ export type Endpoint = {
 
 export type WebappResource = { digest: string; mime: string | null; bytes: number[] };
 
+export type ResourceOrigin = { url: string; sha256: string; size: number; mime: string | null };
+
 export interface DeviceSession {
   readonly tier: Tier;
 
@@ -80,7 +82,7 @@ export interface DeviceSession {
   switchWebapp(id: string): Promise<void>;
   uninstallWebapp(id: string): Promise<void>;
   installWebappFromUrl(url: string, provenance?: string, expected?: ArtifactDigest | null): Promise<WebappInfo>;
-  webappResource(id: string, kind: WebappResourceKind): Promise<WebappResource>;
+  webappResource(id: string, kind: WebappResourceKind, origin?: ResourceOrigin | null): Promise<WebappResource>;
 
   webappConfig(id: string): Promise<ConfigEntry[]>;
   setWebappConfigField(id: string, key: string, value: string): Promise<void>;

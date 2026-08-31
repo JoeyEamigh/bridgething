@@ -19,6 +19,7 @@ import type {
   BridgethingOtaProgress,
   BridgethingOtaRun,
   BridgethingProviderInfo,
+  BridgethingResourceOrigin,
   BridgethingResumeTarget,
   BridgethingSessionPeer,
   BridgethingSessionSnapshot,
@@ -70,6 +71,7 @@ export type {
   BridgethingPeerLinkStatus,
   BridgethingProviderInfo,
   BridgethingRepeatMode,
+  BridgethingResourceOrigin,
   BridgethingResumeTarget,
   BridgethingServiceHealth,
   BridgethingServiceHealthKind,
@@ -248,8 +250,8 @@ export class BridgethingSession {
     return this.native.webappIcon(deviceId, id);
   }
 
-  async webappSettingsMarkup(deviceId: string, id: string): Promise<string> {
-    return this.native.webappSettingsMarkup(deviceId, id);
+  async webappSettingsMarkup(deviceId: string, id: string, origin?: BridgethingResourceOrigin): Promise<string> {
+    return this.native.webappSettingsMarkup(deviceId, id, origin);
   }
 
   async listWebappConfig(deviceId: string, id: string): Promise<BridgethingConfigEntry[]> {

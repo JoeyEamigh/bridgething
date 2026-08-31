@@ -295,7 +295,7 @@ fn compress_body(
 ) -> Result<(Compression, Vec<u8>), EndecError> {
   let wanted = match compress {
     Compress::Never => return Ok((Compression::None, packed)),
-    Compress::Always => true,
+    Compress::Always | Compress::IfSmaller => true,
     Compress::Auto => priority == Priority::Normal && packed.len() > AUTO_GZIP_THRESHOLD_BYTES,
   };
   if !wanted {
@@ -689,6 +689,43 @@ mod compression_tests {
       .encode(PrioritizedFrame::normal(msg), &mut wire)
       .expect("encode");
     assert_eq!(wire[3], COMPRESSION_NONE, "gzip only wins when it is smaller");
+  }
+
+  #[test]
+  fn if_smaller_gzips_a_small_bulk_frame() {
+    let wire = frame_of(4 * 1024, Priority::Bulk, Compress::IfSmaller);
+    assert_eq!(
+      wire[3], COMPRESSION_GZIP,
+      "a compressible bulk fragment must gzip whatever the lane and the threshold say"
+    );
+  }
+
+  #[test]
+  fn if_smaller_ships_incompressible_bytes_raw() {
+    let mut noise = vec![0u8; 4 * 1024];
+    let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+    for byte in noise.iter_mut() {
+      state ^= state << 13;
+      state ^= state >> 7;
+      state ^= state << 17;
+      *byte = state as u8;
+    }
+    let msg = BridgeToGatewayMsg {
+      id: uuid::Uuid::now_v7(),
+      meta: MsgMeta::Event,
+      data: routed(noise),
+    };
+    let mut wire = BytesMut::new();
+    BridgeEndec::default()
+      .encode(
+        PrioritizedFrame::new(Priority::Bulk, msg).compressed(Compress::IfSmaller),
+        &mut wire,
+      )
+      .expect("encode");
+    assert_eq!(
+      wire[3], COMPRESSION_NONE,
+      "an icon that is already compressed must not pay for gzip"
+    );
   }
 
   #[test]

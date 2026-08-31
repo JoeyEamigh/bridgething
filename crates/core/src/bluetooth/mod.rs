@@ -11,7 +11,7 @@ use iap2::{Iap2EaGateway, Iap2EaGatewayHandle, Iap2EventsRx, Iap2Handles};
 use libbridgething::{
   Priority,
   gateway::{BridgeToGatewayMsg, BridgeToGatewayMsgData, GatewayToBridgeMsg, GatewayToBridgeMsgData},
-  protocol::EnvelopeProbe,
+  protocol::{Compress, EnvelopeProbe},
   wire::{MsgMeta, RequestError, ResponseMeta, WireCommand, WireError, WireEvent, WireRequest},
 };
 #[cfg(target_os = "linux")]
@@ -428,6 +428,7 @@ impl InboundGatewayMessage {
 pub struct OutboundGatewayMessage {
   pub address: Option<Address>,
   pub priority: Priority,
+  pub compress: Compress,
   pub msg: Arc<BridgeToGatewayMsg>,
 }
 
@@ -436,6 +437,7 @@ impl OutboundGatewayMessage {
     Self {
       address,
       priority: Priority::Normal,
+      compress: Compress::Auto,
       msg: Arc::new(msg),
     }
   }
@@ -455,6 +457,11 @@ impl OutboundGatewayMessage {
 
   pub fn bulk(self) -> Self {
     self.with_priority(Priority::Bulk)
+  }
+
+  pub fn with_compress(mut self, compress: Compress) -> Self {
+    self.compress = compress;
+    self
   }
 }
 
@@ -635,7 +642,12 @@ impl GatewayMan {
       .await;
   }
 
-  pub async fn send_event_bulk<E: WireEvent<BridgeToGatewayMsgData>>(&self, address: Address, event: E) {
+  pub async fn send_event_bulk<E: WireEvent<BridgeToGatewayMsgData>>(
+    &self,
+    address: Address,
+    event: E,
+    compress: Compress,
+  ) {
     self
       .send_all(
         OutboundGatewayMessage::to(
@@ -646,7 +658,8 @@ impl GatewayMan {
             data: event.into(),
           },
         )
-        .bulk(),
+        .bulk()
+        .with_compress(compress),
       )
       .await;
   }

@@ -19,4 +19,4 @@ export const BRIDGETHING_NETWORK_GATEWAY_URL = `ws://${BRIDGETHING_DEFAULT_HOST}
 
 import { version } from './version.js';
 export const LIB_VERSION = `v${version}`;
-export const LIBBRIDGETHING_VERSION = 'v0.11.0';
+export const LIBBRIDGETHING_VERSION = 'v0.12.1';

@@ -1,7 +1,7 @@
 {
   "id": "01a04f27-8595-7000-89de-891e682b3c40",
   "name": "System Info",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Load, memory, and uptime of the computer running the desktop app.",
   "icon": "icon.svg",
   "permissions": [],

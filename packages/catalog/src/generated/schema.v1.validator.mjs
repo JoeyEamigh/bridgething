@@ -212,7 +212,7 @@ var require_validator = __commonJS((exports, module) => {
   var func1 = require_ucs2length().default;
   var schema33 = { type: "object", additionalProperties: true, description: "One installable webapp. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["id", "name", "description", "author", "icon", "homepage", "source", "versions"], properties: { id: { $ref: "#/$defs/Uuid" }, name: { type: "string", minLength: 1, maxLength: 100, description: "Display name." }, description: { type: "string", minLength: 1, maxLength: 300, description: "One-line tagline for store cards." }, author: { type: "string", minLength: 1, maxLength: 100 }, icon: { type: ["string", "null"], format: "uri", description: "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then." }, screenshots: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", format: "uri" }, description: "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array." }, homepage: { type: ["string", "null"], format: "uri" }, source: { type: ["string", "null"], format: "uri", description: "Repository or source URL, for users who want to check it themselves." }, versions: { type: "array", minItems: 1, items: { $ref: "#/$defs/AppVersion" }, description: "Published versions, newest-first. The companion installs the newest version compatible with the connected device." } } };
   var formats8 = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-  var schema35 = { type: "object", additionalProperties: true, description: "One published version. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["version", "released_at", "download", "permissions", "min_libbridgething_version", "changelog"], properties: { version: { $ref: "#/$defs/Version" }, released_at: { type: "string", format: "date-time" }, download: { $ref: "#/$defs/Download" }, permissions: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true, description: "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate." }, role: { enum: ["standard", "launcher"], description: "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard." }, provides_overlay: { type: "boolean", description: "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not." }, extension: { $ref: "#/$defs/Extension" }, min_libbridgething_version: { $ref: "#/$defs/Semver" }, changelog: { type: ["string", "null"], description: "Markdown changelog for this version." } } };
+  var schema35 = { type: "object", additionalProperties: true, description: "One published version. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["version", "released_at", "download", "permissions", "min_libbridgething_version", "changelog"], properties: { version: { $ref: "#/$defs/Version" }, released_at: { type: "string", format: "date-time" }, download: { $ref: "#/$defs/Download" }, settings: { $ref: "#/$defs/Download", description: "The bundle's settings page, hosted separately so a companion can fetch it over the internet instead of pulling it off the device over Bluetooth. Its sha256 MUST be the digest of the same bytes the bundle ships, which is what the device reports as settings_hash; a client verifies against the device's hash and falls back to the device when they disagree. Absent when the version ships no settings page." }, permissions: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true, description: "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate." }, role: { enum: ["standard", "launcher"], description: "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard." }, provides_overlay: { type: "boolean", description: "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not." }, extension: { $ref: "#/$defs/Extension" }, min_libbridgething_version: { $ref: "#/$defs/Semver" }, changelog: { type: ["string", "null"], description: "Markdown changelog for this version." } } };
   var pattern4 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$", "u");
   var pattern6 = new RegExp("^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$", "u");
   var pattern5 = new RegExp("^[a-f0-9]{64}$", "u");
@@ -478,14 +478,20 @@ var require_validator = __commonJS((exports, module) => {
           errors = vErrors.length;
         }
       }
+      if (data.settings !== undefined) {
+        if (!validate23(data.settings, { instancePath: instancePath + "/settings", parentData: data, parentDataProperty: "settings", rootData, dynamicAnchors })) {
+          vErrors = vErrors === null ? validate23.errors : vErrors.concat(validate23.errors);
+          errors = vErrors.length;
+        }
+      }
       if (data.permissions !== undefined) {
-        let data3 = data.permissions;
-        if (Array.isArray(data3)) {
-          const len0 = data3.length;
+        let data4 = data.permissions;
+        if (Array.isArray(data4)) {
+          const len0 = data4.length;
           for (let i0 = 0;i0 < len0; i0++) {
-            let data4 = data3[i0];
-            if (typeof data4 === "string") {
-              if (func1(data4) < 1) {
+            let data5 = data4[i0];
+            if (typeof data5 === "string") {
+              if (func1(data5) < 1) {
                 const err12 = { instancePath: instancePath + "/permissions/" + i0, schemaPath: "#/properties/permissions/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
                 if (vErrors === null) {
                   vErrors = [err12];
@@ -504,12 +510,12 @@ var require_validator = __commonJS((exports, module) => {
               errors++;
             }
           }
-          let i1 = data3.length;
+          let i1 = data4.length;
           let j0;
           if (i1 > 1) {
             const indices0 = {};
             for (;i1--; ) {
-              let item0 = data3[i1];
+              let item0 = data4[i1];
               if (typeof item0 !== "string") {
                 continue;
               }
@@ -538,8 +544,8 @@ var require_validator = __commonJS((exports, module) => {
         }
       }
       if (data.role !== undefined) {
-        let data5 = data.role;
-        if (!(data5 === "standard" || data5 === "launcher")) {
+        let data6 = data.role;
+        if (!(data6 === "standard" || data6 === "launcher")) {
           const err16 = { instancePath: instancePath + "/role", schemaPath: "#/properties/role/enum", keyword: "enum", params: { allowedValues: schema35.properties.role.enum }, message: "must be equal to one of the allowed values" };
           if (vErrors === null) {
             vErrors = [err16];
@@ -561,9 +567,9 @@ var require_validator = __commonJS((exports, module) => {
         }
       }
       if (data.extension !== undefined) {
-        let data7 = data.extension;
-        if (data7 && typeof data7 == "object" && !Array.isArray(data7)) {
-          if (data7.desktop === undefined) {
+        let data8 = data.extension;
+        if (data8 && typeof data8 == "object" && !Array.isArray(data8)) {
+          if (data8.desktop === undefined) {
             const err18 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/required", keyword: "required", params: { missingProperty: "desktop" }, message: "must have required property '" + "desktop" + "'" };
             if (vErrors === null) {
               vErrors = [err18];
@@ -572,7 +578,7 @@ var require_validator = __commonJS((exports, module) => {
             }
             errors++;
           }
-          if (data7.permissions === undefined) {
+          if (data8.permissions === undefined) {
             const err19 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/required", keyword: "required", params: { missingProperty: "permissions" }, message: "must have required property '" + "permissions" + "'" };
             if (vErrors === null) {
               vErrors = [err19];
@@ -581,7 +587,7 @@ var require_validator = __commonJS((exports, module) => {
             }
             errors++;
           }
-          for (const key0 in data7) {
+          for (const key0 in data8) {
             if (!(key0 === "desktop" || key0 === "permissions")) {
               const err20 = { instancePath: instancePath + "/extension", schemaPath: "#/$defs/Extension/additionalProperties", keyword: "additionalProperties", params: { additionalProperty: key0 }, message: "must NOT have additional properties" };
               if (vErrors === null) {
@@ -592,8 +598,8 @@ var require_validator = __commonJS((exports, module) => {
               errors++;
             }
           }
-          if (data7.desktop !== undefined) {
-            if (data7.desktop !== true) {
+          if (data8.desktop !== undefined) {
+            if (data8.desktop !== true) {
               const err21 = { instancePath: instancePath + "/extension/desktop", schemaPath: "#/$defs/Extension/properties/desktop/const", keyword: "const", params: { allowedValue: true }, message: "must be equal to constant" };
               if (vErrors === null) {
                 vErrors = [err21];
@@ -603,14 +609,14 @@ var require_validator = __commonJS((exports, module) => {
               errors++;
             }
           }
-          if (data7.permissions !== undefined) {
-            let data9 = data7.permissions;
-            if (Array.isArray(data9)) {
-              const len1 = data9.length;
+          if (data8.permissions !== undefined) {
+            let data10 = data8.permissions;
+            if (Array.isArray(data10)) {
+              const len1 = data10.length;
               for (let i2 = 0;i2 < len1; i2++) {
-                let data10 = data9[i2];
-                if (typeof data10 === "string") {
-                  if (func1(data10) < 1) {
+                let data11 = data10[i2];
+                if (typeof data11 === "string") {
+                  if (func1(data11) < 1) {
                     const err22 = { instancePath: instancePath + "/extension/permissions/" + i2, schemaPath: "#/$defs/Extension/properties/permissions/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
                     if (vErrors === null) {
                       vErrors = [err22];
@@ -629,12 +635,12 @@ var require_validator = __commonJS((exports, module) => {
                   errors++;
                 }
               }
-              let i3 = data9.length;
+              let i3 = data10.length;
               let j1;
               if (i3 > 1) {
                 const indices1 = {};
                 for (;i3--; ) {
-                  let item1 = data9[i3];
+                  let item1 = data10[i3];
                   if (typeof item1 !== "string") {
                     continue;
                   }
@@ -673,9 +679,9 @@ var require_validator = __commonJS((exports, module) => {
         }
       }
       if (data.min_libbridgething_version !== undefined) {
-        let data11 = data.min_libbridgething_version;
-        if (typeof data11 === "string") {
-          if (!pattern6.test(data11)) {
+        let data12 = data.min_libbridgething_version;
+        if (typeof data12 === "string") {
+          if (!pattern6.test(data12)) {
             const err27 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/pattern", keyword: "pattern", params: { pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" }, message: 'must match pattern "' + "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" + '"' };
             if (vErrors === null) {
               vErrors = [err27];
@@ -695,8 +701,8 @@ var require_validator = __commonJS((exports, module) => {
         }
       }
       if (data.changelog !== undefined) {
-        let data12 = data.changelog;
-        if (typeof data12 !== "string" && data12 !== null) {
+        let data13 = data.changelog;
+        if (typeof data13 !== "string" && data13 !== null) {
           const err29 = { instancePath: instancePath + "/changelog", schemaPath: "#/properties/changelog/type", keyword: "type", params: { type: schema35.properties.changelog.type }, message: "must be string,null" };
           if (vErrors === null) {
             vErrors = [err29];

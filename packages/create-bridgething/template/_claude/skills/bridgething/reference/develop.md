@@ -72,15 +72,16 @@ scrolling for the rotary's horizontal wheel.
 CDP input goes into the page, so the launcher gesture and browser-nav side
 effects stay out of the way.
 
-Get the app on the kiosk first with `bun run dev:device` or `bun run push`. CDP
-is served at `bridgething.local:9222`, reachable over USB:
+Get the app on the kiosk first with `bun run dev:device` or `bun run push`.
+Chromium listens on loopback, but the image proxies it, so CDP answers on
+`bridgething.local:9222` over USB:
 
 ```bash
 curl -s http://bridgething.local:9222/json/version >/dev/null && echo cdp-up
 ```
 
-Use the `webSocketDebuggerUrl` exactly as returned. It comes back as an IP rather
-than the hostname you asked for, and that address is the correct one.
+Use the `webSocketDebuggerUrl` exactly as returned. It comes back as an IP
+rather than the hostname you asked for, and that address is the correct one.
 
 Playwright's `connectOverCDP` never finishes the websocket upgrade against the
 device's embedded chromium, so drive it with a raw CDP websocket. Connect to the

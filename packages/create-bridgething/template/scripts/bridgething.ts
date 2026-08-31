@@ -1,4 +1,4 @@
-// Generated from @bridgething/webapp-shared. It is yours now; tweak it freely.
+// Generated from @bridgething/webapp-shared.
 import { createRequire } from 'node:module';
 var __require = /* @__PURE__ */ createRequire(import.meta.url);
 

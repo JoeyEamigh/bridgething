@@ -15,9 +15,9 @@ name: a store listing shows the screenshots its catalog publishes
 - hideKeyboard
 - tapOn: "add this source"
 - extendedWaitUntil:
-    visible: "Fixture Calendar"
+    visible: ".*Fixture Calendar.*"
     timeout: 60000
-- tapOn: "Fixture Calendar"
+- tapOn: ".*Fixture Calendar.*"
 - extendedWaitUntil:
     visible:
       id: "app-screenshots"

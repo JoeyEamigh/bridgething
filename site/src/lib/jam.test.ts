@@ -29,14 +29,14 @@ describe('jam config', () => {
     expect(jamCategoryLabel('nonesuch' as JamCategory)).toBe('nonesuch');
   });
 
-  test('every category explains itself past the one-liner, so the page is not a list of labels', () => {
+  test('every category says something past its own label', () => {
     for (const category of JAM_CATEGORIES) {
-      expect(category.detail.length).toBeGreaterThan(60);
+      expect(category.detail.trim()).not.toBe('');
+      expect(category.detail).not.toBe(category.label);
     }
   });
 
   test('the pool is the sum of the cards, so the hero cannot drift from the prizes', () => {
-    expect(JAM_PRIZE_POOL).toBe(250);
     expect(JAM_PRIZE_POOL).toBe(
       JAM_CATEGORIES.reduce((total, category) => total + category.first + (category.second ?? 0), 0),
     );

@@ -526,6 +526,7 @@ impl CompanionSession {
     device_id: String,
     id: String,
     kind: WebappResourceKind,
+    origin: Option<WebappResourceOrigin>,
   ) -> Result<WebappResourceFile, CompanionError> {
     let gateway = self.gateway_checked(&device_id)?;
     let id = webapp_id(&id)?;
@@ -538,12 +539,21 @@ impl CompanionSession {
       WebappResourceKind::Settings => libbridgething::gateway::WebappResourceKind::Settings,
       WebappResourceKind::Overlay => libbridgething::gateway::WebappResourceKind::Overlay,
     };
-    let cached = resources.fetch(&gateway, id, kind).await.map_err(|error| match error {
-      bridgething_delivery::webapp::WebappResourceError::Domain(
-        libbridgething::WebappError::ResourceNotAvailable { .. },
-      ) => CompanionError::ResourceNotAvailable,
-      other => CompanionError::Device(format!("{other:?}")),
-    })?;
+    let origin = origin.map(|origin| bridgething_delivery::webapp::ResourceOrigin {
+      url: origin.url,
+      sha256: origin.sha256,
+      size: origin.size,
+      mime: origin.mime,
+    });
+    let cached = resources
+      .fetch(&gateway, id, kind, origin.as_ref())
+      .await
+      .map_err(|error| match error {
+        bridgething_delivery::webapp::WebappResourceError::Domain(
+          libbridgething::WebappError::ResourceNotAvailable { .. },
+        ) => CompanionError::ResourceNotAvailable,
+        other => CompanionError::Device(format!("{other:?}")),
+      })?;
     let path = self
       .session
       .blobs()

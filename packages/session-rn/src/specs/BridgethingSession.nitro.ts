@@ -128,6 +128,13 @@ export type BridgethingWebappIcon = {
   mime?: string;
 };
 
+export type BridgethingResourceOrigin = {
+  url: string;
+  sha256: string;
+  size: number;
+  mime?: string;
+};
+
 export type BridgethingDocEntry = {
   key: string;
   value: string;
@@ -405,7 +412,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   getWebappSlots(deviceId: string): Promise<BridgethingWebappSlots>;
   setWebappSlot(deviceId: string, slot: BridgethingWebappSlot, id?: string): Promise<BridgethingWebappSlots>;
   webappIcon(deviceId: string, id: string): Promise<BridgethingWebappIcon | null>;
-  webappSettingsMarkup(deviceId: string, id: string): Promise<string>;
+  webappSettingsMarkup(deviceId: string, id: string, origin?: BridgethingResourceOrigin): Promise<string>;
   listWebappConfig(deviceId: string, id: string): Promise<BridgethingConfigEntry[]>;
   setWebappConfigField(deviceId: string, id: string, key: string, value: string): Promise<void>;
   deleteWebappConfigField(deviceId: string, id: string, key: string): Promise<void>;

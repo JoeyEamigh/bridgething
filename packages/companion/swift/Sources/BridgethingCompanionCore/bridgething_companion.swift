@@ -3570,7 +3570,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func voiceModelPaths()  -> VoiceModelPaths
     
-    func webappResource(deviceId: String, id: String, kind: WebappResourceKind) async throws  -> WebappResourceFile
+    func webappResource(deviceId: String, id: String, kind: WebappResourceKind, origin: WebappResourceOrigin?) async throws  -> WebappResourceFile
     
     func webappSlots(deviceId: String) async throws  -> WebappSlots
     
@@ -4338,12 +4338,12 @@ open func voiceModelPaths() -> VoiceModelPaths  {
 })
 }
     
-open func webappResource(deviceId: String, id: String, kind: WebappResourceKind)async throws  -> WebappResourceFile  {
+open func webappResource(deviceId: String, id: String, kind: WebappResourceKind, origin: WebappResourceOrigin?)async throws  -> WebappResourceFile  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_webapp_resource(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(id),FfiConverterTypeWebappResourceKind_lower(kind)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(id),FfiConverterTypeWebappResourceKind_lower(kind),FfiConverterOptionTypeWebappResourceOrigin.lower(origin)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -5085,10 +5085,6 @@ public func FfiConverterTypeEarconSink_lower(_ value: EarconSink) -> UInt64 {
 
 
 
-/**
- * The seam a native extension host plugs into. Desktop supplies one; phones
- * pass `None` and every extension surface stays unsupported there.
- */
 public protocol ExtensionHost: AnyObject, Sendable {
     
     func start(inbox: ExtensionHostInbox) 
@@ -5097,13 +5093,6 @@ public protocol ExtensionHost: AnyObject, Sendable {
     
     func deliver(device: String, webapp: String, message: ExtensionMessage) 
     
-    /**
-     * `webapps` is what `config` was actually read for: everything running when
-     * the link itself came up, or the extensions that just started and missed
-     * that announce. A host must not tell an extension outside that list the
-     * device connected, and must not tell one inside it twice without a
-     * disconnect in between.
-     */
     func deviceConnected(device: String, name: String, config: [ExtensionConfigEntry], webapps: [String]) 
     
     func deviceDisconnected(device: String) 
@@ -5113,10 +5102,6 @@ public protocol ExtensionHost: AnyObject, Sendable {
     func configChanged(device: String, webapp: String, key: String, value: String?) 
     
 }
-/**
- * The seam a native extension host plugs into. Desktop supplies one; phones
- * pass `None` and every extension surface stays unsupported there.
- */
 open class ExtensionHostImpl: ExtensionHost, @unchecked Sendable {
     fileprivate let handle: UInt64
 
@@ -5198,13 +5183,6 @@ open func deliver(device: String, webapp: String, message: ExtensionMessage)  {t
 }
 }
     
-    /**
-     * `webapps` is what `config` was actually read for: everything running when
-     * the link itself came up, or the extensions that just started and missed
-     * that announce. A host must not tell an extension outside that list the
-     * device connected, and must not tell one inside it twice without a
-     * disconnect in between.
-     */
 open func deviceConnected(device: String, name: String, config: [ExtensionConfigEntry], webapps: [String])  {try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_extensionhost_device_connected(
@@ -12401,21 +12379,11 @@ public func FfiConverterTypeVolumeMonitor_lower(_ value: VolumeMonitor) -> UInt6
 
 
 
-/**
- * Handed the downloaded bundle once it has verified and landed on the device,
- * while the artifact is still on disk. A host that keeps something out of the
- * zip hooks in here rather than composing the fetch and the install itself.
- */
 public protocol WebappBundleSink: AnyObject, Sendable {
     
     func installed(bundle: String) 
     
 }
-/**
- * Handed the downloaded bundle once it has verified and landed on the device,
- * while the artifact is still on disk. A host that keeps something out of the
- * zip hooks in here rather than composing the fetch and the install itself.
- */
 open class WebappBundleSinkImpl: WebappBundleSink, @unchecked Sendable {
     fileprivate let handle: UInt64
 
@@ -14630,21 +14598,11 @@ public struct DeviceWebappsEntry: Equatable, Hashable {
     public var deviceId: String
     public var webapps: [WebappInfo]
     public var active: ActiveWebapp?
-    /**
-     * Whether this is a full inventory read off the device. Install and
-     * active-webapp pushes can land before the listing does, and an entry that
-     * has never been listed says nothing about what the device holds.
-     */
     public var listed: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(deviceId: String, webapps: [WebappInfo], active: ActiveWebapp?, 
-        /**
-         * Whether this is a full inventory read off the device. Install and
-         * active-webapp pushes can land before the listing does, and an entry that
-         * has never been listed says nothing about what the device holds.
-         */listed: Bool) {
+    public init(deviceId: String, webapps: [WebappInfo], active: ActiveWebapp?, listed: Bool) {
         self.deviceId = deviceId
         self.webapps = webapps
         self.active = active
@@ -14752,9 +14710,6 @@ public func FfiConverterTypeDocEntry_lower(_ value: DocEntry) -> RustBuffer {
 }
 
 
-/**
- * One config value the host hands to the extension owning `webapp`.
- */
 public struct ExtensionConfigEntry: Equatable, Hashable {
     public var webapp: String
     public var key: String
@@ -14813,10 +14768,6 @@ public func FfiConverterTypeExtensionConfigEntry_lower(_ value: ExtensionConfigE
 }
 
 
-/**
- * The extension block a webapp declares, as every surface that renders an
- * installed app sees it. Permissions are the plain Deno descriptor strings.
- */
 public struct ExtensionInfo: Equatable, Hashable {
     public var permissions: [String]
     public var api: UInt32
@@ -18651,6 +18602,68 @@ public func FfiConverterTypeWebappResourceFile_lower(_ value: WebappResourceFile
 }
 
 
+public struct WebappResourceOrigin: Equatable, Hashable {
+    public var url: String
+    public var sha256: String
+    public var size: UInt64
+    public var mime: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(url: String, sha256: String, size: UInt64, mime: String?) {
+        self.url = url
+        self.sha256 = sha256
+        self.size = size
+        self.mime = mime
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WebappResourceOrigin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWebappResourceOrigin: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WebappResourceOrigin {
+        return
+            try WebappResourceOrigin(
+                url: FfiConverterString.read(from: &buf), 
+                sha256: FfiConverterString.read(from: &buf), 
+                size: FfiConverterUInt64.read(from: &buf), 
+                mime: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WebappResourceOrigin, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterString.write(value.sha256, into: &buf)
+        FfiConverterUInt64.write(value.size, into: &buf)
+        FfiConverterOptionString.write(value.mime, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappResourceOrigin_lift(_ buf: RustBuffer) throws -> WebappResourceOrigin {
+    return try FfiConverterTypeWebappResourceOrigin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappResourceOrigin_lower(_ value: WebappResourceOrigin) -> RustBuffer {
+    return FfiConverterTypeWebappResourceOrigin.lower(value)
+}
+
+
 public struct WebappSlots: Equatable, Hashable {
     public var launcher: String?
     public var overlay: String?
@@ -20085,10 +20098,6 @@ public func FfiConverterTypeEndCallAction_lower(_ value: EndCallAction) -> RustB
 
 
 
-/**
- * A forward payload across the FFI. `Json` carries the serialized document
- * because uniffi has no JSON value type.
- */
 
 public enum ExtensionMessage: Equatable, Hashable {
     
@@ -20327,9 +20336,6 @@ public enum HttpMethod: Equatable, Hashable {
     case patch
     case delete
     case options
-    /**
-     * A verb this enum does not name, handed to the platform transport verbatim.
-     */
     case other(verb: String
     )
 
@@ -25623,6 +25629,30 @@ fileprivate struct FfiConverterOptionTypeSpotifyProviderConfig: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeWebappResourceOrigin: FfiConverterRustBuffer {
+    typealias SwiftType = WebappResourceOrigin?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeWebappResourceOrigin.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeWebappResourceOrigin.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeMediaRepeatMode: FfiConverterRustBuffer {
     typealias SwiftType = MediaRepeatMode?
 
@@ -27192,7 +27222,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_voice_model_paths() != 45257) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_webapp_resource() != 11233) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_webapp_resource() != 54617) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots() != 15167) {
@@ -27408,7 +27438,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_extensionhost_deliver() != 22605) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 6431) {
+    if (uniffi_bridgething_companion_checksum_method_extensionhost_device_connected() != 47175) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_extensionhost_device_disconnected() != 43849) {

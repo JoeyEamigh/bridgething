@@ -11,6 +11,7 @@ import { Note } from '../components/Note';
 import { Press } from '../components/Press';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { Spinner } from '../components/Spinner';
+import { useSettingsOrigin } from '../lib/catalog';
 import { getSession } from '../lib/session';
 import {
   settingsAuthorize,
@@ -34,6 +35,7 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
   const { deviceId, id, name } = route.params;
   const { list } = useWebapps(deviceId);
   const info = list.find(w => w.id === id) ?? null;
+  const origin = useSettingsOrigin(info);
 
   const webviewRef = useRef<WebView<object>>(null);
   const [markup, setMarkup] = useState<string | null>(null);
@@ -58,18 +60,22 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
     });
   }, [finish, name, navigation]);
 
+  const load = useRef(0);
+
   const loadPage = useCallback(async () => {
+    const mine = ++load.current;
     setError(null);
     setMarkup(null);
     try {
-      setMarkup(await session.webappSettingsMarkup(deviceId, id));
+      const page = await session.webappSettingsMarkup(deviceId, id, origin);
+      if (load.current === mine) setMarkup(page);
     } catch (err) {
-      setError(describeError(err));
+      if (load.current === mine) setError(describeError(err));
     }
-  }, [deviceId, id, session]);
+  }, [deviceId, id, origin, session]);
 
   useEffect(() => {
-    loadPage();
+    void loadPage();
   }, [loadPage]);
 
   const deliver = useCallback((payload: unknown) => {

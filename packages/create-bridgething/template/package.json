@@ -7,13 +7,13 @@
     "dev": "vite",
     "dev:device": "vite --mode device",
     "build": "vite build && vite build -c vite.settings.config.ts",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "push": "bun scripts/push.ts",
     "share": "bun scripts/share.ts",
     "update": "bunx @bridgething/updater"
   },
   "dependencies": {
-    "@bridgething/client": "^0.4.0",
     "preact": "^10.29.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

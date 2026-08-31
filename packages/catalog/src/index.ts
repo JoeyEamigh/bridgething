@@ -26,6 +26,7 @@ export {
 export { releasedAtInstant, sortNewestFirst } from './versions.ts';
 
 export {
+  SETTINGS_PAGE_MIME,
   aggregate,
   compareVersions,
   isListedWebapp,
@@ -35,6 +36,8 @@ export {
   pinsFrom,
   recommendedSources,
   satisfies,
+  settingsOrigin,
+  settingsOriginFor,
   updates,
   versionCompatible,
   type CatalogAppListing,
@@ -46,6 +49,7 @@ export {
 export { blendStoreListings, type StoreListings } from './blend.ts';
 
 export {
+  CATALOG_FETCH_TIMEOUT_MS,
   DIRECTORY_ORIGIN,
   OFFICIAL_CATALOG_URL,
   SOURCE_DIRECTORY_URL,

@@ -176,18 +176,14 @@ describe('the admin entries row', () => {
 describe('the extension note', () => {
   const extension: AppExtension = { desktop: true, permissions: ['all'] };
 
-  test('links a github repo in both layouts', () => {
+  test('links a github repo', () => {
     expect(hrefs(ExtensionNote({ extension, source: 'https://github.com/someone/thing' }))).toEqual([
-      'https://github.com/someone/thing',
-    ]);
-    expect(hrefs(ExtensionNote({ extension, source: 'https://github.com/someone/thing', compact: true }))).toEqual([
       'https://github.com/someone/thing',
     ]);
   });
 
   test('a javascript source renders as no repository rather than a link', () => {
     expect(hrefs(ExtensionNote({ extension, source: STEAL }))).toEqual([]);
-    expect(hrefs(ExtensionNote({ extension, source: STEAL, compact: true }))).toEqual([]);
   });
 });
 

@@ -236,14 +236,15 @@ mod tests {
 
   use super::*;
 
-  const PROBE_HOST: &str = "bridgething-discovery-probe.local.";
+  static PROBE_SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
   fn unique_instance() -> String {
-    let stamp = std::time::SystemTime::now()
-      .duration_since(std::time::UNIX_EPOCH)
-      .unwrap()
-      .as_nanos();
-    format!("probe-{}-{stamp}", std::process::id())
+    let seq = PROBE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("probe-{}-{seq}", std::process::id())
+  }
+
+  fn probe_host(instance: &str) -> String {
+    format!("{instance}.local.")
   }
 
   fn announce(instance: &str, nickname: &str) -> ServiceDaemon {
@@ -251,7 +252,7 @@ mod tests {
     let info = ServiceInfo::new(
       &format!("{BRIDGETHING_MDNS_SERVICE_TYPE}.local."),
       instance,
-      PROBE_HOST,
+      &probe_host(instance),
       "127.0.0.1",
       8892,
       &[(NICKNAME_TXT_KEY, nickname), (SERIAL_TXT_KEY, "8558R481Q61R")][..],
@@ -276,12 +277,13 @@ mod tests {
   }
 
   fn wait_for(rx: &mpsc::Receiver<EndpointChange>, instance: &str, within: Duration) -> Endpoint {
+    let fullname = format!("{instance}.{BRIDGETHING_MDNS_SERVICE_TYPE}.local.");
     let deadline = Instant::now() + within;
     loop {
       let remaining = deadline.saturating_duration_since(Instant::now());
       assert!(!remaining.is_zero(), "{instance} never arrived on the link");
       if let Ok(EndpointChange::Found(endpoint)) = rx.recv_timeout(remaining)
-        && endpoint.id.starts_with(instance)
+        && endpoint.id == fullname
       {
         return endpoint;
       }
@@ -299,8 +301,13 @@ mod tests {
     let endpoint = wait_for(&rx, &instance, Duration::from_secs(20));
 
     assert_eq!(
+      endpoint.host,
+      probe_host(&instance).trim_end_matches('.'),
+      "the announcement names its own probe host, not another test's"
+    );
+    assert_eq!(
       endpoint.url,
-      format!("ws://{}:8892/", PROBE_HOST.trim_end_matches('.')),
+      format!("ws://{}:8892/", probe_host(&instance).trim_end_matches('.')),
       "the endpoint is dialable by hostname"
     );
     assert_eq!(

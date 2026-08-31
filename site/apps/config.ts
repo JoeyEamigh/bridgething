@@ -47,6 +47,7 @@ export type AppVersionConfig = {
   version: string;
   released_at: string;
   download: Download;
+  settings?: Download | null;
   permissions: string[];
   role?: 'standard' | 'launcher';
   provides_overlay?: boolean;

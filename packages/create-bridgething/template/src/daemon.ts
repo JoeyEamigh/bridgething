@@ -1,4 +1,4 @@
-// Generated from @bridgething/webapp-shared. It is yours now; tweak it freely.
+// Generated from @bridgething/webapp-shared.
 /// <reference types="vite/client" />
 
 const OFF_DEVICE_URL = 'ws://127.0.0.1:8891/';

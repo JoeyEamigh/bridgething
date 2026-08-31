@@ -50,10 +50,22 @@ export function normalizeSourceUrl(raw: string): string {
   return url.toString();
 }
 
-export async function fetchCatalog(url: string): Promise<Catalog> {
-  const response = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
-  return validate(await response.json());
+export const CATALOG_FETCH_TIMEOUT_MS = 15_000;
+
+export async function fetchCatalog(url: string, init?: { signal?: AbortSignal }): Promise<Catalog> {
+  const controller = new AbortController();
+  const deadline = init?.signal ? null : setTimeout(() => controller.abort(), CATALOG_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: init?.signal ?? controller.signal,
+    });
+    if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+    return validate(await response.json());
+  } finally {
+    if (deadline) clearTimeout(deadline);
+  }
 }
 
 export type MergedCatalog = {

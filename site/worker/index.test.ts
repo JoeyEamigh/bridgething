@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import { listInstalls, toInstallCounts } from './installs.ts';
 import { ENTRY_SNAPSHOT_KEY } from './jam.ts';
+import { JAM_CATEGORIES } from '../src/lib/jam.ts';
 import { fakeKv, type FakeKv } from './kv-fake.ts';
 import { readSnapshot } from './store.ts';
 import type { Env } from './env.ts';
@@ -465,7 +466,7 @@ describe('/api/jam/review and scoring', () => {
     expect((await call('GET', '/api/jam/tally', { token })).status).toBe(401);
     const tally = await call('GET', '/api/jam/tally', { token: ADMIN_TOKEN });
     expect(tally.status).toBe(200);
-    expect((await tally.json<{ tally: unknown[] }>()).tally).toHaveLength(5);
+    expect((await tally.json<{ tally: unknown[] }>()).tally).toHaveLength(JAM_CATEGORIES.length);
   });
 });
 

@@ -15,7 +15,7 @@ pub fn digest_of(bytes: &[u8]) -> String {
   hex::encode(Sha256::digest(bytes))
 }
 
-fn is_digest(digest: &str) -> bool {
+pub fn is_digest(digest: &str) -> bool {
   digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 

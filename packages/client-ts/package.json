@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/client",
-  "version": "0.4.0",
+  "version": "0.12.1",
   "description": "Typed client SDK a bridgething webapp uses to talk to the on-device daemon on a Spotify Car Thing.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

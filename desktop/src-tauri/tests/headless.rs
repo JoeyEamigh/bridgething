@@ -860,12 +860,12 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
      and the sidecar outlives every app that could reach it"
   );
 
-  let icon = commands::webapp_resource(app.state(), webapp.to_string(), WebappResourceKind::Icon)
+  let icon = commands::webapp_resource(app.state(), webapp.to_string(), WebappResourceKind::Icon, None)
     .await
     .expect("the icon comes off the device");
   assert_eq!(icon.bytes, ICON, "the resource pull hands back the bytes it cached");
 
-  let cached = commands::webapp_resource(app.state(), webapp.to_string(), WebappResourceKind::Icon)
+  let cached = commands::webapp_resource(app.state(), webapp.to_string(), WebappResourceKind::Icon, None)
     .await
     .expect("the second fetch is served against the have cue");
   assert_eq!(

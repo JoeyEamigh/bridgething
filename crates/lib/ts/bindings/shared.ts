@@ -1149,15 +1149,15 @@ export type WebappManifest = {
   version: string;
   description: string | null;
   /**
-   * Path in the bundle. The file must be 64 KiB or under.
+   * Path in the bundle. Over 64 KiB it is dropped and the app installs without an icon.
    */
   icon: string | null;
   /**
-   * Path in the bundle. The file must be 1 MiB or under.
+   * Path in the bundle. Over 1 MiB the install fails.
    */
   settings: string | null;
   /**
-   * Path in the bundle. The file must be 512 KiB or under.
+   * Path in the bundle. Over 512 KiB the install fails.
    */
   overlay: string | null;
   role: WebappRole;

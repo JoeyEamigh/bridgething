@@ -307,6 +307,16 @@ pub struct WebappResourceFile {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
+pub struct WebappResourceOrigin {
+  pub url: String,
+  pub sha256: String,
+  pub size: u64,
+  pub mime: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
 pub struct DeviceMeta {
   pub daemon_version: String,
   pub libbridgething_version: String,

@@ -190,11 +190,11 @@ pub struct WebappManifest {
   pub name: String,
   pub version: String,
   pub description: Option<String>,
-  /// Path in the bundle. The file must be 64 KiB or under.
+  /// Path in the bundle. Over 64 KiB it is dropped and the app installs without an icon.
   pub icon: Option<String>,
-  /// Path in the bundle. The file must be 1 MiB or under.
+  /// Path in the bundle. Over 1 MiB the install fails.
   pub settings: Option<String>,
-  /// Path in the bundle. The file must be 512 KiB or under.
+  /// Path in the bundle. Over 512 KiB the install fails.
   pub overlay: Option<String>,
   #[serde(default)]
   pub role: WebappRole,

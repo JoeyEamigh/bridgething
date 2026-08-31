@@ -78,9 +78,9 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
       {communitySources.length > 0 ? (
         <AppSection
           title="community apps"
-          note="from sources in the directory that are listed but unreviewed."
+          note="these are unreviewed"
           status={countLine(community.length, communitySources.length)}
-          empty="these sources are listed but have no apps in them right now."
+          empty="nothing here"
           listings={community}
           sources={sources}
         />

@@ -1117,11 +1117,14 @@ impl Session {
 
   pub fn resources_for(&self, device_id: &str) -> Option<WebappResourceService> {
     let peer = self.peer_for(device_id)?;
-    Some(WebappResourceService::new(
-      self.blobs.clone() as Arc<dyn BlobStore>,
-      self.resource_slots.clone() as Arc<dyn SlotIndex>,
-      peer.receiver().clone(),
-    ))
+    Some(
+      WebappResourceService::new(
+        self.blobs.clone() as Arc<dyn BlobStore>,
+        self.resource_slots.clone() as Arc<dyn SlotIndex>,
+        peer.receiver().clone(),
+      )
+      .with_fetch(self.fetch.clone(), self.cache_dir().join("webapp-resource")),
+    )
   }
 
   pub fn blobs(&self) -> &Arc<FsBlobStore> {

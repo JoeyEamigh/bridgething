@@ -21,6 +21,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
+import com.margelo.nitro.bridgething.session.BridgethingResourceOrigin
 import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealth
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
@@ -65,7 +66,11 @@ public interface BridgethingSessionBackend {
     public suspend fun getWebappSlots(deviceId: String): BridgethingWebappSlots
     public suspend fun setWebappSlot(deviceId: String, slot: BridgethingWebappSlot, id: String?): BridgethingWebappSlots
     public suspend fun webappIcon(deviceId: String, id: String): BridgethingWebappIcon?
-    public suspend fun webappSettingsMarkup(deviceId: String, id: String): String
+    public suspend fun webappSettingsMarkup(
+        deviceId: String,
+        id: String,
+        origin: BridgethingResourceOrigin?,
+    ): String
     public suspend fun listWebappConfig(deviceId: String, id: String): Array<BridgethingConfigEntry>
     public suspend fun setWebappConfigField(deviceId: String, id: String, key: String, value: String)
     public suspend fun deleteWebappConfigField(deviceId: String, id: String, key: String)

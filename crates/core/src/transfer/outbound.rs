@@ -4,7 +4,10 @@ use std::{
   time::Duration,
 };
 
-use libbridgething::gateway::{BridgeToGatewayTransferMsgEvent, TransferAbandon, TransferFragment};
+use libbridgething::{
+  gateway::{BridgeToGatewayTransferMsgEvent, TransferAbandon, TransferFragment},
+  protocol::Compress,
+};
 use tokio::sync::watch;
 use tokio_util::bytes::Bytes;
 use uuid::Uuid;
@@ -44,7 +47,14 @@ impl TransferOutbound {
     }
   }
 
-  pub async fn send_stream(&self, bluetooth: &BluetoothMan, address: Address, id: Uuid, bytes: Bytes) -> bool {
+  pub async fn send_stream(
+    &self,
+    bluetooth: &BluetoothMan,
+    address: Address,
+    id: Uuid,
+    bytes: Bytes,
+    compress: Compress,
+  ) -> bool {
     let mut ack_rx = self.register(id);
     let total = bytes.len();
     let mut offset: usize = 0;
@@ -72,7 +82,7 @@ impl TransferOutbound {
         offset: offset as u32,
         bytes: bytes.slice(offset..offset + len),
       });
-      bluetooth.gateway_man.send_event_bulk(address, fragment).await;
+      bluetooth.gateway_man.send_event_bulk(address, fragment, compress).await;
       offset += len;
     }
 

@@ -1,0 +1,14 @@
+appId: com.bridgething.gateway
+---
+- runFlow:
+    when:
+      visible: ".*view warnings.*"
+    commands:
+      - tapOn:
+          point: "92%,93%"
+- runFlow:
+    when:
+      visible: ".*view errors.*"
+    commands:
+      - tapOn:
+          point: "92%,93%"

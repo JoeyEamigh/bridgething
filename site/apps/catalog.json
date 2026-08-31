@@ -32,7 +32,7 @@
           "permissions": [
             "net.fetch"
           ],
-          "min_libbridgething_version": "0.4.0",
+          "min_libbridgething_version": "0.12.0",
           "changelog": "Initial release."
         }
       ]
@@ -61,7 +61,7 @@
             "net.fetch",
             "geo"
           ],
-          "min_libbridgething_version": "0.4.0",
+          "min_libbridgething_version": "0.12.0",
           "changelog": "Initial release."
         }
       ]
@@ -89,7 +89,7 @@
           "permissions": [
             "net.ws"
           ],
-          "min_libbridgething_version": "0.4.0",
+          "min_libbridgething_version": "0.12.0",
           "changelog": null
         },
         {
@@ -103,7 +103,7 @@
           "permissions": [
             "net.ws"
           ],
-          "min_libbridgething_version": "0.4.0",
+          "min_libbridgething_version": "0.12.0",
           "changelog": null
         }
       ]

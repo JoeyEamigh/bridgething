@@ -1,0 +1,61 @@
+{
+  "name": "@bridgething/source",
+  "version": "0.12.1",
+  "description": "The toolkit for running a bridgething webapp source: build, bundle, version, validate and publish a catalog.v1 to GitHub Pages.",
+  "license": "MIT",
+  "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
+  "homepage": "https://bridgething.com/docs/publishing-apps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoeyEamigh/bridgething.git",
+    "directory": "packages/source"
+  },
+  "bugs": {
+    "url": "https://github.com/JoeyEamigh/bridgething/issues"
+  },
+  "keywords": [
+    "bridgething",
+    "spotify",
+    "car-thing",
+    "superbird",
+    "catalog",
+    "appstore",
+    "publishing"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "bridgething-source": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@bridgething/catalog": "workspace:*"
+  },
+  "peerDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
+}

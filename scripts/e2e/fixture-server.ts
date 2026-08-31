@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const port = Number(process.env.E2E_FIXTURE_PORT ?? '8899');
@@ -46,6 +47,56 @@ const artifacts = {
   webapp: pattern(16 * 1024),
   wakeword: pattern(3 * 1024),
 };
+
+const SETTINGS_PAGE = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Fixture settings</title>
+  </head>
+  <body>
+    <h1>Fixture Calendar settings</h1>
+    <p id="hosted-settings-marker">the settings page rendered</p>
+  </body>
+</html>
+`;
+
+function storeBundle(): Uint8Array {
+  const staging = join(DEV_DIR, 'store-fixture');
+  const dist = join(staging, 'dist');
+  const out = join(staging, 'app.zip');
+  rmSync(staging, { recursive: true, force: true });
+  mkdirSync(dist, { recursive: true });
+
+  writeFileSync(
+    join(dist, 'manifest.json'),
+    JSON.stringify(
+      {
+        id: STORE_APP_ID,
+        name: 'Fixture Calendar',
+        version: '1.0.0',
+        description: 'A store fixture with a settings page.',
+        settings: 'settings.html',
+        config: [{ type: 'string', data: { key: 'greeting', label: 'Greeting' } }],
+        permissions: [],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(join(dist, 'index.html'), '<!doctype html><title>Fixture Calendar</title><h1>fixture</h1>\n');
+  writeFileSync(join(dist, 'settings.html'), SETTINGS_PAGE);
+
+  const zipped = spawnSync('zip', ['-q', '-X', '-r', out, 'manifest.json', 'index.html', 'settings.html'], {
+    cwd: dist,
+  });
+  if (zipped.status !== 0) throw new Error(`could not build the store fixture bundle: ${zipped.stderr}`);
+  return new Uint8Array(readFileSync(out));
+}
+
+const storeApp = storeBundle();
+const storeSettings = new TextEncoder().encode(SETTINGS_PAGE);
+let hostedSettingsHits = 0;
 
 type Mode = 'current' | 'image' | 'daemon' | 'webapp' | 'wakeword';
 const MODES: Mode[] = ['current', 'image', 'daemon', 'webapp', 'wakeword'];
@@ -123,7 +174,8 @@ function storeCatalog(host: string) {
           {
             version: '1.0.0',
             released_at: '2026-01-01T00:00:00Z',
-            download: { url: `http://${host}/store/app.zip`, ...digestOf(artifacts.webapp) },
+            download: { url: `http://${host}/store/app.zip`, ...digestOf(storeApp) },
+            settings: { url: `http://${host}/store/settings.html`, ...digestOf(storeSettings) },
             permissions: [],
             min_libbridgething_version: '0.4.0',
             changelog: null,
@@ -188,7 +240,16 @@ Bun.serve({
     if (pathname === '/store/shot.png') {
       return new Response(Bun.file(SHOT), { headers: { 'content-type': 'image/png' } });
     }
-    if (pathname === '/store/app.zip') return bytes(artifacts.webapp);
+    if (pathname === '/store/app.zip') return bytes(storeApp);
+    if (pathname === '/store/settings.html') {
+      hostedSettingsHits += 1;
+      return new Response(SETTINGS_PAGE, {
+        headers: { 'content-type': 'text/html; charset=utf-8', 'access-control-allow-origin': '*' },
+      });
+    }
+    if (pathname === '/store/settings-hits') {
+      return Response.json({ hits: hostedSettingsHits }, { headers: { 'access-control-allow-origin': '*' } });
+    }
 
     const rooted = /^\/m\/([a-z]+)(\/.*)?$/.exec(pathname);
     if (rooted) {

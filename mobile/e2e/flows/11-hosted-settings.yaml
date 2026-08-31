@@ -1,0 +1,52 @@
+appId: com.bridgething.gateway
+name: an installed app's settings page comes from the catalog's hosted copy, not off the device
+---
+- runFlow: ../common/fresh-start.yaml
+- tapOn: "store"
+- scrollUntilVisible:
+    element: "manage sources"
+    direction: DOWN
+    centerElement: true
+    visibilityPercentage: 100
+- tapOn: "manage sources"
+- tapOn:
+    id: "source-url"
+- inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}/store/catalog.json"
+- hideKeyboard
+- tapOn: "add this source"
+- extendedWaitUntil:
+    visible: ".*Fixture Calendar.*"
+    timeout: 60000
+- tapOn: ".*Fixture Calendar.*"
+- extendedWaitUntil:
+    visible: ".*install v1.0.0.*"
+    timeout: 60000
+- tapOn: ".*install v1.0.0.*"
+- extendedWaitUntil:
+    visible: ".*installed v1.0.0.*"
+    timeout: 180000
+
+- runScript:
+    file: ../scripts/hosted-settings-hits.js
+    env:
+      CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+      PHASE: before
+
+- tapOn: "apps"
+- extendedWaitUntil:
+    visible: ".*Fixture Calendar.*"
+    timeout: 60000
+- tapOn: ".*Fixture Calendar.*"
+- extendedWaitUntil:
+    visible: ".*open Fixture Calendar settings.*"
+    timeout: 60000
+- tapOn: ".*open Fixture Calendar settings.*"
+- extendedWaitUntil:
+    visible: ".*the settings page rendered.*"
+    timeout: 180000
+
+- runScript:
+    file: ../scripts/hosted-settings-hits.js
+    env:
+      CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+      PHASE: after

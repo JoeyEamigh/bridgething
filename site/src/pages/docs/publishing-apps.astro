@@ -35,11 +35,16 @@ const entrySnippet = `{
         "size": 402118,
         "sha256": "…"
       },
+      "settings": {
+        "url": "https://example.com/s/<id>/0.1.0.html",
+        "size": 26909,
+        "sha256": "…"
+      },
       "permissions": ["net.fetch"],
       "role": "launcher",
       "provides_overlay": true,
       "extension": { "desktop": true, "permissions": ["all"] },
-      "min_libbridgething_version": "0.5.0",
+      "min_libbridgething_version": "0.12.0",
       "changelog": "Initial release."
     }
   ]
@@ -83,6 +88,16 @@ const newest = entry.versions[0];`;
   </header>
 
   <section class="mb-14">
+    <h2 class={refdes}>start with the scaffold</h2>
+    <p class="text-white/70">
+      <code>bun create bridgething</code> does all of this for you. it asks for a source name, a github repo and a first
+      app, and writes a repo that holds your webapps and publishes them. run <code>bun run new &lt;app&gt;</code> to add
+      another, then push to main. github actions builds each app, hosts the bundles on github pages with the right
+      headers, and publishes the catalog.
+    </p>
+  </section>
+
+  <section class="mb-14">
     <h2 class={refdes}>a source is a url</h2>
     <p class="text-white/70">
       publish a <code>catalog.v1</code> document at an https url. users add it by pasting the url.
@@ -106,13 +121,28 @@ const newest = entry.versions[0];`;
     </p>
     <p class="text-white/70">
       <code>screenshots</code> is up to six https urls of the app running on a device, 800x480. the store card uses the first
-      one, and the listing shows the rest. it is optional in the schema and required to enter the{' '}
-      <a href="/appjam">app jam</a>. with the thing plugged in, chromium answers CDP on port 9222, so{' '}
-      <code>Page.captureScreenshot</code> against the kiosk target gives you an exact 800x480 png.
+      one, and the listing shows the rest. with the thing plugged in, chromium answers CDP at
+      <code>bridgething.local:9222</code>, so <code>Page.captureScreenshot</code> against the kiosk target gives you an
+      exact 800x480 png. the scaffold wraps that as <code>bun run shot &lt;app&gt;</code>.
     </p>
     <p class="text-white/70">
       <code>min_libbridgething_version</code> is dotted semver, no leading <code>v</code>. the store installs the newest
       version the connected device can run.
+    </p>
+  </section>
+
+  <section class="mb-14">
+    <h2 class={refdes}>hosting the settings page</h2>
+    <p class="text-white/70">
+      <code>settings</code> is optional and points at the same <a href="/docs/settings-pages">settings page</a> the bundle
+      ships, hosted on its own. a companion that has it fetches the page over the internet instead of pulling it off the device,
+      which matters most on a slow bluetooth link.
+    </p>
+    <p class="text-white/70">
+      <code>sha256</code> must be the digest of the bytes in the bundle. the device reports that digest itself, and the companion
+      only uses your hosted copy when the two agree, so a mismatch is not a trust problem: it just falls back to the device.
+      that also means a bundle pushed straight to a device during development always uses the link, which is what you want
+      while iterating.
     </p>
   </section>
 

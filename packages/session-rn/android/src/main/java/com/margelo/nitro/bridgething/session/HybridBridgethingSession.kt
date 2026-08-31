@@ -217,8 +217,12 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         else Variant_NullType_BridgethingWebappIcon.First(NullType.NULL)
     }
 
-    override fun webappSettingsMarkup(deviceId: String, id: String): Promise<String> = Promise.async {
-        require().webappSettingsMarkup(deviceId, id)
+    override fun webappSettingsMarkup(
+        deviceId: String,
+        id: String,
+        origin: BridgethingResourceOrigin?,
+    ): Promise<String> = Promise.async {
+        require().webappSettingsMarkup(deviceId, id, origin)
     }
 
     override fun listWebappConfig(deviceId: String, id: String): Promise<Array<BridgethingConfigEntry>> = Promise.async {
