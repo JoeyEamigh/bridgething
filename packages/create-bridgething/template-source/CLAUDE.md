@@ -83,7 +83,7 @@ bun run check
 
 `new` scaffolds into `apps/<slug>`. Never add an app by hand: the scaffold generates the uuid, writes the store listing, wires the dev server to a connected device, and lands the tsconfig and scripts CI expects.
 
-`shot` captures the kiosk over CDP into `apps/<slug>/screenshots/`. Chromium's debugging port is 9223 and is bound to the device's loopback, so it goes through an ssh tunnel; the command opens and closes one itself. Up to six, filename order, first is the store card.
+`shot` captures the kiosk over CDP into `apps/<slug>/screenshots/`. The image fronts chromium's debugging port on `bridgething.local:9222`, so it needs nothing but the device plugged in. Up to six, filename order, first is the store card.
 
 `bump` writes `public/manifest.json` and `package.json` together and opens the changelog section. Editing one without the other fails the build.
 

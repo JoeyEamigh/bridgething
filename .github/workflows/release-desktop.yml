@@ -99,6 +99,33 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf clang xdg-utils
           { echo "CC=clang"; echo "CXX=clang++"; } >> "$GITHUB_ENV"
 
+      - name: seed the appimage tooling
+        if: startsWith(matrix.runner, 'ubuntu')
+        shell: bash
+        env:
+          LINUXDEPLOY_TAG: 1-alpha-20251107-1
+        run: |
+          set -euo pipefail
+          declare -A sums=(
+            [x86_64]=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+            [aarch64]=620095110d693282b8ebeb244a95b5e911cf8f65f76c88b4b47d16ae6346fcff
+          )
+          arch="${{ matrix.target }}"
+          arch="${arch%%-*}"
+          dir="${XDG_CACHE_HOME:-$HOME/.cache}/tauri"
+          mkdir -p "$dir"
+
+          out="$dir/linuxdeploy-${arch}.AppImage"
+          curl -fsSL -o "$out" "https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_TAG}/linuxdeploy-${arch}.AppImage"
+          echo "${sums[$arch]}  $out" | sha256sum -c -
+          chmod +x "$out"
+
+          gtk="$dir/linuxdeploy-plugin-gtk.sh"
+          curl -fsSL -o "$gtk" https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+          grep -q '^export GDK_BACKEND=x11' "$gtk"
+          sed -i '/^export GDK_BACKEND=x11/d' "$gtk"
+          chmod +x "$gtk"
+
       - run: bun install --frozen-lockfile
 
       - name: build the frontend and its workspace deps
@@ -166,6 +193,25 @@ jobs:
         run: |
           set -euo pipefail
           echo "dir=target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/bundle" >>"$GITHUB_OUTPUT"
+
+      - name: check the appimage leaves the host graphics stack alone
+        if: startsWith(matrix.runner, 'ubuntu')
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="$(echo "$GITHUB_WORKSPACE/${{ steps.bundle.outputs.dir }}"/appimage/*.AppImage)"
+          work="$(mktemp -d)"
+          (cd "$work" && "$appimage" --appimage-extract >/dev/null)
+          root="$work/squashfs-root"
+          if find "$root" -name 'libwayland-client.so*' -print -quit | grep -q .; then
+            echo "the appimage bundles libwayland-client, which shadows the host copy and makes mesa's egl vendor fail to load" >&2
+            exit 1
+          fi
+          if grep -rq 'GDK_BACKEND=x11' "$root/apprun-hooks"; then
+            echo "the appimage pins gdk to x11, which routes every wayland session through xwayland and dies outright without it" >&2
+            exit 1
+          fi
+          rm -rf "$work"
 
       - uses: actions/upload-artifact@v4
         with:
