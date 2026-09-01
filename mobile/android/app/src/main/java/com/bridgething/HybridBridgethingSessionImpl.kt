@@ -31,6 +31,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
+import com.margelo.nitro.bridgething.session.BridgethingResourceOrigin
 import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
@@ -61,6 +62,7 @@ import uniffi.bridgething_companion.LogOrigin
 import uniffi.bridgething_companion.SessionEvent
 import uniffi.bridgething_companion.SpotifyProviderConfig
 import uniffi.bridgething_companion.WebappResourceKind
+import uniffi.bridgething_companion.WebappResourceOrigin
 
 public class HybridBridgethingSessionImpl(
     private val context: Context,
