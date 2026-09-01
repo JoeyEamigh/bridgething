@@ -265,7 +265,14 @@ impl Provider for HubProvider {
 }
 
 fn hub(gateway: Gateway) -> Arc<Hub> {
-  let hub = Hub::new(Arc::new(gateway), host(), flags());
+  let hub = Hub::new(Arc::new(gateway), host(), flags(), false);
+  hub.start();
+  hub
+}
+
+// a host that can move its own output volume, which a phone cannot
+fn hub_owning_volume(gateway: Gateway) -> Arc<Hub> {
+  let hub = Hub::new(Arc::new(gateway), host(), flags(), true);
   hub.start();
   hub
 }
@@ -278,6 +285,7 @@ fn hub_on(gateway: Gateway, os_name: &str) -> Arc<Hub> {
       ..host()
     },
     flags(),
+    false,
   );
   hub.start();
   hub
@@ -546,6 +554,53 @@ async fn the_volume_scope_is_claimed_only_when_the_audible_source_wants_it() {
   );
   peer
     .wait("the volume claim", claim_of(CompanionAuthorityScope::Volume))
+    .await;
+}
+
+#[tokio::test]
+async fn a_host_that_owns_its_own_volume_claims_the_scope_for_any_audible_source() {
+  let (gateway, peer) = Peer::link();
+  let hub = hub_owning_volume(gateway);
+  hub.sink().submit_player(
+    "system-media",
+    snapshot(PlaybackState::Playing, "mpris:track:a"),
+    "org.mpris.MediaPlayer2.spotify",
+    true,
+    false,
+  );
+  let claim = peer
+    .wait("the volume claim", claim_of(CompanionAuthorityScope::Volume))
+    .await;
+  assert_eq!(claim.app_bundle.as_deref(), Some("org.mpris.MediaPlayer2.spotify"));
+}
+
+#[tokio::test]
+async fn a_host_that_owns_its_own_volume_keeps_the_scope_when_the_source_gives_it_up() {
+  let (gateway, peer) = Peer::link();
+  let hub = hub_owning_volume(gateway);
+  let sink = hub.sink();
+  sink.submit_player(
+    "spotify",
+    snapshot(PlaybackState::Playing, "spotify:track:a"),
+    "com.spotify.client",
+    true,
+    true,
+  );
+  peer
+    .wait("the volume claim", claim_of(CompanionAuthorityScope::Volume))
+    .await;
+  sink.submit_player(
+    "spotify",
+    snapshot(PlaybackState::Playing, "spotify:track:a"),
+    "com.spotify.client",
+    true,
+    false,
+  );
+  peer
+    .quiet(
+      "a volume release the host never wanted",
+      release_of(CompanionAuthorityScope::Volume),
+    )
     .await;
 }
 

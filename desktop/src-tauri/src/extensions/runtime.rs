@@ -223,7 +223,7 @@ fn executable(_path: &Path) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-  use std::{io::Write as _, sync::Arc};
+  use std::sync::Arc;
 
   use bridgething_io::{HttpDownloadSink, HttpSink, HttpTransport};
 

@@ -9,7 +9,7 @@ use std::{
 
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, SessionEvent},
-  backend::{ExtensionHost, HttpTransport, LinkDevice, LinkInbox, LinkTransport},
+  backend::{ExtensionHost, HttpTransport, LinkDevice, LinkInbox, LinkTransport, VolumeBackend},
   session::Session,
 };
 use bridgething_gateway::Gateway;
@@ -296,6 +296,7 @@ pub struct Setup {
   pub recording: bool,
   pub extensions: Option<Arc<dyn ExtensionHost>>,
   pub http: Option<Arc<dyn HttpTransport>>,
+  pub volume: Option<Arc<dyn VolumeBackend>>,
 }
 
 pub struct Rig {
@@ -328,6 +329,16 @@ impl Rig {
     .await
   }
 
+  // a host that can move its own output volume, recording so the emitted frames are inspectable
+  pub async fn with_volume(volume: Arc<dyn VolumeBackend>) -> Self {
+    Self::launch(Setup {
+      recording: true,
+      volume: Some(volume),
+      ..Setup::default()
+    })
+    .await
+  }
+
   pub async fn with_http(http: Arc<dyn HttpTransport>) -> Self {
     Self::launch(Setup {
       http: Some(http),
@@ -352,7 +363,7 @@ impl Rig {
       secrets: Arc::new(MemorySecrets::default()),
       log: Arc::new(Quiet),
       audio: None,
-      volume: None,
+      volume: setup.volume,
       geo: None,
       notifications: None,
       phone: None,

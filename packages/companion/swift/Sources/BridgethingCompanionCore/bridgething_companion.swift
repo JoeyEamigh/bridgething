@@ -3002,16 +3002,6 @@ public func FfiConverterTypeAppleMusicBackend_lower(_ value: AppleMusicBackend) 
 
 public protocol AudioBackend: AnyObject, Sendable {
     
-    func setVolume(level: Float) 
-    
-    func setMute(muted: Bool) 
-    
-    func volumeUp() 
-    
-    func volumeDown() 
-    
-    func muteToggle() 
-    
     func speak(id: String, text: String, voice: String?, sink: SpeakSink) 
     
     func cancel(id: String) 
@@ -3073,48 +3063,6 @@ open class AudioBackendImpl: AudioBackend, @unchecked Sendable {
 
     
 
-    
-open func setVolume(level: Float)  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_audiobackend_set_volume(
-            self.uniffiCloneHandle(),
-        FfiConverterFloat.lower(level),uniffiCallStatus
-    )
-}
-}
-    
-open func setMute(muted: Bool)  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_audiobackend_set_mute(
-            self.uniffiCloneHandle(),
-        FfiConverterBool.lower(muted),uniffiCallStatus
-    )
-}
-}
-    
-open func volumeUp()  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_audiobackend_volume_up(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-}
-}
-    
-open func volumeDown()  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_audiobackend_volume_down(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-}
-}
-    
-open func muteToggle()  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_audiobackend_mute_toggle(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-}
-}
     
 open func speak(id: String, text: String, voice: String?, sink: SpeakSink)  {try! rustCall() {
         uniffiCallStatus in
@@ -3182,120 +3130,6 @@ fileprivate struct UniffiCallbackInterfaceAudioBackend {
             } catch {
                 fatalError("Uniffi callback interface AudioBackend: handle missing in uniffiClone")
             }
-        },
-        setVolume: { (
-            uniffiHandle: UInt64,
-            level: Float,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeAudioBackend.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.setVolume(
-                     level: try FfiConverterFloat.lift(level)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        setMute: { (
-            uniffiHandle: UInt64,
-            muted: Int8,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeAudioBackend.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.setMute(
-                     muted: try FfiConverterBool.lift(muted)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        volumeUp: { (
-            uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeAudioBackend.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.volumeUp(
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        volumeDown: { (
-            uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeAudioBackend.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.volumeDown(
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        muteToggle: { (
-            uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeAudioBackend.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.muteToggle(
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
         },
         speak: { (
             uniffiHandle: UInt64,
@@ -11998,6 +11832,443 @@ public func FfiConverterTypeTransferPolicy_lower(_ value: TransferPolicy) -> UIn
 
 
 
+/**
+ * output volume on the host itself. a host that leaves this unimplemented keeps the device
+ * routing volume over iAP2 HID instead of over the gateway.
+ */
+public protocol VolumeBackend: AnyObject, Sendable {
+    
+    func start(inbox: VolumeInbox) 
+    
+    func stop() 
+    
+    func snapshot()  -> VolumeLevel
+    
+    func setVolume(level: Float) 
+    
+    func setMute(muted: Bool) 
+    
+    func volumeUp() 
+    
+    func volumeDown() 
+    
+    func muteToggle() 
+    
+}
+/**
+ * output volume on the host itself. a host that leaves this unimplemented keeps the device
+ * routing volume over iAP2 HID instead of over the gateway.
+ */
+open class VolumeBackendImpl: VolumeBackend, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_volumebackend(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_volumebackend(handle, $0) }
+    }
+
+    
+
+    
+open func start(inbox: VolumeInbox)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_start(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeVolumeInbox_lower(inbox),uniffiCallStatus
+    )
+}
+}
+    
+open func stop()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_stop(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func snapshot() -> VolumeLevel  {
+    return try!  FfiConverterTypeVolumeLevel_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_snapshot(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func setVolume(level: Float)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_set_volume(
+            self.uniffiCloneHandle(),
+        FfiConverterFloat.lower(level),uniffiCallStatus
+    )
+}
+}
+    
+open func setMute(muted: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_set_mute(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(muted),uniffiCallStatus
+    )
+}
+}
+    
+open func volumeUp()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_volume_up(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func volumeDown()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_volume_down(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func muteToggle()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_volumebackend_mute_toggle(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceVolumeBackend {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceVolumeBackend = UniffiVTableCallbackInterfaceVolumeBackend(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeVolumeBackend.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface VolumeBackend: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeVolumeBackend.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface VolumeBackend: handle missing in uniffiClone")
+            }
+        },
+        start: { (
+            uniffiHandle: UInt64,
+            inbox: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.start(
+                     inbox: try FfiConverterTypeVolumeInbox_lift(inbox)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        stop: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.stop(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        snapshot: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> VolumeLevel in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.snapshot(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeVolumeLevel_lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        setVolume: { (
+            uniffiHandle: UInt64,
+            level: Float,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.setVolume(
+                     level: try FfiConverterFloat.lift(level)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        setMute: { (
+            uniffiHandle: UInt64,
+            muted: Int8,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.setMute(
+                     muted: try FfiConverterBool.lift(muted)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        volumeUp: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.volumeUp(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        volumeDown: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.volumeDown(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        muteToggle: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVolumeBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.muteToggle(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceVolumeBackend> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceVolumeBackend>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitVolumeBackend() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_volumebackend(UniffiCallbackInterfaceVolumeBackend.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVolumeBackend: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<VolumeBackend>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = VolumeBackend
+
+    public static func lift(_ handle: UInt64) throws -> VolumeBackend {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return VolumeBackendImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: VolumeBackend) -> UInt64 {
+         if let rustImpl = value as? VolumeBackendImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VolumeBackend {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: VolumeBackend, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVolumeBackend_lift(_ handle: UInt64) throws -> VolumeBackend {
+    return try FfiConverterTypeVolumeBackend.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVolumeBackend_lower(_ value: VolumeBackend) -> UInt64 {
+    return FfiConverterTypeVolumeBackend.lower(value)
+}
+
+
+
+
+
+
 public protocol VolumeInboxProtocol: AnyObject, Sendable {
     
     func onChanged(level: Float, muted: Bool) 
@@ -12109,269 +12380,6 @@ public func FfiConverterTypeVolumeInbox_lift(_ handle: UInt64) throws -> VolumeI
 #endif
 public func FfiConverterTypeVolumeInbox_lower(_ value: VolumeInbox) -> UInt64 {
     return FfiConverterTypeVolumeInbox.lower(value)
-}
-
-
-
-
-
-
-public protocol VolumeMonitor: AnyObject, Sendable {
-    
-    func start(inbox: VolumeInbox) 
-    
-    func stop() 
-    
-    func snapshot()  -> VolumeLevel
-    
-}
-open class VolumeMonitorImpl: VolumeMonitor, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_bridgething_companion_fn_clone_volumemonitor(self.handle, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        if handle == 0 {
-            // Mock objects have handle=0 don't try to free them
-            return
-        }
-
-        try! rustCall { uniffi_bridgething_companion_fn_free_volumemonitor(handle, $0) }
-    }
-
-    
-
-    
-open func start(inbox: VolumeInbox)  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_volumemonitor_start(
-            self.uniffiCloneHandle(),
-        FfiConverterTypeVolumeInbox_lower(inbox),uniffiCallStatus
-    )
-}
-}
-    
-open func stop()  {try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_volumemonitor_stop(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-}
-}
-    
-open func snapshot() -> VolumeLevel  {
-    return try!  FfiConverterTypeVolumeLevel_lift(try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_volumemonitor_snapshot(
-            self.uniffiCloneHandle(),uniffiCallStatus
-    )
-})
-}
-    
-
-    
-}
-
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceVolumeMonitor {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceVolumeMonitor = UniffiVTableCallbackInterfaceVolumeMonitor(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterTypeVolumeMonitor.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface VolumeMonitor: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterTypeVolumeMonitor.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface VolumeMonitor: handle missing in uniffiClone")
-            }
-        },
-        start: { (
-            uniffiHandle: UInt64,
-            inbox: UInt64,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeVolumeMonitor.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.start(
-                     inbox: try FfiConverterTypeVolumeInbox_lift(inbox)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        stop: { (
-            uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterTypeVolumeMonitor.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.stop(
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        snapshot: { (
-            uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> VolumeLevel in
-                guard let uniffiObj = try? FfiConverterTypeVolumeMonitor.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.snapshot(
-                )
-            }
-
-            
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeVolumeLevel_lower($0) }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        }
-    )
-
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
-    //
-    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
-    // This is safe because the pointee is initialized once during static init
-    // and never mutated by either side of the FFI.  Its fields are C function pointers.
-    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceVolumeMonitor> = {
-        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceVolumeMonitor>.allocate(capacity: 1)
-        ptr.initialize(to: vtable)
-        return UnsafePointer(ptr)
-    }()
-}
-
-private func uniffiCallbackInitVolumeMonitor() {
-    uniffi_bridgething_companion_fn_init_callback_vtable_volumemonitor(UniffiCallbackInterfaceVolumeMonitor.vtablePtr)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeVolumeMonitor: FfiConverter {
-    fileprivate static let handleMap = UniffiHandleMap<VolumeMonitor>()
-
-    typealias FfiType = UInt64
-    typealias SwiftType = VolumeMonitor
-
-    public static func lift(_ handle: UInt64) throws -> VolumeMonitor {
-        if ((handle & 1) == 0) {
-            // Rust-generated handle, construct a new class that uses the handle to implement the
-            // interface
-            return VolumeMonitorImpl(unsafeFromHandle: handle)
-        } else {
-            // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
-        }
-    }
-
-    public static func lower(_ value: VolumeMonitor) -> UInt64 {
-         if let rustImpl = value as? VolumeMonitorImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
-            // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VolumeMonitor {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: VolumeMonitor, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeVolumeMonitor_lift(_ handle: UInt64) throws -> VolumeMonitor {
-    return try FfiConverterTypeVolumeMonitor.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeVolumeMonitor_lower(_ value: VolumeMonitor) -> UInt64 {
-    return FfiConverterTypeVolumeMonitor.lower(value)
 }
 
 
@@ -13842,7 +13850,7 @@ public struct CompanionBackends {
     public var secrets: SecretStore
     public var log: LogSink
     public var audio: AudioBackend?
-    public var volume: VolumeMonitor?
+    public var volume: VolumeBackend?
     public var geo: GeoProvider?
     public var notifications: NotificationBackend?
     public var phone: PhoneBackend?
@@ -13859,7 +13867,7 @@ public struct CompanionBackends {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeMonitor? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
+    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
         self.link = link
         self.host = host
         self.http = http
@@ -13906,7 +13914,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
                 secrets: FfiConverterTypeSecretStore.read(from: &buf), 
                 log: FfiConverterTypeLogSink.read(from: &buf), 
                 audio: FfiConverterOptionTypeAudioBackend.read(from: &buf), 
-                volume: FfiConverterOptionTypeVolumeMonitor.read(from: &buf), 
+                volume: FfiConverterOptionTypeVolumeBackend.read(from: &buf), 
                 geo: FfiConverterOptionTypeGeoProvider.read(from: &buf), 
                 notifications: FfiConverterOptionTypeNotificationBackend.read(from: &buf), 
                 phone: FfiConverterOptionTypePhoneBackend.read(from: &buf), 
@@ -13931,7 +13939,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
         FfiConverterTypeSecretStore.write(value.secrets, into: &buf)
         FfiConverterTypeLogSink.write(value.log, into: &buf)
         FfiConverterOptionTypeAudioBackend.write(value.audio, into: &buf)
-        FfiConverterOptionTypeVolumeMonitor.write(value.volume, into: &buf)
+        FfiConverterOptionTypeVolumeBackend.write(value.volume, into: &buf)
         FfiConverterOptionTypeGeoProvider.write(value.geo, into: &buf)
         FfiConverterOptionTypeNotificationBackend.write(value.notifications, into: &buf)
         FfiConverterOptionTypePhoneBackend.write(value.phone, into: &buf)
@@ -25221,8 +25229,8 @@ fileprivate struct FfiConverterOptionTypeTransferPolicy: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeVolumeMonitor: FfiConverterRustBuffer {
-    typealias SwiftType = VolumeMonitor?
+fileprivate struct FfiConverterOptionTypeVolumeBackend: FfiConverterRustBuffer {
+    typealias SwiftType = VolumeBackend?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -25230,13 +25238,13 @@ fileprivate struct FfiConverterOptionTypeVolumeMonitor: FfiConverterRustBuffer {
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeVolumeMonitor.write(value, into: &buf)
+        FfiConverterTypeVolumeBackend.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeVolumeMonitor.read(from: &buf)
+        case 1: return try FfiConverterTypeVolumeBackend.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -27372,31 +27380,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite() != 26475) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_set_volume() != 21027) {
+    if (uniffi_bridgething_companion_checksum_method_audiobackend_speak() != 61321) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_set_mute() != 7264) {
+    if (uniffi_bridgething_companion_checksum_method_audiobackend_cancel() != 62888) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_volume_up() != 12902) {
+    if (uniffi_bridgething_companion_checksum_method_audiobackend_cancel_all() != 29982) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_volume_down() != 52367) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_mute_toggle() != 41201) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_speak() != 33056) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_cancel() != 19918) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_cancel_all() != 26405) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_audiobackend_play_earcon() != 22743) {
+    if (uniffi_bridgething_companion_checksum_method_audiobackend_play_earcon() != 25031) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_earconsink_on_finished() != 30498) {
@@ -27408,16 +27401,31 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_speaksink_on_start() != 43824) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_start() != 11566) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_stop() != 22914) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_snapshot() != 6320) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_set_volume() != 60392) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_set_mute() != 14436) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_volume_up() != 13866) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_volume_down() != 31743) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_volumebackend_mute_toggle() != 51282) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_volumeinbox_on_changed() != 45635) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_volumemonitor_start() != 27669) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_volumemonitor_stop() != 62783) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_volumemonitor_snapshot() != 25236) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_connectivityinbox_on_changed() != 42704) {
@@ -27774,7 +27782,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitSessionEventSink()
     uniffiCallbackInitSpeechRecognizer()
     uniffiCallbackInitTransferPolicy()
-    uniffiCallbackInitVolumeMonitor()
+    uniffiCallbackInitVolumeBackend()
     uniffiCallbackInitWebappBundleSink()
     uniffiCallbackInitWsTransport()
     return InitializationResult.ok

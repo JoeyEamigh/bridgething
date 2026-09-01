@@ -12,7 +12,7 @@ import com.bridgething.companion.shell.AndroidImageScaler
 import com.bridgething.companion.shell.AndroidMediaSessionBackend
 import com.bridgething.companion.shell.AndroidNotificationBackend
 import com.bridgething.companion.shell.AndroidPhoneBackend
-import com.bridgething.companion.shell.AndroidVolumeMonitor
+import com.bridgething.companion.shell.AndroidVolumeBackend
 import com.bridgething.companion.shell.BtLinkTransport
 import com.bridgething.companion.shell.EncryptedPrefsSecretStore
 import com.bridgething.companion.shell.IntentDeviceWaker
@@ -78,7 +78,7 @@ public class BridgethingCompanion(
                 secrets = secrets,
                 log = LogcatSink(),
                 audio = AndroidAudioBackend(appContext),
-                volume = AndroidVolumeMonitor(appContext),
+                volume = AndroidVolumeBackend(appContext),
                 geo = AndroidGeoProvider(appContext),
                 notifications = notifications,
                 phone = AndroidPhoneBackend(appContext),

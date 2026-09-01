@@ -278,6 +278,7 @@ async fn boot(backend: Arc<FakeAm>) -> Rig {
       audio_tts: false,
       voice_model: false,
     },
+    false,
   );
   hub.start();
   let provider = AppleMusicProvider::new(backend.clone(), Arc::new(NoHttp), None);

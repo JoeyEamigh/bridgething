@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "alsa",
  "anyhow",
@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-client"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-sdk-runtime",
  "futures",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-codegen"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "quote",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-companion"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -892,7 +892,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "async-trait",
  "bridgething-gateway",
@@ -918,7 +918,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery-napi"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-delivery",
  "bridgething-gateway",
@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery-wasm"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-delivery",
  "bridgething-gateway",
@@ -979,6 +979,7 @@ dependencies = [
  "mdns-sd",
  "objc2",
  "objc2-avf-audio",
+ "objc2-core-audio",
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-core-location",
@@ -987,6 +988,7 @@ dependencies = [
  "objc2-image-io",
  "objc2-uniform-type-identifiers",
  "ort",
+ "pulseaudio",
  "serde",
  "serde_json",
  "spotify",
@@ -1009,13 +1011,14 @@ dependencies = [
  "uuid",
  "whisper-rs",
  "windows 0.62.2",
+ "windows-core 0.62.2",
  "zbus",
  "zip 8.6.0",
 ]
 
 [[package]]
 name = "bridgething-dsp"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-wakeword",
  "earshot",
@@ -1028,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -1050,7 +1053,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-host-gateway"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "bridgething-delivery",
@@ -1073,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-iap2"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "async-trait",
  "bitflags 2.13.1",
@@ -1095,7 +1098,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "futures",
  "js-sys",
@@ -1113,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
@@ -1123,7 +1126,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mfi"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "hex-literal",
  "i2cdev",
@@ -1133,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mfi-proxy"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-mfi",
  "tracing",
@@ -1142,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mic-debug"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "alsa",
  "axum",
@@ -1162,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bytes",
  "futures",
@@ -1180,14 +1183,14 @@ dependencies = [
 
 [[package]]
 name = "bridgething-swupdate-sys"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bindgen",
 ]
 
 [[package]]
 name = "bridgething-test-harness"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1218,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-wakeword"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "realfft",
  "thiserror 2.0.18",
@@ -2481,6 +2484,17 @@ name = "endi"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66b7e2430c6dff6a955451e2cfc438f09cea1965a9d6f87f7e3b90decc014099"
+
+[[package]]
+name = "enum-primitive-derive"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba7795da175654fe16979af73f81f26a8ea27638d8d9823d317016888a63dc4c"
+dependencies = [
+ "num-traits",
+ "quote",
+ "syn 2.0.117",
+]
 
 [[package]]
 name = "enumflags2"
@@ -4040,7 +4054,7 @@ dependencies = [
 
 [[package]]
 name = "libbridgething"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "bridgething-macros",
  "bytes",
@@ -4584,7 +4598,7 @@ dependencies = [
 
 [[package]]
 name = "nlu"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -4808,6 +4822,15 @@ checksum = "b034b578389f89a85c055eacc8d8b368be5f04a6c1b07f672bf3aec21d0ef621"
 dependencies = [
  "objc2",
  "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-core-audio"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1eebcea8b0dbff5f7c8504f3107c68fc061a3eb44932051c8cf8a68d969c3b2"
+dependencies = [
+ "objc2-core-foundation",
 ]
 
 [[package]]
@@ -5781,6 +5804,22 @@ version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
 dependencies = [
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pulseaudio"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d70623bd7967a9ca4c2ae0e807fc380b291f98480fc037042305ec643a4d3373"
+dependencies = [
+ "bitflags 2.13.1",
+ "byteorder",
+ "enum-primitive-derive",
+ "futures",
+ "log",
+ "mio",
+ "num-traits",
  "thiserror 1.0.69",
 ]
 
@@ -7158,7 +7197,7 @@ dependencies = [
 
 [[package]]
 name = "spotify"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "base64 0.22.1",
  "bridgething-io",

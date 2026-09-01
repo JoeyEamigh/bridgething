@@ -15,7 +15,7 @@ use crate::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, ForeignWs,
     GeoProvider, HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
     MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend, SecretStore,
-    SpeechRecognizer, TransferPolicy, VolumeMonitor, WsTransport,
+    SpeechRecognizer, TransferPolicy, VolumeBackend, WsTransport,
   },
   provider::ResumeTarget,
   session::Session,
@@ -46,7 +46,7 @@ pub struct CompanionBackends {
   #[uniffi(default = None)]
   pub audio: Option<Arc<dyn AudioBackend>>,
   #[uniffi(default = None)]
-  pub volume: Option<Arc<dyn VolumeMonitor>>,
+  pub volume: Option<Arc<dyn VolumeBackend>>,
   #[uniffi(default = None)]
   pub geo: Option<Arc<dyn GeoProvider>>,
   #[uniffi(default = None)]

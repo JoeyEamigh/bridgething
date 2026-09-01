@@ -25,12 +25,6 @@
             synth.delegate = delegate
         }
 
-        public func setVolume(level: Float) {}
-        public func setMute(muted: Bool) {}
-        public func volumeUp() {}
-        public func volumeDown() {}
-        public func muteToggle() {}
-
         public func speak(id: String, text: String, voice: String?, sink: SpeakSink) {
             ShellAudioSession.activateMixedPlayback()
             let utterance = AVSpeechUtterance(string: text)

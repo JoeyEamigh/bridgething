@@ -2,14 +2,12 @@ package com.bridgething.companion.shell
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -26,7 +24,6 @@ public class AndroidAudioBackend(
     context: Context,
 ) : AudioBackend {
     private val appContext = context.applicationContext
-    private val audio = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val ready = CompletableDeferred<Boolean>()
     private val callbacks = ConcurrentHashMap<String, SpeakSink>()
     private val watchdogs = ConcurrentHashMap<String, Job>()
@@ -62,29 +59,6 @@ public class AndroidAudioBackend(
         val sink = callbacks.remove(id)
         watchdogs.remove(id)?.cancel()
         sink?.use { it.onFinished(completed) }
-    }
-
-    override fun setVolume(level: Float) {
-        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val index = (level.coerceIn(0f, 1f) * max).roundToInt()
-        runCatching { audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
-    }
-
-    override fun setMute(muted: Boolean) {
-        val direction = if (muted) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
-        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0) }
-    }
-
-    override fun volumeUp() {
-        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0) }
-    }
-
-    override fun volumeDown() {
-        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0) }
-    }
-
-    override fun muteToggle() {
-        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0) }
     }
 
     override fun speak(id: String, text: String, voice: String?, sink: SpeakSink) {

@@ -11,7 +11,7 @@ use libbridgething::{
 };
 
 use crate::{
-  backend::{AudioBackend, EarconSink, SpeakEvent, SpeakSink},
+  backend::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend},
   dispatch::{Serial, tell},
 };
 
@@ -24,7 +24,8 @@ pub trait VolumeAuthority: Send + Sync {
 }
 
 pub struct AudioDispatcher {
-  backend: Arc<dyn AudioBackend>,
+  backend: Option<Arc<dyn AudioBackend>>,
+  volume: Option<Arc<dyn VolumeBackend>>,
   link: Arc<dyn OutboundLink>,
   authority: RwLock<Option<Arc<dyn VolumeAuthority>>>,
   speech: Serial,
@@ -32,9 +33,14 @@ pub struct AudioDispatcher {
 }
 
 impl AudioDispatcher {
-  pub fn new(backend: Arc<dyn AudioBackend>, link: Arc<dyn OutboundLink>) -> Self {
+  pub fn new(
+    backend: Option<Arc<dyn AudioBackend>>,
+    volume: Option<Arc<dyn VolumeBackend>>,
+    link: Arc<dyn OutboundLink>,
+  ) -> Self {
     Self {
       backend,
+      volume,
       link,
       authority: RwLock::new(None),
       speech: Serial::spawn(),
@@ -47,7 +53,9 @@ impl AudioDispatcher {
   }
 
   pub async fn stop(&self) {
-    tell(&self.backend, |backend| backend.cancel_all()).await;
+    if let Some(backend) = &self.backend {
+      tell(backend, |backend| backend.cancel_all()).await;
+    }
   }
 
   async fn volume_owner(&self) -> Option<Arc<dyn VolumeAuthority>> {
@@ -55,6 +63,14 @@ impl AudioDispatcher {
     match installed {
       Some(authority) if authority.owns_volume().await => Some(authority),
       _ => None,
+    }
+  }
+
+  // the level change comes back through the volume backend's own inbox, so nothing is synthesized here
+  async fn on_host(&self, verb: &str, act: impl for<'a> FnOnce(&'a (dyn VolumeBackend + 'static)) + Send + 'static) {
+    match &self.volume {
+      Some(volume) => tell(volume, act).await,
+      None => self.unavailable(verb).await,
     }
   }
 
@@ -79,6 +95,14 @@ impl AudioDispatcher {
     }
   }
 
+  async fn unavailable(&self, verb: &str) {
+    self
+      .report(AudioError::Unavailable {
+        verb: verb.to_owned(),
+      })
+      .await;
+  }
+
   async fn report(&self, error: AudioError) {
     let _ = self
       .link
@@ -91,7 +115,7 @@ impl AudioHandler for AudioDispatcher {
   async fn volume_up(&self) -> Result<(), WireError> {
     match self.volume_owner().await {
       Some(authority) => self.moved("volumeUp", authority.volume_up().await).await,
-      None => tell(&self.backend, |backend| backend.volume_up()).await,
+      None => self.on_host("volumeUp", |volume| volume.volume_up()).await,
     }
     Ok(())
   }
@@ -99,7 +123,7 @@ impl AudioHandler for AudioDispatcher {
   async fn volume_down(&self) -> Result<(), WireError> {
     match self.volume_owner().await {
       Some(authority) => self.moved("volumeDown", authority.volume_down().await).await,
-      None => tell(&self.backend, |backend| backend.volume_down()).await,
+      None => self.on_host("volumeDown", |volume| volume.volume_down()).await,
     }
     Ok(())
   }
@@ -108,14 +132,18 @@ impl AudioHandler for AudioDispatcher {
     let level = payload.level;
     match self.volume_owner().await {
       Some(authority) => self.moved("setVolume", authority.set_volume(level).await).await,
-      None => tell(&self.backend, move |backend| backend.set_volume(level)).await,
+      None => {
+        self
+          .on_host("setVolume", move |volume| volume.set_volume(level))
+          .await
+      }
     }
     Ok(())
   }
 
   async fn mute_toggle(&self) -> Result<(), WireError> {
     if self.volume_owner().await.is_none() {
-      tell(&self.backend, |backend| backend.mute_toggle()).await;
+      self.on_host("muteToggle", |volume| volume.mute_toggle()).await;
     }
     Ok(())
   }
@@ -123,33 +151,41 @@ impl AudioHandler for AudioDispatcher {
   async fn set_mute(&self, payload: SetMute) -> Result<(), WireError> {
     if self.volume_owner().await.is_none() {
       let muted = payload.muted;
-      tell(&self.backend, move |backend| backend.set_mute(muted)).await;
+      self.on_host("setMute", move |volume| volume.set_mute(muted)).await;
     }
     Ok(())
   }
 
   async fn tts(&self, payload: Tts) -> Result<(), WireError> {
-    self
-      .speech
-      .push(speak(self.backend.clone(), self.link.clone(), payload));
+    let Some(backend) = self.backend.clone() else {
+      self.unavailable("tts").await;
+      return Ok(());
+    };
+    self.speech.push(speak(backend, self.link.clone(), payload));
     Ok(())
   }
 
   async fn tts_cancel(&self, payload: TtsCancel) -> Result<(), WireError> {
-    let id = payload.id.to_string();
-    tell(&self.backend, move |backend| backend.cancel(id)).await;
+    if let Some(backend) = &self.backend {
+      let id = payload.id.to_string();
+      tell(backend, move |backend| backend.cancel(id)).await;
+    }
     Ok(())
   }
 
   async fn tts_cancel_all(&self) -> Result<(), WireError> {
-    tell(&self.backend, |backend| backend.cancel_all()).await;
+    if let Some(backend) = &self.backend {
+      tell(backend, |backend| backend.cancel_all()).await;
+    }
     Ok(())
   }
 
   async fn earcon(&self, payload: Earcon) -> Result<(), WireError> {
-    self
-      .earcons
-      .push(play(self.backend.clone(), self.link.clone(), payload.name));
+    let Some(backend) = self.backend.clone() else {
+      self.unavailable("earcon").await;
+      return Ok(());
+    };
+    self.earcons.push(play(backend, self.link.clone(), payload.name));
     Ok(())
   }
 }

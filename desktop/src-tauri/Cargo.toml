@@ -65,6 +65,7 @@ block2 = "0.6.2"
 dispatch2 = "0.3.1"
 objc2 = "0.6.4"
 objc2-avf-audio = "0.3.2"
+objc2-core-audio = { version = "0.3.2", default-features = false, features = ["AudioHardware", "std"] }
 objc2-core-foundation = "0.3.2"
 objc2-core-graphics = "0.3.2"
 objc2-core-location = "0.3.2"
@@ -80,6 +81,7 @@ ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 futures.workspace = true
+pulseaudio = "0.3.1"
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -93,5 +95,11 @@ windows = { version = "0.62.2", features = [
   "Media_SpeechSynthesis",
   "Networking_Connectivity",
   "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
   "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
 ] }
+windows-core = "0.62.2"

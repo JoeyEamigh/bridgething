@@ -7,7 +7,7 @@ use std::{
 };
 
 use bridgething_companion::{
-  backend::{AudioBackend, EarconSink, SpeakSink},
+  backend::{AudioBackend, EarconSink, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel},
   dispatch::audio::{AudioDispatcher, VolumeAuthority},
 };
 use bridgething_gateway::AudioHandler;
@@ -26,11 +26,6 @@ use crate::support::Peer;
 struct FakeAudio {
   hold_speech: bool,
   earcon_ok: bool,
-  set_volume: Mutex<Vec<f32>>,
-  set_mute: Mutex<Vec<bool>>,
-  volume_up: AtomicUsize,
-  volume_down: AtomicUsize,
-  mute_toggle: AtomicUsize,
   earcons: Mutex<Vec<String>>,
   spoken: Mutex<Vec<String>>,
   holding: Mutex<HashMap<String, Arc<SpeakSink>>>,
@@ -68,26 +63,6 @@ impl FakeAudio {
 }
 
 impl AudioBackend for FakeAudio {
-  fn set_volume(&self, level: f32) {
-    self.set_volume.lock().unwrap().push(level);
-  }
-
-  fn set_mute(&self, muted: bool) {
-    self.set_mute.lock().unwrap().push(muted);
-  }
-
-  fn volume_up(&self) {
-    self.volume_up.fetch_add(1, Ordering::SeqCst);
-  }
-
-  fn volume_down(&self) {
-    self.volume_down.fetch_add(1, Ordering::SeqCst);
-  }
-
-  fn mute_toggle(&self) {
-    self.mute_toggle.fetch_add(1, Ordering::SeqCst);
-  }
-
   fn speak(&self, id: String, text: String, _voice: Option<String>, sink: Arc<SpeakSink>) {
     self.spoken.lock().unwrap().push(text);
     if self.abandon_speech {
@@ -117,6 +92,51 @@ impl AudioBackend for FakeAudio {
   fn play_earcon(&self, name: String, sink: Arc<EarconSink>) {
     self.earcons.lock().unwrap().push(name);
     sink.on_finished(self.earcon_ok);
+  }
+}
+
+#[derive(Default)]
+struct FakeVolume {
+  level: Mutex<VolumeLevel>,
+  set_volume: Mutex<Vec<f32>>,
+  set_mute: Mutex<Vec<bool>>,
+  volume_up: AtomicUsize,
+  volume_down: AtomicUsize,
+  mute_toggle: AtomicUsize,
+  inbox: Mutex<Option<Arc<VolumeInbox>>>,
+}
+
+impl VolumeBackend for FakeVolume {
+  fn start(&self, inbox: Arc<VolumeInbox>) {
+    *self.inbox.lock().unwrap() = Some(inbox);
+  }
+
+  fn stop(&self) {
+    self.inbox.lock().unwrap().take();
+  }
+
+  fn snapshot(&self) -> VolumeLevel {
+    *self.level.lock().unwrap()
+  }
+
+  fn set_volume(&self, level: f32) {
+    self.set_volume.lock().unwrap().push(level);
+  }
+
+  fn set_mute(&self, muted: bool) {
+    self.set_mute.lock().unwrap().push(muted);
+  }
+
+  fn volume_up(&self) {
+    self.volume_up.fetch_add(1, Ordering::SeqCst);
+  }
+
+  fn volume_down(&self) {
+    self.volume_down.fetch_add(1, Ordering::SeqCst);
+  }
+
+  fn mute_toggle(&self) {
+    self.mute_toggle.fetch_add(1, Ordering::SeqCst);
   }
 }
 
@@ -224,10 +244,10 @@ fn tts(id: Uuid, text: &str) -> Tts {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn volume_verbs_route_to_the_backend() {
-  let backend = FakeAudio::new();
+async fn volume_verbs_route_to_the_host_mixer() {
+  let volume = Arc::new(FakeVolume::default());
   let (gateway, _peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(volume.clone()), Arc::new(gateway));
 
   dispatcher
     .set_volume(SetVolume { level: 0.42 })
@@ -236,29 +256,45 @@ async fn volume_verbs_route_to_the_backend() {
   dispatcher.volume_up().await.expect("accepted");
   dispatcher.volume_down().await.expect("accepted");
 
-  assert_eq!(*backend.set_volume.lock().unwrap(), vec![0.42]);
-  assert_eq!(backend.volume_up.load(Ordering::SeqCst), 1);
-  assert_eq!(backend.volume_down.load(Ordering::SeqCst), 1);
+  assert_eq!(*volume.set_volume.lock().unwrap(), vec![0.42]);
+  assert_eq!(volume.volume_up.load(Ordering::SeqCst), 1);
+  assert_eq!(volume.volume_down.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn mute_verbs_route_to_the_backend() {
+async fn volume_verbs_report_unavailable_on_a_host_with_no_mixer() {
   let backend = FakeAudio::new();
+  let (gateway, peer) = Peer::link();
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
+
+  dispatcher.volume_up().await.expect("accepted");
+
+  let reply = peer.wait("an audio error", audio_error).await;
+  assert_eq!(
+    reply.error,
+    AudioError::Unavailable { verb: "volumeUp".into() },
+    "a host that cannot move its own volume says so instead of swallowing the verb"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mute_verbs_route_to_the_host_mixer() {
+  let volume = Arc::new(FakeVolume::default());
   let (gateway, _peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(volume.clone()), Arc::new(gateway));
 
   dispatcher.set_mute(SetMute { muted: true }).await.expect("accepted");
   dispatcher.mute_toggle().await.expect("accepted");
 
-  assert_eq!(*backend.set_mute.lock().unwrap(), vec![true]);
-  assert_eq!(backend.mute_toggle.load(Ordering::SeqCst), 1);
+  assert_eq!(*volume.set_mute.lock().unwrap(), vec![true]);
+  assert_eq!(volume.mute_toggle.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn speech_emits_started_then_ended_completed() {
   let backend = FakeAudio::new();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let id = Uuid::now_v7();
 
   dispatcher.tts(tts(id, "hello")).await.expect("accepted");
@@ -273,7 +309,7 @@ async fn speech_emits_started_then_ended_completed() {
 async fn cancelling_speech_ends_it_incomplete() {
   let backend = FakeAudio::holding_speech();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let id = Uuid::now_v7();
 
   dispatcher.tts(tts(id, "a long sentence")).await.expect("accepted");
@@ -289,7 +325,7 @@ async fn cancelling_speech_ends_it_incomplete() {
 async fn cancel_all_ends_every_turn_in_flight() {
   let backend = FakeAudio::holding_speech();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let id = Uuid::now_v7();
 
   dispatcher.tts(tts(id, "a long sentence")).await.expect("accepted");
@@ -306,7 +342,7 @@ async fn cancel_all_ends_every_turn_in_flight() {
 async fn a_second_turn_waits_for_the_first_to_end() {
   let backend = FakeAudio::holding_speech();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let first = Uuid::now_v7();
   let second = Uuid::now_v7();
 
@@ -329,7 +365,7 @@ async fn a_second_turn_waits_for_the_first_to_end() {
 async fn a_turn_the_backend_abandons_still_ends() {
   let backend = FakeAudio::abandoning_speech();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let id = Uuid::now_v7();
 
   dispatcher.tts(tts(id, "hello")).await.expect("accepted");
@@ -345,7 +381,7 @@ async fn a_turn_the_backend_abandons_still_ends() {
 async fn earcons_route_to_the_backend() {
   let backend = FakeAudio::new();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
 
   dispatcher
     .earcon(Earcon { name: "confirm".into() })
@@ -360,7 +396,7 @@ async fn earcons_route_to_the_backend() {
 async fn an_earcon_the_platform_refuses_reports_unavailable() {
   let backend = FakeAudio::refusing_earcons();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
 
   dispatcher
     .earcon(Earcon { name: "confirm".into() })
@@ -375,7 +411,7 @@ async fn an_earcon_the_platform_refuses_reports_unavailable() {
 async fn stopping_cancels_everything_still_speaking() {
   let backend = FakeAudio::holding_speech();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(Some(backend.clone()), None, Arc::new(gateway));
   let id = Uuid::now_v7();
 
   dispatcher.tts(tts(id, "a long sentence")).await.expect("accepted");
@@ -388,10 +424,10 @@ async fn stopping_cancels_everything_still_speaking() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn volume_verbs_go_to_the_authority_that_owns_volume() {
-  let backend = FakeAudio::new();
+  let volume = Arc::new(FakeVolume::default());
   let authority = FakeAuthority::owning();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(volume.clone()), Arc::new(gateway));
   dispatcher.set_volume_authority(Some(authority.clone()));
 
   dispatcher.volume_up().await.expect("accepted");
@@ -400,18 +436,17 @@ async fn volume_verbs_go_to_the_authority_that_owns_volume() {
   assert_eq!(changed.level, 0.75, "the level the authority landed on is broadcast");
   assert_eq!(*authority.calls.lock().unwrap(), vec!["volumeUp".to_string()]);
   assert_eq!(
-    backend.volume_up.load(Ordering::SeqCst),
+    volume.volume_up.load(Ordering::SeqCst),
     0,
-    "the phone's own volume is not moved when a remote player owns it"
+    "the host's own volume is not moved when a remote player owns it"
   );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_refused_authority_verb_reports_action_rejected() {
-  let backend = FakeAudio::new();
   let authority = FakeAuthority::refusing();
   let (gateway, peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(Arc::new(FakeVolume::default())), Arc::new(gateway));
   dispatcher.set_volume_authority(Some(authority.clone()));
 
   dispatcher.set_volume(SetVolume { level: 0.5 }).await.expect("accepted");
@@ -428,30 +463,30 @@ async fn a_refused_authority_verb_reports_action_rejected() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn mute_verbs_are_dropped_while_the_authority_owns_volume() {
-  let backend = FakeAudio::new();
+  let volume = Arc::new(FakeVolume::default());
   let (gateway, _peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(volume.clone()), Arc::new(gateway));
   dispatcher.set_volume_authority(Some(FakeAuthority::owning()));
 
   dispatcher.mute_toggle().await.expect("accepted");
   dispatcher.set_mute(SetMute { muted: true }).await.expect("accepted");
 
-  assert_eq!(backend.mute_toggle.load(Ordering::SeqCst), 0);
-  assert!(backend.set_mute.lock().unwrap().is_empty());
+  assert_eq!(volume.mute_toggle.load(Ordering::SeqCst), 0);
+  assert!(volume.set_mute.lock().unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn volume_verbs_fall_back_to_the_backend_when_nothing_owns_volume() {
-  let backend = FakeAudio::new();
+async fn volume_verbs_fall_back_to_the_host_mixer_when_nothing_owns_volume() {
+  let volume = Arc::new(FakeVolume::default());
   let authority = FakeAuthority::not_owning();
   let (gateway, _peer) = Peer::link();
-  let dispatcher = AudioDispatcher::new(backend.clone(), Arc::new(gateway));
+  let dispatcher = AudioDispatcher::new(None, Some(volume.clone()), Arc::new(gateway));
   dispatcher.set_volume_authority(Some(authority.clone()));
 
   dispatcher.volume_up().await.expect("accepted");
   dispatcher.mute_toggle().await.expect("accepted");
 
-  assert_eq!(backend.volume_up.load(Ordering::SeqCst), 1);
-  assert_eq!(backend.mute_toggle.load(Ordering::SeqCst), 1);
+  assert_eq!(volume.volume_up.load(Ordering::SeqCst), 1);
+  assert_eq!(volume.mute_toggle.load(Ordering::SeqCst), 1);
   assert!(authority.calls.lock().unwrap().is_empty());
 }

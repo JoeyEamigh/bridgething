@@ -6,13 +6,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.os.Build
+import kotlin.math.roundToInt
+import uniffi.bridgething_companion.VolumeBackend
 import uniffi.bridgething_companion.VolumeInbox
 import uniffi.bridgething_companion.VolumeLevel
-import uniffi.bridgething_companion.VolumeMonitor
 
-public class AndroidVolumeMonitor(
+public class AndroidVolumeBackend(
     context: Context,
-) : VolumeMonitor {
+) : VolumeBackend {
     private val appContext = context.applicationContext
     private val audio = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -55,6 +56,29 @@ public class AndroidVolumeMonitor(
     }
 
     override fun snapshot(): VolumeLevel = readSnapshot()
+
+    override fun setVolume(level: Float) {
+        val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val index = (level.coerceIn(0f, 1f) * max).roundToInt()
+        runCatching { audio.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0) }
+    }
+
+    override fun setMute(muted: Boolean) {
+        val direction = if (muted) AudioManager.ADJUST_MUTE else AudioManager.ADJUST_UNMUTE
+        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0) }
+    }
+
+    override fun volumeUp() {
+        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0) }
+    }
+
+    override fun volumeDown() {
+        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0) }
+    }
+
+    override fun muteToggle() {
+        runCatching { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0) }
+    }
 
     private fun readSnapshot(): VolumeLevel {
         val max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)

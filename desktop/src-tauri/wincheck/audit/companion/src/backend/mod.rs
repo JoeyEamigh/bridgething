@@ -9,7 +9,7 @@ pub mod image;
 #[path = "../../../../../../../crates/companion/src/backend/media.rs"]
 pub mod media;
 
-pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink};
+pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};
 pub use image::ImageScaler;

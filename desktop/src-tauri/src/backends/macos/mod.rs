@@ -5,6 +5,7 @@ mod image;
 mod media;
 pub mod nlu;
 mod speech;
+mod volume;
 
 use std::{path::Path, sync::Arc};
 
@@ -19,6 +20,7 @@ pub fn platform(config_dir: &Path) -> Platform {
     notifications: None,
     media_sessions: Some(Arc::new(media::MediaRemoteSessions::new(config_dir))),
     audio: Some(Arc::new(speech::AvAudio::new())),
+    volume: Some(Arc::new(volume::CoreAudioVolume::default())),
     connectivity: Some(Arc::new(connectivity::NwPathConnectivity::default())),
     image: Some(Arc::new(image::ImageIoScaler)),
     speech: Some(Arc::new(asr::WhisperSpeech::new(paths.clone()))),

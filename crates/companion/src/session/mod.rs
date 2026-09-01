@@ -28,7 +28,7 @@ use bridgething_io::HttpExecutor;
 use bridgething_sdk_runtime::Connector;
 use libbridgething::{
   CompanionAuthorityScope, TimeInfo,
-  gateway::{GatewayToBridgeTransferMsgEvent, TransferAck},
+  gateway::{GatewayToBridgeTransferMsgEvent, TransferAck, VolumeChanged},
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 use uuid::Uuid;
@@ -42,7 +42,7 @@ use crate::{
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
-    LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink,
+    LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
   dispatch::{
     asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
@@ -160,6 +160,7 @@ pub struct Session {
   links: Mutex<HashMap<String, Link>>,
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
+  volume_pump: Mutex<Option<JoinHandle<()>>>,
   arbitration: Mutex<Option<JoinHandle<()>>>,
   updates: Mutex<Option<JoinHandle<()>>>,
 }
@@ -237,6 +238,7 @@ impl Session {
       broadcast.clone() as Arc<dyn OutboundLink>,
       config.host.clone(),
       config.capabilities,
+      backends.volume.is_some(),
     );
     let extensions = backends.extensions.clone().map(ExtensionDispatcher::new);
     Arc::new(Self {
@@ -268,6 +270,7 @@ impl Session {
       links: Mutex::new(HashMap::new()),
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
+      volume_pump: Mutex::new(None),
       arbitration: Mutex::new(None),
       updates: Mutex::new(None),
     })
@@ -601,6 +604,15 @@ impl Session {
       }
       tokio::task::spawn_blocking(move || monitor.start(inbox));
     }
+    if let Some(volume) = self.backends.volume.clone() {
+      let (inbox, levels) = VolumeInbox::channel();
+      let session = self.clone();
+      let pump = tokio::spawn(async move { session.pump_volume(levels).await });
+      if let Some(previous) = self.volume_pump.lock().unwrap().replace(pump) {
+        previous.abort();
+      }
+      tokio::task::spawn_blocking(move || volume.start(inbox));
+    }
     let Some(transport) = self.backends.link.clone() else {
       return;
     };
@@ -636,6 +648,20 @@ impl Session {
     });
   }
 
+  async fn pump_volume(self: Arc<Self>, mut levels: mpsc::UnboundedReceiver<VolumeLevel>) {
+    while let Some(level) = levels.recv().await {
+      for (_, gateway) in self.live_gateways() {
+        let _ = gateway
+          .audio()
+          .volume_changed(VolumeChanged {
+            level: level.level,
+            muted: level.muted,
+          })
+          .await;
+      }
+    }
+  }
+
   async fn pump_connectivity(self: Arc<Self>, mut edges: mpsc::UnboundedReceiver<bool>) {
     while let Some(online) = edges.recv().await {
       let providers = self.providers.lock().unwrap().clone();
@@ -653,6 +679,7 @@ impl Session {
       &self.models_watch,
       &self.inbox,
       &self.connectivity_pump,
+      &self.volume_pump,
       &self.arbitration,
       &self.updates,
     ] {
@@ -662,6 +689,9 @@ impl Session {
     }
     if let Some(monitor) = self.backends.connectivity.clone() {
       let _ = tokio::task::spawn_blocking(move || monitor.stop()).await;
+    }
+    if let Some(volume) = self.backends.volume.clone() {
+      let _ = tokio::task::spawn_blocking(move || volume.stop()).await;
     }
     for device_id in self.device_ids() {
       self.teardown(&device_id).await;
@@ -890,6 +920,7 @@ impl Session {
       .await;
     self.hub.peer_connected(&device.id).await;
     self.push_time(gateway).await;
+    self.push_volume(gateway).await;
 
     if let Some(geo) = &peer.geo {
       geo.start().await;
@@ -914,6 +945,22 @@ impl Session {
     });
   }
 
+  pub async fn push_volume(&self, gateway: &Gateway) {
+    let Some(volume) = self.backends.volume.clone() else {
+      return;
+    };
+    let Ok(level) = tokio::task::spawn_blocking(move || volume.snapshot()).await else {
+      return;
+    };
+    let _ = gateway
+      .audio()
+      .volume_changed(VolumeChanged {
+        level: level.level,
+        muted: level.muted,
+      })
+      .await;
+  }
+
   pub async fn push_time(&self, gateway: &Gateway) {
     let host = self.backends.host.clone();
     let Ok(clock) = tokio::task::spawn_blocking(move || host.clock()).await else {
@@ -932,8 +979,12 @@ impl Session {
     let registry = self.hub.clone() as Arc<dyn ProviderRegistry>;
     let http = HttpExecutor::new(Arc::new(ForeignHttp::new(self.backends.http.clone())));
 
-    let audio = self.backends.audio.clone().map(|backend| {
-      let dispatcher = AudioDispatcher::new(backend, outbound.clone());
+    let audio = (self.backends.audio.is_some() || self.backends.volume.is_some()).then(|| {
+      let dispatcher = AudioDispatcher::new(
+        self.backends.audio.clone(),
+        self.backends.volume.clone(),
+        outbound.clone(),
+      );
       dispatcher.set_volume_authority(Some(self.hub.clone()));
       dispatcher
     });

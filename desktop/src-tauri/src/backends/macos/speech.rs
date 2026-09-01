@@ -41,12 +41,6 @@ impl AvAudio {
 }
 
 impl AudioBackend for AvAudio {
-  fn set_volume(&self, _level: f32) {}
-  fn set_mute(&self, _muted: bool) {}
-  fn volume_up(&self) {}
-  fn volume_down(&self) {}
-  fn mute_toggle(&self) {}
-
   fn speak(&self, _id: String, text: String, voice: Option<String>, sink: Arc<SpeakSink>) {
     self.speaking.begin(sink, &text);
     self.on_main(move |synth| unsafe {

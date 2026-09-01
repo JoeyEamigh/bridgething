@@ -379,6 +379,9 @@ impl ClientManager {
         );
       }
       state.peers.seed_to(address).await;
+      if let Err(err) = state.audio.send_current_to(address).await {
+        tracing::warn!(?err, "failed to seed volume for new modern client {address}");
+      }
     }
 
     Ok(())

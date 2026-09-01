@@ -154,7 +154,7 @@ impl Shell {
       secrets: Arc::new(FileSecrets::open(&config.paths.config_dir)),
       log: Arc::new(TracingLog),
       audio: platform.audio,
-      volume: None,
+      volume: platform.volume,
       geo: platform.geo,
       notifications: platform.notifications,
       phone: None,

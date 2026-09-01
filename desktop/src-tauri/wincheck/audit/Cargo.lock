@@ -1977,6 +1977,7 @@ dependencies = [
  "tracing",
  "wincheck-companion",
  "windows",
+ "windows-core",
 ]
 
 [[package]]

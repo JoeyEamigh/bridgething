@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/lib",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "Wire types and shared constants for bridgething, the community daemon that replaces Spotify's app on the Car Thing.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

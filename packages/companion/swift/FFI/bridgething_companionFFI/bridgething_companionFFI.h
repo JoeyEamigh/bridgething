@@ -371,14 +371,14 @@ typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod15)(uint64_t, RustB
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD0
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod0)(uint64_t, float, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAudioBackendMethod0)(uint64_t, RustBuffer, RustBuffer, RustBuffer, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD1
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD1
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod1)(uint64_t, int8_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAudioBackendMethod1)(uint64_t, RustBuffer, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -392,63 +392,63 @@ typedef void (*UniffiCallbackInterfaceAudioBackendMethod2)(uint64_t, void* _Nonn
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD3
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD3
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod3)(uint64_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAudioBackendMethod3)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD4
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD4
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod4)(uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD0
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod0)(uint64_t, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD5
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD5
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod5)(uint64_t, RustBuffer, RustBuffer, RustBuffer, uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD1
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod1)(uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD6
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD6
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod6)(uint64_t, RustBuffer, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD2
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod2)(uint64_t, RustBuffer* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD7
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD7
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod7)(uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD3
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod3)(uint64_t, float, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD8
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_AUDIO_BACKEND_METHOD8
-typedef void (*UniffiCallbackInterfaceAudioBackendMethod8)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD4
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD4
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod4)(uint64_t, int8_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD0
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD0
-typedef void (*UniffiCallbackInterfaceVolumeMonitorMethod0)(uint64_t, uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD5
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD5
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod5)(uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD1
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD1
-typedef void (*UniffiCallbackInterfaceVolumeMonitorMethod1)(uint64_t, void* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD6
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD6
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod6)(uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD2
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_MONITOR_METHOD2
-typedef void (*UniffiCallbackInterfaceVolumeMonitorMethod2)(uint64_t, RustBuffer* _Nonnull, 
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD7
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VOLUME_BACKEND_METHOD7
+typedef void (*UniffiCallbackInterfaceVolumeBackendMethod7)(uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -899,27 +899,27 @@ typedef struct UniffiVTableCallbackInterfaceAppleMusicBackend {
 typedef struct UniffiVTableCallbackInterfaceAudioBackend {
     UniffiCallbackInterfaceFree _Nonnull uniffiFree;
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
-    UniffiCallbackInterfaceAudioBackendMethod0 _Nonnull setVolume;
-    UniffiCallbackInterfaceAudioBackendMethod1 _Nonnull setMute;
-    UniffiCallbackInterfaceAudioBackendMethod2 _Nonnull volumeUp;
-    UniffiCallbackInterfaceAudioBackendMethod3 _Nonnull volumeDown;
-    UniffiCallbackInterfaceAudioBackendMethod4 _Nonnull muteToggle;
-    UniffiCallbackInterfaceAudioBackendMethod5 _Nonnull speak;
-    UniffiCallbackInterfaceAudioBackendMethod6 _Nonnull cancel;
-    UniffiCallbackInterfaceAudioBackendMethod7 _Nonnull cancelAll;
-    UniffiCallbackInterfaceAudioBackendMethod8 _Nonnull playEarcon;
+    UniffiCallbackInterfaceAudioBackendMethod0 _Nonnull speak;
+    UniffiCallbackInterfaceAudioBackendMethod1 _Nonnull cancel;
+    UniffiCallbackInterfaceAudioBackendMethod2 _Nonnull cancelAll;
+    UniffiCallbackInterfaceAudioBackendMethod3 _Nonnull playEarcon;
 } UniffiVTableCallbackInterfaceAudioBackend;
 
 #endif
-#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VOLUME_MONITOR
-#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VOLUME_MONITOR
-typedef struct UniffiVTableCallbackInterfaceVolumeMonitor {
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VOLUME_BACKEND
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VOLUME_BACKEND
+typedef struct UniffiVTableCallbackInterfaceVolumeBackend {
     UniffiCallbackInterfaceFree _Nonnull uniffiFree;
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
-    UniffiCallbackInterfaceVolumeMonitorMethod0 _Nonnull start;
-    UniffiCallbackInterfaceVolumeMonitorMethod1 _Nonnull stop;
-    UniffiCallbackInterfaceVolumeMonitorMethod2 _Nonnull snapshot;
-} UniffiVTableCallbackInterfaceVolumeMonitor;
+    UniffiCallbackInterfaceVolumeBackendMethod0 _Nonnull start;
+    UniffiCallbackInterfaceVolumeBackendMethod1 _Nonnull stop;
+    UniffiCallbackInterfaceVolumeBackendMethod2 _Nonnull snapshot;
+    UniffiCallbackInterfaceVolumeBackendMethod3 _Nonnull setVolume;
+    UniffiCallbackInterfaceVolumeBackendMethod4 _Nonnull setMute;
+    UniffiCallbackInterfaceVolumeBackendMethod5 _Nonnull volumeUp;
+    UniffiCallbackInterfaceVolumeBackendMethod6 _Nonnull volumeDown;
+    UniffiCallbackInterfaceVolumeBackendMethod7 _Nonnull muteToggle;
+} UniffiVTableCallbackInterfaceVolumeBackend;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CONNECTIVITY_MONITOR
@@ -1799,31 +1799,6 @@ void uniffi_bridgething_companion_fn_free_audiobackend(uint64_t handle, RustCall
 void uniffi_bridgething_companion_fn_init_callback_vtable_audiobackend(const UniffiVTableCallbackInterfaceAudioBackend* _Nonnull vtable
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SET_VOLUME
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SET_VOLUME
-void uniffi_bridgething_companion_fn_method_audiobackend_set_volume(uint64_t ptr, float level, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SET_MUTE
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SET_MUTE
-void uniffi_bridgething_companion_fn_method_audiobackend_set_mute(uint64_t ptr, int8_t muted, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_VOLUME_UP
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_VOLUME_UP
-void uniffi_bridgething_companion_fn_method_audiobackend_volume_up(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_VOLUME_DOWN
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_VOLUME_DOWN
-void uniffi_bridgething_companion_fn_method_audiobackend_volume_down(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_MUTE_TOGGLE
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_MUTE_TOGGLE
-void uniffi_bridgething_companion_fn_method_audiobackend_mute_toggle(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SPEAK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AUDIOBACKEND_SPEAK
 void uniffi_bridgething_companion_fn_method_audiobackend_speak(uint64_t ptr, RustBuffer id, RustBuffer text, RustBuffer voice, uint64_t sink, RustCallStatus *_Nonnull out_status
@@ -1879,6 +1854,61 @@ void uniffi_bridgething_companion_fn_method_speaksink_on_finished(uint64_t ptr, 
 void uniffi_bridgething_companion_fn_method_speaksink_on_start(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEBACKEND
+uint64_t uniffi_bridgething_companion_fn_clone_volumebackend(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_VOLUMEBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_VOLUMEBACKEND
+void uniffi_bridgething_companion_fn_free_volumebackend(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_VOLUMEBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_VOLUMEBACKEND
+void uniffi_bridgething_companion_fn_init_callback_vtable_volumebackend(const UniffiVTableCallbackInterfaceVolumeBackend* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_START
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_START
+void uniffi_bridgething_companion_fn_method_volumebackend_start(uint64_t ptr, uint64_t inbox, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_STOP
+void uniffi_bridgething_companion_fn_method_volumebackend_stop(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SNAPSHOT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SNAPSHOT
+RustBuffer uniffi_bridgething_companion_fn_method_volumebackend_snapshot(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SET_VOLUME
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SET_VOLUME
+void uniffi_bridgething_companion_fn_method_volumebackend_set_volume(uint64_t ptr, float level, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SET_MUTE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_SET_MUTE
+void uniffi_bridgething_companion_fn_method_volumebackend_set_mute(uint64_t ptr, int8_t muted, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_VOLUME_UP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_VOLUME_UP
+void uniffi_bridgething_companion_fn_method_volumebackend_volume_up(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_VOLUME_DOWN
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_VOLUME_DOWN
+void uniffi_bridgething_companion_fn_method_volumebackend_volume_down(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_MUTE_TOGGLE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEBACKEND_MUTE_TOGGLE
+void uniffi_bridgething_companion_fn_method_volumebackend_mute_toggle(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEINBOX
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEINBOX
 uint64_t uniffi_bridgething_companion_fn_clone_volumeinbox(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -1892,36 +1922,6 @@ void uniffi_bridgething_companion_fn_free_volumeinbox(uint64_t handle, RustCallS
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEINBOX_ON_CHANGED
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEINBOX_ON_CHANGED
 void uniffi_bridgething_companion_fn_method_volumeinbox_on_changed(uint64_t ptr, float level, int8_t muted, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEMONITOR
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_VOLUMEMONITOR
-uint64_t uniffi_bridgething_companion_fn_clone_volumemonitor(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_VOLUMEMONITOR
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_VOLUMEMONITOR
-void uniffi_bridgething_companion_fn_free_volumemonitor(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_VOLUMEMONITOR
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_VOLUMEMONITOR
-void uniffi_bridgething_companion_fn_init_callback_vtable_volumemonitor(const UniffiVTableCallbackInterfaceVolumeMonitor* _Nonnull vtable
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_START
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_START
-void uniffi_bridgething_companion_fn_method_volumemonitor_start(uint64_t ptr, uint64_t inbox, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_STOP
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_STOP
-void uniffi_bridgething_companion_fn_method_volumemonitor_stop(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_SNAPSHOT
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_VOLUMEMONITOR_SNAPSHOT
-RustBuffer uniffi_bridgething_companion_fn_method_volumemonitor_snapshot(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_CONNECTIVITYINBOX
@@ -3894,36 +3894,6 @@ uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favo
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SET_VOLUME
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SET_VOLUME
-uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_set_volume(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SET_MUTE
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SET_MUTE
-uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_set_mute(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_VOLUME_UP
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_VOLUME_UP
-uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_volume_up(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_VOLUME_DOWN
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_VOLUME_DOWN
-uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_volume_down(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_MUTE_TOGGLE
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_MUTE_TOGGLE
-uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_mute_toggle(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SPEAK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AUDIOBACKEND_SPEAK
 uint16_t uniffi_bridgething_companion_checksum_method_audiobackend_speak(void
@@ -3966,27 +3936,57 @@ uint16_t uniffi_bridgething_companion_checksum_method_speaksink_on_start(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_START
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_START
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_start(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_STOP
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_stop(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SNAPSHOT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SNAPSHOT
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_snapshot(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SET_VOLUME
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SET_VOLUME
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_set_volume(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SET_MUTE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_SET_MUTE
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_set_mute(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_VOLUME_UP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_VOLUME_UP
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_volume_up(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_VOLUME_DOWN
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_VOLUME_DOWN
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_volume_down(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_MUTE_TOGGLE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEBACKEND_MUTE_TOGGLE
+uint16_t uniffi_bridgething_companion_checksum_method_volumebackend_mute_toggle(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEINBOX_ON_CHANGED
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEINBOX_ON_CHANGED
 uint16_t uniffi_bridgething_companion_checksum_method_volumeinbox_on_changed(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_START
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_START
-uint16_t uniffi_bridgething_companion_checksum_method_volumemonitor_start(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_STOP
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_STOP
-uint16_t uniffi_bridgething_companion_checksum_method_volumemonitor_stop(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_SNAPSHOT
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_VOLUMEMONITOR_SNAPSHOT
-uint16_t uniffi_bridgething_companion_checksum_method_volumemonitor_snapshot(void
     
 );
 #endif

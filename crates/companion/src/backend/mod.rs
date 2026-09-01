@@ -24,7 +24,7 @@ pub use apple_music::{
   AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode,
   AmSearchResults, AmSearchSink, AmShelf, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
 };
-pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeInbox, VolumeLevel, VolumeMonitor};
+pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
 pub use extension::{ExtensionConfigEntry, ExtensionHost, ExtensionHostInbox, ExtensionMessage, ExtensionOutbound};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};

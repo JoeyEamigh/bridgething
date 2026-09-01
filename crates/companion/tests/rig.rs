@@ -16,18 +16,18 @@ mod support;
 use std::{
   io::Write,
   path::{Path, PathBuf},
-  sync::Arc,
+  sync::{Arc, Mutex},
   time::Duration,
 };
 
 use bridgething_companion::{
   api::{PeerLinkStatus, SessionEvent},
-  backend::{ExtensionHost, ExtensionMessage},
+  backend::{ExtensionHost, ExtensionMessage, VolumeBackend, VolumeInbox, VolumeLevel},
   provider::Provider,
 };
 use bridgething_delivery::ota::{event::OtaPhaseSnapshot, stream::FileSource};
 use bridgething_gateway::route;
-use libbridgething::{MediaItem, Playback, PlaybackState, PlayerState};
+use libbridgething::{CompanionAuthorityScope, MediaItem, Playback, PlaybackState, PlayerState};
 use serde::Serialize;
 
 use crate::{
@@ -36,6 +36,55 @@ use crate::{
   install::{BlockingSink, RecordingSink, Serving},
   support::{Rig, WireEntry},
 };
+
+#[derive(Default)]
+pub struct FakeVolume {
+  inbox: Mutex<Option<Arc<VolumeInbox>>>,
+  level: Mutex<VolumeLevel>,
+}
+
+impl FakeVolume {
+  pub fn resting_at(level: f32) -> Arc<Self> {
+    Arc::new(Self {
+      inbox: Mutex::new(None),
+      level: Mutex::new(VolumeLevel { level, muted: false }),
+    })
+  }
+
+  pub fn moved_to(&self, level: f32) {
+    *self.level.lock().unwrap() = VolumeLevel { level, muted: false };
+    let inbox = self.inbox.lock().unwrap().clone();
+    if let Some(inbox) = inbox {
+      inbox.on_changed(level, false);
+    }
+  }
+}
+
+impl VolumeBackend for FakeVolume {
+  fn start(&self, inbox: Arc<VolumeInbox>) {
+    *self.inbox.lock().unwrap() = Some(inbox);
+  }
+
+  fn stop(&self) {
+    self.inbox.lock().unwrap().take();
+  }
+
+  fn snapshot(&self) -> VolumeLevel {
+    *self.level.lock().unwrap()
+  }
+
+  fn set_volume(&self, level: f32) {
+    self.moved_to(level);
+  }
+
+  fn set_mute(&self, muted: bool) {
+    self.level.lock().unwrap().muted = muted;
+  }
+
+  fn volume_up(&self) {}
+  fn volume_down(&self) {}
+  fn mute_toggle(&self) {}
+}
 
 const ARTIFACT_BYTES: usize = 512 * 1024;
 
@@ -871,4 +920,49 @@ async fn a_device_install_that_fails_never_reaches_the_bundle_sink() {
     "a host must not adopt an extension from a bundle the device rejected, got {:?}",
     sink.calls()
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_that_owns_its_volume_takes_the_scope_and_pushes_its_level_to_the_device() {
+  let volume = FakeVolume::resting_at(0.4);
+  let rig = Rig::with_volume(volume.clone() as Arc<dyn VolumeBackend>).await;
+  let source: Arc<FakeSource> = FakeSource::new("rig");
+  rig
+    .session
+    .add_provider(source.clone() as Arc<dyn Provider>)
+    .await
+    .expect("the provider attaches");
+  rig.settle().await;
+
+  source.submit(playing("the litmus track"));
+
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.authority.is_authoritative(CompanionAuthorityScope::Volume),
+        SETTLE,
+      )
+      .await,
+    "a host with its own mixer claims volume for whatever is audible, even though the source does not own it"
+  );
+
+  volume.moved_to(0.8);
+
+  let deadline = tokio::time::Instant::now() + SETTLE;
+  loop {
+    let announced = rig
+      .transcript()
+      .into_iter()
+      .any(|entry| entry.dir == "toDevice" && entry.msg.contains("volumeChanged"));
+    if announced {
+      break;
+    }
+    assert!(
+      tokio::time::Instant::now() < deadline,
+      "the host mixer moved and the device was never told: {:?}",
+      rig.transcript()
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
 }

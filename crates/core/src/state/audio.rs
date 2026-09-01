@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use libbridgething::{
   CompanionAuthorityScope,
@@ -56,6 +56,15 @@ impl AudioManager {
   pub async fn apply_ams(&self, vol: VolumeChanged) -> Result<(), AudioError> {
     self.inner.write().await.ams = Some(vol);
     self.broadcast_current().await
+  }
+
+  pub async fn send_current_to(&self, to: SocketAddr) -> Result<(), AudioError> {
+    let v = self.current().await;
+    self
+      .bus
+      .send_event(to, BridgeToClientAudioMsgEvent::VolumeChanged(v))
+      .await?;
+    Ok(())
   }
 
   pub async fn broadcast_current(&self) -> Result<(), AudioError> {

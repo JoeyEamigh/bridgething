@@ -25,5 +25,11 @@ windows = { version = "0.62.2", features = [
   "Media_SpeechSynthesis",
   "Networking_Connectivity",
   "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
   "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Variant",
 ] }
+windows-core = "0.62.2"

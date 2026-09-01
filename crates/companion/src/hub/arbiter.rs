@@ -29,7 +29,7 @@ enum Op {
     snapshot: Box<PlayerState>,
     app_bundle: String,
     has_item: bool,
-    wants_volume: bool,
+    source_owns_volume: bool,
   },
   Queue {
     source: String,
@@ -59,14 +59,14 @@ impl NowPlayingSink {
     snapshot: PlayerState,
     app_bundle: &str,
     has_item: bool,
-    wants_volume: bool,
+    source_owns_volume: bool,
   ) {
     let _ = self.tx.send(Op::Player {
       source: source.to_owned(),
       snapshot: Box::new(snapshot),
       app_bundle: app_bundle.to_owned(),
       has_item,
-      wants_volume,
+      source_owns_volume,
     });
   }
 
@@ -108,7 +108,7 @@ struct SourceState {
   snapshot: Option<PlayerState>,
   app_bundle: String,
   has_item: bool,
-  wants_volume: bool,
+  source_owns_volume: bool,
   queue: Option<QueueSnapshot>,
   targets: Option<PlaybackTargets>,
   seq: u64,
@@ -133,13 +133,14 @@ impl Drop for NowPlayingHub {
 }
 
 impl NowPlayingHub {
-  pub fn init(link: Arc<dyn OutboundLink>) -> Self {
+  pub fn init(link: Arc<dyn OutboundLink>, host_owns_volume: bool) -> Self {
     let (tx, rx) = mpsc::unbounded_channel();
     let current = Arc::new(Mutex::new(None));
     let held = Arc::new(Mutex::new(Held::default()));
     let arbitrated = broadcast::channel(32).0;
     let actor = Arbiter {
       link,
+      host_owns_volume,
       current: current.clone(),
       held: held.clone(),
       arbitrated: arbitrated.clone(),
@@ -217,6 +218,7 @@ impl NowPlayingHub {
 
 struct Arbiter {
   link: Arc<dyn OutboundLink>,
+  host_owns_volume: bool,
   current: Arc<Mutex<Option<String>>>,
   held: Arc<Mutex<Held>>,
   arbitrated: broadcast::Sender<Option<PlayerState>>,
@@ -249,14 +251,14 @@ impl Arbiter {
         snapshot,
         app_bundle,
         has_item,
-        wants_volume,
+        source_owns_volume,
       } => {
         self.seq_counter += 1;
         let state = self.sources.entry(source).or_default();
         state.snapshot = Some(*snapshot);
         state.app_bundle = app_bundle;
         state.has_item = has_item;
-        state.wants_volume = wants_volume;
+        state.source_owns_volume = source_owns_volume;
         state.seq = self.seq_counter;
         self.emit_arbitrated().await;
       }
@@ -356,12 +358,12 @@ impl Arbiter {
       let _ = self.arbitrated.send(None);
       return;
     };
-    let (app_bundle, has_item, wants_volume) = (state.app_bundle.clone(), state.has_item, state.wants_volume);
+    let (app_bundle, has_item, source_owns_volume) = (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
     let snapshot = state.snapshot.clone();
     let queue = state.queue.clone();
     let targets = state.targets.clone();
     if has_item {
-      self.claim(&app_bundle, wants_volume).await;
+      self.claim(&app_bundle, source_owns_volume).await;
     } else {
       self.release_all().await;
     }
@@ -403,12 +405,12 @@ impl Arbiter {
       }
     };
     let Some(state) = self.sources.get(&next) else { return };
-    let (app_bundle, has_item, wants_volume) = (state.app_bundle.clone(), state.has_item, state.wants_volume);
+    let (app_bundle, has_item, source_owns_volume) = (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
     let snapshot = state.snapshot.clone();
     let queue = state.queue.clone();
     let targets = state.targets.clone();
     if has_item {
-      self.claim(&app_bundle, wants_volume).await;
+      self.claim(&app_bundle, source_owns_volume).await;
     }
     if let Some(snapshot) = snapshot {
       let _ = self.arbitrated.send(Some(snapshot.clone()));
@@ -431,10 +433,12 @@ impl Arbiter {
     }
   }
 
-  async fn claim(&mut self, app_bundle: &str, wants_volume: bool) {
+  async fn claim(&mut self, app_bundle: &str, source_owns_volume: bool) {
+    // either arm of the audio dispatcher's volume routing can act: the source itself, or the host's own mixer
+    let volume = source_owns_volume || self.host_owns_volume;
     let bundle_changed = self.held.lock().unwrap().app_bundle.as_deref() != Some(app_bundle);
     let mut want = NOW_PLAYING_SCOPES.to_vec();
-    if wants_volume {
+    if volume {
       want.push(CompanionAuthorityScope::Volume);
     }
     for scope in want {
@@ -452,7 +456,7 @@ impl Arbiter {
         }
       }
     }
-    let dropped_volume = !wants_volume
+    let dropped_volume = !volume
       && self
         .held
         .lock()

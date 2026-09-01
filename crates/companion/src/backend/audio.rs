@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{mpsc, oneshot};
 
-#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, uniffi::Record)]
 pub struct VolumeLevel {
   pub level: f32,
   pub muted: bool,
@@ -16,11 +16,6 @@ pub enum SpeakEvent {
 
 #[uniffi::export(with_foreign)]
 pub trait AudioBackend: Send + Sync {
-  fn set_volume(&self, level: f32);
-  fn set_mute(&self, muted: bool);
-  fn volume_up(&self);
-  fn volume_down(&self);
-  fn mute_toggle(&self);
   fn speak(&self, id: String, text: String, voice: Option<String>, sink: Arc<SpeakSink>);
   fn cancel(&self, id: String);
   fn cancel_all(&self);
@@ -76,11 +71,18 @@ impl EarconSink {
   }
 }
 
+/// output volume on the host itself. a host that leaves this unimplemented keeps the device
+/// routing volume over iAP2 HID instead of over the gateway.
 #[uniffi::export(with_foreign)]
-pub trait VolumeMonitor: Send + Sync {
+pub trait VolumeBackend: Send + Sync {
   fn start(&self, inbox: Arc<VolumeInbox>);
   fn stop(&self);
   fn snapshot(&self) -> VolumeLevel;
+  fn set_volume(&self, level: f32);
+  fn set_mute(&self, muted: bool);
+  fn volume_up(&self);
+  fn volume_down(&self);
+  fn mute_toggle(&self);
 }
 
 #[derive(uniffi::Object)]
