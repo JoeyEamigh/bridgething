@@ -358,7 +358,8 @@ impl Arbiter {
       let _ = self.arbitrated.send(None);
       return;
     };
-    let (app_bundle, has_item, source_owns_volume) = (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
+    let (app_bundle, has_item, source_owns_volume) =
+      (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
     let snapshot = state.snapshot.clone();
     let queue = state.queue.clone();
     let targets = state.targets.clone();
@@ -405,7 +406,8 @@ impl Arbiter {
       }
     };
     let Some(state) = self.sources.get(&next) else { return };
-    let (app_bundle, has_item, source_owns_volume) = (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
+    let (app_bundle, has_item, source_owns_volume) =
+      (state.app_bundle.clone(), state.has_item, state.source_owns_volume);
     let snapshot = state.snapshot.clone();
     let queue = state.queue.clone();
     let targets = state.targets.clone();
@@ -434,7 +436,6 @@ impl Arbiter {
   }
 
   async fn claim(&mut self, app_bundle: &str, source_owns_volume: bool) {
-    // either arm of the audio dispatcher's volume routing can act: the source itself, or the host's own mixer
     let volume = source_owns_volume || self.host_owns_volume;
     let bundle_changed = self.held.lock().unwrap().app_bundle.as_deref() != Some(app_bundle);
     let mut want = NOW_PLAYING_SCOPES.to_vec();

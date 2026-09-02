@@ -272,7 +272,9 @@ async fn volume_verbs_report_unavailable_on_a_host_with_no_mixer() {
   let reply = peer.wait("an audio error", audio_error).await;
   assert_eq!(
     reply.error,
-    AudioError::Unavailable { verb: "volumeUp".into() },
+    AudioError::Unavailable {
+      verb: "volumeUp".into()
+    },
     "a host that cannot move its own volume says so instead of swallowing the verb"
   );
 }

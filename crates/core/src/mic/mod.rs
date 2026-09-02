@@ -727,7 +727,15 @@ impl Endpointer {
     bridgething_dsp::pipeline::from_pcm16(&frame.pcm, &mut self.samples);
     let end = self.vad.observe(&self.samples, frame.on_target)?;
     tracing::debug!(?end, "the endpointer ended the turn");
-    Some(VoiceCloseReason::EndOfSpeech)
+    Some(close_for(end))
+  }
+}
+
+#[cfg(feature = "mic")]
+fn close_for(end: bridgething_dsp::vad::TurnEnd) -> VoiceCloseReason {
+  match end {
+    bridgething_dsp::vad::TurnEnd::NoOnset => VoiceCloseReason::Cancelled,
+    bridgething_dsp::vad::TurnEnd::SilenceAfterSpeech => VoiceCloseReason::EndOfSpeech,
   }
 }
 
@@ -911,6 +919,15 @@ mod tests {
     assert_eq!(settled_phase(VoiceCloseReason::Cancelled), VoicePhase::Idle);
     assert_eq!(settled_phase(VoiceCloseReason::Muted), VoicePhase::Idle);
     assert_eq!(settled_phase(VoiceCloseReason::Error), VoicePhase::Failed);
+  }
+
+  #[cfg(feature = "mic")]
+  #[test]
+  fn a_wake_word_nobody_followed_is_dropped_rather_than_transcribed() {
+    use bridgething_dsp::vad::TurnEnd;
+
+    assert_eq!(close_for(TurnEnd::NoOnset), VoiceCloseReason::Cancelled);
+    assert_eq!(close_for(TurnEnd::SilenceAfterSpeech), VoiceCloseReason::EndOfSpeech);
   }
 
   #[cfg(feature = "mic")]

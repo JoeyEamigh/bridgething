@@ -158,7 +158,7 @@ const PREVIOUS_LEADS: &[&str] = &[
 
 fn normalize(transcript: &str) -> (String, Vec<String>) {
   let lowered = transcript.to_lowercase();
-  let depunctuated = re!(r"[^\w\s']").replace_all(&lowered, " ");
+  let depunctuated = re!(r"[^\w\s']|_").replace_all(&lowered, " ");
   let tokens: Vec<String> = depunctuated
     .split(' ')
     .filter(|token| !token.is_empty() && !FILLERS.contains(token))

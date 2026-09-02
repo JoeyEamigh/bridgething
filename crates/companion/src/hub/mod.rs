@@ -56,12 +56,7 @@ pub struct Hub {
 }
 
 impl Hub {
-  pub fn new(
-    link: Arc<dyn OutboundLink>,
-    host: HostInfo,
-    flags: CapabilityFlags,
-    host_owns_volume: bool,
-  ) -> Arc<Self> {
+  pub fn new(link: Arc<dyn OutboundLink>, host: HostInfo, flags: CapabilityFlags, host_owns_volume: bool) -> Arc<Self> {
     Arc::new(Self {
       now_playing: NowPlayingHub::init(link.clone(), host_owns_volume),
       link,

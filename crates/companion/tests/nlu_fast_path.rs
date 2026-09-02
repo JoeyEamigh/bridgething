@@ -164,3 +164,9 @@ fn an_empty_or_filler_only_transcript_matches_nothing() {
     assert_eq!(intent(utterance), None, "fast path must not claim: {utterance:?}");
   }
 }
+
+#[test]
+fn an_underscore_splits_words_rather_than_welding_them() {
+  assert_eq!(intent("next_song"), Some("NEXT"));
+  assert_eq!(intent("what's_playing"), Some("SHOW_VIEW"));
+}

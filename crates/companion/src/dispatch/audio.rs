@@ -66,7 +66,6 @@ impl AudioDispatcher {
     }
   }
 
-  // the level change comes back through the volume backend's own inbox, so nothing is synthesized here
   async fn on_host(&self, verb: &str, act: impl for<'a> FnOnce(&'a (dyn VolumeBackend + 'static)) + Send + 'static) {
     match &self.volume {
       Some(volume) => tell(volume, act).await,
@@ -96,11 +95,7 @@ impl AudioDispatcher {
   }
 
   async fn unavailable(&self, verb: &str) {
-    self
-      .report(AudioError::Unavailable {
-        verb: verb.to_owned(),
-      })
-      .await;
+    self.report(AudioError::Unavailable { verb: verb.to_owned() }).await;
   }
 
   async fn report(&self, error: AudioError) {
@@ -132,11 +127,7 @@ impl AudioHandler for AudioDispatcher {
     let level = payload.level;
     match self.volume_owner().await {
       Some(authority) => self.moved("setVolume", authority.set_volume(level).await).await,
-      None => {
-        self
-          .on_host("setVolume", move |volume| volume.set_volume(level))
-          .await
-      }
+      None => self.on_host("setVolume", move |volume| volume.set_volume(level)).await,
     }
     Ok(())
   }
