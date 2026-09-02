@@ -11,10 +11,9 @@ use bridgething_companion::backend::{VolumeBackend, VolumeInbox, VolumeLevel};
 use windows::{
   Win32::{
     Media::Audio::{
-      AUDIO_VOLUME_NOTIFICATION_DATA, EDataFlow, ERole, IMMDeviceEnumerator, IMMNotificationClient,
-      IMMNotificationClient_Impl, MMDeviceEnumerator,
+      AUDIO_VOLUME_NOTIFICATION_DATA, EDataFlow, ERole,
       Endpoints::{IAudioEndpointVolume, IAudioEndpointVolumeCallback, IAudioEndpointVolumeCallback_Impl},
-      eMultimedia, eRender,
+      IMMDeviceEnumerator, IMMNotificationClient, IMMNotificationClient_Impl, MMDeviceEnumerator, eMultimedia, eRender,
     },
     System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize},
   },

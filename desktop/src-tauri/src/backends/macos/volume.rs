@@ -103,7 +103,12 @@ impl Shared {
 
   fn apply_mute(&self, muted: bool) {
     let id = self.output.lock().unwrap().id;
-    write(id, kAudioDevicePropertyMute, kAudioObjectPropertyElementMain, u32::from(muted));
+    write(
+      id,
+      kAudioDevicePropertyMute,
+      kAudioObjectPropertyElementMain,
+      u32::from(muted),
+    );
     self.refresh();
   }
 }
@@ -245,7 +250,11 @@ fn default_output() -> Option<AudioObjectID> {
 }
 
 fn read_global<T: Copy>(id: AudioObjectID, selector: u32) -> Option<T> {
-  let mut wanted = address(selector, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain);
+  let mut wanted = address(
+    selector,
+    kAudioObjectPropertyScopeGlobal,
+    kAudioObjectPropertyElementMain,
+  );
   let mut size = size_of::<T>() as u32;
   let mut value = MaybeUninit::<T>::uninit();
   // SAFETY: size matches the buffer and CoreAudio writes at most that many bytes into it
@@ -264,7 +273,11 @@ fn read_global<T: Copy>(id: AudioObjectID, selector: u32) -> Option<T> {
 }
 
 fn listen(id: AudioObjectID, selector: u32, shared: &Shared, add: bool) {
-  let mut wanted = address(selector, kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain);
+  let mut wanted = address(
+    selector,
+    kAudioObjectPropertyScopeOutput,
+    kAudioObjectPropertyElementMain,
+  );
   let context = (shared as *const Shared).cast_mut().cast();
   // SAFETY: the listener and its context outlive the registration, which stop removes
   unsafe {
