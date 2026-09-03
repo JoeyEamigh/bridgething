@@ -472,16 +472,6 @@ impl OtaActor {
     }
 
     let kind = req.kind;
-    let target_dir = match kind {
-      OtaKind::Image | OtaKind::InstalledWebapp | OtaKind::WakewordModel => None,
-      OtaKind::Daemon | OtaKind::BuiltinWebapp => {
-        if crate::paths::is_on_device() {
-          Some(crate::paths::bandaid_transfers_dir())
-        } else {
-          None
-        }
-      }
-    };
     let expected_size = req.transfer.total_size as u64;
 
     if let Some(piece) = self.staged.iter().find(|p| p.update_id == req.update_id) {
@@ -495,32 +485,15 @@ impl OtaActor {
       return;
     }
 
-    if target_dir.is_none()
-      && let Err(err) = self.assets.reserve_disk(expected_size).await
-    {
+    if let Err(err) = self.assets.reserve_disk(expected_size).await {
       tracing::warn!(?err, update_id = %req.update_id, "ota: asset cache reserve_disk failed; proceeding");
     }
     let result = self
       .transfers
-      .begin(
-        req.update_id.clone(),
-        expected_size,
-        Some(expected_sha256),
-        target_dir.clone(),
-      )
+      .begin(req.update_id.clone(), expected_size, Some(expected_sha256))
       .await;
     match result {
       Ok(BeginOutcome::AlreadyComplete { path }) => {
-        if let Some(dir) = &target_dir {
-          let free = crate::paths::partition_free_bytes(dir);
-          let needed = bandaid_bytes_needed(expected_size, expected_size, req.patch.as_ref());
-          if free < needed {
-            let _ = ack.send(Err(OtaBeginRejected {
-              reason: format!("insufficient bandaid space: {free} bytes free, {needed} needed"),
-            }));
-            return;
-          }
-        }
         tracing::info!(update_id = %req.update_id, ?kind, "OtaBegin found a verified retained artifact; skipping transfer");
         let update_id = req.update_id.clone();
         let _ = ack.send(Ok(OtaBeginAck {
@@ -544,16 +517,6 @@ impl OtaActor {
       Ok(BeginOutcome::Resume {
         offset: resume_from_offset,
       }) => {
-        if let Some(dir) = &target_dir {
-          let free = crate::paths::partition_free_bytes(dir);
-          let needed = bandaid_bytes_needed(expected_size, resume_from_offset, req.patch.as_ref());
-          if free < needed {
-            let _ = ack.send(Err(OtaBeginRejected {
-              reason: format!("insufficient bandaid space: {free} bytes free, {needed} needed"),
-            }));
-            return;
-          }
-        }
         let resume_percent = phase_percent(resume_from_offset, expected_size);
         emit_progress(&self.events_tx, OtaPhase::Streaming, resume_percent, None).await;
         self.last_streaming_emit_at = Some(Instant::now());
@@ -1081,21 +1044,13 @@ async fn run_stage(
             code: OtaErrorCode::WriteFailed,
             msg: format!("daemon patch apply failed: {err}"),
           })?,
-        None if crate::paths::is_on_device() => {
-          let copy = payload.with_extension("stage");
-          tokio::fs::copy(payload, &copy).await.map_err(|err| WriteError {
-            code: OtaErrorCode::WriteFailed,
-            msg: format!("daemon stage copy failed: {err}"),
-          })?;
-          copy
-        }
         None => payload.to_path_buf(),
       };
       let result = daemon_swap::stage(&staged, update_id).await.map_err(|err| WriteError {
         code: OtaErrorCode::WriteFailed,
         msg: format!("daemon stage failed: {err}"),
       });
-      if result.is_err() && staged != payload {
+      if staged != payload {
         let _ = tokio::fs::remove_file(&staged).await;
       }
       result?
@@ -1154,16 +1109,6 @@ fn phase_percent(received: u64, expected: u64) -> u8 {
   ((received.saturating_mul(100)) / expected).min(100) as u8
 }
 
-const BANDAID_PREFLIGHT_SLACK_BYTES: u64 = 4 * 1024 * 1024;
-
-fn bandaid_bytes_needed(expected_size: u64, resume_from_offset: u64, patch: Option<&OtaPatch>) -> u64 {
-  let reconstructed = patch.map(|p| p.result_size as u64).unwrap_or(0);
-  expected_size
-    .saturating_sub(resume_from_offset)
-    .saturating_add(reconstructed)
-    .saturating_add(BANDAID_PREFLIGHT_SLACK_BYTES)
-}
-
 fn transfer_error_code(err: &TransferError) -> OtaErrorCode {
   match err {
     TransferError::OffsetMismatch { .. } => OtaErrorCode::OffsetMismatch,
@@ -1187,24 +1132,6 @@ mod tests {
   use tokio_util::bytes::Bytes;
 
   use super::*;
-
-  #[test]
-  fn bandaid_preflight_counts_remaining_transfer_plus_reconstruction() {
-    let patch = OtaPatch {
-      algorithm: libbridgething::gateway::OtaPatchAlgorithm::ZstdPatchFrom,
-      result_sha256: "aa".into(),
-      result_size: 43_000_000,
-      source_sha256: None,
-    };
-    let needed = bandaid_bytes_needed(13_000_000, 3_000_000, Some(&patch));
-    assert_eq!(needed, 10_000_000 + 43_000_000 + BANDAID_PREFLIGHT_SLACK_BYTES);
-
-    let raw = bandaid_bytes_needed(43_000_000, 0, None);
-    assert_eq!(raw, 43_000_000 + BANDAID_PREFLIGHT_SLACK_BYTES);
-
-    let resumed_past_end = bandaid_bytes_needed(100, 200, None);
-    assert_eq!(resumed_past_end, BANDAID_PREFLIGHT_SLACK_BYTES);
-  }
 
   fn dummy_info() -> WebappInfo {
     WebappInfo {

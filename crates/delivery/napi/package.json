@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/core-node",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "N-API bindings for the bridgething delivery core: gateway link, updates, webapp install, bundle store.",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
   "homepage": "https://bridgething.com",

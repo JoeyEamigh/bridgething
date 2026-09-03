@@ -82,9 +82,9 @@ pub async fn stage(staged_binary: &Path, update_id: String) -> Result<StagedPiec
   staging::remove_any(&incoming).await;
   staging::remove_any(&previous).await;
 
-  fs::rename(staged_binary, &incoming)
+  fs::copy(staged_binary, &incoming)
     .await
-    .map_err(io_err("rename staged -> incoming"))?;
+    .map_err(io_err("copy staged -> incoming"))?;
 
   fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o755))
     .await

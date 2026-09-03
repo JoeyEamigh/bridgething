@@ -23,7 +23,6 @@ pub(super) enum Command {
     id: String,
     expected_size: u64,
     expected_sha256: Option<String>,
-    target_dir: Option<PathBuf>,
     ack: oneshot::Sender<Result<BeginOutcome, TransferError>>,
   },
   AcceptChunk {
@@ -180,13 +179,8 @@ impl ChunkedTransferActor {
         id,
         expected_size,
         expected_sha256,
-        target_dir,
         ack,
-      } => {
-        self
-          .handle_begin(id, expected_size, expected_sha256, target_dir, ack)
-          .await
-      }
+      } => self.handle_begin(id, expected_size, expected_sha256, ack).await,
       Command::AcceptChunk {
         id,
         offset,
@@ -208,7 +202,6 @@ impl ChunkedTransferActor {
     id: String,
     expected_size: u64,
     expected_sha256: Option<String>,
-    target_dir: Option<PathBuf>,
     ack: oneshot::Sender<Result<BeginOutcome, TransferError>>,
   ) {
     match self.begin_fast_path(&id, expected_size, &expected_sha256) {
@@ -227,7 +220,7 @@ impl ChunkedTransferActor {
         });
       }
       FastPath::Fresh => {
-        let result = self.begin_fresh(id, expected_size, expected_sha256, target_dir).await;
+        let result = self.begin_fresh(id, expected_size, expected_sha256).await;
         let _ = ack.send(result.map(|offset| BeginOutcome::Resume { offset }));
       }
     }
@@ -297,13 +290,8 @@ impl ChunkedTransferActor {
     tracing::warn!(%id, "retained complete artifact failed re-verification; restarting fresh");
     let expected_size = transfer.expected_size;
     let expected_sha256 = transfer.expected_sha256.clone();
-    let target_dir = transfer
-      .partial_path
-      .parent()
-      .filter(|dir| *dir != self.transfers_dir)
-      .map(Path::to_path_buf);
     let _ = self.handle_abandon(id.clone()).await;
-    let result = self.begin_fresh(id, expected_size, expected_sha256, target_dir).await;
+    let result = self.begin_fresh(id, expected_size, expected_sha256).await;
     let _ = ack.send(result.map(|offset| BeginOutcome::Resume { offset }));
   }
 
@@ -312,7 +300,6 @@ impl ChunkedTransferActor {
     id: String,
     expected_size: u64,
     expected_sha256: Option<String>,
-    target_dir: Option<PathBuf>,
   ) -> Result<u64, TransferError> {
     let projected = self.total_disk_bytes.saturating_add(expected_size);
     if projected > TRANSFER_DISK_BUDGET_BYTES {
@@ -324,14 +311,7 @@ impl ChunkedTransferActor {
     }
 
     let stem = safe_filename(&id);
-    let partial_dir = match &target_dir {
-      Some(dir) => {
-        tokio::fs::create_dir_all(dir).await?;
-        dir.clone()
-      }
-      None => self.transfers_dir.clone(),
-    };
-    let partial_path = partial_dir.join(format!("{stem}.partial"));
+    let partial_path = self.transfers_dir.join(format!("{stem}.partial"));
     let meta_path = self.transfers_dir.join(format!("{stem}.meta"));
 
     let _ = tokio::fs::remove_file(&partial_path).await;
