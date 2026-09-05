@@ -1,7 +1,9 @@
 import { Window } from 'happy-dom';
 import { render, type ComponentChild } from 'preact';
 
-const DOM_GLOBALS = ['document', 'Node', 'Event', 'FocusEvent', 'MouseEvent'] as const;
+const DOM_GLOBALS = ['window', 'document', 'Node', 'Event', 'FocusEvent', 'MouseEvent'] as const;
+
+const DEFAULT_URL = 'https://bridgething.com/appjam';
 
 const EFFECT_POLL_TICKS = 200;
 const EFFECT_POLL_STEP_MS = 5;
@@ -19,8 +21,8 @@ export type Mounted = {
   unmount(): void;
 };
 
-export function mount(node: ComponentChild): Mounted {
-  const window = new Window({ url: 'https://bridgething.com/appjam' });
+export function mount(node: ComponentChild, options: { url?: string } = {}): Mounted {
+  const window = new Window({ url: options.url ?? DEFAULT_URL });
   const globals = globalThis as unknown as Record<string, unknown>;
   const held = new Map<string, unknown>(DOM_GLOBALS.map(name => [name, globals[name]]));
   for (const name of DOM_GLOBALS) globals[name] = (window as unknown as Record<string, unknown>)[name];

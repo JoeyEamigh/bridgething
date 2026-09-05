@@ -1,5 +1,5 @@
 import { normalizeSourceUrl, SourceUrlError, type AppEntry, type Catalog } from '@bridgething/catalog';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { DirectoryApiError, submitSource } from '../../lib/directory-client';
 import { fetchJamCatalog, submitJamEntry } from '../../lib/jam-client';
 import { JAM_CATEGORIES, JAM_TIMELINE, jamClosedReason, jamWindow, type JamCategory } from '../../lib/jam';
@@ -108,13 +108,10 @@ function OpenForm() {
     setAppId('');
   }
 
-  async function onProbe(event: Event) {
-    event.preventDefault();
-    if (busy) return;
-
+  async function probe(raw: string) {
     let candidate: string;
     try {
-      candidate = normalizeSourceUrl(sourceUrl);
+      candidate = normalizeSourceUrl(raw);
     } catch (err) {
       setError(reason(err));
       return;
@@ -137,6 +134,18 @@ function OpenForm() {
     } finally {
       setBusy(false);
     }
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handed = new URLSearchParams(window.location.search).get('source');
+    if (handed !== null && handed.trim()) void probe(handed.trim());
+  }, []);
+
+  function onProbe(event: Event) {
+    event.preventDefault();
+    if (busy) return;
+    void probe(sourceUrl);
   }
 
   async function onSubmit(event: Event) {

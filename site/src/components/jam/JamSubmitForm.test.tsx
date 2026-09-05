@@ -115,6 +115,17 @@ describe('loading the apps out of a catalog', () => {
     expect(held.text()).toContain('Does a thing.');
   });
 
+  test('a source handed over from the store loads its apps without the entrant retyping it', async () => {
+    held = mount(<JamSubmitForm />, {
+      url: `https://bridgething.com/appjam?source=${encodeURIComponent(CATALOG_URL)}`,
+    });
+
+    await held.waitFor(() => held!.text().includes('Does a thing.'));
+
+    expect((held.find('#jam-source') as HTMLInputElement).value).toBe(CATALOG_URL);
+    expect(calls).toEqual([{ method: 'GET', url: CATALOG_CALL }]);
+  });
+
   test('an empty url says so rather than looking like a dead button', async () => {
     held = mount(<JamSubmitForm />);
 

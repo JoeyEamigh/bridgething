@@ -34,7 +34,7 @@ const SUBMIT_LIMIT = 5;
 const SUBMIT_WINDOW_SECONDS = 3600;
 const INSTALL_LIMIT = 40;
 const INSTALL_WINDOW_SECONDS = 3600;
-const JAM_LIMIT = 5;
+const JAM_LIMIT = 30;
 const JAM_WINDOW_SECONDS = 3600;
 const JAM_CATALOG_LIMIT = 60;
 const JAM_CATALOG_WINDOW_SECONDS = 3600;
@@ -184,7 +184,7 @@ async function handleJam(request: Request, env: Env, url: URL, caller: Principal
     if (!parsed.ok) return fail(parsed.status, parsed.reason);
 
     if (!(await takeRateLimitToken(kv, `jam:${clientOf(request)}`, JAM_LIMIT, JAM_WINDOW_SECONDS))) {
-      return fail(429, `at most ${JAM_LIMIT} jam submissions per hour. try again later.`);
+      return fail(429, `at most ${JAM_LIMIT} jam submission attempts per hour. try again later.`);
     }
 
     const submission = { ...parsed.submission, claim: bearerToken(request) ?? parsed.submission.claim };

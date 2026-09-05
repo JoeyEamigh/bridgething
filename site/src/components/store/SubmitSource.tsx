@@ -1,13 +1,19 @@
 import { normalizeSourceUrl, SourceUrlError } from '@bridgething/catalog';
 import { useState } from 'preact/hooks';
 import { DirectoryApiError, submitSource, type DirectoryEntry } from '../../lib/directory-client';
+import { JAM_PRIZE_POOL, JAM_TIMELINE, jamDate, jamWindow } from '../../lib/jam';
 
-type Outcome = { kind: 'ok' | 'err'; message: string } | null;
+type Outcome = { kind: 'ok'; message: string; sourceUrl: string } | { kind: 'err'; message: string } | null;
+
+function jamEntryPath(sourceUrl: string): string {
+  return `/appjam?source=${encodeURIComponent(sourceUrl)}`;
+}
 
 export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEntry) => void }) {
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const jam = jamWindow(JAM_TIMELINE);
 
   async function onSubmit(event: Event) {
     event.preventDefault();
@@ -30,6 +36,7 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
       setUrl('');
       setOutcome({
         kind: 'ok',
+        sourceUrl: entry.url,
         message:
           entry.status === 'quarantined'
             ? `${entry.name} is in the directory as unreviewed. it reaches the phone app once a reviewer lists it.`
@@ -53,6 +60,12 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
       <p class="mt-2 mb-4 max-w-2xl text-sm text-white/60">
         the https url of your <code>catalog.v1</code> document. it must be reachable, parse, and send{' '}
         <code>Access-Control-Allow-Origin</code>. <a href="/docs/publishing-apps">publishing docs</a>.
+        {jam.open ? (
+          <>
+            {' '}
+            building something new? <a href="/appjam">enter it in the app jam</a>!
+          </>
+        ) : null}
       </p>
 
       <form class="flex flex-wrap gap-3" onSubmit={onSubmit}>
@@ -74,6 +87,18 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
 
       {outcome ? (
         <p class={`mt-3 text-sm ${outcome.kind === 'ok' ? 'text-ok' : 'text-warn'}`}>{outcome.message}</p>
+      ) : null}
+
+      {outcome?.kind === 'ok' && jam.open ? (
+        <div class="border-accent/40 bg-accent-soft mt-4 border p-4">
+          <p class="m-0 font-medium">the app jam is on until {jamDate(JAM_TIMELINE.closesAt)}.</p>
+          <p class="m-0 mt-1 text-sm text-white/70">${JAM_PRIZE_POOL} in prizes</p>
+          <p class="m-0 mt-3">
+            <a class="btn btn-primary" href={jamEntryPath(outcome.sourceUrl)}>
+              enter in the jam
+            </a>
+          </p>
+        </div>
       ) : null}
     </details>
   );

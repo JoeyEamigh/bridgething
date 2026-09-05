@@ -344,7 +344,7 @@ describe('/api/jam/entries', () => {
   test('one client cannot flood the jam', async () => {
     const statuses = await onStubbedNetwork(async () => {
       const seen: number[] = [];
-      for (let i = 0; i < 6; i += 1) seen.push((await call('POST', '/api/jam/entries', { body: entryBody() })).status);
+      for (let i = 0; i < 31; i += 1) seen.push((await call('POST', '/api/jam/entries', { body: entryBody() })).status);
       return seen;
     });
 
