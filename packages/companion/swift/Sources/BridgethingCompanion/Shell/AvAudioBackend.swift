@@ -4,21 +4,12 @@
     import BridgethingCompanionCore
     import Foundation
 
-    enum ShellAudioSession {
-        static func activateMixedPlayback() {
-            #if os(iOS)
-                let session = AVAudioSession.sharedInstance()
-                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-                try? session.setActive(true)
-            #endif
-        }
-    }
-
     public final class AvAudioBackend: AudioBackend, @unchecked Sendable {
         private let synth = AVSpeechSynthesizer()
         private let delegate = SpeechDelegate()
         private let earconBundle: Bundle
         private let playerStore = EarconPlayerStore()
+        private let session = ShellAudioSession.shared
 
         public init(earconBundle: Bundle = .main) {
             self.earconBundle = earconBundle
@@ -26,7 +17,9 @@
         }
 
         public func speak(id: String, text: String, voice: String?, sink: SpeakSink) {
-            ShellAudioSession.activateMixedPlayback()
+            let session = self.session
+            session.activateMixedPlayback()
+            session.beginSpeech()
             let utterance = AVSpeechUtterance(string: text)
             if let voice {
                 utterance.voice = AVSpeechSynthesisVoice(identifier: voice) ?? AVSpeechSynthesisVoice(language: voice)
@@ -35,7 +28,10 @@
                 utterance,
                 deadlineNanos: Self.speakDeadline(for: text),
                 onStart: { sink.onStart() },
-                onFinish: { completed in sink.onFinished(ok: completed) }
+                onFinish: { completed in
+                    session.endSpeech()
+                    sink.onFinished(ok: completed)
+                }
             )
             synth.speak(utterance)
         }
@@ -55,7 +51,8 @@
         }
 
         public func playEarcon(name: String, sink: EarconSink) {
-            ShellAudioSession.activateMixedPlayback()
+            let session = self.session
+            session.activateMixedPlayback()
             let exts = ["wav", "caf", "aiff", "m4a", "mp3"]
             let bundle = earconBundle
             let url = exts.lazy
@@ -65,7 +62,11 @@
                 sink.onFinished(ok: false)
                 return
             }
-            playerStore.retainWhilePlaying(player) { completed in sink.onFinished(ok: completed) }
+            session.beginSpeech()
+            playerStore.retainWhilePlaying(player) { completed in
+                session.endSpeech()
+                sink.onFinished(ok: completed)
+            }
             if !player.play() {
                 playerStore.resolve(player, completed: false)
             }

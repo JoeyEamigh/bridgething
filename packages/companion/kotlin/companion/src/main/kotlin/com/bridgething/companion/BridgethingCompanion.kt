@@ -12,6 +12,7 @@ import com.bridgething.companion.shell.AndroidImageScaler
 import com.bridgething.companion.shell.AndroidMediaSessionBackend
 import com.bridgething.companion.shell.AndroidNotificationBackend
 import com.bridgething.companion.shell.AndroidPhoneBackend
+import com.bridgething.companion.shell.AndroidStreamBackend
 import com.bridgething.companion.shell.AndroidVolumeBackend
 import com.bridgething.companion.shell.BtLinkTransport
 import com.bridgething.companion.shell.EncryptedPrefsSecretStore

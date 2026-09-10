@@ -7,14 +7,6 @@ import Foundation
 
     private let keepAliveLog = Logger(subsystem: "com.bridgething.companion", category: "keepalive")
 
-    enum CompanionAudioSession {
-        static func activateMixedPlayback() {
-            let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try? session.setActive(true)
-        }
-    }
-
     actor BackgroundAudioKeepAlive {
         private var player: AVAudioPlayer?
         private var observers: [NSObjectProtocol] = []
@@ -39,11 +31,11 @@ import Foundation
             observers.removeAll()
             player?.stop()
             player = nil
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            ShellAudioSession.shared.deactivate()
         }
 
         private func startPlayer() {
-            CompanionAudioSession.activateMixedPlayback()
+            ShellAudioSession.shared.activateMixedPlayback()
             do {
                 let p = try AVAudioPlayer(data: Self.silence)
                 p.numberOfLoops = -1
@@ -57,7 +49,7 @@ import Foundation
 
         private func reassert() {
             guard active else { return }
-            CompanionAudioSession.activateMixedPlayback()
+            ShellAudioSession.shared.activateMixedPlayback()
             if let p = player {
                 if !p.isPlaying { p.play() }
             } else {

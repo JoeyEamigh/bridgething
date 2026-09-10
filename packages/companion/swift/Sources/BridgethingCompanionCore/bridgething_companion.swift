@@ -6285,7 +6285,7 @@ public protocol HttpDownloadSinkProtocol: AnyObject, Sendable {
     
     func onFinished() 
     
-    func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) 
+    func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?)  -> Bool
     
 }
 open class HttpDownloadSink: HttpDownloadSinkProtocol, @unchecked Sendable {
@@ -6367,7 +6367,8 @@ open func onFinished()  {try! rustCall() {
 }
 }
     
-open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?)  {try! rustCall() {
+open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_httpdownloadsink_on_response(
             self.uniffiCloneHandle(),
@@ -6375,7 +6376,7 @@ open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt6
         FfiConverterSequenceTypeHttpHeader.lower(headers),
         FfiConverterOptionUInt64.lower(contentLength),uniffiCallStatus
     )
-}
+})
 }
     
 
@@ -11509,27 +11510,33 @@ public func FfiConverterTypeSpeechRecognizer_lower(_ value: SpeechRecognizer) ->
 
 
 /**
- * Native playback of a raw http(s) media URL on the phone. Webapps run in the
- * on-device kiosk and the Car Thing has no speaker, so a webapp that wants to
- * play a stream (internet radio, a podcast episode, ambient audio) hands the
- * URL to this backend and the phone's native player takes it from there.
+ * Native playback of a raw http(s) media url on the phone. The host owns the audio session,
+ * audio focus, lock-screen presence and background survival; it reports what its player is
+ * actually doing through the sink and never assumes a verb succeeded. `live` on the source is
+ * settled before play from the origin's icy headers, since native players fabricate a finite
+ * duration behind a fake content length and never expose the headers themselves.
  */
 public protocol StreamBackend: AnyObject, Sendable {
     
-    func play(url: String, sink: StreamSink) 
+    func appBundle()  -> String
+    
+    func play(source: StreamSource, sink: StreamSink) 
     
     func pause() 
     
     func resume() 
     
+    func seekTo(positionMs: UInt32) 
+    
     func stop() 
     
 }
 /**
- * Native playback of a raw http(s) media URL on the phone. Webapps run in the
- * on-device kiosk and the Car Thing has no speaker, so a webapp that wants to
- * play a stream (internet radio, a podcast episode, ambient audio) hands the
- * URL to this backend and the phone's native player takes it from there.
+ * Native playback of a raw http(s) media url on the phone. The host owns the audio session,
+ * audio focus, lock-screen presence and background survival; it reports what its player is
+ * actually doing through the sink and never assumes a verb succeeded. `live` on the source is
+ * settled before play from the origin's icy headers, since native players fabricate a finite
+ * duration behind a fake content length and never expose the headers themselves.
  */
 open class StreamBackendImpl: StreamBackend, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -11584,11 +11591,20 @@ open class StreamBackendImpl: StreamBackend, @unchecked Sendable {
     
 
     
-open func play(url: String, sink: StreamSink)  {try! rustCall() {
+open func appBundle() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_app_bundle(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func play(source: StreamSource, sink: StreamSink)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_streambackend_play(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(url),
+        FfiConverterTypeStreamSource_lower(source),
         FfiConverterTypeStreamSink_lower(sink),uniffiCallStatus
     )
 }
@@ -11606,6 +11622,15 @@ open func resume()  {try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_streambackend_resume(
             self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func seekTo(positionMs: UInt32)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_seek_to(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(positionMs),uniffiCallStatus
     )
 }
 }
@@ -11646,9 +11671,31 @@ fileprivate struct UniffiCallbackInterfaceStreamBackend {
                 fatalError("Uniffi callback interface StreamBackend: handle missing in uniffiClone")
             }
         },
+        appBundle: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> String in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.appBundle(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
         play: { (
             uniffiHandle: UInt64,
-            url: RustBuffer,
+            source: RustBuffer,
             sink: UInt64,
             uniffiOutReturn: UnsafeMutableRawPointer,
             uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
@@ -11659,7 +11706,7 @@ fileprivate struct UniffiCallbackInterfaceStreamBackend {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return uniffiObj.play(
-                     url: try FfiConverterString.lift(url),
+                     source: try FfiConverterTypeStreamSource_lift(source),
                      sink: try FfiConverterTypeStreamSink_lift(sink)
                 )
             }
@@ -11705,6 +11752,30 @@ fileprivate struct UniffiCallbackInterfaceStreamBackend {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return uniffiObj.resume(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        seekTo: { (
+            uniffiHandle: UInt64,
+            positionMs: UInt32,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.seekTo(
+                     positionMs: try FfiConverterUInt32.lift(positionMs)
                 )
             }
 
@@ -11819,9 +11890,11 @@ public func FfiConverterTypeStreamBackend_lower(_ value: StreamBackend) -> UInt6
 
 public protocol StreamSinkProtocol: AnyObject, Sendable {
     
-    func onStarted() 
+    func onMetadata(metadata: StreamMetadata) 
     
-    func onStopped(error: String?) 
+    func onStatus(status: StreamStatus) 
+    
+    func onTiming(timing: StreamTiming) 
     
 }
 open class StreamSink: StreamSinkProtocol, @unchecked Sendable {
@@ -11877,19 +11950,29 @@ open class StreamSink: StreamSinkProtocol, @unchecked Sendable {
     
 
     
-open func onStarted()  {try! rustCall() {
+open func onMetadata(metadata: StreamMetadata)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_streamsink_on_started(
-            self.uniffiCloneHandle(),uniffiCallStatus
+    uniffi_bridgething_companion_fn_method_streamsink_on_metadata(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamMetadata_lower(metadata),uniffiCallStatus
     )
 }
 }
     
-open func onStopped(error: String?)  {try! rustCall() {
+open func onStatus(status: StreamStatus)  {try! rustCall() {
         uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_streamsink_on_stopped(
+    uniffi_bridgething_companion_fn_method_streamsink_on_status(
             self.uniffiCloneHandle(),
-        FfiConverterOptionString.lower(error),uniffiCallStatus
+        FfiConverterTypeStreamStatus_lower(status),uniffiCallStatus
+    )
+}
+}
+    
+open func onTiming(timing: StreamTiming)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streamsink_on_timing(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamTiming_lower(timing),uniffiCallStatus
     )
 }
 }
@@ -18530,6 +18613,184 @@ public func FfiConverterTypeSpotifyProviderConfig_lower(_ value: SpotifyProvider
 }
 
 
+public struct StreamMetadata: Equatable, Hashable {
+    public var title: String?
+    public var artist: String?
+    public var album: String?
+    public var artworkUrl: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(title: String?, artist: String?, album: String?, artworkUrl: String?) {
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.artworkUrl = artworkUrl
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamMetadata: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamMetadata: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamMetadata {
+        return
+            try StreamMetadata(
+                title: FfiConverterOptionString.read(from: &buf), 
+                artist: FfiConverterOptionString.read(from: &buf), 
+                album: FfiConverterOptionString.read(from: &buf), 
+                artworkUrl: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamMetadata, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.artist, into: &buf)
+        FfiConverterOptionString.write(value.album, into: &buf)
+        FfiConverterOptionString.write(value.artworkUrl, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamMetadata_lift(_ buf: RustBuffer) throws -> StreamMetadata {
+    return try FfiConverterTypeStreamMetadata.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamMetadata_lower(_ value: StreamMetadata) -> RustBuffer {
+    return FfiConverterTypeStreamMetadata.lower(value)
+}
+
+
+public struct StreamSource: Equatable, Hashable {
+    public var url: String
+    public var live: Bool
+    public var station: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(url: String, live: Bool, station: String?) {
+        self.url = url
+        self.live = live
+        self.station = station
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamSource: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamSource: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamSource {
+        return
+            try StreamSource(
+                url: FfiConverterString.read(from: &buf), 
+                live: FfiConverterBool.read(from: &buf), 
+                station: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamSource, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterBool.write(value.live, into: &buf)
+        FfiConverterOptionString.write(value.station, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSource_lift(_ buf: RustBuffer) throws -> StreamSource {
+    return try FfiConverterTypeStreamSource.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSource_lower(_ value: StreamSource) -> RustBuffer {
+    return FfiConverterTypeStreamSource.lower(value)
+}
+
+
+public struct StreamTiming: Equatable, Hashable {
+    public var positionMs: UInt32
+    public var durationMs: UInt32?
+    public var seekable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(positionMs: UInt32, durationMs: UInt32?, seekable: Bool) {
+        self.positionMs = positionMs
+        self.durationMs = durationMs
+        self.seekable = seekable
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamTiming: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamTiming: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamTiming {
+        return
+            try StreamTiming(
+                positionMs: FfiConverterUInt32.read(from: &buf), 
+                durationMs: FfiConverterOptionUInt32.read(from: &buf), 
+                seekable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamTiming, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.positionMs, into: &buf)
+        FfiConverterOptionUInt32.write(value.durationMs, into: &buf)
+        FfiConverterBool.write(value.seekable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTiming_lift(_ buf: RustBuffer) throws -> StreamTiming {
+    return try FfiConverterTypeStreamTiming.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTiming_lower(_ value: StreamTiming) -> RustBuffer {
+    return FfiConverterTypeStreamTiming.lower(value)
+}
+
+
 public struct Transcription: Equatable, Hashable {
     public var text: String
     public var alternatives: [String]
@@ -24409,6 +24670,96 @@ public func FfiConverterTypeSessionEvent_lower(_ value: SessionEvent) -> RustBuf
 
 
 
+public enum StreamStatus: Equatable, Hashable {
+    
+    case buffering
+    case playing
+    case paused
+    case ended
+    case failed(reason: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension StreamStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamStatus: FfiConverterRustBuffer {
+    typealias SwiftType = StreamStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .buffering
+        
+        case 2: return .playing
+        
+        case 3: return .paused
+        
+        case 4: return .ended
+        
+        case 5: return .failed(reason: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StreamStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .buffering:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .playing:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .paused:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .ended:
+            writeInt(&buf, Int32(4))
+        
+        
+        case let .failed(reason):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(reason, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamStatus_lift(_ buf: RustBuffer) throws -> StreamStatus {
+    return try FfiConverterTypeStreamStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamStatus_lower(_ value: StreamStatus) -> RustBuffer {
+    return FfiConverterTypeStreamStatus.lower(value)
+}
+
+
+
+
 public enum VoiceModelStatus: Equatable, Hashable {
     
     case absent
@@ -28081,7 +28432,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_finished() != 21755) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_response() != 21604) {
+    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_response() != 56008) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_httpsink_complete() != 53113) {
@@ -28213,22 +28564,31 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_transcriptionsink_fail() != 11687) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streambackend_play() != 4066) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_app_bundle() != 50332) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streambackend_pause() != 58598) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_play() != 53203) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streambackend_resume() != 50967) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_pause() != 64195) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streambackend_stop() != 35524) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_resume() != 63510) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streamsink_on_started() != 34052) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_seek_to() != 2174) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_streamsink_on_stopped() != 24633) {
+    if (uniffi_bridgething_companion_checksum_method_streambackend_stop() != 51811) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_metadata() != 27607) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_status() != 20662) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_timing() != 22810) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {

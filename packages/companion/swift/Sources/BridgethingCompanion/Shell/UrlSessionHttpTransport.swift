@@ -102,6 +102,7 @@ private final class DownloadRouter: NSObject, URLSessionDataDelegate, @unchecked
     private let lock = NSLock()
     private var sinks: [Int: HttpDownloadSink] = [:]
     private var responded: Set<Int> = []
+    private var refused: Set<Int> = []
 
     func register(_ task: URLSessionTask, sink: HttpDownloadSink) {
         lock.lock()
@@ -120,17 +121,24 @@ private final class DownloadRouter: NSObject, URLSessionDataDelegate, @unchecked
         didReceive response: URLResponse,
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
-        if let sink = sink(for: dataTask), let http = response as? HTTPURLResponse {
+        guard let sink = sink(for: dataTask), let http = response as? HTTPURLResponse else {
+            return completionHandler(.allow)
+        }
+        lock.lock()
+        let first = responded.insert(dataTask.taskIdentifier).inserted
+        lock.unlock()
+        guard first else { return completionHandler(.allow) }
+
+        let accepted = sink.onResponse(
+            status: UInt16(clamping: http.statusCode),
+            headers: UrlSessionHttpTransport.headers(http),
+            contentLength: http.expectedContentLength >= 0 ? UInt64(http.expectedContentLength) : nil
+        )
+        guard accepted else {
             lock.lock()
-            let first = responded.insert(dataTask.taskIdentifier).inserted
+            refused.insert(dataTask.taskIdentifier)
             lock.unlock()
-            if first {
-                sink.onResponse(
-                    status: UInt16(clamping: http.statusCode),
-                    headers: UrlSessionHttpTransport.headers(http),
-                    contentLength: http.expectedContentLength >= 0 ? UInt64(http.expectedContentLength) : nil
-                )
-            }
+            return completionHandler(.cancel)
         }
         completionHandler(.allow)
     }
@@ -143,14 +151,24 @@ private final class DownloadRouter: NSObject, URLSessionDataDelegate, @unchecked
         lock.lock()
         let sink = sinks.removeValue(forKey: task.taskIdentifier)
         let sawResponse = responded.remove(task.taskIdentifier) != nil
+        let wasRefused = refused.remove(task.taskIdentifier) != nil
         lock.unlock()
         guard let sink else { return }
         if let error {
-            sink.onFailed(reason: error.localizedDescription)
+            if wasRefused, Self.isCancellation(error) {
+                sink.onFinished()
+            } else {
+                sink.onFailed(reason: error.localizedDescription)
+            }
         } else if sawResponse {
             sink.onFinished()
         } else {
             sink.onFailed(reason: "request completed with no http response")
         }
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        let ns = error as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
     }
 }

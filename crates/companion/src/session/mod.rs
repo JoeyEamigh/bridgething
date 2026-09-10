@@ -45,7 +45,7 @@ use crate::{
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
   dispatch::{
-    asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
+    ask, asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
     library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
     phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
@@ -632,8 +632,13 @@ impl Session {
       return;
     };
     let hub = self.hub.clone();
+    let http = self.backends.http.clone();
+    let scaler = self.backends.image.clone();
     tokio::spawn(async move {
-      let provider = StreamProvider::new(backend);
+      let Some(app_bundle) = ask(&backend, |backend| backend.app_bundle()).await else {
+        return;
+      };
+      let provider = StreamProvider::new(backend, app_bundle, Arc::new(ForeignHttp::new(http)), scaler);
       if let Err(error) = hub.attach(provider).await {
         tracing::warn!(%error, "the stream provider did not attach");
       }
@@ -1118,7 +1123,7 @@ impl Session {
   async fn release(&self, device_id: &str, link: Option<Link>) {
     self.log_stream.lock().unwrap().tokens.remove(device_id);
     self.broadcast.release(device_id);
-    self.hub.peer_disconnected(device_id);
+    self.hub.peer_disconnected(device_id).await;
     let Some(link) = link else { return };
     tracing::info!(%device_id, "a peer link is being torn down");
     if let Some(extensions) = &self.extensions {

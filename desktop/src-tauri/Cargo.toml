@@ -15,6 +15,11 @@ path = "src/lib.rs"
 name = "bridgething-desktop"
 path = "src/main.rs"
 
+[[test]]
+name = "stream_live"
+path = "tests/stream_live.rs"
+harness = false
+
 [build-dependencies]
 cc = "1.4.3"
 tauri-build = { version = "2.6.3", features = [] }
@@ -25,6 +30,7 @@ tokio-tungstenite.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.11.5", features = ["test"] }
 tempfile = "3.27.0"
+bridgething-client = { path = "../../crates/client-rs" }
 
 [dependencies]
 base64 = "0.23.1"
@@ -64,11 +70,13 @@ ort = "2.0.0-rc.13"
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
 objc2 = "0.6.4"
+objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "AVPlayer", "AVPlayerItem", "AVPlayerItemOutput", "AVPlayerItemTrack", "AVTimedMetadataGroup", "AVMetadataItem", "AVMetadataFormat", "AVMetadataIdentifiers", "AVAsset", "AVTime", "block2", "dispatch2", "objc2-core-media"] }
 objc2-avf-audio = "0.3.2"
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["AudioHardware", "std"] }
 objc2-core-foundation = "0.3.2"
 objc2-core-graphics = "0.3.2"
 objc2-core-location = "0.3.2"
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMBase", "CMTime"] }
 objc2-core-ml = "0.3.2"
 objc2-foundation = "0.3.2"
 objc2-image-io = "0.3.2"
@@ -82,6 +90,8 @@ ort = "2.0.0-rc.13"
 [target.'cfg(target_os = "linux")'.dependencies]
 futures.workspace = true
 pulseaudio = "0.3.1"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider", "stream"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["mp3", "aac", "isomp4", "ogg", "vorbis", "flac", "pcm", "wav", "id3v1", "id3v2"] }
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -93,6 +103,7 @@ windows = { version = "0.62.2", features = [
   "Media_Core",
   "Media_Playback",
   "Media_SpeechSynthesis",
+  "Media_Streaming_Adaptive",
   "Networking_Connectivity",
   "Storage_Streams",
   "Win32_Foundation",

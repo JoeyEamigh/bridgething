@@ -130,6 +130,7 @@ pub trait Provider: PlayerTransport {
   async fn attach(&self, link: ProviderLink) -> Result<(), ProviderError>;
   async fn detach(&self);
   async fn handle_peer_connected(&self, _allow_auto_resume: bool) {}
+  async fn last_peer_gone(&self) {}
   async fn resumed(&self) {}
   async fn connectivity_changed(&self, _online: bool) {}
   fn set_resume_target(&self, _target: ResumeTarget) {}

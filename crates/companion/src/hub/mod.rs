@@ -368,9 +368,20 @@ impl Hub {
     }
   }
 
-  pub fn peer_disconnected(&self, device_id: &str) {
-    self.resume.lock().unwrap().connected.remove(device_id);
+  pub async fn peer_disconnected(&self, device_id: &str) {
+    let none_left = {
+      let mut resume = self.resume.lock().unwrap();
+      resume.connected.remove(device_id);
+      resume.connected.is_empty()
+    };
     self.push_resume_target();
+    if none_left {
+      for id in self.ordered_ids() {
+        if let Some(provider) = self.provider(&id) {
+          provider.last_peer_gone().await;
+        }
+      }
+    }
   }
 
   fn allow_auto_resume(&self, device_id: &str) -> bool {

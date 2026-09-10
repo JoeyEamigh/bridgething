@@ -37,12 +37,13 @@ private class RecordingHttpSink : HttpSink(NoHandle) {
     }
 }
 
-private class RecordingDownloadSink : HttpDownloadSink(NoHandle) {
+private class RecordingDownloadSink(private val accept: Boolean = true) : HttpDownloadSink(NoHandle) {
     val events = LinkedBlockingQueue<String>()
     val chunks = mutableListOf<ByteArray>()
 
-    override fun onResponse(status: UShort, headers: List<HttpHeader>, contentLength: ULong?) {
+    override fun onResponse(status: UShort, headers: List<HttpHeader>, contentLength: ULong?): Boolean {
         events.add("response:$status:${contentLength ?: "?"}")
+        return accept
     }
 
     override fun onChunk(chunk: ByteArray) {
@@ -158,6 +159,23 @@ class KtorHttpTransportTest {
                 sink.chunks.fold(ByteArray(0)) { acc, chunk -> acc + chunk }
             }
             assertArrayEquals(payload, whole)
+        } finally {
+            srv.stop(0, 0)
+        }
+    }
+
+    @Test
+    fun aRefusalAtTheHeadersNeverStreamsAByteAndStillFinishes() {
+        val payload = ByteArray(4 * 1024 * 1024) { (it % 251).toByte() }
+        val (srv, port) = server {
+            get("/radio") { call.respondBytes(payload) }
+        }
+        try {
+            val sink = RecordingDownloadSink(accept = false)
+            KtorHttpTransport().download(request("http://127.0.0.1:$port/radio"), sink)
+            assertEquals("response:200:${payload.size}", sink.events.poll(5, TimeUnit.SECONDS))
+            assertEquals("finished", sink.events.poll(5, TimeUnit.SECONDS))
+            assertTrue(synchronized(sink.chunks) { sink.chunks.isEmpty() }, "the refused body reached the sink")
         } finally {
             srv.stop(0, 0)
         }

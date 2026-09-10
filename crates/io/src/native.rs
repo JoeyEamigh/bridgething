@@ -142,11 +142,16 @@ async fn reqwest_download(
     rb = rb.body(request.body);
   }
   let mut resp = rb.send().await.map_err(|e| e.to_string())?;
-  sink.on_response(
+  let wanted = sink.on_response(
     resp.status().as_u16(),
     header_vec(resp.headers()),
     resp.content_length(),
   );
+  if !wanted {
+    drop(resp);
+    sink.on_finished();
+    return Ok(());
+  }
   while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
     let writing = sink.clone();
     tokio::task::spawn_blocking(move || writing.on_chunk(chunk.to_vec()))

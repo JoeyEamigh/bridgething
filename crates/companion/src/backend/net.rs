@@ -86,10 +86,10 @@ impl HttpDownloadSink {
 
 #[uniffi::export]
 impl HttpDownloadSink {
-  pub fn on_response(&self, status: u16, headers: Vec<HttpHeader>, content_length: Option<u64>) {
+  pub fn on_response(&self, status: u16, headers: Vec<HttpHeader>, content_length: Option<u64>) -> bool {
     self
       .inner
-      .on_response(status, headers.into_iter().map(Into::into).collect(), content_length);
+      .on_response(status, headers.into_iter().map(Into::into).collect(), content_length)
   }
 
   pub fn on_chunk(&self, chunk: Vec<u8>) {

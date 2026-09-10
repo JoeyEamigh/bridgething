@@ -85,11 +85,15 @@ public class KtorHttpTransport : HttpTransport {
                         apply(request)
                         timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
                     }.execute { resp ->
-                        held.onResponse(
+                        val wanted = held.onResponse(
                             status = resp.status.value.toUShort(),
                             headers = headersOf(resp),
                             contentLength = resp.headers["Content-Length"]?.toLongOrNull()?.toULong(),
                         )
+                        if (!wanted) {
+                            held.onFinished()
+                            return@execute
+                        }
                         val channel: ByteReadChannel = resp.bodyAsChannel()
                         val buf = ByteArray(64 * 1024)
                         while (true) {

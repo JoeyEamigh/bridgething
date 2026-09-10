@@ -120,7 +120,7 @@ mod test {
       active: true,
     }))
     .expect("failed to serialize json");
-    println!("{:?}", &ser);
+    println!("{:?}", ser);
 
     assert_eq!(ser, r#"{"type":"bluetooth","action":"discoverable","active":true}"#);
   }

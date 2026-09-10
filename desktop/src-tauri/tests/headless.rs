@@ -1,43 +1,29 @@
 use std::{
-  io::{Read, Write},
-  net::TcpListener,
+  io::Write,
   path::{Path, PathBuf},
-  sync::{Arc, Mutex, OnceLock, Weak},
+  sync::{Arc, Mutex},
   time::{Duration, Instant},
 };
 
 use bridgething_companion::provider::ResumeTarget;
-use bridgething_delivery::discovery::Discovery;
 use bridgething_desktop::{
   commands::{self, InstallOutcome, OtaOutcome},
-  hints::{self, Hint, HintSink, Invalidation},
-  shell::{DEFAULT_GATEWAY_URL, DesktopPaths, Shell, ShellConfig},
+  hints::{self, Hint, Invalidation},
+  shell::{DEFAULT_GATEWAY_URL, Shell},
 };
 use libbridgething::{BRIDGETHING_MDNS_SERVICE_TYPE, BRIDGETHING_STOCK_WS_PORT, gateway::WebappResourceKind};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
-use tauri::{
-  Manager,
-  test::{MockRuntime, mock_builder, mock_context, noop_assets},
-};
+use support::{Channel, DRIVE_DEADLINE, Daemon, SETTLE, daemon_host, mock_app, model_root, shell_config};
+use tauri::Manager;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
+#[path = "support/mod.rs"]
+mod support;
+
 const ARTIFACT_BYTES: usize = 512 * 1024;
 
-const DRIVE_DEADLINE: Duration = Duration::from_secs(120);
-const SETTLE: Duration = Duration::from_secs(15);
-
 const ICON: &[u8] = b"\x89PNG\r\n\x1a\n-- not a real png, but it is bytes with a digest --";
-
-struct Channel {
-  tx: mpsc::UnboundedSender<Hint>,
-}
-
-impl HintSink for Channel {
-  fn emit(&self, hint: Hint) {
-    let _ = self.tx.send(hint);
-  }
-}
 
 struct Heard {
   rx: Mutex<mpsc::UnboundedReceiver<Hint>>,
@@ -89,16 +75,6 @@ impl Heard {
   }
 }
 
-fn stock_url_for(gateway_url: &str) -> String {
-  let rest = gateway_url.split_once("://").map_or(gateway_url, |(_, rest)| rest);
-  let authority = rest.split('/').next().unwrap_or(rest);
-  let host = match authority.rsplit_once(':') {
-    Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host,
-    _ => authority,
-  };
-  format!("ws://{host}:{BRIDGETHING_STOCK_WS_PORT}/")
-}
-
 fn ask_stock_onboarding(stock_url: &str) -> Option<String> {
   use tokio_tungstenite::tungstenite::{Message, connect, stream::MaybeTlsStream};
 
@@ -135,84 +111,6 @@ fn await_stock_onboarding(stock_url: &str) -> Option<String> {
     }
     std::thread::sleep(Duration::from_millis(50));
   }
-}
-
-enum Daemon {
-  Borrowed,
-  Owned,
-  Remote(String),
-}
-
-static SHARED: Mutex<Option<Weak<Daemon>>> = Mutex::new(None);
-
-impl Daemon {
-  fn shared() -> Arc<Self> {
-    let mut held = SHARED.lock().unwrap();
-    if let Some(live) = held.as_ref().and_then(Weak::upgrade) {
-      return live;
-    }
-    let fresh = Arc::new(Self::start());
-    *held = Some(Arc::downgrade(&fresh));
-    fresh
-  }
-
-  fn start() -> Self {
-    if let Ok(url) = std::env::var("BRIDGETHING_GATEWAY_URL") {
-      return Self::Remote(url);
-    }
-    if reachable(DEFAULT_GATEWAY_URL) {
-      return Self::Borrowed;
-    }
-    assert!(
-      supervise("start").success(),
-      "the dev daemon did not come up; its log is .dev/dev-daemon.log"
-    );
-    Self::Owned
-  }
-
-  fn url(&self) -> String {
-    match self {
-      Self::Remote(url) => url.clone(),
-      _ => DEFAULT_GATEWAY_URL.to_owned(),
-    }
-  }
-}
-
-impl Drop for Daemon {
-  fn drop(&mut self) {
-    if !matches!(self, Self::Owned) {
-      return;
-    }
-    let _serialized = SHARED.lock().unwrap_or_else(|held| held.into_inner());
-    supervise("stop");
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while Instant::now() < deadline && reachable(DEFAULT_GATEWAY_URL) {
-      std::thread::sleep(Duration::from_millis(50));
-    }
-  }
-}
-
-fn reachable(url: &str) -> bool {
-  let authority = url
-    .trim_start_matches("ws://")
-    .trim_start_matches("wss://")
-    .trim_end_matches('/');
-  let Ok(mut addrs) = std::net::ToSocketAddrs::to_socket_addrs(authority) else {
-    return false;
-  };
-  addrs.any(|addr| std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(1)).is_ok())
-}
-
-fn supervise(action: &str) -> std::process::ExitStatus {
-  let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-    .join("../..")
-    .canonicalize()
-    .expect("the repo root resolves");
-  std::process::Command::new(root.join("scripts/dev-daemon.sh"))
-    .arg(action)
-    .current_dir(&root)
-    .status()
-    .expect("the dev daemon script runs")
 }
 
 fn write_artifact(dir: &Path, name: &str, len: usize) -> PathBuf {
@@ -272,56 +170,9 @@ fn write_extension_bundle(dir: &Path, id: Uuid) -> PathBuf {
   path
 }
 
-fn mock_app(shell: Arc<Shell>) -> tauri::App<MockRuntime> {
-  mock_builder()
-    .manage(Arc::clone(shell.extensions()))
-    .manage(shell)
-    .manage(Discovery::spawn(|_| ()).expect("the responder starts"))
-    .invoke_handler(bridgething_desktop::desktop_commands!())
-    .build(mock_context(noop_assets()))
-    .expect("the shell's command surface builds without a window")
-}
-
-fn shell_config(url: impl Into<String>, spool: &Path) -> ShellConfig {
-  model_root();
-  ShellConfig::new(url, DesktopPaths::under(spool))
-}
-
 fn probe_shell(spool: &Path) -> Arc<Shell> {
   let (tx, _rx) = mpsc::unbounded_channel();
   Shell::create(shell_config(DEFAULT_GATEWAY_URL, spool), Arc::new(Channel { tx })).expect("the shell builds")
-}
-
-struct ModelRoot {
-  url: String,
-  asked: Arc<Mutex<Vec<String>>>,
-}
-
-static MODEL_ROOT: OnceLock<ModelRoot> = OnceLock::new();
-
-fn model_root() -> &'static ModelRoot {
-  MODEL_ROOT.get_or_init(|| {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
-    let url = format!("http://{}", listener.local_addr().expect("the bound address"));
-    let asked = Arc::new(Mutex::new(Vec::new()));
-
-    let heard = Arc::clone(&asked);
-    std::thread::spawn(move || {
-      for stream in listener.incoming().flatten() {
-        let mut stream = stream;
-        let mut head = [0u8; 1024];
-        let read = stream.read(&mut head).unwrap_or(0);
-        if let Some(line) = String::from_utf8_lossy(&head[..read]).lines().next() {
-          heard.lock().unwrap().push(line.to_owned());
-        }
-        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
-      }
-    });
-
-    // SAFETY: set once, before any test builds a shell, so no session reads it concurrently.
-    unsafe { std::env::set_var("BRIDGETHING_MODEL_ROOT", &url) };
-    ModelRoot { url, asked }
-  })
 }
 
 fn announce(instance: &str, nickname: &str) -> ServiceDaemon {
@@ -337,6 +188,10 @@ fn announce(instance: &str, nickname: &str) -> ServiceDaemon {
   .expect("the announcement is well formed");
   registrar.register(info).expect("the announcement goes out");
   registrar
+}
+
+fn stock_url_for(gateway_url: &str) -> String {
+  format!("ws://{}:{BRIDGETHING_STOCK_WS_PORT}/", daemon_host(gateway_url))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -432,10 +287,10 @@ async fn the_model_root_override_is_honored_so_a_test_run_never_pulls_from_the_p
 
   shell.start().await;
 
-  let root = model_root();
+  let (root_url, root_asked) = model_root();
   let deadline = tokio::time::Instant::now() + SETTLE;
   loop {
-    let asked = root.asked.lock().unwrap().clone();
+    let asked = root_asked.lock().unwrap().clone();
     if asked.iter().any(|line| line.contains("/nlu/stable/manifest.json")) {
       assert!(
         asked.iter().all(|line| !line.contains("ota.bridgething.com")),
@@ -446,7 +301,7 @@ async fn the_model_root_override_is_honored_so_a_test_run_never_pulls_from_the_p
     assert!(
       tokio::time::Instant::now() < deadline,
       "a started session with voice models on never asked {} for a manifest; it would have reached the published bucket",
-      root.url
+      root_url
     );
     tokio::time::sleep(Duration::from_millis(20)).await;
   }

@@ -2,12 +2,16 @@ package com.bridgething.companion.shell
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +38,24 @@ public class AndroidAudioBackend(
         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
+    private val audio = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val duckOthers = AtomicInteger(0)
+
+    private val duckRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        .setAudioAttributes(speechAttributes)
+        .build()
+
+    private fun holdFocus() {
+        if (duckOthers.getAndIncrement() == 0) runCatching { audio.requestAudioFocus(duckRequest) }
+    }
+
+    private fun dropFocus() {
+        if (duckOthers.decrementAndGet() <= 0) {
+            duckOthers.set(0)
+            runCatching { audio.abandonAudioFocusRequest(duckRequest) }
+        }
+    }
+
     private val tts = TextToSpeech(appContext) { status ->
         ready.complete(status == TextToSpeech.SUCCESS)
     }.apply {
@@ -56,9 +78,10 @@ public class AndroidAudioBackend(
 
     private fun finish(utteranceId: String?, completed: Boolean) {
         val id = utteranceId ?: return
-        val sink = callbacks.remove(id)
+        val sink = callbacks.remove(id) ?: return
         watchdogs.remove(id)?.cancel()
-        sink?.use { it.onFinished(completed) }
+        dropFocus()
+        sink.use { it.onFinished(completed) }
     }
 
     override fun speak(id: String, text: String, voice: String?, sink: SpeakSink) {
@@ -69,6 +92,7 @@ public class AndroidAudioBackend(
             }
             applyVoice(voice)
             callbacks[id] = sink
+            holdFocus()
             val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), id)
             if (result != TextToSpeech.SUCCESS) {
                 finish(id, completed = false)
@@ -114,10 +138,20 @@ public class AndroidAudioBackend(
             sink.use { it.onFinished(false) }
             return
         }
-        player.setOnCompletionListener {
-            it.release()
-            sink.use { held -> held.onFinished(true) }
+        val done = AtomicBoolean(false)
+        val settle = { finished: MediaPlayer, completed: Boolean ->
+            if (done.compareAndSet(false, true)) {
+                finished.release()
+                dropFocus()
+                sink.use { held -> held.onFinished(completed) }
+            }
         }
+        player.setOnCompletionListener { settle(it, true) }
+        player.setOnErrorListener { failed, _, _ ->
+            settle(failed, false)
+            true
+        }
+        holdFocus()
         player.start()
     }
 

@@ -998,7 +998,7 @@ mod test {
       skip_to_uid: None,
     })
     .expect("failed to serialize json");
-    println!("{:?}", &ser);
+    println!("{:?}", ser);
 
     assert_eq!(
       ser,
@@ -1138,7 +1138,7 @@ mod test {
       }),
     }))
     .expect("failed to serialize json");
-    println!("{:?}", &ser);
+    println!("{:?}", ser);
 
     assert_eq!(
       ser,
@@ -1487,9 +1487,6 @@ mod test {
     }
   }
 
-  /// The stock webapp reads `playback_restrictions.can_skip_next` and friends off
-  /// the raw payload, so a camelCase key reads as undefined and greys the control
-  /// out. Assert the serialized key names, not the rust field names.
   #[test]
   fn player_state_restrictions_serialize_as_snake_case() {
     let reply = reply_with(
