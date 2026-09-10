@@ -53,6 +53,7 @@ use crate::{
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
     catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry},
+    stream::StreamProvider,
     system_media::SystemMediaProvider,
   },
   session::{handlers::Peer, link::LinkConnector, models::VoiceModels, observer::SessionObserver, ota::OtaLink},
@@ -563,6 +564,7 @@ impl Session {
   pub fn start(self: &Arc<Self>) {
     self.hub.start();
     self.mirror_system_media();
+    self.attach_stream();
     if let Some(extensions) = &self.extensions {
       extensions.start();
     }
@@ -623,6 +625,19 @@ impl Session {
       previous.abort();
     }
     tokio::task::spawn_blocking(move || transport.start(inbox));
+  }
+
+  fn attach_stream(self: &Arc<Self>) {
+    let Some(backend) = self.backends.stream.clone() else {
+      return;
+    };
+    let hub = self.hub.clone();
+    tokio::spawn(async move {
+      let provider = StreamProvider::new(backend);
+      if let Err(error) = hub.attach(provider).await {
+        tracing::warn!(%error, "the stream provider did not attach");
+      }
+    });
   }
 
   fn mirror_system_media(self: &Arc<Self>) {

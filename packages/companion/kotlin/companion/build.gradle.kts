@@ -39,6 +39,7 @@ dependencies {
   api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
   api("androidx.core:core-ktx:1.13.1")
   implementation("androidx.media:media:1.8.0")
+  implementation("androidx.media3:media3-exoplayer:1.11.0")
   implementation(project(":packages:asr:kotlin:whisper"))
   implementation("io.ktor:ktor-client-core:3.0.0")
   implementation("io.ktor:ktor-client-cio:3.0.0")

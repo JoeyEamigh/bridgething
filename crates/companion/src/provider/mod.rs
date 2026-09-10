@@ -2,6 +2,7 @@ pub mod apple_music;
 pub mod art;
 pub mod catalog;
 pub mod spotify;
+pub mod stream;
 pub mod system_media;
 
 use std::sync::Arc;

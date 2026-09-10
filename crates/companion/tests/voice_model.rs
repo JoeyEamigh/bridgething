@@ -346,6 +346,7 @@ impl ModelRig {
       notifications: None,
       phone: None,
       media_sessions: None,
+      stream: None,
       speech: Some(recognizer.clone()),
       nlu: Some(runner.clone()),
       apple_music: None,

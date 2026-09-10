@@ -53,6 +53,8 @@ public class BridgethingCompanion(
     public val mediaSessions: AndroidMediaSessionBackend =
         AndroidMediaSessionBackend(context.applicationContext, notificationListener)
 
+    public val stream: AndroidStreamBackend = AndroidStreamBackend(context.applicationContext)
+
     private val http: KtorHttpTransport = KtorHttpTransport()
     private val ws: KtorWsTransport = KtorWsTransport()
 
@@ -83,6 +85,7 @@ public class BridgethingCompanion(
                 notifications = notifications,
                 phone = AndroidPhoneBackend(appContext),
                 mediaSessions = mediaSessions,
+                stream = stream,
                 speech = WhisperSpeechBackend { session.voiceModelPaths().asrWeights },
                 nlu = LitertNluRunner { session.voiceModelPaths().nluBundleDir },
                 appleMusic = null,
