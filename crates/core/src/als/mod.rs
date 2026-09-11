@@ -20,6 +20,7 @@ use crate::net::WireEventBus;
 
 const ALS_PATH: &str = "/sys/bus/iio/devices/iio:device0/in_intensity0_raw";
 const BACKLIGHT_DIR: &str = "/sys/class/backlight/backlight";
+const ALS_PREFS_FILE: &str = "als.json";
 
 #[derive(Debug, Clone)]
 pub struct AlsConfig {
@@ -33,7 +34,7 @@ pub struct AlsConfig {
   pub gain: u32,
   pub als_path: PathBuf,
   pub backlight_dir: PathBuf,
-  pub prefs_path: Option<PathBuf>,
+  pub prefs_path: PathBuf,
 }
 
 impl Default for AlsConfig {
@@ -49,7 +50,7 @@ impl Default for AlsConfig {
       gain: 16,
       als_path: PathBuf::from(ALS_PATH),
       backlight_dir: PathBuf::from(BACKLIGHT_DIR),
-      prefs_path: Some(crate::paths::state_dir().join("als.json")),
+      prefs_path: crate::paths::state_dir().join(ALS_PREFS_FILE),
     }
   }
 }
@@ -240,7 +241,7 @@ impl AlsManager {
       );
     }
 
-    let prefs = config.prefs_path.as_deref().and_then(load_prefs);
+    let prefs = load_prefs(&config.prefs_path);
     let inner = Arc::new(RwLock::new(Inner::new(config, max_brightness, initial_ticks, prefs)));
     let restore = {
       let guard = inner.read().await;
@@ -376,9 +377,7 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
         };
         (guard.config.prefs_path.clone(), prefs, guard.snapshot().brightness)
       };
-      if let Some(path) = prefs_path {
-        save_prefs(&path, prefs).await;
-      }
+      save_prefs(&prefs_path, prefs).await;
       let _ = reply.send(Ok(()));
       broadcast(bus, BridgeToClientHardwareMsg::BrightnessChanged(brightness)).await;
     }
@@ -412,9 +411,7 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
         };
         (guard.config.prefs_path.clone(), prefs, guard.snapshot().brightness)
       };
-      if let Some(path) = prefs_path {
-        save_prefs(&path, prefs).await;
-      }
+      save_prefs(&prefs_path, prefs).await;
       let outcome = if mismatch {
         Err(HardwareError::ModeMismatch)
       } else {
@@ -562,7 +559,7 @@ mod tests {
     let config = AlsConfig {
       als_path: root.join("in_intensity0_raw"),
       backlight_dir: root.join("backlight"),
-      prefs_path: Some(root.join("als.json")),
+      prefs_path: root.join("als.json"),
       ..Default::default()
     };
     let (manager, loop_handle) = AlsManager::init(WireEventBus::new(client_man), config)
