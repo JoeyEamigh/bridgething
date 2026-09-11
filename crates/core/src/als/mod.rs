@@ -10,6 +10,7 @@ use libbridgething::{
   client::{AmbientLightUpdate, BridgeToClientHardwareMsg, HardwareStateReply},
   wire::MsgMeta,
 };
+use serde::{Deserialize, Serialize};
 use tokio::{
   sync::{RwLock, mpsc, oneshot},
   task::JoinHandle,
@@ -32,6 +33,7 @@ pub struct AlsConfig {
   pub gain: u32,
   pub als_path: PathBuf,
   pub backlight_dir: PathBuf,
+  pub prefs_path: Option<PathBuf>,
 }
 
 impl Default for AlsConfig {
@@ -47,7 +49,41 @@ impl Default for AlsConfig {
       gain: 16,
       als_path: PathBuf::from(ALS_PATH),
       backlight_dir: PathBuf::from(BACKLIGHT_DIR),
+      prefs_path: Some(crate::paths::state_dir().join("als.json")),
     }
+  }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct BrightnessPrefs {
+  mode: BrightnessMode,
+  level: f32,
+}
+
+fn load_prefs(path: &Path) -> Option<BrightnessPrefs> {
+  let bytes = std::fs::read(path).ok()?;
+  serde_json::from_slice(&bytes).ok()
+}
+
+async fn save_prefs(path: &Path, prefs: BrightnessPrefs) {
+  if let Some(dir) = path.parent()
+    && let Err(err) = tokio::fs::create_dir_all(dir).await
+  {
+    tracing::warn!(path = %path.display(), "als: cannot create prefs dir: {err}");
+    return;
+  }
+  let body = match serde_json::to_vec(&prefs) {
+    Ok(body) => body,
+    Err(err) => {
+      tracing::warn!("als: cannot serialize brightness prefs: {err}");
+      return;
+    }
+  };
+  let tmp = path.with_extension("tmp");
+  if let Err(err) = tokio::fs::write(&tmp, body).await {
+    tracing::warn!(path = %path.display(), "als: cannot write brightness prefs: {err}");
+  } else if let Err(err) = tokio::fs::rename(&tmp, path).await {
+    tracing::warn!(path = %path.display(), "als: cannot replace brightness prefs: {err}");
   }
 }
 
@@ -72,12 +108,15 @@ struct Inner {
 }
 
 impl Inner {
-  fn new(config: AlsConfig, max_brightness: u32, current_ticks: u32) -> Self {
+  fn new(config: AlsConfig, max_brightness: u32, current_ticks: u32, prefs: Option<BrightnessPrefs>) -> Self {
     let cap = config.median_window.max(1);
+    let (mode, manual_level) = prefs
+      .map(|p| (p.mode, p.level.clamp(0.0, 1.0)))
+      .unwrap_or((BrightnessMode::Auto, 1.0));
     Self {
       config,
-      mode: BrightnessMode::Auto,
-      manual_level: 1.0,
+      mode,
+      manual_level,
       samples: VecDeque::with_capacity(cap),
       current_ticks,
       max_brightness,
@@ -201,7 +240,27 @@ impl AlsManager {
       );
     }
 
-    let inner = Arc::new(RwLock::new(Inner::new(config, max_brightness, initial_ticks)));
+    let prefs = config.prefs_path.as_deref().and_then(load_prefs);
+    let inner = Arc::new(RwLock::new(Inner::new(config, max_brightness, initial_ticks, prefs)));
+    let restore = {
+      let guard = inner.read().await;
+      (guard.mode == BrightnessMode::Manual && guard.max_brightness > 0).then(|| {
+        (
+          guard.level_to_ticks(guard.manual_level),
+          guard.config.backlight_dir.clone(),
+        )
+      })
+    };
+    if let Some((ticks, dir)) = restore {
+      match write_brightness(&dir, ticks).await {
+        Ok(()) => {
+          inner.write().await.current_ticks = ticks;
+        }
+        Err(err) => {
+          tracing::warn!(dir = %dir.display(), "als: cannot restore manual brightness: {err}");
+        }
+      }
+    }
     let (tx, rx) = mpsc::channel(16);
     Ok(AlsManagerInit {
       manager: Self {
@@ -307,12 +366,19 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
         let _ = reply.send(Err(err));
         return;
       }
-      let brightness = {
+      let (prefs_path, prefs, brightness) = {
         let mut guard = inner.write().await;
         guard.mode = mode;
         guard.current_ticks = write_ticks;
-        guard.snapshot().brightness
+        let prefs = BrightnessPrefs {
+          mode: guard.mode,
+          level: guard.manual_level,
+        };
+        (guard.config.prefs_path.clone(), prefs, guard.snapshot().brightness)
       };
+      if let Some(path) = prefs_path {
+        save_prefs(&path, prefs).await;
+      }
       let _ = reply.send(Ok(()));
       broadcast(bus, BridgeToClientHardwareMsg::BrightnessChanged(brightness)).await;
     }
@@ -334,14 +400,21 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
         let _ = reply.send(Err(err));
         return;
       }
-      let brightness = {
+      let (prefs_path, prefs, brightness) = {
         let mut guard = inner.write().await;
         guard.manual_level = level;
         if let Some(ticks) = write_ticks {
           guard.current_ticks = ticks;
         }
-        guard.snapshot().brightness
+        let prefs = BrightnessPrefs {
+          mode: guard.mode,
+          level: guard.manual_level,
+        };
+        (guard.config.prefs_path.clone(), prefs, guard.snapshot().brightness)
       };
+      if let Some(path) = prefs_path {
+        save_prefs(&path, prefs).await;
+      }
       let outcome = if mismatch {
         Err(HardwareError::ModeMismatch)
       } else {
@@ -363,9 +436,17 @@ async fn poll_once(inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) -> Result<(),
     let dir = inner.read().await.config.backlight_dir.clone();
     let max = read_max_brightness(&dir).await?;
     let actual = read_actual_brightness(&dir).await.unwrap_or(max).min(max);
-    let mut guard = inner.write().await;
-    guard.max_brightness = max;
-    guard.current_ticks = actual;
+    let restore_ticks = {
+      let mut guard = inner.write().await;
+      guard.max_brightness = max;
+      guard.current_ticks = actual;
+      (guard.mode == BrightnessMode::Manual).then(|| guard.level_to_ticks(guard.manual_level))
+    };
+    if let Some(ticks) = restore_ticks
+      && write_brightness(&dir, ticks).await.is_ok()
+    {
+      inner.write().await.current_ticks = ticks;
+    }
   }
 
   let (ticks_to_write, dir, prev_level) = {
@@ -476,18 +557,19 @@ mod tests {
     root
   }
 
-  async fn manager_at(root: &Path) -> (AlsManager, impl Sized) {
-    let (client_man, listener) = crate::net::create_client_manager();
+  async fn manager_at(root: &Path) -> (AlsManager, JoinHandle<()>) {
+    let (client_man, _listener) = crate::net::create_client_manager();
     let config = AlsConfig {
       als_path: root.join("in_intensity0_raw"),
       backlight_dir: root.join("backlight"),
+      prefs_path: Some(root.join("als.json")),
       ..Default::default()
     };
     let (manager, loop_handle) = AlsManager::init(WireEventBus::new(client_man), config)
       .await
       .expect("als init tolerates absent sysfs")
       .spawn();
-    (manager, (listener, loop_handle))
+    (manager, loop_handle)
   }
 
   #[tokio::test]
@@ -542,5 +624,46 @@ mod tests {
       "the daemon reports a brightness the panel never took"
     );
     assert_eq!(after.effective_level, settled.effective_level);
+  }
+
+  #[tokio::test]
+  async fn manual_brightness_is_restored_after_a_restart() {
+    let root = scratch("als-test-persist");
+    let backlight = root.join("backlight");
+    std::fs::create_dir_all(&backlight).expect("scratch backlight");
+    std::fs::write(backlight.join("max_brightness"), "255\n").expect("max_brightness");
+    std::fs::write(backlight.join("actual_brightness"), "255\n").expect("actual_brightness");
+    std::fs::write(backlight.join("brightness"), "255\n").expect("brightness");
+
+    let (manager, loop_handle) = manager_at(&root).await;
+    manager.set_mode(BrightnessMode::Manual).await.expect("mode switch");
+    manager
+      .set_level(0.42)
+      .await
+      .expect("level write")
+      .expect("manual mode accepts a level");
+    let prefs_body = std::fs::read_to_string(root.join("als.json")).expect("prefs were persisted");
+    assert!(
+      prefs_body.contains("\"manual\""),
+      "prefs record manual mode: {prefs_body}"
+    );
+    drop(manager);
+    loop_handle.abort();
+
+    std::fs::write(backlight.join("actual_brightness"), "255\n").expect("actual_brightness");
+
+    let (manager2, _rig2) = manager_at(&root).await;
+    let state = manager2.snapshot().await.brightness;
+    assert_eq!(state.mode, BrightnessMode::Manual, "manual mode survives a reboot");
+    assert!(
+      (state.level - 0.42).abs() < f32::EPSILON,
+      "manual level survives a reboot: {}",
+      state.level
+    );
+    let panel: String = std::fs::read_to_string(backlight.join("brightness"))
+      .expect("panel brightness")
+      .trim()
+      .to_string();
+    assert_eq!(panel, "107", "the panel itself is restored to the manual level");
   }
 }
