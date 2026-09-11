@@ -662,8 +662,9 @@ fn spawn_next_art_warmer(state: State, bluetooth: bluetooth::BluetoothMan) {
         .queue_reply
         .items
         .first()
-        .and_then(|item| item.artwork_id.clone())
-        .filter(|id| !id.is_empty());
+        .and_then(|item| item.artwork_id.as_deref())
+        .filter(|id| !id.is_empty())
+        .map(asset::art::hero);
       if let Some(id) = head_art
         && last.as_deref() != Some(id.as_str())
         && state.gateway_info().is_some()

@@ -9,6 +9,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func connectProvider(id: String) async throws
     func disconnectProvider(id: String) async
     func cancelAuth(id: String) async
+    func completeProviderAuth(id: String, credentials: BridgethingProviderCredentials) async throws
     func setProviderPriority(ids: [String]) async
 
     func snapshot() async -> BridgethingSessionSnapshot
@@ -251,6 +252,12 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     public func cancelAuth(id: String) throws -> Promise<Void> {
         Promise.async {
             await (try Self.backend()).cancelAuth(id: id)
+        }
+    }
+
+    public func completeProviderAuth(id: String, credentials: BridgethingProviderCredentials) throws -> Promise<Void> {
+        Promise.async {
+            try await Self.backend().completeProviderAuth(id: id, credentials: credentials)
         }
     }
 

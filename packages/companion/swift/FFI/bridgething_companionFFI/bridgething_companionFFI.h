@@ -845,6 +845,55 @@ typedef void (*UniffiCallbackInterfaceSpeechRecognizerMethod1)(uint64_t, RustBuf
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD0
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod0)(uint64_t, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD1
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod1)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD2
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod2)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD3
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod3)(uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD4
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD4
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod4)(uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD5
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD5
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod5)(uint64_t, uint32_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD6
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STREAM_BACKEND_METHOD6
+typedef void (*UniffiCallbackInterfaceStreamBackendMethod6)(uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_WAKER_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DEVICE_WAKER_METHOD0
 typedef void (*UniffiCallbackInterfaceDeviceWakerMethod0)(uint64_t, RustBuffer, int8_t, void* _Nonnull, 
@@ -1114,6 +1163,21 @@ typedef struct UniffiVTableCallbackInterfaceSpeechRecognizer {
 } UniffiVTableCallbackInterfaceSpeechRecognizer;
 
 #endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_STREAM_BACKEND
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_STREAM_BACKEND
+typedef struct UniffiVTableCallbackInterfaceStreamBackend {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceStreamBackendMethod0 _Nonnull appBundle;
+    UniffiCallbackInterfaceStreamBackendMethod1 _Nonnull play;
+    UniffiCallbackInterfaceStreamBackendMethod2 _Nonnull present;
+    UniffiCallbackInterfaceStreamBackendMethod3 _Nonnull pause;
+    UniffiCallbackInterfaceStreamBackendMethod4 _Nonnull resume;
+    UniffiCallbackInterfaceStreamBackendMethod5 _Nonnull seekTo;
+    UniffiCallbackInterfaceStreamBackendMethod6 _Nonnull stop;
+} UniffiVTableCallbackInterfaceStreamBackend;
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DEVICE_WAKER
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DEVICE_WAKER
 typedef struct UniffiVTableCallbackInterfaceDeviceWaker {
@@ -1165,7 +1229,7 @@ RustBuffer uniffi_bridgething_companion_fn_method_companionsession_companion_deb
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_COMPLETE_PROVIDER_AUTH
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_COMPLETE_PROVIDER_AUTH
-uint64_t uniffi_bridgething_companion_fn_method_companionsession_complete_provider_auth(uint64_t ptr, RustBuffer id, RustBuffer tokens
+uint64_t uniffi_bridgething_companion_fn_method_companionsession_complete_provider_auth(uint64_t ptr, RustBuffer id, RustBuffer credentials
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_COMPANIONSESSION_CONNECT_NETWORK
@@ -2481,7 +2545,7 @@ void uniffi_bridgething_companion_fn_free_httpdownloadsink(uint64_t handle, Rust
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_HTTPDOWNLOADSINK_ON_CHUNK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_HTTPDOWNLOADSINK_ON_CHUNK
-void uniffi_bridgething_companion_fn_method_httpdownloadsink_on_chunk(uint64_t ptr, RustBuffer chunk, RustCallStatus *_Nonnull out_status
+int8_t uniffi_bridgething_companion_fn_method_httpdownloadsink_on_chunk(uint64_t ptr, RustBuffer chunk, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_HTTPDOWNLOADSINK_ON_FAILED
@@ -2496,7 +2560,7 @@ void uniffi_bridgething_companion_fn_method_httpdownloadsink_on_finished(uint64_
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_HTTPDOWNLOADSINK_ON_RESPONSE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_HTTPDOWNLOADSINK_ON_RESPONSE
-void uniffi_bridgething_companion_fn_method_httpdownloadsink_on_response(uint64_t ptr, uint16_t status, RustBuffer headers, RustBuffer content_length, RustCallStatus *_Nonnull out_status
+int8_t uniffi_bridgething_companion_fn_method_httpdownloadsink_on_response(uint64_t ptr, uint16_t status, RustBuffer headers, RustBuffer content_length, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_HTTPSINK
@@ -2897,6 +2961,81 @@ void uniffi_bridgething_companion_fn_method_transcriptionsink_complete(uint64_t 
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_TRANSCRIPTIONSINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_TRANSCRIPTIONSINK_FAIL
 void uniffi_bridgething_companion_fn_method_transcriptionsink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_STREAMBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_STREAMBACKEND
+uint64_t uniffi_bridgething_companion_fn_clone_streambackend(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_STREAMBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_STREAMBACKEND
+void uniffi_bridgething_companion_fn_free_streambackend(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_STREAMBACKEND
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_INIT_CALLBACK_VTABLE_STREAMBACKEND
+void uniffi_bridgething_companion_fn_init_callback_vtable_streambackend(const UniffiVTableCallbackInterfaceStreamBackend* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_APP_BUNDLE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_APP_BUNDLE
+RustBuffer uniffi_bridgething_companion_fn_method_streambackend_app_bundle(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PLAY
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PLAY
+void uniffi_bridgething_companion_fn_method_streambackend_play(uint64_t ptr, RustBuffer source, uint64_t sink, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PRESENT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PRESENT
+void uniffi_bridgething_companion_fn_method_streambackend_present(uint64_t ptr, RustBuffer presentation, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PAUSE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_PAUSE
+void uniffi_bridgething_companion_fn_method_streambackend_pause(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_RESUME
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_RESUME
+void uniffi_bridgething_companion_fn_method_streambackend_resume(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_SEEK_TO
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_SEEK_TO
+void uniffi_bridgething_companion_fn_method_streambackend_seek_to(uint64_t ptr, uint32_t position_ms, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMBACKEND_STOP
+void uniffi_bridgething_companion_fn_method_streambackend_stop(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_STREAMSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_STREAMSINK
+uint64_t uniffi_bridgething_companion_fn_clone_streamsink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_STREAMSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_STREAMSINK
+void uniffi_bridgething_companion_fn_free_streamsink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_METADATA
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_METADATA
+void uniffi_bridgething_companion_fn_method_streamsink_on_metadata(uint64_t ptr, RustBuffer metadata, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_STATUS
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_STATUS
+void uniffi_bridgething_companion_fn_method_streamsink_on_status(uint64_t ptr, RustBuffer status, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_TIMING
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_STREAMSINK_ON_TIMING
+void uniffi_bridgething_companion_fn_method_streamsink_on_timing(uint64_t ptr, RustBuffer timing, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_DEVICEWAKER
@@ -4629,6 +4768,66 @@ uint16_t uniffi_bridgething_companion_checksum_method_transcriptionsink_complete
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_TRANSCRIPTIONSINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_TRANSCRIPTIONSINK_FAIL
 uint16_t uniffi_bridgething_companion_checksum_method_transcriptionsink_fail(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_APP_BUNDLE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_APP_BUNDLE
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_app_bundle(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PLAY
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PLAY
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_play(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PRESENT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PRESENT
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_present(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PAUSE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_PAUSE
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_pause(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_RESUME
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_RESUME
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_resume(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_SEEK_TO
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_SEEK_TO
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_seek_to(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_STOP
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMBACKEND_STOP
+uint16_t uniffi_bridgething_companion_checksum_method_streambackend_stop(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_METADATA
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_METADATA
+uint16_t uniffi_bridgething_companion_checksum_method_streamsink_on_metadata(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_STATUS
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_STATUS
+uint16_t uniffi_bridgething_companion_checksum_method_streamsink_on_status(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_TIMING
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_STREAMSINK_ON_TIMING
+uint16_t uniffi_bridgething_companion_checksum_method_streamsink_on_timing(void
     
 );
 #endif

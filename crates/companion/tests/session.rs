@@ -30,7 +30,7 @@ use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
   api::{
     AncsAuthStatus, AuthKind, CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo, LogOrigin, PeerLinkStatus,
-    ProviderTokens, SessionEvent, SessionPeer, SpotifyProviderConfig,
+    ProviderCredentials, SessionEvent, SessionPeer, SpotifyProviderConfig,
   },
   backend::{
     AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmFavoritesSink, AmFlagSink, AmItemSink, AmLibraryScope,
@@ -239,6 +239,7 @@ fn session_full(
     notifications: None,
     phone: None,
     media_sessions,
+    stream: None,
     speech,
     nlu: None,
     apple_music,
@@ -558,6 +559,7 @@ async fn a_reachability_edge_reaches_every_provider_and_stop_releases_the_monito
     notifications: None,
     phone: None,
     media_sessions: None,
+    stream: None,
     speech: None,
     nlu: None,
     apple_music: None,
@@ -1002,7 +1004,7 @@ async fn an_unknown_provider_id_is_refused() {
     session
       .complete_provider_auth(
         "tidal",
-        ProviderTokens {
+        ProviderCredentials::OauthTokens {
           access_token: "a".into(),
           refresh_token: "r".into(),
         },
@@ -1057,7 +1059,7 @@ async fn complete_provider_auth_persists_the_refresh_token_and_connects() {
   session
     .complete_provider_auth(
       "spotify",
-      ProviderTokens {
+      ProviderCredentials::OauthTokens {
         access_token: "bearer-from-pkce".into(),
         refresh_token: "refresh-from-pkce".into(),
       },

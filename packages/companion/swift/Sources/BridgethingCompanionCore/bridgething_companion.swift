@@ -3324,7 +3324,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func companionDebug()  -> CompanionDebug
     
-    func completeProviderAuth(id: String, tokens: ProviderTokens) async throws 
+    func completeProviderAuth(id: String, credentials: ProviderCredentials) async throws 
     
     func connectNetwork(url: String, device: LinkDevice) async throws 
     
@@ -3550,12 +3550,12 @@ open func companionDebug() -> CompanionDebug  {
 })
 }
     
-open func completeProviderAuth(id: String, tokens: ProviderTokens)async throws   {
+open func completeProviderAuth(id: String, credentials: ProviderCredentials)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_complete_provider_auth(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(id),FfiConverterTypeProviderTokens_lower(tokens)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(id),FfiConverterTypeProviderCredentials_lower(credentials)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_void,
@@ -6279,13 +6279,13 @@ public func FfiConverterTypeHostEnvironment_lower(_ value: HostEnvironment) -> U
 
 public protocol HttpDownloadSinkProtocol: AnyObject, Sendable {
     
-    func onChunk(chunk: Data) 
+    func onChunk(chunk: Data)  -> Bool
     
     func onFailed(reason: String) 
     
     func onFinished() 
     
-    func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) 
+    func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?)  -> Bool
     
 }
 open class HttpDownloadSink: HttpDownloadSinkProtocol, @unchecked Sendable {
@@ -6341,13 +6341,14 @@ open class HttpDownloadSink: HttpDownloadSinkProtocol, @unchecked Sendable {
     
 
     
-open func onChunk(chunk: Data)  {try! rustCall() {
+open func onChunk(chunk: Data) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_httpdownloadsink_on_chunk(
             self.uniffiCloneHandle(),
         FfiConverterData.lower(chunk),uniffiCallStatus
     )
-}
+})
 }
     
 open func onFailed(reason: String)  {try! rustCall() {
@@ -6367,7 +6368,8 @@ open func onFinished()  {try! rustCall() {
 }
 }
     
-open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?)  {try! rustCall() {
+open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_httpdownloadsink_on_response(
             self.uniffiCloneHandle(),
@@ -6375,7 +6377,7 @@ open func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt6
         FfiConverterSequenceTypeHttpHeader.lower(headers),
         FfiConverterOptionUInt64.lower(contentLength),uniffiCallStatus
     )
-}
+})
 }
     
 
@@ -11508,6 +11510,545 @@ public func FfiConverterTypeSpeechRecognizer_lower(_ value: SpeechRecognizer) ->
 
 
 
+public protocol StreamBackend: AnyObject, Sendable {
+    
+    func appBundle()  -> String
+    
+    func play(source: StreamSource, sink: StreamSink) 
+    
+    func present(presentation: StreamPresentation) 
+    
+    func pause() 
+    
+    func resume() 
+    
+    func seekTo(positionMs: UInt32) 
+    
+    func stop() 
+    
+}
+open class StreamBackendImpl: StreamBackend, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_streambackend(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_streambackend(handle, $0) }
+    }
+
+    
+
+    
+open func appBundle() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_app_bundle(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func play(source: StreamSource, sink: StreamSink)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_play(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamSource_lower(source),
+        FfiConverterTypeStreamSink_lower(sink),uniffiCallStatus
+    )
+}
+}
+    
+open func present(presentation: StreamPresentation)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_present(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamPresentation_lower(presentation),uniffiCallStatus
+    )
+}
+}
+    
+open func pause()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_pause(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func resume()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_resume(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func seekTo(positionMs: UInt32)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_seek_to(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(positionMs),uniffiCallStatus
+    )
+}
+}
+    
+open func stop()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streambackend_stop(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceStreamBackend {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceStreamBackend = UniffiVTableCallbackInterfaceStreamBackend(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeStreamBackend.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface StreamBackend: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeStreamBackend.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface StreamBackend: handle missing in uniffiClone")
+            }
+        },
+        appBundle: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> String in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.appBundle(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        play: { (
+            uniffiHandle: UInt64,
+            source: RustBuffer,
+            sink: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.play(
+                     source: try FfiConverterTypeStreamSource_lift(source),
+                     sink: try FfiConverterTypeStreamSink_lift(sink)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        present: { (
+            uniffiHandle: UInt64,
+            presentation: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.present(
+                     presentation: try FfiConverterTypeStreamPresentation_lift(presentation)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        pause: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.pause(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        resume: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.resume(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        seekTo: { (
+            uniffiHandle: UInt64,
+            positionMs: UInt32,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.seekTo(
+                     positionMs: try FfiConverterUInt32.lift(positionMs)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        stop: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeStreamBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.stop(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceStreamBackend> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceStreamBackend>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitStreamBackend() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_streambackend(UniffiCallbackInterfaceStreamBackend.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamBackend: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<StreamBackend>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = StreamBackend
+
+    public static func lift(_ handle: UInt64) throws -> StreamBackend {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return StreamBackendImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: StreamBackend) -> UInt64 {
+         if let rustImpl = value as? StreamBackendImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamBackend {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: StreamBackend, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamBackend_lift(_ handle: UInt64) throws -> StreamBackend {
+    return try FfiConverterTypeStreamBackend.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamBackend_lower(_ value: StreamBackend) -> UInt64 {
+    return FfiConverterTypeStreamBackend.lower(value)
+}
+
+
+
+
+
+
+public protocol StreamSinkProtocol: AnyObject, Sendable {
+    
+    func onMetadata(metadata: StreamMetadata) 
+    
+    func onStatus(status: StreamStatus) 
+    
+    func onTiming(timing: StreamTiming) 
+    
+}
+open class StreamSink: StreamSinkProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_streamsink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_streamsink(handle, $0) }
+    }
+
+    
+
+    
+open func onMetadata(metadata: StreamMetadata)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streamsink_on_metadata(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamMetadata_lower(metadata),uniffiCallStatus
+    )
+}
+}
+    
+open func onStatus(status: StreamStatus)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streamsink_on_status(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamStatus_lower(status),uniffiCallStatus
+    )
+}
+}
+    
+open func onTiming(timing: StreamTiming)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_streamsink_on_timing(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeStreamTiming_lower(timing),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamSink: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = StreamSink
+
+    public static func lift(_ handle: UInt64) throws -> StreamSink {
+        return StreamSink(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: StreamSink) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: StreamSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSink_lift(_ handle: UInt64) throws -> StreamSink {
+    return try FfiConverterTypeStreamSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSink_lower(_ value: StreamSink) -> UInt64 {
+    return FfiConverterTypeStreamSink.lower(value)
+}
+
+
+
+
+
+
 public protocol TranscriptionSinkProtocol: AnyObject, Sendable {
     
     func complete(transcription: Transcription) 
@@ -13855,6 +14396,7 @@ public struct CompanionBackends {
     public var notifications: NotificationBackend?
     public var phone: PhoneBackend?
     public var mediaSessions: MediaSessionBackend?
+    public var stream: StreamBackend?
     public var speech: SpeechRecognizer?
     public var nlu: NluModelRunner?
     public var appleMusic: AppleMusicBackend?
@@ -13867,7 +14409,7 @@ public struct CompanionBackends {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
+    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, stream: StreamBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
         self.link = link
         self.host = host
         self.http = http
@@ -13880,6 +14422,7 @@ public struct CompanionBackends {
         self.notifications = notifications
         self.phone = phone
         self.mediaSessions = mediaSessions
+        self.stream = stream
         self.speech = speech
         self.nlu = nlu
         self.appleMusic = appleMusic
@@ -13919,6 +14462,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
                 notifications: FfiConverterOptionTypeNotificationBackend.read(from: &buf), 
                 phone: FfiConverterOptionTypePhoneBackend.read(from: &buf), 
                 mediaSessions: FfiConverterOptionTypeMediaSessionBackend.read(from: &buf), 
+                stream: FfiConverterOptionTypeStreamBackend.read(from: &buf), 
                 speech: FfiConverterOptionTypeSpeechRecognizer.read(from: &buf), 
                 nlu: FfiConverterOptionTypeNluModelRunner.read(from: &buf), 
                 appleMusic: FfiConverterOptionTypeAppleMusicBackend.read(from: &buf), 
@@ -13944,6 +14488,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
         FfiConverterOptionTypeNotificationBackend.write(value.notifications, into: &buf)
         FfiConverterOptionTypePhoneBackend.write(value.phone, into: &buf)
         FfiConverterOptionTypeMediaSessionBackend.write(value.mediaSessions, into: &buf)
+        FfiConverterOptionTypeStreamBackend.write(value.stream, into: &buf)
         FfiConverterOptionTypeSpeechRecognizer.write(value.speech, into: &buf)
         FfiConverterOptionTypeNluModelRunner.write(value.nlu, into: &buf)
         FfiConverterOptionTypeAppleMusicBackend.write(value.appleMusic, into: &buf)
@@ -17555,16 +18100,18 @@ public struct ProviderInfo: Equatable, Hashable {
     public var displayName: String
     public var available: Bool
     public var connected: Bool
+    public var signIn: SignInMethod
     public var authState: AuthState
     public var serviceHealth: ServiceHealth
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, displayName: String, available: Bool, connected: Bool, authState: AuthState, serviceHealth: ServiceHealth) {
+    public init(id: String, displayName: String, available: Bool, connected: Bool, signIn: SignInMethod, authState: AuthState, serviceHealth: ServiceHealth) {
         self.id = id
         self.displayName = displayName
         self.available = available
         self.connected = connected
+        self.signIn = signIn
         self.authState = authState
         self.serviceHealth = serviceHealth
     }
@@ -17589,6 +18136,7 @@ public struct FfiConverterTypeProviderInfo: FfiConverterRustBuffer {
                 displayName: FfiConverterString.read(from: &buf), 
                 available: FfiConverterBool.read(from: &buf), 
                 connected: FfiConverterBool.read(from: &buf), 
+                signIn: FfiConverterTypeSignInMethod.read(from: &buf), 
                 authState: FfiConverterTypeAuthState.read(from: &buf), 
                 serviceHealth: FfiConverterTypeServiceHealth.read(from: &buf)
         )
@@ -17599,6 +18147,7 @@ public struct FfiConverterTypeProviderInfo: FfiConverterRustBuffer {
         FfiConverterString.write(value.displayName, into: &buf)
         FfiConverterBool.write(value.available, into: &buf)
         FfiConverterBool.write(value.connected, into: &buf)
+        FfiConverterTypeSignInMethod.write(value.signIn, into: &buf)
         FfiConverterTypeAuthState.write(value.authState, into: &buf)
         FfiConverterTypeServiceHealth.write(value.serviceHealth, into: &buf)
     }
@@ -17617,60 +18166,6 @@ public func FfiConverterTypeProviderInfo_lift(_ buf: RustBuffer) throws -> Provi
 #endif
 public func FfiConverterTypeProviderInfo_lower(_ value: ProviderInfo) -> RustBuffer {
     return FfiConverterTypeProviderInfo.lower(value)
-}
-
-
-public struct ProviderTokens: Equatable, Hashable {
-    public var accessToken: String
-    public var refreshToken: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(accessToken: String, refreshToken: String) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension ProviderTokens: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeProviderTokens: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProviderTokens {
-        return
-            try ProviderTokens(
-                accessToken: FfiConverterString.read(from: &buf), 
-                refreshToken: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: ProviderTokens, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.accessToken, into: &buf)
-        FfiConverterString.write(value.refreshToken, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeProviderTokens_lift(_ buf: RustBuffer) throws -> ProviderTokens {
-    return try FfiConverterTypeProviderTokens.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeProviderTokens_lower(_ value: ProviderTokens) -> RustBuffer {
-    return FfiConverterTypeProviderTokens.lower(value)
 }
 
 
@@ -18087,6 +18582,250 @@ public func FfiConverterTypeSpotifyProviderConfig_lift(_ buf: RustBuffer) throws
 #endif
 public func FfiConverterTypeSpotifyProviderConfig_lower(_ value: SpotifyProviderConfig) -> RustBuffer {
     return FfiConverterTypeSpotifyProviderConfig.lower(value)
+}
+
+
+public struct StreamMetadata: Equatable, Hashable {
+    public var title: String?
+    public var artist: String?
+    public var album: String?
+    public var artworkUrl: String?
+    public var artwork: Data?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(title: String?, artist: String?, album: String?, artworkUrl: String?, artwork: Data?) {
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.artworkUrl = artworkUrl
+        self.artwork = artwork
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamMetadata: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamMetadata: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamMetadata {
+        return
+            try StreamMetadata(
+                title: FfiConverterOptionString.read(from: &buf), 
+                artist: FfiConverterOptionString.read(from: &buf), 
+                album: FfiConverterOptionString.read(from: &buf), 
+                artworkUrl: FfiConverterOptionString.read(from: &buf), 
+                artwork: FfiConverterOptionData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamMetadata, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.artist, into: &buf)
+        FfiConverterOptionString.write(value.album, into: &buf)
+        FfiConverterOptionString.write(value.artworkUrl, into: &buf)
+        FfiConverterOptionData.write(value.artwork, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamMetadata_lift(_ buf: RustBuffer) throws -> StreamMetadata {
+    return try FfiConverterTypeStreamMetadata.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamMetadata_lower(_ value: StreamMetadata) -> RustBuffer {
+    return FfiConverterTypeStreamMetadata.lower(value)
+}
+
+
+public struct StreamPresentation: Equatable, Hashable {
+    public var title: String
+    public var artist: String?
+    public var album: String?
+    public var artwork: Data?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(title: String, artist: String?, album: String?, artwork: Data?) {
+        self.title = title
+        self.artist = artist
+        self.album = album
+        self.artwork = artwork
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamPresentation: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamPresentation: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamPresentation {
+        return
+            try StreamPresentation(
+                title: FfiConverterString.read(from: &buf), 
+                artist: FfiConverterOptionString.read(from: &buf), 
+                album: FfiConverterOptionString.read(from: &buf), 
+                artwork: FfiConverterOptionData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamPresentation, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterOptionString.write(value.artist, into: &buf)
+        FfiConverterOptionString.write(value.album, into: &buf)
+        FfiConverterOptionData.write(value.artwork, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamPresentation_lift(_ buf: RustBuffer) throws -> StreamPresentation {
+    return try FfiConverterTypeStreamPresentation.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamPresentation_lower(_ value: StreamPresentation) -> RustBuffer {
+    return FfiConverterTypeStreamPresentation.lower(value)
+}
+
+
+public struct StreamSource: Equatable, Hashable {
+    public var url: String
+    public var live: Bool
+    public var station: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(url: String, live: Bool, station: String?) {
+        self.url = url
+        self.live = live
+        self.station = station
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamSource: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamSource: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamSource {
+        return
+            try StreamSource(
+                url: FfiConverterString.read(from: &buf), 
+                live: FfiConverterBool.read(from: &buf), 
+                station: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamSource, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterBool.write(value.live, into: &buf)
+        FfiConverterOptionString.write(value.station, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSource_lift(_ buf: RustBuffer) throws -> StreamSource {
+    return try FfiConverterTypeStreamSource.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamSource_lower(_ value: StreamSource) -> RustBuffer {
+    return FfiConverterTypeStreamSource.lower(value)
+}
+
+
+public struct StreamTiming: Equatable, Hashable {
+    public var positionMs: UInt32
+    public var durationMs: UInt32?
+    public var seekable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(positionMs: UInt32, durationMs: UInt32?, seekable: Bool) {
+        self.positionMs = positionMs
+        self.durationMs = durationMs
+        self.seekable = seekable
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamTiming: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamTiming: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamTiming {
+        return
+            try StreamTiming(
+                positionMs: FfiConverterUInt32.read(from: &buf), 
+                durationMs: FfiConverterOptionUInt32.read(from: &buf), 
+                seekable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamTiming, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.positionMs, into: &buf)
+        FfiConverterOptionUInt32.write(value.durationMs, into: &buf)
+        FfiConverterBool.write(value.seekable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTiming_lift(_ buf: RustBuffer) throws -> StreamTiming {
+    return try FfiConverterTypeStreamTiming.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTiming_lower(_ value: StreamTiming) -> RustBuffer {
+    return FfiConverterTypeStreamTiming.lower(value)
 }
 
 
@@ -23428,6 +24167,81 @@ public func FfiConverterTypePhoneCommand_lower(_ value: PhoneCommand) -> RustBuf
 
 
 
+public enum ProviderCredentials: Equatable, Hashable {
+    
+    case oauthTokens(accessToken: String, refreshToken: String
+    )
+    case serverLogin(serverUrl: String, username: String, password: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ProviderCredentials: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProviderCredentials: FfiConverterRustBuffer {
+    typealias SwiftType = ProviderCredentials
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProviderCredentials {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .oauthTokens(accessToken: try FfiConverterString.read(from: &buf), refreshToken: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .serverLogin(serverUrl: try FfiConverterString.read(from: &buf), username: try FfiConverterString.read(from: &buf), password: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProviderCredentials, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .oauthTokens(accessToken,refreshToken):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(accessToken, into: &buf)
+            FfiConverterString.write(refreshToken, into: &buf)
+            
+        
+        case let .serverLogin(serverUrl,username,password):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(serverUrl, into: &buf)
+            FfiConverterString.write(username, into: &buf)
+            FfiConverterString.write(password, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderCredentials_lift(_ buf: RustBuffer) throws -> ProviderCredentials {
+    return try FfiConverterTypeProviderCredentials.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderCredentials_lower(_ value: ProviderCredentials) -> RustBuffer {
+    return FfiConverterTypeProviderCredentials.lower(value)
+}
+
+
+
+
 public enum RegistrationStatus: Equatable, Hashable {
     
     case unknown
@@ -23964,6 +24778,165 @@ public func FfiConverterTypeSessionEvent_lift(_ buf: RustBuffer) throws -> Sessi
 #endif
 public func FfiConverterTypeSessionEvent_lower(_ value: SessionEvent) -> RustBuffer {
     return FfiConverterTypeSessionEvent.lower(value)
+}
+
+
+
+/**
+ * How a provider gets signed in: a handshake the provider drives itself, or a server login the user types.
+ */
+
+public enum SignInMethod: Equatable, Hashable {
+    
+    case handshake
+    case serverLogin
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SignInMethod: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSignInMethod: FfiConverterRustBuffer {
+    typealias SwiftType = SignInMethod
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SignInMethod {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .handshake
+        
+        case 2: return .serverLogin
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SignInMethod, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .handshake:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .serverLogin:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignInMethod_lift(_ buf: RustBuffer) throws -> SignInMethod {
+    return try FfiConverterTypeSignInMethod.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignInMethod_lower(_ value: SignInMethod) -> RustBuffer {
+    return FfiConverterTypeSignInMethod.lower(value)
+}
+
+
+
+
+public enum StreamStatus: Equatable, Hashable {
+    
+    case buffering
+    case playing
+    case paused
+    case ended
+    case failed(reason: String
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension StreamStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamStatus: FfiConverterRustBuffer {
+    typealias SwiftType = StreamStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .buffering
+        
+        case 2: return .playing
+        
+        case 3: return .paused
+        
+        case 4: return .ended
+        
+        case 5: return .failed(reason: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StreamStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .buffering:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .playing:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .paused:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .ended:
+            writeInt(&buf, Int32(4))
+        
+        
+        case let .failed(reason):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(reason, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamStatus_lift(_ buf: RustBuffer) throws -> StreamStatus {
+    return try FfiConverterTypeStreamStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamStatus_lower(_ value: StreamStatus) -> RustBuffer {
+    return FfiConverterTypeStreamStatus.lower(value)
 }
 
 
@@ -25197,6 +26170,30 @@ fileprivate struct FfiConverterOptionTypeSpeechRecognizer: FfiConverterRustBuffe
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeSpeechRecognizer.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeStreamBackend: FfiConverterRustBuffer {
+    typealias SwiftType = StreamBackend?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStreamBackend.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStreamBackend.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -27110,7 +28107,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_companion_debug() != 26391) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_complete_provider_auth() != 52876) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_complete_provider_auth() != 21862) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_connect_network() != 17882) {
@@ -27608,7 +28605,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_transferpolicy_allows_large_transfer() != 54961) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_chunk() != 43867) {
+    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_chunk() != 59003) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_failed() != 48694) {
@@ -27617,7 +28614,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_finished() != 21755) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_response() != 21604) {
+    if (uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_response() != 56008) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_httpsink_complete() != 53113) {
@@ -27749,6 +28746,36 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_transcriptionsink_fail() != 11687) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_app_bundle() != 50332) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_play() != 53203) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_present() != 50594) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_pause() != 5385) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_resume() != 59746) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_seek_to() != 44303) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streambackend_stop() != 18345) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_metadata() != 27607) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_status() != 20662) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_streamsink_on_timing() != 22810) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -27781,6 +28808,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitSecretStore()
     uniffiCallbackInitSessionEventSink()
     uniffiCallbackInitSpeechRecognizer()
+    uniffiCallbackInitStreamBackend()
     uniffiCallbackInitTransferPolicy()
     uniffiCallbackInitVolumeBackend()
     uniffiCallbackInitWebappBundleSink()

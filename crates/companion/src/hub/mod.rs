@@ -432,13 +432,26 @@ impl Hub {
 
 impl ProviderRegistry for Hub {
   fn library(&self) -> Option<Arc<dyn Provider>> {
+    let ordered: Vec<Arc<dyn Provider>> = self
+      .ordered_ids()
+      .into_iter()
+      .filter_map(|id| self.provider(&id))
+      .collect();
+    let with_catalog: Vec<&Arc<dyn Provider>> = ordered
+      .iter()
+      .filter(|provider| provider.music_provider() != MusicProvider::None)
+      .collect();
+    let candidates: Vec<&Arc<dyn Provider>> = if with_catalog.is_empty() {
+      ordered.iter().collect()
+    } else {
+      with_catalog
+    };
     let last = self.attached.lock().unwrap().last_played_from.clone();
-    if let Some(id) = last
-      && let Some(provider) = self.provider(&id)
-    {
-      return Some(provider);
-    }
-    self.ordered_ids().into_iter().next().and_then(|id| self.provider(&id))
+    candidates
+      .iter()
+      .find(|provider| Some(provider.name()) == last.as_deref())
+      .or_else(|| candidates.first())
+      .map(|provider| Arc::clone(provider))
   }
 
   fn audible(&self) -> Option<Arc<dyn Provider>> {

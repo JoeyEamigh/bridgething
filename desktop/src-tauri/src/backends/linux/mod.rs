@@ -3,6 +3,7 @@ mod geo;
 mod media;
 mod notifications;
 mod speech;
+mod stream;
 mod volume;
 
 use std::{path::Path, sync::Arc};
@@ -17,6 +18,7 @@ pub fn platform(_config_dir: &Path) -> Platform {
     geo: Some(Arc::new(Locator::new(geo::run))),
     notifications: Some(Arc::new(notifications::FreedesktopNotifications::default())),
     media_sessions: Some(Arc::new(media::MprisMedia::default())),
+    stream: Some(Arc::new(stream::PulseStream::default())),
     audio: Some(Arc::new(speech::SpeechDispatcher::new())),
     volume: Some(Arc::new(volume::PulseVolume::default())),
     connectivity: Some(Arc::new(connectivity::NetworkManagerConnectivity::default())),

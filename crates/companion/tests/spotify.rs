@@ -1056,6 +1056,7 @@ fn catalog_session(secrets: Arc<MemorySecrets>) -> Arc<Session> {
       notifications: None,
       phone: None,
       media_sessions: None,
+      stream: None,
       speech: None,
       nlu: None,
       apple_music: None,

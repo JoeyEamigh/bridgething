@@ -985,9 +985,9 @@ async fn run_image_write(
     let tx = events_tx.clone();
     move |mut tick: swupdate::ProgressTick| {
       let (served, expected) = tally.snapshot();
-      if expected > 0 {
+      if let Some(percent) = served.saturating_mul(100).checked_div(expected) {
         tick.dwl_bytes = served.min(u32::MAX as u64) as u32;
-        tick.dwl_percent = ((served.saturating_mul(100) / expected).min(100)) as u8;
+        tick.dwl_percent = percent.min(100) as u8;
       }
       let tx = tx.clone();
       tokio::spawn(async move {

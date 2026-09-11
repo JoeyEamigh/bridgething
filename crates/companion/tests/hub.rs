@@ -124,18 +124,33 @@ struct HubProvider {
   peer_connects: Mutex<Vec<bool>>,
   resume_targets: Mutex<Vec<ResumeTarget>>,
   resolver: Option<Arc<dyn VoiceCatalogResolver>>,
+  catalog: MusicProvider,
 }
 
 impl HubProvider {
   fn new(name: &str, schemes: &[&str]) -> Arc<Self> {
-    HubProvider::build(name, schemes, None)
+    HubProvider::build(name, schemes, None, MusicProvider::None)
+  }
+
+  fn with_catalog(name: &str, schemes: &[&str], catalog: MusicProvider) -> Arc<Self> {
+    HubProvider::build(name, schemes, None, catalog)
   }
 
   fn resolving(name: &str, schemes: &[&str], uri: &str) -> Arc<Self> {
-    HubProvider::build(name, schemes, Some(Arc::new(HubCatalog { uri: uri.into() })))
+    HubProvider::build(
+      name,
+      schemes,
+      Some(Arc::new(HubCatalog { uri: uri.into() })),
+      MusicProvider::None,
+    )
   }
 
-  fn build(name: &str, schemes: &[&str], resolver: Option<Arc<dyn VoiceCatalogResolver>>) -> Arc<Self> {
+  fn build(
+    name: &str,
+    schemes: &[&str],
+    resolver: Option<Arc<dyn VoiceCatalogResolver>>,
+    catalog: MusicProvider,
+  ) -> Arc<Self> {
     Arc::new(Self {
       name: name.into(),
       schemes: schemes.iter().map(|s| (*s).to_owned()).collect(),
@@ -143,6 +158,7 @@ impl HubProvider {
       peer_connects: Mutex::new(Vec::new()),
       resume_targets: Mutex::new(Vec::new()),
       resolver,
+      catalog,
     })
   }
 
@@ -187,7 +203,7 @@ impl Provider for HubProvider {
   }
 
   fn music_provider(&self) -> MusicProvider {
-    MusicProvider::None
+    self.catalog
   }
 
   fn voice_resolver(&self) -> Option<Arc<dyn VoiceCatalogResolver>> {
@@ -1013,6 +1029,30 @@ async fn the_library_pick_is_sticky_to_last_played_from_then_priority() {
     "spotify",
     "a detach clears the sticky pick"
   );
+}
+
+#[tokio::test]
+async fn the_library_pick_skips_providers_without_a_catalog() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let radio = HubProvider::new("stream", &["http", "https"]);
+  let catalog = HubProvider::with_catalog("subsonic", &["subsonic"], MusicProvider::Subsonic);
+  hub.attach(radio.clone()).await.unwrap();
+  assert_eq!(hub.library().unwrap().name(), "stream", "alone, a catalog-less provider still answers");
+  hub.attach(catalog.clone()).await.unwrap();
+  assert_eq!(
+    hub.library().unwrap().name(),
+    "subsonic",
+    "a catalog beats the sort order"
+  );
+  hub.mark_played_from("stream");
+  assert_eq!(
+    hub.library().unwrap().name(),
+    "subsonic",
+    "playing a plain url does not move the library to a provider that cannot browse"
+  );
+  hub.set_priority(vec!["stream".into()]).await;
+  assert_eq!(hub.library().unwrap().name(), "subsonic", "nor does priority");
 }
 
 fn play_naming(target: &str) -> NluResolvedIntent {

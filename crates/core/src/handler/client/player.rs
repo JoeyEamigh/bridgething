@@ -9,7 +9,7 @@ use libbridgething::{
 };
 
 use super::{HandlerResult, MsgHandle};
-use crate::capabilities::is_valid_scheme;
+use crate::{bluetooth::Address, capabilities::is_valid_scheme};
 
 pub struct PlayerHandler {
   handle: MsgHandle,
@@ -26,25 +26,38 @@ impl ClientToBridgePlayerMsgDispatch for PlayerHandler {
 
   async fn play(&self, params: PlayUri) -> HandlerResult {
     let PlayUri { uri, context } = params;
-    if let Some(rejected) = self.reject_unclaimed_uri(&uri).await {
-      return rejected;
-    }
+    let claimant = match self.claimant_of(&uri).await {
+      Ok(claimant) => claimant,
+      Err(rejected) => return rejected,
+    };
     self
-      .forward_command(BridgeToGatewayPlayerMsgCommand::Play(gateway::PlayUri { uri, context }))
-      .await
+      .handle
+      .bluetooth
+      .gateway_man
+      .send_command(
+        claimant,
+        BridgeToGatewayPlayerMsgCommand::Play(gateway::PlayUri { uri, context }),
+      )
+      .await;
+    Ok(())
   }
 
   async fn queue(&self, params: QueueUri) -> HandlerResult {
     let QueueUri { uri, position } = params;
-    if let Some(rejected) = self.reject_unclaimed_uri(&uri).await {
-      return rejected;
-    }
+    let claimant = match self.claimant_of(&uri).await {
+      Ok(claimant) => claimant,
+      Err(rejected) => return rejected,
+    };
     self
-      .forward_command(BridgeToGatewayPlayerMsgCommand::Queue(gateway::QueueUri {
-        uri,
-        position,
-      }))
-      .await
+      .handle
+      .bluetooth
+      .gateway_man
+      .send_command(
+        claimant,
+        BridgeToGatewayPlayerMsgCommand::Queue(gateway::QueueUri { uri, position }),
+      )
+      .await;
+    Ok(())
   }
 
   async fn pause(&self) -> HandlerResult {
@@ -149,10 +162,10 @@ impl ClientToBridgePlayerMsgDispatch for PlayerHandler {
 }
 
 impl PlayerHandler {
-  async fn reject_unclaimed_uri(&self, uri: &str) -> Option<HandlerResult> {
-    let snapshot = self.handle.state.capabilities.snapshot();
+  async fn claimant_of(&self, uri: &str) -> Result<Address, HandlerResult> {
+    let capabilities = &self.handle.state.capabilities;
     let Some(scheme) = scheme_of(uri) else {
-      return Some(
+      return Err(
         self
           .respond_player_error(PlayerError::SchemeUnclaimed {
             scheme: uri.to_string(),
@@ -160,20 +173,23 @@ impl PlayerHandler {
           .await,
       );
     };
-    if snapshot.gateway.is_none() {
-      return Some(self.respond_player_error(PlayerError::NoGateway).await);
+    if capabilities.snapshot().gateway.is_none() {
+      return Err(self.respond_player_error(PlayerError::NoGateway).await);
     }
-    if !snapshot.uri_schemes.iter().any(|s| s == &scheme) {
-      return Some(self.respond_player_error(PlayerError::SchemeUnclaimed { scheme }).await);
+    match capabilities.companion_for_scheme(&scheme) {
+      Some(claimant) => Ok(claimant),
+      None => Err(self.respond_player_error(PlayerError::SchemeUnclaimed { scheme }).await),
     }
-    None
   }
 
   async fn forward_command<C>(&self, cmd: C) -> HandlerResult
   where
     C: libbridgething::wire::WireCommand<libbridgething::gateway::BridgeToGatewayMsgData>,
   {
-    self.handle.bluetooth.gateway_man.broadcast_command(cmd).await;
+    match self.handle.state.capabilities.primary_addr() {
+      Some(primary) => self.handle.bluetooth.gateway_man.send_command(primary, cmd).await,
+      None => return self.respond_player_error(PlayerError::NoGateway).await,
+    }
     Ok(())
   }
 

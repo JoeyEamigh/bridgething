@@ -15,6 +15,7 @@ pub fn executor() -> bridgething_io::HttpExecutor {
     user_agent: format!("Spotify/{CLIENT_VERSION} Android/36 (SM-X810)"),
     request_timeout: HTTP_REQUEST_TIMEOUT,
     connect_timeout: HTTP_CONNECT_TIMEOUT,
+    ..ReqwestConfig::default()
   })))
 }
 

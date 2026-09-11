@@ -33,8 +33,8 @@ use tokio::{sync::mpsc, task::JoinHandle};
 use crate::{
   backend::{DeviceWaker as PlatformWaker, ImageScaler, SecretStore, WakeReason as PlatformWakeReason},
   provider::{
-    AssetBytes, PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderLink, ProviderNowPlaying,
-    ResumeTarget,
+    AssetBytes, AuthObserver, NowPlayingObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError,
+    ProviderLink, ProviderNowPlaying, ResumeTarget,
     art::{ArtCache, ImageAssetCodec},
     none_if_empty,
   },
@@ -138,9 +138,6 @@ struct Shared {
   last_emitted_remote_volume: Option<f32>,
   connectivity_available: Option<bool>,
 }
-
-type NowPlayingObserver = Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>;
-type AuthObserver = Arc<dyn Fn(ProviderAuthState) + Send + Sync>;
 
 struct Core {
   config: SpotifyConfig,

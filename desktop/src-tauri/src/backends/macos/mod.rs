@@ -5,6 +5,7 @@ mod image;
 mod media;
 pub mod nlu;
 mod speech;
+mod stream;
 mod volume;
 
 use std::{path::Path, sync::Arc};
@@ -19,6 +20,7 @@ pub fn platform(config_dir: &Path) -> Platform {
     geo: Some(Arc::new(Locator::new(geo::run))),
     notifications: None,
     media_sessions: Some(Arc::new(media::MediaRemoteSessions::new(config_dir))),
+    stream: Some(Arc::new(stream::AvPlayerStream::new())),
     audio: Some(Arc::new(speech::AvAudio::new())),
     volume: Some(Arc::new(volume::CoreAudioVolume::default())),
     connectivity: Some(Arc::new(connectivity::NwPathConnectivity::default())),
@@ -56,8 +58,10 @@ mod tests {
       .expect("a data chunk in the wav")
       + 8;
     wav[data..]
-      .chunks_exact(2)
-      .map(|sample| f32::from(i16::from_le_bytes([sample[0], sample[1]])) / f32::from(i16::MAX))
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|sample| f32::from(i16::from_le_bytes(*sample)) / f32::from(i16::MAX))
       .collect()
   }
 

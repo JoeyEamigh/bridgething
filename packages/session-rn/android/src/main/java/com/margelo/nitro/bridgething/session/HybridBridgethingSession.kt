@@ -130,6 +130,8 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
     override fun connectProvider(id: String): Promise<Unit> = Promise.async { require().connectProvider(id) }
     override fun disconnectProvider(id: String): Promise<Unit> = Promise.async { backend?.disconnectProvider(id) }
     override fun cancelAuth(id: String): Promise<Unit> = Promise.async { backend?.cancelAuth(id) }
+    override fun completeProviderAuth(id: String, credentials: BridgethingProviderCredentials): Promise<Unit> =
+        Promise.async { require().completeProviderAuth(id, credentials) }
     override fun setProviderPriority(ids: Array<String>): Promise<Unit> = Promise.async { backend?.setProviderPriority(ids) }
 
     override fun snapshot(): Promise<BridgethingSessionSnapshot> = Promise.async {

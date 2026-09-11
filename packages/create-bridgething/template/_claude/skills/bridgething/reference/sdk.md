@@ -68,6 +68,7 @@ client.player.stateGet().then(r => r.ok && setState(r.response.state)); // prime
 // playback.state: 'stopped' | 'paused' | 'playing'; playback.positionMs; playback.shuffle
 
 client.player.play({ uri: 'spotify:track:...' });
+client.player.play({ uri: 'https://stream.example/live.mp3' }); // any http(s) media url plays on the phone
 client.player.pause();
 client.player.resume();
 client.player.skipNext();
@@ -80,6 +81,14 @@ client.player.setRepeat({ mode: 'all' }); // 'off' | 'all' | 'one'
 `onSnapshot` fires on material changes such as a track change, play, pause, and
 seek. For a smooth progress bar, extrapolate the playhead between snapshots from
 `playback.state` and `playback.positionMs`.
+
+An `http`/`https` uri is a raw media stream (internet radio, a podcast episode,
+an HLS playlist) played by the phone's native player. Its snapshot carries the
+stream's live metadata: ICY titles land in `track.title`, station artwork in
+`track.artworkId`, and `playback.setElapsedTimeAvailable` is true only for
+finite media that can seek. Live streams have no duration. A stream that fails
+arrives on `player.onErrorEvent` as `playFailed`, and the stream stops when the
+last Car Thing disconnects.
 
 `client.asset`. Player state carries opaque asset ids:
 

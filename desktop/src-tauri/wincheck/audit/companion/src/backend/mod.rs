@@ -8,6 +8,8 @@ pub mod geo;
 pub mod image;
 #[path = "../../../../../../../crates/companion/src/backend/media.rs"]
 pub mod media;
+#[path = "../../../../../../../crates/companion/src/backend/stream.rs"]
+pub mod stream;
 
 pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
@@ -16,4 +18,7 @@ pub use image::ImageScaler;
 pub use media::{
   MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend, MediaSessionInbox,
   MediaSessionSnapshot, MediaSnapshotSink,
+};
+pub use stream::{
+  StreamBackend, StreamEvent, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };

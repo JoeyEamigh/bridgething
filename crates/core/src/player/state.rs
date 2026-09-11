@@ -184,6 +184,16 @@ impl PlayerState {
     }
   }
 
+  fn iap2_describes_the_companion_item(&self) -> bool {
+    match (
+      self.companion_metadata.title.as_deref(),
+      self.iap2_metadata.title.as_deref(),
+    ) {
+      (Some(companion), Some(iap2)) => companion.trim().eq_ignore_ascii_case(iap2.trim()),
+      _ => false,
+    }
+  }
+
   fn iap2_bundle_matches_companion(&self) -> bool {
     let Some(iap2) = self.iap2_playback.app_bundle.as_deref().filter(|b| !b.is_empty()) else {
       return false;
@@ -508,74 +518,34 @@ impl PlayerState {
   }
 
   fn merged_metadata(&self) -> MediaItemUpdate {
-    let companion_authoritative = self.companion_now_playing_authoritative(CompanionAuthorityScope::NowPlayingMetadata);
-    if companion_authoritative {
-      MediaItemUpdate {
-        persistent_id: self
-          .companion_metadata
-          .persistent_id
-          .clone()
-          .or_else(|| self.iap2_metadata.persistent_id.clone()),
-        title: self
-          .companion_metadata
-          .title
-          .clone()
-          .or_else(|| self.iap2_metadata.title.clone()),
-        album: self
-          .companion_metadata
-          .album
-          .clone()
-          .or_else(|| self.iap2_metadata.album.clone()),
-        album_uri: self
-          .companion_metadata
-          .album_uri
-          .clone()
-          .or_else(|| self.iap2_metadata.album_uri.clone()),
-        album_artist: self
-          .companion_metadata
-          .album_artist
-          .clone()
-          .or_else(|| self.iap2_metadata.album_artist.clone()),
-        artist: self
-          .companion_metadata
-          .artist
-          .clone()
-          .or_else(|| self.iap2_metadata.artist.clone()),
-        artist_uri: self
-          .companion_metadata
-          .artist_uri
-          .clone()
-          .or_else(|| self.iap2_metadata.artist_uri.clone()),
-        liked: self.companion_metadata.liked.or(self.iap2_metadata.liked),
-        artwork_id: self.companion_metadata.artwork_id.clone(),
-        duration_ms: self.companion_metadata.duration_ms.or(self.iap2_metadata.duration_ms),
-        media_types: self
-          .companion_metadata
-          .media_types
-          .clone()
-          .or_else(|| self.iap2_metadata.media_types.clone()),
-        track_number: self.companion_metadata.track_number.or(self.iap2_metadata.track_number),
-        track_count: self.companion_metadata.track_count.or(self.iap2_metadata.track_count),
-        is_like_supported: self
-          .companion_metadata
-          .is_like_supported
-          .or(self.iap2_metadata.is_like_supported),
-        is_ban_supported: self
-          .companion_metadata
-          .is_ban_supported
-          .or(self.iap2_metadata.is_ban_supported),
-        is_banned: self.companion_metadata.is_banned.or(self.iap2_metadata.is_banned),
-        is_resident_on_device: self
-          .companion_metadata
-          .is_resident_on_device
-          .or(self.iap2_metadata.is_resident_on_device),
-        chapter_count: self
-          .companion_metadata
-          .chapter_count
-          .or(self.iap2_metadata.chapter_count),
-      }
-    } else {
+    if !self.companion_now_playing_authoritative(CompanionAuthorityScope::NowPlayingMetadata) {
+      return self.iap2_metadata.clone();
+    }
+    let companion = self.companion_metadata.clone();
+    let iap2 = if self.iap2_describes_the_companion_item() {
       self.iap2_metadata.clone()
+    } else {
+      MediaItemUpdate::default()
+    };
+    MediaItemUpdate {
+      persistent_id: companion.persistent_id.or(iap2.persistent_id),
+      title: companion.title.or(iap2.title),
+      album: companion.album.or(iap2.album),
+      album_uri: companion.album_uri.or(iap2.album_uri),
+      album_artist: companion.album_artist.or(iap2.album_artist),
+      artist: companion.artist.or(iap2.artist),
+      artist_uri: companion.artist_uri.or(iap2.artist_uri),
+      liked: companion.liked.or(iap2.liked),
+      artwork_id: companion.artwork_id,
+      duration_ms: companion.duration_ms.or(iap2.duration_ms),
+      media_types: companion.media_types.or(iap2.media_types),
+      track_number: companion.track_number.or(iap2.track_number),
+      track_count: companion.track_count.or(iap2.track_count),
+      is_like_supported: companion.is_like_supported.or(iap2.is_like_supported),
+      is_ban_supported: companion.is_ban_supported.or(iap2.is_ban_supported),
+      is_banned: companion.is_banned.or(iap2.is_banned),
+      is_resident_on_device: companion.is_resident_on_device.or(iap2.is_resident_on_device),
+      chapter_count: companion.chapter_count.or(iap2.chapter_count),
     }
   }
 
@@ -1262,6 +1232,60 @@ mod tests {
       None,
       "companion authoritative without artwork_id must NOT leak iap2 art onto the wire"
     );
+  }
+
+  fn iap2_full(pid: &str, title: &str, app_bundle: &str) -> NowPlayingUpdate {
+    NowPlayingUpdate {
+      media_item: Some(MediaItemUpdate {
+        persistent_id: Some(pid.to_string()),
+        title: Some(title.to_string()),
+        artist: Some("Phone Artist".to_string()),
+        album: Some("Phone Album".to_string()),
+        duration_ms: Some(240_000),
+        ..MediaItemUpdate::default()
+      }),
+      playback: Some(PlaybackUpdate {
+        playing: Some(true),
+        app_bundle: Some(app_bundle.to_string()),
+        ..PlaybackUpdate::default()
+      }),
+    }
+  }
+
+  #[test]
+  fn another_item_s_iap2_fields_never_fill_in_a_companion_track() {
+    let auth = AuthorityRegistry::new();
+    let mut state = PlayerState::new(auth.clone());
+    state.apply_now_playing(iap2_full("iap2:track:1", "Spotify Song", "com.bridgething.gateway"));
+
+    auth.claim(COMPANION, CompanionAuthorityScope::NowPlayingMetadata);
+    auth.set_companion_app_bundle(COMPANION, Some("com.bridgething.gateway".into()));
+    state.apply_companion_snapshot(
+      COMPANION,
+      companion_snapshot("https://radio.example/live", "Groove Salad", None, true),
+    );
+
+    let track = media(&state);
+    assert_eq!(track.title.as_deref(), Some("Groove Salad"));
+    assert_eq!(track.artist, None, "a stream has no artist to borrow from spotify");
+    assert_eq!(track.album, None);
+    assert_eq!(track.duration_ms, None);
+  }
+
+  #[test]
+  fn the_same_item_s_iap2_fields_still_fill_in_a_companion_track() {
+    let auth = AuthorityRegistry::new();
+    let mut state = PlayerState::new(auth.clone());
+    state.apply_now_playing(iap2_full("iap2:track:1", "Song", "com.spotify.client"));
+
+    auth.claim(COMPANION, CompanionAuthorityScope::NowPlayingMetadata);
+    auth.set_companion_app_bundle(COMPANION, Some("com.spotify.client".into()));
+    state.apply_companion_snapshot(COMPANION, companion_snapshot("spotify:track:1", "Song", None, true));
+
+    let track = media(&state);
+    assert_eq!(track.artist.as_deref(), Some("Phone Artist"));
+    assert_eq!(track.album.as_deref(), Some("Phone Album"));
+    assert_eq!(track.duration_ms, Some(240_000));
   }
 
   #[test]

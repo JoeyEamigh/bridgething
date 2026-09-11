@@ -406,7 +406,7 @@ export type MediaItemUpdate = {
  */
 export type MediaType = 'music' | 'podcast' | 'audioBook';
 
-export type MusicProvider = 'none' | 'spotify' | 'appleMusic';
+export type MusicProvider = 'none' | 'spotify' | 'appleMusic' | 'subsonic';
 
 export type NetError =
   | { type: 'requestFailed'; data: { reason: string } }

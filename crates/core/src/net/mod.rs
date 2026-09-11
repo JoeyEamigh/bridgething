@@ -261,7 +261,7 @@ async fn modern_handler(
 
   let req = match try_serve_hub(&state.state, req).await {
     Ok(resp) => return resp,
-    Err(req) => req,
+    Err(req) => *req,
   };
 
   let active_path = match resolve_active_webapp(&state.state).await {
@@ -277,18 +277,18 @@ async fn modern_handler(
 
 const HUB_PREFIX: &str = "/_hub/";
 
-async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<Response, Request<Body>> {
+async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<Response, Box<Request<Body>>> {
   if !req.uri().path().starts_with(HUB_PREFIX) {
-    return Err(req);
+    return Err(Box::new(req));
   }
   let Ok(Some(launcher)) = state.launcher_webapp().await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
   let Some(hash) = state.webapps.bundle_hash(launcher).await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
   let Some(bundle_path) = state.webapps.resolve(launcher).await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
 
   let path = req.uri().path().to_owned();

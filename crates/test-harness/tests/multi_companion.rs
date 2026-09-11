@@ -356,3 +356,143 @@ async fn losing_the_primary_asks_the_promoted_companion_to_resend() {
     .await;
   assert!(restored, "the promoted companion's re-pushed state never landed");
 }
+
+fn caps_claiming(name: &str, provider: MusicProvider, schemes: &[&str]) -> GatewayCapabilities {
+  GatewayCapabilities {
+    uri_schemes: schemes.iter().map(|s| s.to_string()).collect(),
+    ..caps(name, provider)
+  }
+}
+
+async fn next_player_command(
+  inbound: &mut tokio::sync::broadcast::Receiver<libbridgething::gateway::BridgeToGatewayMsg>,
+  within: Duration,
+) -> Option<BridgeToGatewayPlayerMsg> {
+  tokio::time::timeout(within, async {
+    loop {
+      match inbound.recv().await {
+        Ok(msg) => {
+          if let BridgeToGatewayMsgData::Player(player) = msg.data
+            && !matches!(player, BridgeToGatewayPlayerMsg::SnapshotRequest(_))
+          {
+            return Some(player);
+          }
+        }
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+      }
+    }
+  })
+  .await
+  .ok()
+  .flatten()
+}
+
+fn played_uri(command: Option<BridgeToGatewayPlayerMsg>) -> Option<String> {
+  match command {
+    Some(BridgeToGatewayPlayerMsg::Play(play)) => Some(play.uri),
+    _ => None,
+  }
+}
+
+#[tokio::test]
+async fn a_play_goes_only_to_the_companion_that_claims_its_scheme() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = harness.connect_android().await.expect("phone connect");
+  phone
+    .capabilities()
+    .announce(caps_claiming("harness-phone", MusicProvider::Spotify, &["spotify"]))
+    .await
+    .expect("phone announce");
+  claim_now_playing(&phone).await;
+  phone.player().snapshot(phone_snapshot()).await.expect("phone snapshot");
+  await_primary_ready(&harness).await;
+
+  let desktop = harness.connect_android().await.expect("desktop connect");
+  desktop
+    .capabilities()
+    .announce(caps_claiming(
+      "harness-desktop",
+      MusicProvider::None,
+      &["http", "https"],
+    ))
+    .await
+    .expect("desktop announce");
+  let announced = harness
+    .wait_for(
+      |s| {
+        let schemes = s.capabilities.snapshot().uri_schemes;
+        schemes.iter().any(|s| s == "https") && schemes.iter().any(|s| s == "spotify")
+      },
+      CONVERGE,
+    )
+    .await;
+  assert!(
+    announced,
+    "both companions' schemes never reached the capability snapshot"
+  );
+
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+
+  client
+    .player()
+    .play(libbridgething::client::PlayUri {
+      uri: "https://radio.example/live".into(),
+      context: None,
+    })
+    .await
+    .expect("play a stream");
+  assert_eq!(
+    played_uri(next_player_command(&mut desktop_inbound, CONVERGE).await).as_deref(),
+    Some("https://radio.example/live"),
+    "the companion claiming https never got the play"
+  );
+  assert!(
+    next_player_command(&mut phone_inbound, SETTLE).await.is_none(),
+    "the primary companion was handed a uri it does not claim"
+  );
+
+  client
+    .player()
+    .play(libbridgething::client::PlayUri {
+      uri: "spotify:track:abc".into(),
+      context: None,
+    })
+    .await
+    .expect("play a spotify uri");
+  assert_eq!(
+    played_uri(next_player_command(&mut phone_inbound, CONVERGE).await).as_deref(),
+    Some("spotify:track:abc")
+  );
+  assert!(
+    next_player_command(&mut desktop_inbound, SETTLE).await.is_none(),
+    "a spotify uri leaked to the companion that only claims http"
+  );
+}
+
+#[tokio::test]
+async fn transport_verbs_reach_only_the_companion_holding_playback() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = connect_primary(&harness).await;
+  let desktop = connect_secondary(&harness).await;
+  await_primary_ready(&harness).await;
+
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+  client.player().pause().await.expect("pause");
+
+  assert!(
+    matches!(
+      next_player_command(&mut phone_inbound, CONVERGE).await,
+      Some(BridgeToGatewayPlayerMsg::Pause)
+    ),
+    "the companion holding playback never got the pause"
+  );
+  assert!(
+    next_player_command(&mut desktop_inbound, SETTLE).await.is_none(),
+    "a companion without playback authority was told to pause"
+  );
+}

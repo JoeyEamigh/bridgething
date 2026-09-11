@@ -159,6 +159,7 @@ impl Shell {
       notifications: platform.notifications,
       phone: None,
       media_sessions: platform.media_sessions,
+      stream: platform.stream,
       speech: platform.speech,
       nlu: platform.nlu,
       apple_music: None,

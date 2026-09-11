@@ -41,6 +41,7 @@ pub struct ReqwestConfig {
   pub user_agent: String,
   pub request_timeout: Duration,
   pub connect_timeout: Duration,
+  pub read_timeout: Duration,
 }
 
 impl Default for ReqwestConfig {
@@ -49,6 +50,7 @@ impl Default for ReqwestConfig {
       user_agent: concat!("bridgething/", env!("CARGO_PKG_VERSION")).to_string(),
       request_timeout: Duration::from_secs(15),
       connect_timeout: Duration::from_secs(8),
+      read_timeout: Duration::from_secs(60),
     }
   }
 }
@@ -64,6 +66,7 @@ impl ReqwestTransport {
       .user_agent(config.user_agent)
       .timeout(config.request_timeout)
       .connect_timeout(config.connect_timeout)
+      .read_timeout(config.read_timeout)
       .build()
       .expect("reqwest client builds");
     ReqwestTransport { client }
@@ -138,21 +141,33 @@ async fn reqwest_download(
   sink: Arc<HttpDownloadSink>,
 ) -> Result<(), String> {
   let mut rb = reqwest_builder(client, &request)?;
+  if request.timeout_ms == 0 {
+    rb = rb.timeout(Duration::MAX);
+  }
   if !request.body.is_empty() {
     rb = rb.body(request.body);
   }
   let mut resp = rb.send().await.map_err(|e| e.to_string())?;
-  sink.on_response(
+  let wanted = sink.on_response(
     resp.status().as_u16(),
     header_vec(resp.headers()),
     resp.content_length(),
   );
+  if !wanted {
+    drop(resp);
+    sink.on_finished();
+    return Ok(());
+  }
   while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
     let writing = sink.clone();
-    tokio::task::spawn_blocking(move || writing.on_chunk(chunk.to_vec()))
+    let wanted = tokio::task::spawn_blocking(move || writing.on_chunk(chunk.to_vec()))
       .await
       .map_err(|e| e.to_string())?;
+    if !wanted {
+      break;
+    }
   }
+  drop(resp);
   sink.on_finished();
   Ok(())
 }
