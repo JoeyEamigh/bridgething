@@ -164,6 +164,7 @@ function InstalledApps({
           {tiles.map(tile => (
             <Press
               key={tile.id}
+              testID={`webapp-row-${tile.name}`}
               onPress={() =>
                 deviceId &&
                 navigation.navigate('WebappDetail', { deviceId, id: tile.id })

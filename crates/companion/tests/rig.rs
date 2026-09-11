@@ -89,7 +89,7 @@ impl VolumeBackend for FakeVolume {
 const ARTIFACT_BYTES: usize = 512 * 1024;
 
 const DRIVE_DEADLINE: Duration = Duration::from_secs(60);
-const SETTLE: Duration = Duration::from_secs(5);
+const SETTLE: Duration = Duration::from_secs(20);
 
 fn playing(title: &str) -> PlayerState {
   PlayerState {

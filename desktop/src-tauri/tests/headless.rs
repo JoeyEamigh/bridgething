@@ -5,7 +5,7 @@ use std::{
   time::{Duration, Instant},
 };
 
-use bridgething_companion::provider::ResumeTarget;
+use bridgething_companion::provider::{ResumeTarget, spotify, subsonic};
 use bridgething_desktop::{
   commands::{self, InstallOutcome, OtaOutcome},
   hints::{self, Hint, Invalidation},
@@ -537,10 +537,16 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
     snapshot.capability_flags
   );
   let providers = commands::providers(app.state()).await.expect("providers");
+  let mut offered: Vec<&str> = providers.iter().map(|provider| provider.id.as_str()).collect();
+  offered.sort_unstable();
+  let mut expected = vec![subsonic::PROVIDER_NAME];
+  if option_env!("BRIDGETHING_AUTH_PSK").is_some_and(|psk| !psk.is_empty()) {
+    expected.push(spotify::PROVIDER_NAME);
+  }
+  expected.sort_unstable();
   assert_eq!(
-    providers.is_empty(),
-    option_env!("BRIDGETHING_AUTH_PSK").is_none_or(str::is_empty),
-    "the shell registers exactly the providers its baked-in psk can reach, and nothing else"
+    offered, expected,
+    "every desktop owns a stream backend, so subsonic is always on offer; spotify needs the baked-in psk"
   );
   assert!(commands::now_playing(app.state()).await.is_ok());
   assert!(commands::voice_model(app.state()).await.is_ok());

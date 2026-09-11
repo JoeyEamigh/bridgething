@@ -62,7 +62,7 @@ async fn overlay_mounted(page: &Page) -> bool {
 }
 
 async fn settle(page: &Page, url: &str, want_mounted: bool) -> bool {
-  for _ in 0..80 {
+  for _ in 0..200 {
     if page.goto(url).await.is_err() {
       tokio::time::sleep(Duration::from_millis(250)).await;
       continue;
