@@ -1,8 +1,4 @@
-import {
-  countLine,
-  failureLine,
-  STORE_COPY,
-} from '@bridgething/catalog';
+import { countLine, failureLine, STORE_COPY } from '@bridgething/catalog';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 

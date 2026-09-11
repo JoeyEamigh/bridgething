@@ -112,6 +112,7 @@ struct SourceState {
   queue: Option<QueueSnapshot>,
   targets: Option<PlaybackTargets>,
   seq: u64,
+  playing_since: u64,
 }
 
 pub struct NowPlayingHub {
@@ -257,12 +258,18 @@ impl Arbiter {
         source_owns_volume,
       } => {
         self.seq_counter += 1;
+        let audible = has_item && snapshot.playback.state == PlaybackState::Playing;
         let state = self.sources.entry(source).or_default();
         state.snapshot = Some(*snapshot);
         state.app_bundle = app_bundle;
         state.has_item = has_item;
         state.source_owns_volume = source_owns_volume;
         state.seq = self.seq_counter;
+        state.playing_since = match (audible, state.playing_since) {
+          (true, 0) => self.seq_counter,
+          (true, since) => since,
+          (false, _) => 0,
+        };
         self.emit_arbitrated().await;
       }
       Op::Queue { source, queue } => {
@@ -320,23 +327,18 @@ impl Arbiter {
           id.as_str(),
           state.has_item,
           state.snapshot.as_ref().map(|snapshot| snapshot.playback.state),
-          state.seq
+          state.seq,
+          state.playing_since
         ))
         .collect::<Vec<_>>(),
       "arbitrating"
     );
-    let playing: Vec<(&String, &SourceState)> = self
+    let started_last = self
       .sources
       .iter()
-      .filter(|(_, s)| {
-        s.has_item
-          && s
-            .snapshot
-            .as_ref()
-            .is_some_and(|snapshot| snapshot.playback.state == PlaybackState::Playing)
-      })
-      .collect();
-    if let Some((id, _)) = playing.into_iter().max_by_key(|(_, s)| s.seq) {
+      .filter(|(_, s)| s.playing_since != 0)
+      .max_by_key(|(_, s)| s.playing_since);
+    if let Some((id, _)) = started_last {
       return Some(id.clone());
     }
     if let Some(held) = self.current()

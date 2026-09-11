@@ -338,10 +338,7 @@ describe('reportInstall', () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall(
-        { appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE },
-        { origin: 'http://localhost:8787' },
-      );
+      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE }, { origin: 'http://localhost:8787' });
       await flush();
     });
 

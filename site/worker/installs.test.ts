@@ -394,9 +394,7 @@ describe('recountInstalls', () => {
       JSON.stringify({ app_id: CALENDAR_ID, source_url: LISTED_URL, count: 99, versions: { '9.9.9': 99 } }),
     );
 
-    expect(toInstallCounts(await recountInstalls(kv))).toEqual([
-      counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 }),
-    ]);
+    expect(toInstallCounts(await recountInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 })]);
   });
 
   test('never lowers a count that the markers still back', async () => {

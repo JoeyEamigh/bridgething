@@ -98,7 +98,10 @@ async fn lane(login: Login) {
       "the sign-in failed: {:?}",
       subsonic.auth_state.message
     );
-    assert!(tokio::time::Instant::now() < deadline, "the sign-in never settled: {subsonic:?}");
+    assert!(
+      tokio::time::Instant::now() < deadline,
+      "the sign-in never settled: {subsonic:?}"
+    );
     tokio::time::sleep(Duration::from_millis(250)).await;
   }
   eprintln!("signed in to {}", login.server_url);
@@ -164,7 +167,11 @@ async fn lane(login: Login) {
       .result
       .entries,
   );
-  assert!(tracks.len() >= 2, "the lane needs an album with two tracks: {}", album.name);
+  assert!(
+    tracks.len() >= 2,
+    "the lane needs an album with two tracks: {}",
+    album.name
+  );
   eprintln!("album: {} ({} tracks)", album.name, tracks.len());
 
   client
@@ -195,7 +202,10 @@ async fn lane(login: Login) {
   let advanced = now_playing_settles(&app, |held| held.is_some_and(|now| now.playback.position_ms > 1_000))
     .await
     .expect("the player advances through the file");
-  eprintln!("position after decode: {}ms of {duration}ms", advanced.playback.position_ms);
+  eprintln!(
+    "position after decode: {}ms of {duration}ms",
+    advanced.playback.position_ms
+  );
 
   client.player().pause().await.expect("pause");
   now_playing_settles(&app, |held| held.is_some_and(|now| !now.playback.playing)).await;

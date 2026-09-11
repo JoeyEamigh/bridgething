@@ -48,6 +48,20 @@ impl PlayerDispatcher {
     uri.split(':').next().unwrap_or(uri).to_owned()
   }
 
+  async fn yield_output_to(&self, next: &str) {
+    let now_playing = self.hub.now_playing();
+    let Some(outgoing) = now_playing.current_source().filter(|id| id != next) else {
+      return;
+    };
+    let Some(transport) = now_playing.transport(&outgoing) else {
+      return;
+    };
+    tracing::debug!(%outgoing, %next, "handing the output over");
+    if let Err(error) = transport.pause().await {
+      tracing::warn!(%outgoing, %error, "the outgoing source did not stop; the incoming play still goes ahead");
+    }
+  }
+
   fn transport(&self, verb: &str) -> Option<Arc<dyn PlayerTransport>> {
     if let Some(audible) = self.hub.now_playing().current_transport() {
       tracing::debug!(%verb, source = ?self.hub.now_playing().current_source(), "verb routed to the audible source");
@@ -92,6 +106,7 @@ impl PlayerHandler for PlayerDispatcher {
         .await;
       return Ok(());
     };
+    self.yield_output_to(provider.name()).await;
     self.hub.mark_played_from(provider.name());
     if let Err(error) = PlayerTransport::play(provider.as_ref(), payload).await {
       self.failed("play", error).await;

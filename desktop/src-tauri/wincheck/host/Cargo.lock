@@ -205,7 +205,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-companion"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "async-trait",
  "bridgething-delivery",
@@ -215,6 +215,7 @@ dependencies = [
  "bytes",
  "futures",
  "libbridgething",
+ "md-5",
  "nlu",
  "opus",
  "regex",
@@ -234,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "async-trait",
  "bridgething-gateway",
@@ -258,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -279,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "thiserror 2.0.20",
  "tokio",
@@ -289,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -299,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "bytes",
  "futures",
@@ -1360,7 +1361,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libbridgething"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "bridgething-macros",
  "bytes",
@@ -1446,6 +1447,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
+name = "md-5"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
+dependencies = [
+ "cfg-if",
+ "digest",
+]
+
+[[package]]
 name = "mdns-sd"
 version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1528,7 +1539,7 @@ dependencies = [
 
 [[package]]
 name = "nlu"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2272,7 +2283,7 @@ dependencies = [
 
 [[package]]
 name = "spotify"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "base64 0.22.1",
  "bridgething-io",

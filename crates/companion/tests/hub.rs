@@ -482,6 +482,55 @@ async fn a_playing_source_takes_over_from_a_playing_one() {
 }
 
 #[tokio::test]
+async fn a_chattering_playing_source_cannot_take_the_floor_back() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let sink = hub.sink();
+  sink.submit_player(
+    "stream",
+    snapshot(PlaybackState::Playing, "https://radio.example/live"),
+    "com.bridgething.gateway",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("stream")).await,
+    "the stream was audible"
+  );
+
+  sink.submit_player(
+    "spotify",
+    snapshot(PlaybackState::Playing, "spotify:track:a"),
+    "com.spotify.client",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("spotify")).await,
+    "spotify took the floor"
+  );
+
+  for _ in 0..5 {
+    sink.submit_player(
+      "stream",
+      snapshot(PlaybackState::Playing, "https://radio.example/live"),
+      "com.bridgething.gateway",
+      true,
+      false,
+    );
+  }
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || {
+      hub.now_playing().current_source().as_deref() == Some("spotify")
+    })
+    .await,
+    "a source that emits a position tick every second must not outrank one that only speaks on state change; \
+     the floor belongs to whoever started last, not to whoever talks most"
+  );
+}
+
+#[tokio::test]
 async fn clearing_the_current_source_falls_back_to_the_other() {
   let (gateway, _peer) = Peer::link();
   let hub = hub(gateway);
@@ -824,6 +873,73 @@ async fn play_routes_by_uri_scheme() {
 
   assert!(second.saw("play:second:track:xyz"));
   assert!(!first.calls.lock().unwrap().iter().any(|call| call.starts_with("play:")));
+}
+
+#[tokio::test]
+async fn play_on_another_provider_pauses_the_audible_one() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway.clone());
+  let stream = HubProvider::new("stream", &["https"]);
+  let spotify = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(stream.clone()).await.unwrap();
+  hub.attach(spotify.clone()).await.unwrap();
+  hub.sink().submit_player(
+    "stream",
+    snapshot(PlaybackState::Playing, "https://radio.example/live"),
+    "com.bridgething.gateway",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("stream")).await,
+    "the stream was audible"
+  );
+
+  let dispatch = PlayerDispatcher::new(hub.clone(), Arc::new(gateway));
+  dispatch
+    .play(PlayUri {
+      uri: "spotify:track:a".into(),
+      context: None,
+    })
+    .await
+    .unwrap();
+
+  assert!(spotify.saw("play:spotify:track:a"), "the play reached spotify");
+  assert!(
+    stream.saw("pause"),
+    "playback is exclusive: starting one provider silences the one that held the output"
+  );
+}
+
+#[tokio::test]
+async fn play_on_the_audible_provider_does_not_pause_it() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway.clone());
+  let spotify = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(spotify.clone()).await.unwrap();
+  hub.sink().submit_player(
+    "spotify",
+    snapshot(PlaybackState::Playing, "spotify:track:a"),
+    "com.spotify.client",
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some("spotify")).await,
+    "spotify was audible"
+  );
+
+  let dispatch = PlayerDispatcher::new(hub.clone(), Arc::new(gateway));
+  dispatch
+    .play(PlayUri {
+      uri: "spotify:track:b".into(),
+      context: None,
+    })
+    .await
+    .unwrap();
+
+  assert!(spotify.saw("play:spotify:track:b"));
+  assert!(!spotify.saw("pause"), "a provider does not hand off to itself");
 }
 
 #[tokio::test]

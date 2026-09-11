@@ -28,7 +28,9 @@ export function CatalogRow({
   const state = listingState(listing);
 
   const meta = [
-    newestCompatible ? `v${newestCompatible.version}` : STORE_COPY.needsFirmware,
+    newestCompatible
+      ? `v${newestCompatible.version}`
+      : STORE_COPY.needsFirmware,
     installedVersion ? `installed v${installedVersion}` : null,
     ...listingTraits(listing),
     alsoAvailableLabel(alsoAvailableFrom),

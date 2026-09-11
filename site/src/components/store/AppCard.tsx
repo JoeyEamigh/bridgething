@@ -1,4 +1,10 @@
-import { alsoAvailableLabel, extensionOf, installsLabel, STORE_COPY, type CatalogAppListing } from '@bridgething/catalog';
+import {
+  alsoAvailableLabel,
+  extensionOf,
+  installsLabel,
+  STORE_COPY,
+  type CatalogAppListing,
+} from '@bridgething/catalog';
 import { appDetailPath } from '../../lib/app-routes';
 import { webHref } from '../../lib/href';
 import { ExtensionBadge } from './ExtensionNote';

@@ -1,9 +1,9 @@
+use std::{future::Future, sync::Arc, time::Duration};
 #[cfg(target_os = "macos")]
 use std::{
   panic::AssertUnwindSafe,
   sync::atomic::{AtomicBool, Ordering},
 };
-use std::{future::Future, sync::Arc, time::Duration};
 
 use bridgething_desktop::{commands, shell::Shell};
 use libbridgething::BRIDGETHING_WS_MODERN_PORT;

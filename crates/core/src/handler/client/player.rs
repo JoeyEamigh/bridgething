@@ -30,6 +30,7 @@ impl ClientToBridgePlayerMsgDispatch for PlayerHandler {
       Ok(claimant) => claimant,
       Err(rejected) => return rejected,
     };
+    self.yield_output_to(claimant).await;
     self
       .handle
       .bluetooth
@@ -180,6 +181,25 @@ impl PlayerHandler {
       Some(claimant) => Ok(claimant),
       None => Err(self.respond_player_error(PlayerError::SchemeUnclaimed { scheme }).await),
     }
+  }
+
+  async fn yield_output_to(&self, next: Address) {
+    let Some(outgoing) = self
+      .handle
+      .state
+      .capabilities
+      .primary_addr()
+      .filter(|holder| *holder != next)
+    else {
+      return;
+    };
+    tracing::debug!(%outgoing, %next, "handing the output over to another companion");
+    self
+      .handle
+      .bluetooth
+      .gateway_man
+      .send_command(outgoing, BridgeToGatewayPlayerMsgCommand::Pause)
+      .await;
   }
 
   async fn forward_command<C>(&self, cmd: C) -> HandlerResult

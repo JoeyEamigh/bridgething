@@ -167,7 +167,10 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
       _ => None,
     })
     .expect("the album has tracks");
-  eprintln!("first track: {} by {} ({} ms)", track.name, track.artist.name, track.duration_ms);
+  eprintln!(
+    "first track: {} by {} ({} ms)",
+    track.name, track.artist.name, track.duration_ms
+  );
 
   let hits = provider
     .search(LibrarySearchRequest {
@@ -219,7 +222,11 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
   assert_eq!(now.title.as_deref(), Some(track.name.as_str()));
   let source = backend.last_source().expect("the phone got a stream");
   eprintln!("stream source: {} (live {})", source.url, source.live);
-  assert!(source.url.starts_with(&format!("{}/rest/stream?", config.server_url.trim_end_matches('/'))));
+  assert!(
+    source
+      .url
+      .starts_with(&format!("{}/rest/stream?", config.server_url.trim_end_matches('/')))
+  );
   assert!(!source.live);
   assert_eq!(backend.transport_calls(), vec![StreamCall::Play(source.url.clone())]);
   assert!(
@@ -245,7 +252,13 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
   if state.playback.queue_count.is_some_and(|count| count > 1) {
     backend.last_sink().expect("the sink").on_status(StreamStatus::Ended);
     assert!(
-      eventually(|| backend.calls().iter().filter(|call| matches!(call, StreamCall::Play(_))).count() == 2).await,
+      eventually(|| backend
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, StreamCall::Play(_)))
+        .count()
+        == 2)
+      .await,
       "the end of the first track starts the second: {:?}",
       backend.calls()
     );
