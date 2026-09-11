@@ -101,13 +101,34 @@ impl AckWindow {
     window_bytes: u64,
     timeout: Duration,
   ) -> Result<(), TransferStalled> {
+    let mut blocked_since = None;
     loop {
       let acked = self.received_bytes(transfer_id);
       if offset < acked.saturating_add(window_bytes) {
+        if let Some(since) = blocked_since {
+          tracing::warn!(
+            %transfer_id,
+            offset,
+            acked,
+            window_bytes,
+            blocked_ms = rt::Instant::now().saturating_duration_since(since).as_millis() as u64,
+            "transfer resumed after the peer stopped acking"
+          );
+        }
         return Ok(());
       }
+      let since = *blocked_since.get_or_insert_with(rt::Instant::now);
       if !self.wait_for_progress(transfer_id, acked, timeout).await {
         self.finish(transfer_id);
+        tracing::warn!(
+          %transfer_id,
+          offset,
+          acked,
+          window_bytes,
+          blocked_ms = rt::Instant::now().saturating_duration_since(since).as_millis() as u64,
+          timeout_ms = timeout.as_millis() as u64,
+          "transfer abandoned: the peer stopped acking inside the window"
+        );
         return Err(TransferStalled { transfer_id, offset });
       }
     }

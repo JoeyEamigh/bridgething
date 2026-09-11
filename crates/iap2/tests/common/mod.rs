@@ -65,6 +65,7 @@ pub fn fast_link_config(our_lsp: Lsp) -> LinkConfig {
   let mut config = LinkConfig::new(our_lsp);
   config.detect_interval = Duration::from_millis(50);
   config.handshake_timeout = Duration::from_secs(5);
+  config.retransmit_give_up = Duration::from_millis(600);
   config
 }
 

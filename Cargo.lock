@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "alsa",
  "anyhow",
@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-client"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-sdk-runtime",
  "futures",
@@ -842,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-codegen"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "anyhow",
  "quote",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-companion"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -893,7 +893,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "async-trait",
  "bridgething-gateway",
@@ -913,13 +913,14 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "zip 8.6.0",
 ]
 
 [[package]]
 name = "bridgething-delivery-napi"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-delivery",
  "bridgething-gateway",
@@ -936,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery-wasm"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-delivery",
  "bridgething-gateway",
@@ -1024,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-dsp"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-wakeword",
  "earshot",
@@ -1037,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -1059,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-host-gateway"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "anyhow",
  "bridgething-delivery",
@@ -1082,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-iap2"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "async-trait",
  "bitflags 2.13.1",
@@ -1104,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "futures",
  "js-sys",
@@ -1122,7 +1123,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "proc-macro-crate 3.5.0",
  "proc-macro2",
@@ -1132,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mfi"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "hex-literal",
  "i2cdev",
@@ -1142,7 +1143,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mfi-proxy"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-mfi",
  "tracing",
@@ -1151,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-mic-debug"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "alsa",
  "axum",
@@ -1171,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bytes",
  "futures",
@@ -1189,14 +1190,14 @@ dependencies = [
 
 [[package]]
 name = "bridgething-swupdate-sys"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bindgen",
 ]
 
 [[package]]
 name = "bridgething-test-harness"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1227,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-wakeword"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "realfft",
  "thiserror 2.0.18",
@@ -4066,7 +4067,7 @@ dependencies = [
 
 [[package]]
 name = "libbridgething"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "bridgething-macros",
  "bytes",
@@ -4620,7 +4621,7 @@ dependencies = [
 
 [[package]]
 name = "nlu"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -7257,7 +7258,7 @@ dependencies = [
 
 [[package]]
 name = "spotify"
-version = "0.12.8"
+version = "0.12.9"
 dependencies = [
  "base64 0.22.1",
  "bridgething-io",

@@ -18,6 +18,48 @@ use crate::{
 const RETRANSMIT_STALL_MARKER: u8 = 3;
 pub(super) const METER_INTERVAL: Duration = Duration::from_secs(5);
 
+const RTO_MIN: Duration = Duration::from_millis(500);
+const RTO_MAX: Duration = Duration::from_secs(8);
+pub const RETRANSMIT_GIVE_UP: Duration = Duration::from_secs(60);
+
+#[derive(Debug)]
+struct RttEstimator {
+  srtt: Option<Duration>,
+  rttvar: Duration,
+  seed: Duration,
+}
+
+impl RttEstimator {
+  fn new(seed: Duration) -> Self {
+    Self {
+      srtt: None,
+      rttvar: Duration::ZERO,
+      seed,
+    }
+  }
+
+  fn sample(&mut self, rtt: Duration) {
+    match self.srtt {
+      None => {
+        self.srtt = Some(rtt);
+        self.rttvar = rtt / 2;
+      }
+      Some(srtt) => {
+        let err = srtt.abs_diff(rtt);
+        self.rttvar = (self.rttvar * 3 + err) / 4;
+        self.srtt = Some((srtt * 7 + rtt) / 8);
+      }
+    }
+  }
+
+  fn rto(&self) -> Duration {
+    match self.srtt {
+      None => self.seed,
+      Some(srtt) => (srtt + 4 * self.rttvar).clamp(RTO_MIN, RTO_MAX),
+    }
+  }
+}
+
 #[derive(Debug)]
 struct Meter {
   since: Instant,
@@ -42,13 +84,26 @@ impl Meter {
     }
   }
 
-  fn report(&mut self, pending: usize, unacked: usize) {
+  fn report(&mut self, pending: usize, unacked: usize, srtt_ms: Option<u64>, rto_ms: u64) {
     let elapsed = self.since.elapsed();
     if self.tx_packets == 0 && self.rx_packets == 0 {
       *self = Self::new();
       return;
     }
     let secs = elapsed.as_secs_f64();
+    if self.retransmits > 0 {
+      tracing::info!(
+        tx_kb_s = self.tx_bytes as f64 / 1024.0 / secs,
+        rx_kb_s = self.rx_bytes as f64 / 1024.0 / secs,
+        retransmits = self.retransmits,
+        window_stalls = self.window_stalls,
+        srtt_ms,
+        rto_ms,
+        pending,
+        unacked,
+        "iap2 link retransmitting"
+      );
+    }
     tracing::debug!(
       tx_kb_s = self.tx_bytes as f64 / 1024.0 / secs,
       rx_kb_s = self.rx_bytes as f64 / 1024.0 / secs,
@@ -68,8 +123,7 @@ impl Meter {
 struct LinkParams {
   max_outgoing: u8,
   max_payload_len: u16,
-  retransmission_timeout: Duration,
-  max_retransmissions: u8,
+  seed_rto: Duration,
 }
 
 impl LinkParams {
@@ -77,8 +131,7 @@ impl LinkParams {
     Self {
       max_outgoing: lsp.max_outgoing.max(1),
       max_payload_len: lsp.max_len.saturating_sub(LINK_FRAME_OVERHEAD as u16).max(1),
-      retransmission_timeout: Duration::from_millis(lsp.retransmission_timeout_ms as u64),
-      max_retransmissions: lsp.max_retransmissions.max(1),
+      seed_rto: Duration::from_millis(lsp.retransmission_timeout_ms as u64),
     }
   }
 }
@@ -87,7 +140,7 @@ impl LinkParams {
 struct UnackedPacket {
   seq: u8,
   wire: Bytes,
-  deadline: Instant,
+  sent_at: Instant,
   retry_count: u8,
 }
 
@@ -110,13 +163,25 @@ pub(super) struct EstablishedState {
   unacked_delivery: bool,
   must_send_ack: bool,
 
+  rtt: RttEstimator,
+  rto: Duration,
+  retransmit_at: Option<Instant>,
+  last_progress: Instant,
+  give_up_after: Duration,
+
   meter: Meter,
 }
 
 impl EstablishedState {
-  pub(super) fn new(initial_psn: u8, peer_initial_psn: u8, peer_lsp: &Lsp) -> Self {
+  pub(super) fn new(initial_psn: u8, peer_initial_psn: u8, peer_lsp: &Lsp, give_up_after: Duration) -> Self {
+    let params = LinkParams::from_peer_lsp(peer_lsp);
     Self {
-      params: LinkParams::from_peer_lsp(peer_lsp),
+      rtt: RttEstimator::new(params.seed_rto),
+      rto: params.seed_rto,
+      retransmit_at: None,
+      last_progress: Instant::now(),
+      give_up_after,
+      params,
       last_sent_psn: initial_psn,
       unacked: VecDeque::new(),
       pending_send: VecDeque::new(),
@@ -131,7 +196,10 @@ impl EstablishedState {
 
   pub(super) fn report_meter(&mut self) {
     let (pending, unacked) = (self.pending_send.len(), self.unacked.len());
-    self.meter.report(pending, unacked);
+    let srtt_ms = self.rtt.srtt.map(|srtt| srtt.as_millis() as u64);
+    self
+      .meter
+      .report(pending, unacked, srtt_ms, self.rto.as_millis() as u64);
   }
 
   pub(super) fn last_sent_psn(&self) -> u8 {
@@ -139,7 +207,11 @@ impl EstablishedState {
   }
 
   pub(super) fn next_retransmit_deadline(&self) -> Option<Instant> {
-    self.unacked.front().map(|p| p.deadline)
+    self.retransmit_at
+  }
+
+  fn arm_retransmit(&mut self, now: Instant) {
+    self.retransmit_at = (!self.unacked.is_empty()).then(|| now + self.rto);
   }
 
   pub(super) fn has_buffered_out_of_order(&self) -> bool {
@@ -238,7 +310,8 @@ impl EstablishedState {
     W: AsyncWrite + Unpin,
   {
     for &missing_seq in payload {
-      if let Some(packet) = self.unacked.iter().find(|p| p.seq == missing_seq) {
+      if let Some(packet) = self.unacked.iter_mut().find(|p| p.seq == missing_seq) {
+        packet.retry_count = packet.retry_count.saturating_add(1);
         let wire = packet.wire.clone();
         writer.write_all(&wire).await?;
       }
@@ -248,14 +321,28 @@ impl EstablishedState {
   }
 
   pub(super) fn handle_inbound_ack(&mut self, ack_value: u8) {
+    let now = Instant::now();
+    let mut sample = None;
+    let mut advanced = false;
     while let Some(front) = self.unacked.front() {
-      let dist = ack_value.wrapping_sub(front.seq);
-      if dist <= 127 {
-        self.unacked.pop_front();
-      } else {
+      if ack_value.wrapping_sub(front.seq) > 127 {
         break;
       }
+      let packet = self.unacked.pop_front().expect("front peeked");
+      advanced = true;
+      if sample.is_none() && packet.retry_count == 0 {
+        sample = Some(now.saturating_duration_since(packet.sent_at));
+      }
     }
+    if !advanced {
+      return;
+    }
+    if let Some(rtt) = sample {
+      self.rtt.sample(rtt);
+      self.rto = self.rtt.rto();
+    }
+    self.last_progress = now;
+    self.arm_retransmit(now);
   }
 
   pub(super) fn handle_inbound_data(&mut self, packet: LinkPacket) -> Vec<DeliveredData> {
@@ -309,26 +396,48 @@ impl EstablishedState {
   where
     W: AsyncWrite + Unpin,
   {
-    let Some(front) = self.unacked.front_mut() else {
-      return Ok(false);
-    };
-    if front.deadline > Instant::now() {
+    let now = Instant::now();
+    if self.retransmit_at.is_none_or(|at| at > now) {
       return Ok(false);
     }
-    if front.retry_count >= self.params.max_retransmissions {
-      tracing::warn!("iap2 retransmit limit reached for seq {}", front.seq);
+    let stalled_for = now.saturating_duration_since(self.last_progress);
+    let depth = self.unacked.len();
+    let Some(front) = self.unacked.front_mut() else {
+      self.retransmit_at = None;
+      return Ok(false);
+    };
+    if stalled_for >= self.give_up_after {
+      let seq = front.seq;
+      tracing::warn!(
+        seq,
+        stalled_ms = stalled_for.as_millis() as u64,
+        unacked = depth,
+        "iap2 link gave up: the peer stopped acking"
+      );
       return Ok(true);
     }
     front.retry_count += 1;
-    front.deadline = Instant::now() + self.params.retransmission_timeout;
     self.meter.retransmits += 1;
     let wire = front.wire.clone();
     let seq = front.seq;
     let retry = front.retry_count;
+    self.rto = (self.rto * 2).min(RTO_MAX);
+    self.arm_retransmit(now);
     if retry >= RETRANSMIT_STALL_MARKER {
-      tracing::warn!(seq, attempt = retry, "iap2 link wedge suspected (retransmit stall)");
+      tracing::warn!(
+        seq,
+        attempt = retry,
+        stalled_ms = stalled_for.as_millis() as u64,
+        rto_ms = self.rto.as_millis() as u64,
+        "iap2 link wedge suspected (retransmit stall)"
+      );
     } else {
-      tracing::debug!("iap2 retransmitting seq {} (attempt {})", seq, retry);
+      tracing::debug!(
+        seq,
+        attempt = retry,
+        rto_ms = self.rto.as_millis() as u64,
+        "iap2 retransmitting"
+      );
     }
     writer.write_all(&wire).await?;
     writer.flush().await?;
@@ -370,12 +479,18 @@ impl EstablishedState {
     self.last_sent_psn = seq;
     self.unacked_delivery = false;
     self.must_send_ack = false;
+    let now = Instant::now();
+    let opening = self.unacked.is_empty();
     self.unacked.push_back(UnackedPacket {
       seq,
       wire,
-      deadline: Instant::now() + self.params.retransmission_timeout,
+      sent_at: now,
       retry_count: 0,
     });
+    if opening {
+      self.last_progress = now;
+      self.arm_retransmit(now);
+    }
     Ok(())
   }
 }
@@ -408,7 +523,7 @@ mod tests {
 
   #[test]
   fn enqueue_send_chunks_at_max_payload_len() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 60, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 60, 3), RETRANSMIT_GIVE_UP);
     let max_payload = state.params.max_payload_len as usize;
     assert_eq!(max_payload, 60 - LINK_FRAME_OVERHEAD);
     let total = max_payload * 2 + 5;
@@ -421,7 +536,7 @@ mod tests {
 
   #[test]
   fn handle_inbound_data_in_sequence_delivers_and_drains_buffered() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     let buffered = data_packet(52, 100, 1, b"two");
     state.out_of_order.insert(52, buffered);
     let next = data_packet(51, 100, 1, b"one");
@@ -435,7 +550,7 @@ mod tests {
 
   #[test]
   fn handle_inbound_data_buffers_out_of_order() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     let pkt = data_packet(52, 100, 1, b"hello");
     let delivered = state.handle_inbound_data(pkt);
     assert!(delivered.is_empty());
@@ -445,7 +560,7 @@ mod tests {
 
   #[tokio::test]
   async fn single_in_sequence_delivery_owes_ack_immediately() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 8));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 8), RETRANSMIT_GIVE_UP);
     assert!(!state.needs_ack(), "fresh state owes no ack");
     let delivered = state.handle_inbound_data(data_packet(51, 100, 1, b"art-chunk"));
     assert_eq!(delivered.len(), 1);
@@ -461,7 +576,7 @@ mod tests {
 
   #[test]
   fn handle_inbound_data_duplicate_forces_ack() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     let pkt = data_packet(50, 100, 1, b"dup");
     let delivered = state.handle_inbound_data(pkt);
     assert!(delivered.is_empty());
@@ -470,17 +585,17 @@ mod tests {
 
   #[test]
   fn handle_inbound_ack_drains_unacked() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     state.unacked.push_back(UnackedPacket {
       seq: 100,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.unacked.push_back(UnackedPacket {
       seq: 101,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.handle_inbound_ack(102);
@@ -489,17 +604,17 @@ mod tests {
 
   #[test]
   fn handle_inbound_ack_partial_drains() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     state.unacked.push_back(UnackedPacket {
       seq: 100,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.unacked.push_back(UnackedPacket {
       seq: 101,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.handle_inbound_ack(101);
@@ -508,23 +623,23 @@ mod tests {
 
   #[test]
   fn handle_inbound_ack_handles_psn_wrap() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 65535, 3), RETRANSMIT_GIVE_UP);
     state.unacked.push_back(UnackedPacket {
       seq: 254,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.unacked.push_back(UnackedPacket {
       seq: 255,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.unacked.push_back(UnackedPacket {
       seq: 0,
       wire: Bytes::new(),
-      deadline: Instant::now(),
+      sent_at: Instant::now(),
       retry_count: 0,
     });
     state.handle_inbound_ack(1);
@@ -532,14 +647,113 @@ mod tests {
   }
 
   #[test]
+  fn an_unsampled_estimator_uses_the_peers_advertised_timeout() {
+    let rtt = RttEstimator::new(Duration::from_millis(6000));
+    assert_eq!(rtt.rto(), Duration::from_millis(6000));
+  }
+
+  #[test]
+  fn the_first_sample_seeds_srtt_and_variance() {
+    let mut rtt = RttEstimator::new(Duration::from_millis(6000));
+    rtt.sample(Duration::from_millis(800));
+    assert_eq!(rtt.srtt, Some(Duration::from_millis(800)));
+    assert_eq!(rtt.rttvar, Duration::from_millis(400));
+    assert_eq!(rtt.rto(), Duration::from_millis(2400));
+  }
+
+  #[test]
+  fn a_steady_round_trip_converges_and_the_variance_decays() {
+    let mut rtt = RttEstimator::new(Duration::from_millis(6000));
+    for _ in 0..40 {
+      rtt.sample(Duration::from_millis(800));
+    }
+    let srtt = rtt.srtt.expect("sampled");
+    assert!(
+      srtt.abs_diff(Duration::from_millis(800)) < Duration::from_millis(1),
+      "got {srtt:?}"
+    );
+    assert!(rtt.rttvar < Duration::from_millis(10), "got {:?}", rtt.rttvar);
+    assert!(rtt.rto().abs_diff(Duration::from_millis(800)) < Duration::from_millis(50));
+  }
+
+  #[test]
+  fn a_jittery_round_trip_widens_the_timeout_past_the_mean() {
+    let mut steady = RttEstimator::new(Duration::from_millis(6000));
+    let mut jittery = RttEstimator::new(Duration::from_millis(6000));
+    for i in 0..40 {
+      steady.sample(Duration::from_millis(800));
+      jittery.sample(Duration::from_millis(if i % 2 == 0 { 300 } else { 1300 }));
+    }
+    assert!(
+      jittery.rto() > steady.rto(),
+      "jitter must buy headroom: {:?} vs {:?}",
+      jittery.rto(),
+      steady.rto()
+    );
+  }
+
+  #[test]
+  fn the_timeout_stays_inside_its_bounds() {
+    let mut fast = RttEstimator::new(Duration::from_millis(6000));
+    fast.sample(Duration::from_micros(200));
+    assert_eq!(fast.rto(), RTO_MIN);
+
+    let mut slow = RttEstimator::new(Duration::from_millis(6000));
+    slow.sample(Duration::from_secs(90));
+    assert_eq!(slow.rto(), RTO_MAX);
+  }
+
+  #[test]
+  fn a_retransmitted_packet_contributes_no_sample() {
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 2048, 3), RETRANSMIT_GIVE_UP);
+    state.unacked.push_back(UnackedPacket {
+      seq: 100,
+      wire: Bytes::new(),
+      sent_at: Instant::now(),
+      retry_count: 1,
+    });
+    state.handle_inbound_ack(100);
+    assert_eq!(
+      state.rtt.srtt, None,
+      "an ack for a retransmitted packet is ambiguous and always reads short"
+    );
+    assert!(state.unacked.is_empty(), "it is still acknowledged");
+  }
+
+  #[test]
+  fn karn_holds_the_backed_off_timeout_until_an_unambiguous_sample() {
+    let mut state = EstablishedState::new(99, 50, &test_lsp(127, 2048, 3), RETRANSMIT_GIVE_UP);
+    state.rto = (state.rto * 2).min(RTO_MAX);
+    let backed_off = state.rto;
+
+    state.unacked.push_back(UnackedPacket {
+      seq: 100,
+      wire: Bytes::new(),
+      sent_at: Instant::now(),
+      retry_count: 1,
+    });
+    state.handle_inbound_ack(100);
+    assert_eq!(state.rto, backed_off, "an ambiguous ack must not restore it");
+
+    state.unacked.push_back(UnackedPacket {
+      seq: 101,
+      wire: Bytes::new(),
+      sent_at: Instant::now(),
+      retry_count: 0,
+    });
+    state.handle_inbound_ack(101);
+    assert_eq!(state.rto, RTO_MIN, "a clean sample recomputes it from the estimator");
+  }
+
+  #[test]
   fn window_has_room_respects_max_outgoing() {
-    let mut state = EstablishedState::new(99, 50, &test_lsp(2, 65535, 3));
+    let mut state = EstablishedState::new(99, 50, &test_lsp(2, 65535, 3), RETRANSMIT_GIVE_UP);
     assert!(state.window_has_room());
     for seq in 100..102 {
       state.unacked.push_back(UnackedPacket {
         seq,
         wire: Bytes::new(),
-        deadline: Instant::now(),
+        sent_at: Instant::now(),
         retry_count: 0,
       });
     }

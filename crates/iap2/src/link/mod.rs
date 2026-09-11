@@ -3,7 +3,7 @@ mod established;
 use std::time::Duration;
 
 use bytes::{Bytes, BytesMut};
-use established::{EstablishedState, METER_INTERVAL};
+use established::{EstablishedState, METER_INTERVAL, RETRANSMIT_GIVE_UP};
 use tokio::{
   io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
   sync::mpsc,
@@ -27,6 +27,7 @@ pub struct LinkConfig {
   pub our_lsp: Lsp,
   pub detect_interval: Duration,
   pub handshake_timeout: Duration,
+  pub retransmit_give_up: Duration,
 }
 
 impl LinkConfig {
@@ -36,6 +37,7 @@ impl LinkConfig {
       our_lsp,
       detect_interval: Duration::from_secs(1),
       handshake_timeout: Duration::from_secs(30),
+      retransmit_give_up: RETRANSMIT_GIVE_UP,
     }
   }
 }
@@ -105,7 +107,12 @@ impl Link {
         "iap2 link Established"
       );
 
-      let mut state = EstablishedState::new(config.initial_psn, peer_initial_psn, &peer_lsp);
+      let mut state = EstablishedState::new(
+        config.initial_psn,
+        peer_initial_psn,
+        &peer_lsp,
+        config.retransmit_give_up,
+      );
       let established_at = Instant::now();
       let result = Self::established_phase(
         &mut reader,
@@ -180,7 +187,12 @@ impl Link {
     }
     tracing::info!("iap2 device link Established");
 
-    let mut state = EstablishedState::new(config.initial_psn, peer_initial_psn, &peer_lsp);
+    let mut state = EstablishedState::new(
+      config.initial_psn,
+      peer_initial_psn,
+      &peer_lsp,
+      config.retransmit_give_up,
+    );
     Self::established_phase(
       &mut reader,
       &mut writer,
