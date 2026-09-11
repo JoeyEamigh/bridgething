@@ -44,6 +44,7 @@ use crate::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
+  dayparting::Dayparting,
   dispatch::{
     asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
     library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
@@ -1099,8 +1100,14 @@ impl Session {
   fn watch_arbitration(&self) -> JoinHandle<()> {
     let mut arbitrated = self.hub.now_playing().arbitrated();
     let observer = self.observer.clone();
+    let dayparting = Dayparting::new(
+      self.hub.clone(),
+      self.backends.host.clone(),
+      self.backends.secrets.clone(),
+    );
     tokio::spawn(async move {
       while let Ok(state) = arbitrated.recv().await {
+        dayparting.observe(state.as_ref());
         observer.now_playing_changed(state);
       }
     })

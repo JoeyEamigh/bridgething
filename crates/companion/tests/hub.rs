@@ -4,6 +4,8 @@ mod flow;
 mod poll;
 #[path = "dispatch/quiet.rs"]
 mod quiet;
+#[path = "rig/secrets.rs"]
+mod secrets;
 #[path = "dispatch/support.rs"]
 mod support;
 
@@ -14,6 +16,8 @@ use std::{
 
 use bridgething_companion::{
   api::{CapabilityFlags, HostInfo},
+  backend::{HostClock, HostEnvironment, SecretStore},
+  dayparting::Dayparting,
   dispatch::player::PlayerDispatcher,
   hub::Hub,
   provider::{AssetBytes, PlayerTransport, Provider, ProviderError, ProviderLink, ProviderRegistry, ResumeTarget},
@@ -28,7 +32,7 @@ use libbridgething::{
     AuthorityClaim, AuthorityRelease, ContextResolveReply, FavoritesSet, GatewayToBridgeAuthorityMsg,
     GatewayToBridgeCapabilitiesMsg, GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg,
     LibraryBrowseRequest, LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibraryRecommendationsRequest,
-    LibrarySearchRequest, PlayUri, PlayerErrorReply, QueueSnapshot, TrackIdentity,
+    LibrarySearchRequest, PlayUri, PlayerErrorReply, QueueSnapshot, QueueUri, TrackIdentity,
   },
 };
 use poll::eventually;
@@ -166,6 +170,16 @@ impl HubProvider {
     self.calls.lock().unwrap().iter().any(|call| call == what)
   }
 
+  fn queued(&self) -> usize {
+    self
+      .calls
+      .lock()
+      .unwrap()
+      .iter()
+      .filter(|call| call.starts_with("queue:"))
+      .count()
+  }
+
   fn peer_connects(&self) -> Vec<bool> {
     self.peer_connects.lock().unwrap().clone()
   }
@@ -184,6 +198,15 @@ impl PlayerTransport for HubProvider {
 
   async fn pause(&self) -> Result<(), ProviderError> {
     self.calls.lock().unwrap().push("pause".into());
+    Ok(())
+  }
+
+  async fn queue(&self, req: QueueUri) -> Result<(), ProviderError> {
+    self
+      .calls
+      .lock()
+      .unwrap()
+      .push(format!("queue:{}:{:?}", req.uri, req.position));
     Ok(())
   }
 }
@@ -1038,7 +1061,11 @@ async fn the_library_pick_skips_providers_without_a_catalog() {
   let radio = HubProvider::new("stream", &["http", "https"]);
   let catalog = HubProvider::with_catalog("subsonic", &["subsonic"], MusicProvider::Subsonic);
   hub.attach(radio.clone()).await.unwrap();
-  assert_eq!(hub.library().unwrap().name(), "stream", "alone, a catalog-less provider still answers");
+  assert_eq!(
+    hub.library().unwrap().name(),
+    "stream",
+    "alone, a catalog-less provider still answers"
+  );
   hub.attach(catalog.clone()).await.unwrap();
   assert_eq!(
     hub.library().unwrap().name(),
@@ -1138,5 +1165,202 @@ async fn the_library_pick_decides_which_provider_answers_a_voice_turn() {
     resolved.slots.uri.as_deref(),
     Some("spotify:album:strokes"),
     "the provider the device last played from answers the search"
+  );
+}
+
+// ---- dayparting -------------------------------------------------------------
+
+const CYCLE_2026: u64 = 1_775_001_600;
+const CYCLE_2027: u64 = 1_806_537_600;
+const OFF_SLOT_2026: u64 = 1_798_243_200;
+const SEEDED: &str = "queue:spotify:track:4uLU6hMCjMI75M1A2tKUQC:Next";
+
+struct FixedClock(u64);
+
+impl HostEnvironment for FixedClock {
+  fn clock(&self) -> HostClock {
+    HostClock {
+      tz_iana: "UTC".into(),
+      locale: "en-US".into(),
+      unix_seconds: self.0,
+      utc_offset_minutes: 0,
+      dst_offset_minutes: 0,
+    }
+  }
+}
+
+fn dayparting(hub: &Arc<Hub>, at: u64, secrets: &Arc<secrets::MemorySecrets>) -> Dayparting {
+  Dayparting::new(
+    hub.clone(),
+    Arc::new(FixedClock(at)),
+    secrets.clone() as Arc<dyn SecretStore>,
+  )
+}
+
+async fn take_the_floor(hub: &Arc<Hub>, source: &str, bundle: &str, state: PlaybackState) -> Arc<HubProvider> {
+  let provider = HubProvider::new(source, &[source]);
+  hub.attach(provider.clone()).await.unwrap();
+  hub.sink().submit_player(
+    source,
+    snapshot(state, &format!("{source}:track:a")),
+    bundle,
+    true,
+    false,
+  );
+  assert!(
+    eventually(|| hub.now_playing().current_source().as_deref() == Some(source)).await,
+    "{source} took the floor"
+  );
+  provider
+}
+
+async fn spotify_playing(hub: &Arc<Hub>) -> Arc<HubProvider> {
+  take_the_floor(hub, "spotify", "com.spotify.client", PlaybackState::Playing).await
+}
+
+fn playing() -> PlayerState {
+  snapshot(PlaybackState::Playing, "spotify:track:a")
+}
+
+#[tokio::test]
+async fn the_seed_goes_in_behind_the_current_track() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+
+  dayparting(&hub, CYCLE_2026, &Arc::default()).observe(Some(&playing()));
+
+  assert!(eventually(|| provider.saw(SEEDED)).await, "the seed went in next");
+}
+
+#[tokio::test]
+async fn the_seed_does_not_repeat_while_the_song_keeps_ticking() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+
+  let egg = dayparting(&hub, CYCLE_2026, &Arc::default());
+  for _ in 0..20 {
+    egg.observe(Some(&playing()));
+  }
+
+  assert!(eventually(|| provider.saw(SEEDED)).await, "the seed went in next");
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 1).await,
+    "a player state arrives on every seek, skip and volume nudge; each one must not re-seed"
+  );
+}
+
+#[tokio::test]
+async fn a_relaunch_inside_the_same_cycle_stays_quiet() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+  let store = Arc::<secrets::MemorySecrets>::default();
+
+  dayparting(&hub, CYCLE_2026, &store).observe(Some(&playing()));
+  assert!(eventually(|| provider.saw(SEEDED)).await, "the first run seeded it");
+
+  dayparting(&hub, CYCLE_2026, &store).observe(Some(&playing()));
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 1).await,
+    "the year marker outlives the process, so a restart on the same day gets nothing"
+  );
+}
+
+#[tokio::test]
+async fn the_next_cycle_gets_its_own_seed() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+  let store = Arc::<secrets::MemorySecrets>::default();
+
+  dayparting(&hub, CYCLE_2026, &store).observe(Some(&playing()));
+  assert!(eventually(|| provider.saw(SEEDED)).await, "the 2026 cycle seeded it");
+
+  dayparting(&hub, CYCLE_2027, &store).observe(Some(&playing()));
+  assert!(
+    eventually(|| provider.queued() == 2).await,
+    "the 2027 cycle seeded it again"
+  );
+}
+
+#[tokio::test]
+async fn no_peer_on_the_link_means_no_seed() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+
+  dayparting(&hub, CYCLE_2026, &Arc::default()).observe(Some(&playing()));
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 0).await,
+    "a phone playing spotify with no peer attached is just a phone"
+  );
+}
+
+#[tokio::test]
+async fn a_peer_that_went_away_takes_the_seed_with_it() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+  hub.peer_disconnected("carthing-1");
+
+  dayparting(&hub, CYCLE_2026, &Arc::default()).observe(Some(&playing()));
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 0).await,
+    "the gate reads the live peer set, not whether one ever connected"
+  );
+}
+
+#[tokio::test]
+async fn paused_spotify_is_left_alone() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = take_the_floor(&hub, "spotify", "com.spotify.client", PlaybackState::Paused).await;
+  hub.peer_connected("carthing-1").await;
+
+  let paused = snapshot(PlaybackState::Paused, "spotify:track:a");
+  dayparting(&hub, CYCLE_2026, &Arc::default()).observe(Some(&paused));
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 0).await,
+    "nothing is playing to slip a track in behind"
+  );
+}
+
+#[tokio::test]
+async fn another_provider_holding_the_floor_is_left_alone() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let apple = take_the_floor(&hub, "applemusic", "com.apple.Music", PlaybackState::Playing).await;
+  hub.peer_connected("carthing-1").await;
+
+  dayparting(&hub, CYCLE_2026, &Arc::default()).observe(Some(&playing()));
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || apple.queued() == 0).await,
+    "a spotify uri handed to apple music is not a seed, it is a bug report"
+  );
+}
+
+#[tokio::test]
+async fn dates_outside_the_slot_are_quiet() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = spotify_playing(&hub).await;
+  hub.peer_connected("carthing-1").await;
+
+  dayparting(&hub, OFF_SLOT_2026, &Arc::default()).observe(Some(&playing()));
+
+  assert!(
+    quiet_for(Duration::from_millis(300), || provider.queued() == 0).await,
+    "a date outside the slot does nothing"
   );
 }

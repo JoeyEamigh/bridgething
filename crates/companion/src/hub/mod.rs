@@ -368,6 +368,10 @@ impl Hub {
     }
   }
 
+  pub fn has_connected_peer(&self) -> bool {
+    !self.resume.lock().unwrap().connected.is_empty()
+  }
+
   pub fn peer_disconnected(&self, device_id: &str) {
     self.resume.lock().unwrap().connected.remove(device_id);
     self.push_resume_target();

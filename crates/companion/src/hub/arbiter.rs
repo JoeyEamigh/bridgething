@@ -202,9 +202,12 @@ impl NowPlayingHub {
     self.current.lock().unwrap().clone()
   }
 
+  pub fn transport(&self, source: &str) -> Option<Arc<dyn PlayerTransport>> {
+    self.transports.lock().unwrap().get(source).cloned()
+  }
+
   pub fn current_transport(&self) -> Option<Arc<dyn PlayerTransport>> {
-    let current = self.current.lock().unwrap().clone()?;
-    self.transports.lock().unwrap().get(&current).cloned()
+    self.transport(&self.current.lock().unwrap().clone()?)
   }
 
   pub fn authority(&self) -> AuthorityHold {
