@@ -20,12 +20,12 @@ const ready = status === 'ready';
     {note && <p class="m-0 font-mono text-xs text-pretty text-white/35">{note}</p>}
   </div>
 
-  <div class="flex shrink-0 items-center">
+  <div class="flex max-w-full shrink-0 items-center">
     {
       !ready ? (
         <span class="btn btn-soon">coming soon</span>
       ) : command ? (
-        <code class="border border-white/15 bg-black px-4 py-2.5 text-sm text-white/70">
+        <code class="max-w-full overflow-x-auto border border-white/15 bg-black px-4 py-2.5 text-sm text-white/70">
           <span class="text-accent">$</span> {command}
         </code>
       ) : href ? (

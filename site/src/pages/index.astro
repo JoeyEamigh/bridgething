@@ -45,7 +45,7 @@ const APPS = [
       <SchematicSection class="grid grid-cols-1 items-center gap-14 lg:grid-cols-[9fr_11fr]">
         <div class="flex flex-col items-start gap-7">
           <p class="text-accent m-0 font-mono text-sm">u1 - open firmware for the spotify car thing</p>
-          <Wordmark as="h1" class="m-0 text-6xl text-balance md:text-7xl" />
+          <Wordmark as="h1" class="m-0 text-5xl text-balance sm:text-6xl md:text-7xl" />
           <p class="m-0 max-w-[48ch] text-lg text-pretty text-white/70">
             a full system image, daemon, and companion app to restore your thing to its former glory
           </p>
@@ -245,14 +245,14 @@ const APPS = [
           build your own webapp with 19 typed surfaces and internet access tunneled through your phone
         </p>
 
-        <dl class="m-0 grid grid-cols-2 border-t border-white/10 lg:grid-cols-4">
-          <div class="flex flex-col gap-2 border-white/10 px-8 py-6 max-lg:border-b">
+        <dl class="m-0 grid grid-cols-1 border-t border-white/10 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="flex flex-col gap-2 border-white/10 py-6 max-lg:border-b sm:px-8">
             <dt class="font-display text-base font-medium">media</dt>
             <dd class="m-0 font-mono text-sm text-pretty text-white/50">
               player, queue, lyrics, text-to-speech, earcons.
             </dd>
           </div>
-          <div class="flex flex-col gap-2 border-white/10 py-6 pl-8 max-lg:border-b lg:border-l">
+          <div class="flex flex-col gap-2 border-white/10 py-6 max-lg:border-b sm:pl-8 lg:border-l">
             <dt class="font-display text-base font-medium">phone</dt>
             <dd class="m-0 font-mono text-sm text-pretty text-white/50">
               calls, notifications, contacts, all proxied over bluetooth.
@@ -264,7 +264,7 @@ const APPS = [
               geolocation, plus http + websockets tunneled through your phone.
             </dd>
           </div>
-          <div class="flex flex-col gap-2 border-white/10 px-8 py-6 lg:border-l">
+          <div class="flex flex-col gap-2 border-white/10 py-6 sm:px-8 lg:border-l">
             <dt class="font-display text-base font-medium">system</dt>
             <dd class="m-0 font-mono text-sm text-pretty text-white/50">
               voice intents, config, key-value storage, asset cache.

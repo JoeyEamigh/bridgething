@@ -18,13 +18,17 @@ const activeHref = links
 const isActive = (href: string) => href === activeHref;
 ---
 
-<header class="bg-bg/80 border-b border-white/10 backdrop-blur-sm">
-  <div class="container-site flex flex-wrap items-center justify-between gap-4 py-4">
+<header
+  id="site-header"
+  data-nav-open="false"
+  class="bg-bg/80 group sticky top-0 z-50 border-b border-white/10 backdrop-blur-sm">
+  <div class="container-site flex items-center justify-between gap-4 py-4">
     <a href="/" class="flex items-center gap-3 border-b-0" aria-label="homepage">
       <img src="/brand/icon-dark.svg" alt="" width="880" height="539" class="h-5 w-auto shrink-0" />
-      <span class="font-mono text-base text-white/80 max-sm:hidden">bridgething</span>
+      <span class="font-mono text-base text-white/80">bridgething</span>
     </a>
-    <nav class="flex items-center gap-5 font-mono text-sm text-white/55 max-sm:gap-3">
+
+    <nav class="hidden items-center gap-5 font-mono text-sm text-white/55 md:flex lg:gap-7">
       {
         links.map(link => (
           <a
@@ -45,5 +49,90 @@ const isActive = (href: string) => href === activeHref;
         )
       }
     </nav>
+
+    <button
+      id="nav-toggle"
+      type="button"
+      aria-controls="nav-drawer"
+      aria-expanded="false"
+      aria-label="menu"
+      class="relative -my-3 -mr-2.5 grid size-11 shrink-0 place-items-center text-white/70 md:hidden">
+      <span
+        class="absolute h-px w-6 -translate-y-1.5 bg-current transition-transform duration-200 group-data-[nav-open=true]:translate-y-0 group-data-[nav-open=true]:rotate-45 motion-reduce:transition-none"
+      ></span>
+      <span
+        class="absolute h-px w-6 bg-current transition-opacity duration-200 group-data-[nav-open=true]:opacity-0 motion-reduce:transition-none"
+      ></span>
+      <span
+        class="absolute h-px w-6 translate-y-1.5 bg-current transition-transform duration-200 group-data-[nav-open=true]:translate-y-0 group-data-[nav-open=true]:-rotate-45 motion-reduce:transition-none"
+      ></span>
+    </button>
+  </div>
+
+  <div
+    id="nav-drawer"
+    inert
+    class="grid grid-rows-[0fr] transition-[grid-template-rows] duration-200 group-data-[nav-open=true]:grid-rows-[1fr] motion-reduce:transition-none md:hidden">
+    <nav class="bg-bg overflow-hidden font-mono text-sm">
+      {
+        links.map(link => (
+          <a
+            href={link.href}
+            aria-current={isActive(link.href) ? 'page' : undefined}
+            class:list={[
+              'container-site flex items-center gap-3 border-t border-b-0 border-white/10 py-3.5',
+              isActive(link.href) ? 'text-off-white' : 'text-white/55',
+            ]}>
+            <span
+              aria-hidden="true"
+              class:list={['size-1.5 shrink-0 rounded-full', isActive(link.href) ? 'bg-accent' : 'bg-white/15']}
+            />
+            {link.label}
+          </a>
+        ))
+      }
+      {
+        LAUNCHED ? (
+          <a
+            href={SITE.repo}
+            class="container-site flex items-center gap-3 border-t border-b-0 border-white/10 py-3.5 text-white/55">
+            <span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-white/15" />
+            github
+          </a>
+        ) : (
+          <p class="container-site m-0 flex items-center gap-3 border-t border-white/10 py-3.5 text-white/35">
+            <span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-white/10" />
+            github (coming soon)
+          </p>
+        )
+      }
+    </nav>
   </div>
 </header>
+
+<script>
+  const header = document.getElementById('site-header')!;
+  const toggle = document.getElementById('nav-toggle')!;
+  const drawer = document.getElementById('nav-drawer')!;
+
+  function setOpen(open: boolean): void {
+    header.dataset.navOpen = String(open);
+    toggle.setAttribute('aria-expanded', String(open));
+    drawer.toggleAttribute('inert', !open);
+  }
+
+  toggle.addEventListener('click', () => setOpen(header.dataset.navOpen !== 'true'));
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || header.dataset.navOpen !== 'true') return;
+    setOpen(false);
+    toggle.focus();
+  });
+
+  document.addEventListener('click', e => {
+    if (header.dataset.navOpen !== 'true') return;
+    if (!header.contains(e.target as Node)) setOpen(false);
+  });
+
+  matchMedia('(min-width: 48rem)').addEventListener('change', e => e.matches && setOpen(false));
+</script>

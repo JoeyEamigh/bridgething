@@ -53,7 +53,7 @@ const items = groups.flatMap(g => g.items);
   <div class="container-site w-full flex-1 py-10 md:py-14">
     <div class="flex gap-12">
       <aside class="hidden w-44 shrink-0 lg:block">
-        <nav class="sticky top-10">
+        <nav class="sticky top-24">
           <div class="relative flex flex-col gap-4 border border-dashed border-white/25 p-3 pt-5 font-mono text-sm">
             <span class="bg-bg absolute -top-2.5 left-3 px-2 text-white/45">index</span>
             {
@@ -83,10 +83,12 @@ const items = groups.flatMap(g => g.items);
           <summary class="cursor-pointer list-none px-4 py-2.5 font-mono text-sm text-white/50 select-none">
             index &darr;
           </summary>
-          <nav class="grid grid-cols-2 gap-px px-2 pb-3 font-mono text-sm sm:grid-cols-3">
+          <nav class="grid grid-cols-1 gap-px px-2 pb-3 font-mono text-sm sm:grid-cols-2 md:grid-cols-3">
             {
               items.map(it => (
-                <a href={it.href} class:list={['border-b-0 px-2 py-1', it.active ? 'text-off-white' : 'text-white/50']}>
+                <a
+                  href={it.href}
+                  class:list={['border-b-0 px-2 py-2.5', it.active ? 'text-off-white' : 'text-white/50']}>
                   {it.label}
                 </a>
               ))
