@@ -34,6 +34,7 @@ function Console(): VNode {
   const linked = (peers.data ?? [])[0] ?? null;
   const held = meta.data?.[0]?.meta ?? null;
   const lib = held?.libbridgethingVersion ?? null;
+  const serial = held?.serialNumber ?? null;
 
   if (!linked) {
     return (
@@ -47,7 +48,9 @@ function Console(): VNode {
     <Screen>
       <Header peer={linked} meta={held} />
       <Update channel={held?.channel ?? null} />
-      {pending ? <StagedInstall pending={pending} libVersion={lib} onDone={() => setPending(null)} /> : null}
+      {pending ? (
+        <StagedInstall pending={pending} libVersion={lib} serial={serial} onDone={() => setPending(null)} />
+      ) : null}
       <Webapps />
       <AddApp libVersion={lib} />
       <DeviceInfo meta={held} />

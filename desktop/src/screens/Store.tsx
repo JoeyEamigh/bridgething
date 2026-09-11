@@ -1,15 +1,20 @@
 import {
   aggregate,
+  alsoAvailableLabel,
   blendStoreListings,
   compareVersions,
+  countLine,
+  failureLine,
   describeExtensionPermissions,
   extensionOf,
   extensionRepoLabel,
+  listingTraits,
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
   recommendedSources,
   reportInstall,
   sortNewestFirst,
+  STORE_COPY,
   versionCompatible,
   type AppExtension,
   type AppVersion,
@@ -106,16 +111,12 @@ export function StoreRoute(): VNode {
 
   return (
     <Screen>
-      <ScreenHeader
-        eyebrow="catalog"
-        title="store"
-        subtitle="webapps published by catalog sources. nothing here is reviewed."
-      />
+      <ScreenHeader eyebrow="catalog" title="store" subtitle="webapps published by catalog sources" />
 
       <Section>
         <SectionHeader
-          title="available apps"
-          hint={`your ${subscribed.length} source${subscribed.length === 1 ? '' : 's'} and the bridgething directory`}
+          title={STORE_COPY.appsTitle}
+          hint={countLine(vouched.length, subscribed.length)}
           action="refresh"
           pending={pending}
           onAction={refresh}
@@ -125,7 +126,7 @@ export function StoreRoute(): VNode {
             <Spinner class="mx-auto" />
           </SectionEmpty>
         ) : vouched.length === 0 ? (
-          <SectionEmpty>no apps available from your sources yet</SectionEmpty>
+          <SectionEmpty>{STORE_COPY.appsEmpty}</SectionEmpty>
         ) : (
           <ListGroup>
             {vouched.map(listing => (
@@ -133,33 +134,28 @@ export function StoreRoute(): VNode {
             ))}
           </ListGroup>
         )}
-        {snapshot.failures.length > 0 ? (
-          <Hint>
-            {snapshot.failures.length} source{snapshot.failures.length === 1 ? '' : 's'} could not be read. anything
-            already installed from them keeps working.
-          </Hint>
-        ) : null}
+        {snapshot.failures.length > 0 ? <Hint>{failureLine(snapshot.failures.length)}</Hint> : null}
         {error ? <ErrorNote>{error}</ErrorNote> : null}
       </Section>
 
       {community.length > 0 ? (
         <Section>
-          <SectionHeader title="community" hint="from directory sources you have not added" />
+          <SectionHeader title={STORE_COPY.communityTitle} hint={STORE_COPY.communityHint} />
           <ListGroup>
             {community.map(listing => (
               <ListingRow key={listing.app.id} listing={listing} onOpen={() => route(PATHS.storeApp(listing.app.id))} />
             ))}
           </ListGroup>
-          <Hint>installing one of these adds its source to yours. listed, never reviewed.</Hint>
+          <Hint>{STORE_COPY.communityNote}</Hint>
         </Section>
       ) : null}
 
       <MySources subscribed={subscribed} pending={catalogSources.pending.value} />
 
       <Section>
-        <SectionHeader title="suggested sources" hint="listed in the bridgething directory" />
+        <SectionHeader title={STORE_COPY.suggestedTitle} hint={STORE_COPY.suggestedHint} />
         {suggested.length === 0 ? (
-          <SectionEmpty>the directory listed nothing you are not already subscribed to</SectionEmpty>
+          <SectionEmpty>{STORE_COPY.suggestedEmpty}</SectionEmpty>
         ) : (
           <ListGroup>
             {suggested.map(source => (
@@ -175,7 +171,7 @@ export function StoreRoute(): VNode {
             ))}
           </ListGroup>
         )}
-        <Hint>a listing means someone checked it is a real catalog, never that its apps are safe.</Hint>
+        <Hint>{STORE_COPY.communityNote}</Hint>
       </Section>
 
       <BrowseByUrl />
@@ -237,19 +233,20 @@ function MySources({ subscribed, pending }: { subscribed: string[]; pending: boo
           );
         })}
       </ListGroup>
-      <Hint>removing a source hides its apps here. anything already installed from it keeps working.</Hint>
+      <Hint>removing a source hides its apps</Hint>
     </Section>
   );
 }
 
 function ListingRow({ listing, onOpen }: { listing: CatalogAppListing; onOpen: () => void }): VNode {
   const { app, newestCompatible, installedVersion, updateAvailable } = listing;
+  const meta = [...listingTraits(listing), alsoAvailableLabel(listing.alsoAvailableFrom)].filter(Boolean);
 
   return (
     <ListRow
       icon={<CatalogIcon url={app.icon} name={app.name} size="sm" />}
       title={app.name}
-      subtitle={app.description}
+      subtitle={meta.length > 0 ? `${app.description} · ${meta.join(' · ')}` : app.description}
       value={newestCompatible ? `v${newestCompatible.version}` : undefined}
       trailing={
         <span class="flex shrink-0 items-center gap-1.5">
@@ -259,7 +256,7 @@ function ListingRow({ listing, onOpen }: { listing: CatalogAppListing; onOpen: (
           ) : installedVersion ? (
             <Pill tone="ok">installed</Pill>
           ) : !newestCompatible ? (
-            <Pill tone="warn">needs newer firmware</Pill>
+            <Pill tone="warn">{STORE_COPY.needsFirmware}</Pill>
           ) : null}
         </span>
       }
@@ -416,7 +413,12 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
         { size: version.download.size, sha256: version.download.sha256 },
         extensionOf(version)?.permissions,
       );
-      reportInstall({ appId: app.id, sourceUrl, version: version.version });
+      reportInstall({
+        appId: app.id,
+        sourceUrl,
+        deviceId: selectedMeta.value?.serialNumber ?? null,
+        version: version.version,
+      });
       if (!subscribed.includes(sourceUrl)) {
         await session.addCatalogSource(sourceUrl);
         await catalogSources.refresh();
@@ -515,10 +517,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
               subtitle={extensionRepoLabel(app.source) ?? 'this app lists no repository'}
             />
           </ListGroup>
-          <Hint>
-            it runs outside the browser sandbox whenever this app is running, with the access above. your phone has no
-            extension host, so it never runs there.
-          </Hint>
+          <Hint>it runs outside the browser sandbox whenever this app is running, with the access above.</Hint>
         </Section>
       ) : null}
 
@@ -566,9 +565,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
           {app.homepage ? <ListRow icon={<Icon name="globe" />} title="homepage" subtitle={app.homepage} /> : null}
           {app.source ? <ListRow icon={<Icon name="file" />} title="source code" subtitle={app.source} /> : null}
         </ListGroup>
-        <Hint>
-          apps are not reviewed. a listing means a source published it, never that anyone checked what it does.
-        </Hint>
+        <Hint>apps are not reviewed.</Hint>
       </Section>
     </Screen>
   );
@@ -636,14 +633,13 @@ function ConfirmInstall({
             ))}
           </ul>
           <p class="mt-3 mb-0 text-hint text-muted">
-            {repo ? `nobody reviews store apps. the code is at ${repo}.` : 'this app lists no repository to read.'}
+            {repo ? `store apps are unreviewed. the code is at ${repo}.` : 'no repository listed'}
           </p>
         </>
       ) : null}
       {older ? (
         <p class={extension ? 'mt-3 mb-0 text-body text-muted' : 'm-0 text-body text-muted'}>
-          this replaces whatever is installed. an older build misses whatever the newer ones fixed, and the next update
-          offer puts you back on the newest.
+          this replaces the installed version
         </p>
       ) : null}
     </Dialog>

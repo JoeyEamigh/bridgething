@@ -47,8 +47,14 @@ function post(path: string, body: unknown, client = CLIENT): Promise<Response> {
   return worker.fetch(request, env(), context());
 }
 
-function beacon(sourceUrl = OFFICIAL_CATALOG_URL): Record<string, unknown> {
-  return { app_id: CALENDAR_ID, source_url: sourceUrl, version: '1.0.0' };
+const DEVICE = '8558R481Q61R';
+
+function beacon(sourceUrl = OFFICIAL_CATALOG_URL, device = DEVICE): Record<string, unknown> {
+  return { app_id: CALENDAR_ID, source_url: sourceUrl, device_id: device, version: '1.0.0' };
+}
+
+function serialOf(n: number): string {
+  return `8558R${String(n).padStart(3, '0')}Q61R`;
 }
 
 beforeEach(() => {
@@ -64,14 +70,32 @@ describe('POST /api/installs', () => {
     expect(await response.json<{ installs: number }>()).toEqual({ installs: 1 });
   });
 
-  test('a second install of the same app from the same source adds to the tally', async () => {
+  test('a second device installing the same app adds to the tally', async () => {
     await post('/api/installs', beacon());
-    const response = await post('/api/installs', beacon());
+    const response = await post('/api/installs', beacon(OFFICIAL_CATALOG_URL, serialOf(2)));
 
     expect(await response.json<{ installs: number }>()).toEqual({ installs: 2 });
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
-      { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, count: 2 },
+      { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, count: 2, versions: { '1.0.0': 2 } },
     ]);
+  });
+
+  test('one device reinstalling is accepted but never raises the tally', async () => {
+    await post('/api/installs', beacon());
+    const response = await post('/api/installs', beacon());
+
+    expect(response.status).toBe(202);
+    expect(await response.json<{ installs: number }>()).toEqual({ installs: 1 });
+  });
+
+  test('a beacon without a device serial is refused', async () => {
+    const response = await post('/api/installs', {
+      app_id: CALENDAR_ID,
+      source_url: OFFICIAL_CATALOG_URL,
+      version: '1.0.0',
+    });
+
+    expect(response.status).toBe(400);
   });
 
   test('a source outside the directory is refused', async () => {
@@ -93,20 +117,22 @@ describe('POST /api/installs', () => {
 
   test('one client cannot report installs without limit', async () => {
     const statuses: number[] = [];
-    for (let i = 0; i < 41; i += 1) statuses.push((await post('/api/installs', beacon())).status);
+    for (let i = 0; i < 41; i += 1) {
+      statuses.push((await post('/api/installs', beacon(OFFICIAL_CATALOG_URL, serialOf(i)))).status);
+    }
 
     expect(statuses.filter(status => status === 202)).toHaveLength(40);
     expect(statuses.at(-1)).toBe(429);
   });
 
   test('the limit is per client, so one busy installer cannot silence everyone else', async () => {
-    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon());
+    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon(OFFICIAL_CATALOG_URL, serialOf(i)));
 
     expect((await post('/api/installs', beacon(), '198.51.100.4')).status).toBe(202);
   });
 
   test('reporting installs does not spend the budget for submitting sources', async () => {
-    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon());
+    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon(OFFICIAL_CATALOG_URL, serialOf(i)));
 
     const original = globalThis.fetch;
     globalThis.fetch = (() => Promise.reject(new TypeError('no network in tests'))) as unknown as typeof fetch;

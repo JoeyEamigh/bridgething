@@ -8,6 +8,7 @@ import type {
 import { emptySnapshot } from '../__mocks__/react-native-nitro-modules';
 
 export const DEVICE = 'aa:bb:cc:dd:ee:ff';
+export const SERIAL = '8558R481Q61R';
 export const OTHER = '11:22:33:44:55:66';
 
 export function voiceTurn(
@@ -41,7 +42,7 @@ export function meta(
     osVersion: '1.0',
     channel: 'stable',
     modelName: 'Superbird',
-    serialNumber: 'SN12345',
+    serialNumber: SERIAL,
     ...over,
   };
 }

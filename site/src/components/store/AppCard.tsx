@@ -1,9 +1,10 @@
-import { extensionOf, type CatalogAppListing } from '@bridgething/catalog';
+import { alsoAvailableLabel, extensionOf, installsLabel, STORE_COPY, type CatalogAppListing } from '@bridgething/catalog';
 import { appDetailPath } from '../../lib/app-routes';
 import { webHref } from '../../lib/href';
 import { ExtensionBadge } from './ExtensionNote';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import type { StoreSource } from '../../lib/store-sources';
+import { hideOnError } from '../../lib/img';
 
 function SourceBadge({ source }: { source: StoreSource }) {
   return (
@@ -16,7 +17,7 @@ function SourceBadge({ source }: { source: StoreSource }) {
           height="14"
           class="size-3.5 shrink-0"
           loading="lazy"
-          onError={event => (event.currentTarget as HTMLImageElement).remove()}
+          onError={hideOnError}
         />
       ) : null}
       <span class="truncate">{source.name}</span>
@@ -43,7 +44,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
             height="480"
             loading="lazy"
             class="aspect-5/3 w-full border-b border-white/15 object-cover"
-            onError={event => (event.currentTarget as HTMLImageElement).remove()}
+            onError={hideOnError}
           />
         </a>
       ) : null}
@@ -57,7 +58,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
               height="40"
               class="size-full"
               loading="lazy"
-              onError={event => (event.currentTarget as HTMLImageElement).remove()}
+              onError={hideOnError}
             />
           ) : null}
         </div>
@@ -78,7 +79,7 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
       {extension ? <ExtensionBadge /> : null}
 
       {unpublished ? (
-        <p class="text-warn m-0 font-mono text-xs">not published yet</p>
+        <p class="text-warn m-0 font-mono text-xs">{STORE_COPY.unpublished}</p>
       ) : (
         <button type="button" class="btn self-start text-sm" onClick={() => installListing(listing)}>
           install
@@ -106,13 +107,16 @@ export function AppCard({ listing, source }: { listing: CatalogAppListing; sourc
               <span class="text-accent">overlay</span>
             </>
           ) : null}
+          {installsLabel(listing.installs) ? (
+            <>
+              <span class="opacity-50">·</span>
+              <span>{installsLabel(listing.installs)}</span>
+            </>
+          ) : null}
         </div>
         {source ? <SourceBadge source={source} /> : null}
-        {listing.alsoAvailableFrom.length > 0 ? (
-          <span class="text-white/30">
-            also offered by {listing.alsoAvailableFrom.length} other source
-            {listing.alsoAvailableFrom.length === 1 ? '' : 's'}
-          </span>
+        {alsoAvailableLabel(listing.alsoAvailableFrom) ? (
+          <span class="text-white/30">{alsoAvailableLabel(listing.alsoAvailableFrom)}</span>
         ) : null}
       </footer>
     </article>

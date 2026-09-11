@@ -207,6 +207,14 @@ export function deviceLibVersion(
   return state.ledger[deviceId]?.libVersion ?? null;
 }
 
+export function deviceSerial(
+  state: SessionState,
+  deviceId: string | null,
+): string | null {
+  if (!deviceId) return null;
+  return state.ledger[deviceId]?.serialNumber ?? null;
+}
+
 function useDerivedInputs(deviceId: string | null) {
   const catalogs = useCatalogStore(s => s.catalogs);
   const installed = useWebappsStore(
@@ -340,6 +348,7 @@ export async function installApp(
   reportInstall({
     appId: listing.app.id,
     sourceUrl: listing.sourceUrl,
+    deviceId: deviceSerial(useSessionStore.getState(), deviceId),
     version: version.version,
   });
   if (!useCatalogStore.getState().sources.includes(listing.sourceUrl)) {

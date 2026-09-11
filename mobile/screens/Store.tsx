@@ -1,3 +1,8 @@
+import {
+  countLine,
+  failureLine,
+  STORE_COPY,
+} from '@bridgething/catalog';
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 
@@ -69,8 +74,8 @@ export function StoreScreen({ navigation }: Props) {
       <ScreenHeader title="store" subtitle="get your apps here" />
 
       <SectionHeader
-        title="apps"
-        hint="from your sources and the bridgething directory"
+        title={STORE_COPY.appsTitle}
+        hint={countLine(vouched.length, Object.keys(sourceNames).length)}
       />
 
       {vouched.length > 0 ? (
@@ -93,10 +98,8 @@ export function StoreScreen({ navigation }: Props) {
         <View className="items-center py-10">
           <Spinner />
         </View>
-      ) : empty ? (
-        <SectionEmpty>no apps from your sources yet</SectionEmpty>
       ) : (
-        <SectionEmpty>nothing from your sources right now</SectionEmpty>
+        <SectionEmpty>{STORE_COPY.appsEmpty}</SectionEmpty>
       )}
 
       <View className="mt-4">
@@ -112,8 +115,8 @@ export function StoreScreen({ navigation }: Props) {
       {community.length > 0 ? (
         <View className="mt-8">
           <SectionHeader
-            title="community"
-            hint="from directory sources you have not added. listed, never reviewed."
+            title={STORE_COPY.communityTitle}
+            hint={STORE_COPY.communityHint}
           />
           <ListGroup>
             {community.map(listing => (
@@ -131,8 +134,7 @@ export function StoreScreen({ navigation }: Props) {
 
       {failures.length > 0 ? (
         <Text className="mt-3 px-1 font-sans text-muted" style={TEXT.hint}>
-          {failures.length} source{failures.length === 1 ? '' : 's'} could not
-          be read.
+          {failureLine(failures.length)}
         </Text>
       ) : null}
     </ScrollScreen>

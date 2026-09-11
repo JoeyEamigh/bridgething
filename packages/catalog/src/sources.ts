@@ -97,13 +97,21 @@ export async function fetchMergedApps(init?: { origin?: string; signal?: AbortSi
   return { ...body, installs: Array.isArray(body.installs) ? body.installs : [] };
 }
 
-export type InstallReport = { appId: string; sourceUrl: string; version?: string | null };
+export type InstallReport = {
+  appId: string;
+  sourceUrl: string;
+  deviceId: string | null;
+  version?: string | null;
+};
 
 export function reportInstall(install: InstallReport, init?: { origin?: string }): void {
+  if (!install.deviceId) return;
+
   const origin = init?.origin ?? DIRECTORY_ORIGIN;
   const body = JSON.stringify({
     app_id: install.appId,
     source_url: install.sourceUrl,
+    device_id: install.deviceId,
     version: install.version ?? null,
   });
 

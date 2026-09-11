@@ -228,7 +228,7 @@ describe('fetchMergedApps', () => {
   }
 
   test('install counts come back as the directory reported them', async () => {
-    const counts = [{ app_id: APP_ID, source_url: THIRD_PARTY, count: 7 }];
+    const counts = [{ app_id: APP_ID, source_url: THIRD_PARTY, count: 7, versions: {} }];
     const apps = await withFetch(
       merged({ updated_at: 'now', catalogs: [], failures: [], skipped: [], installs: counts }),
       () => fetchMergedApps(),
@@ -255,12 +255,25 @@ describe('fetchMergedApps', () => {
   });
 });
 
+const DEVICE = '8558R481Q61R';
+
 describe('reportInstall', () => {
+  test('a device that never announced a serial is not reported at all', async () => {
+    const beacons: Beacon[] = [];
+
+    await withFetch(collect(beacons), async () => {
+      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: null, version: '1.2.0' });
+      await flush();
+    });
+
+    expect(beacons).toHaveLength(0);
+  });
+
   test('posts the app and the source it came from', async () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' });
+      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE, version: '1.2.0' });
       await flush();
     });
 
@@ -273,13 +286,14 @@ describe('reportInstall', () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' });
+      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE, version: '1.2.0' });
       await flush();
     });
 
     expect(JSON.parse(String(beacons[0]!.init.body))).toEqual({
       app_id: APP_ID,
       source_url: THIRD_PARTY,
+      device_id: DEVICE,
       version: '1.2.0',
     });
   });
@@ -288,7 +302,7 @@ describe('reportInstall', () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY });
+      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE });
       await flush();
     });
 
@@ -301,7 +315,7 @@ describe('reportInstall', () => {
     await withFetch(
       collect(beacons, () => Promise.reject(new Error('offline'))),
       async () => {
-        expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY })).not.toThrow();
+        expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE })).not.toThrow();
         await flush();
       },
     );
@@ -315,7 +329,7 @@ describe('reportInstall', () => {
     }) as unknown as typeof fetch;
 
     await withFetch(impl, async () => {
-      expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY })).not.toThrow();
+      expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE })).not.toThrow();
       await flush();
     });
   });
@@ -324,7 +338,10 @@ describe('reportInstall', () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY }, { origin: 'http://localhost:8787' });
+      reportInstall(
+        { appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE },
+        { origin: 'http://localhost:8787' },
+      );
       await flush();
     });
 

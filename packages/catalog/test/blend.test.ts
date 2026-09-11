@@ -106,8 +106,8 @@ describe('blendStoreListings', () => {
   test('install counts rank each section, ties fall back to name', () => {
     const { vouched } = blend({
       installs: [
-        { app_id: WEATHER_ID, source_url: ATTESTED, count: 40 },
-        { app_id: CALENDAR_ID, source_url: OFFICIAL, count: 2 },
+        { app_id: WEATHER_ID, source_url: ATTESTED, count: 40, versions: {} },
+        { app_id: CALENDAR_ID, source_url: OFFICIAL, count: 2, versions: {} },
       ],
     });
 

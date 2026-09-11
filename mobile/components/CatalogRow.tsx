@@ -1,4 +1,9 @@
-import type { CatalogAppListing } from '@bridgething/catalog';
+import {
+  alsoAvailableLabel,
+  listingTraits,
+  STORE_COPY,
+  type CatalogAppListing,
+} from '@bridgething/catalog';
 import { Text, View } from 'react-native';
 
 import { CatalogIcon } from './CatalogIcon';
@@ -22,9 +27,11 @@ export function CatalogRow({
     listing;
   const state = listingState(listing);
 
-  const traits = [
-    newestCompatible?.role === 'launcher' ? 'home screen' : null,
-    newestCompatible?.provides_overlay ? 'overlay' : null,
+  const meta = [
+    newestCompatible ? `v${newestCompatible.version}` : STORE_COPY.needsFirmware,
+    installedVersion ? `installed v${installedVersion}` : null,
+    ...listingTraits(listing),
+    alsoAvailableLabel(alsoAvailableFrom),
   ].filter(Boolean);
 
   return (
@@ -68,16 +75,7 @@ export function CatalogRow({
               numberOfLines={1}
             >
               {sourceName ? '· ' : ''}
-              {newestCompatible
-                ? `v${newestCompatible.version}`
-                : 'needs newer firmware'}
-              {installedVersion ? ` · installed v${installedVersion}` : ''}
-              {traits.length ? ` · ${traits.join(' · ')}` : ''}
-              {alsoAvailableFrom.length
-                ? ` · also in ${alsoAvailableFrom.length} other source${
-                    alsoAvailableFrom.length === 1 ? '' : 's'
-                  }`
-                : ''}
+              {meta.join(' · ')}
             </Text>
           </View>
         </View>

@@ -35,6 +35,7 @@ const app: AppEntry | null = baked?.app ?? null;
   <Header />
   <main class="container-site w-full flex-1 py-12 md:py-16">
     <p class="mb-6 font-mono text-sm text-white/40"><a href="/apps">← apps</a></p>
+    <script id="store-data" type="application/json" is:inline>null</script>
     <AppDetail client:load baked={baked} />
   </main>
   <Footer />

@@ -82,7 +82,7 @@ export async function shot(argv: string[]): Promise<void> {
   let label: string | null = null;
   let replace = false;
   for (let at = 0; at < argv.length; at++) {
-    const arg = argv[at]!;
+    const arg = argv[at];
     if (arg === '--replace') replace = true;
     else if (arg === '--name') label = argv[++at] ?? fail('--name needs a label');
     else if (arg.startsWith('-')) fail(`unknown flag ${arg}`);

@@ -59,4 +59,9 @@ export type RecommendedSource = {
 
 export type SourceCatalog = { url: string; catalog: Catalog };
 
-export type InstallCount = { app_id: string; source_url: string; count: number };
+export type InstallCount = {
+  app_id: string;
+  source_url: string;
+  count: number;
+  versions: Record<string, number>;
+};

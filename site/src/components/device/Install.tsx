@@ -54,10 +54,12 @@ function InstallProgress(): VNode | null {
 export function StagedInstall({
   pending,
   libVersion,
+  serial,
   onDone,
 }: {
   pending: PendingInstall;
   libVersion: string | null;
+  serial: string | null;
   onDone: () => void;
 }): VNode {
   const session = useBrowser();
@@ -89,13 +91,18 @@ export function StagedInstall({
       setNote('sha256 matches the catalog, sending it over');
       try {
         setNote(`installed ${await deliver(session, fetched.blob, pending.provenance)}`);
-        reportInstall({ appId: pending.appId, sourceUrl: pending.provenance, version: pending.version });
+        reportInstall({
+          appId: pending.appId,
+          sourceUrl: pending.provenance,
+          deviceId: serial,
+          version: pending.version,
+        });
         onDone();
       } catch (reason) {
         setFailure(message(reason));
       }
     })();
-  }, [pending, libVersion, session, onDone]);
+  }, [pending, libVersion, serial, session, onDone]);
 
   return (
     <Section>

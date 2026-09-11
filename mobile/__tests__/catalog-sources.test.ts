@@ -1,6 +1,6 @@
 import { aggregate, type AppEntry, type Catalog } from '@bridgething/catalog';
 
-import { DEVICE } from './fixtures';
+import { DEVICE, meta, SERIAL } from './fixtures';
 import { rig, type Rig } from './harness';
 
 const OFFICIAL = 'https://apps.bridgething.com/catalog.json';
@@ -223,6 +223,7 @@ describe('installing from a catalog you added yourself', () => {
       calls.push(args);
       return Promise.resolve({});
     });
+    r.emit('deviceMetaChanged', DEVICE, meta());
 
     const [listing] = aggregate({
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
@@ -329,7 +330,12 @@ const MERGED = 'https://bridgething.com/api/apps.json';
 const OTHER_APP_ID = '019e6701-13f8-71b5-ba04-81f347137de2';
 
 function mergedApps(
-  installs: { app_id: string; source_url: string; count: number }[],
+  installs: {
+    app_id: string;
+    source_url: string;
+    count: number;
+    versions: Record<string, number>;
+  }[],
 ) {
   return {
     updated_at: '2026-05-31T00:00:00Z',
@@ -357,6 +363,7 @@ describe('reporting an install to the directory', () => {
     await r.catalog.addSource(THIRD_PARTY);
 
     r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
+    r.emit('deviceMetaChanged', DEVICE, meta());
     const [listing] = aggregate({
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
       installed: [],
@@ -378,11 +385,12 @@ describe('reporting an install to the directory', () => {
     expect(JSON.parse(String(sent[0]!.init.body))).toEqual({
       app_id: APP_ID,
       source_url: THIRD_PARTY,
+      device_id: SERIAL,
       version: '1.2.0',
     });
   });
 
-  test('nothing about the phone or the device rides along with it', async () => {
+  test('the car thing serial rides along but nothing about the phone does', async () => {
     const { fetchMock } = await installed();
 
     const body = JSON.parse(String(beacons(fetchMock)[0]!.init.body)) as Record<
@@ -391,10 +399,33 @@ describe('reporting an install to the directory', () => {
     >;
     expect(Object.keys(body).sort()).toEqual([
       'app_id',
+      'device_id',
       'source_url',
       'version',
     ]);
     expect(JSON.stringify(body)).not.toContain(DEVICE);
+  });
+
+  test('a device that never announced a serial is not reported', async () => {
+    const r = rig();
+    const fetchMock = serve({
+      [OFFICIAL]: catalog('official'),
+      [DIRECTORY]: catalog('dir'),
+      [THIRD_PARTY]: catalog('third', [app(APP_ID, 'my app')]),
+    });
+    await r.catalog.addSource(THIRD_PARTY);
+
+    r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
+    const [listing] = aggregate({
+      orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
+      installed: [],
+      deviceLibVersion: '0.6.0',
+      extensions: 'omitted',
+    });
+    await r.catalog.installApp(DEVICE, listing!);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(beacons(fetchMock)).toHaveLength(0);
   });
 
   test('a directory that refuses the report does not fail the install', async () => {
@@ -466,6 +497,7 @@ describe('installing a version other than the newest', () => {
       calls.push(args);
       return Promise.resolve({});
     });
+    r.emit('deviceMetaChanged', DEVICE, meta());
 
     const [listing] = aggregate({
       orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
@@ -527,14 +559,14 @@ describe('popularity from the directory', () => {
       ]),
       [DIRECTORY]: catalog('dir'),
       [MERGED]: mergedApps([
-        { app_id: OTHER_APP_ID, source_url: OFFICIAL, count: 11 },
+        { app_id: OTHER_APP_ID, source_url: OFFICIAL, count: 11, versions: {} },
       ]),
     });
     await r.catalog.refreshCatalog();
 
     const state = r.catalog.useCatalogStore.getState();
     expect(state.installs).toEqual([
-      { app_id: OTHER_APP_ID, source_url: OFFICIAL, count: 11 },
+      { app_id: OTHER_APP_ID, source_url: OFFICIAL, count: 11, versions: {} },
     ]);
 
     const listings = aggregate({
@@ -553,7 +585,7 @@ describe('popularity from the directory', () => {
       [OFFICIAL]: catalog('official'),
       [DIRECTORY]: catalog('dir'),
       [MERGED]: mergedApps([
-        { app_id: APP_ID, source_url: OFFICIAL, count: 4 },
+        { app_id: APP_ID, source_url: OFFICIAL, count: 4, versions: {} },
       ]),
     });
     await r.catalog.refreshCatalog();
@@ -562,7 +594,7 @@ describe('popularity from the directory', () => {
     await r.catalog.refreshCatalog();
 
     expect(r.catalog.useCatalogStore.getState().installs).toEqual([
-      { app_id: APP_ID, source_url: OFFICIAL, count: 4 },
+      { app_id: APP_ID, source_url: OFFICIAL, count: 4, versions: {} },
     ]);
   });
 });

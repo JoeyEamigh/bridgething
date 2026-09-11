@@ -457,7 +457,7 @@ describe('updates', () => {
 
 describe('popularity', () => {
   function counts(entries: [string, string, number][]) {
-    return entries.map(([app_id, source_url, count]) => ({ app_id, source_url, count }));
+    return entries.map(([app_id, source_url, count]) => ({ app_id, source_url, count, versions: {} }));
   }
 
   test('the most installed app leads the listing, whatever its name', () => {
@@ -535,8 +535,8 @@ describe('popularity', () => {
       deviceLibVersion: 'v0.4.1',
       extensions: 'listed',
       installs: [
-        { app_id: WEATHER_ID, source_url: SOURCE_B, count: Number.NaN },
-        { app_id: CALENDAR_ID, source_url: SOURCE_A, count: -50 },
+        { app_id: WEATHER_ID, source_url: SOURCE_B, count: Number.NaN, versions: {} },
+        { app_id: CALENDAR_ID, source_url: SOURCE_A, count: -50, versions: {} },
       ],
     });
 

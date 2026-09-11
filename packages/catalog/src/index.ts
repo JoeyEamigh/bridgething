@@ -49,6 +49,15 @@ export {
 export { blendStoreListings, type StoreListings } from './blend.ts';
 
 export {
+  alsoAvailableLabel,
+  countLine,
+  failureLine,
+  installsLabel,
+  listingTraits,
+  STORE_COPY,
+} from './copy.ts';
+
+export {
   CATALOG_FETCH_TIMEOUT_MS,
   DIRECTORY_ORIGIN,
   OFFICIAL_CATALOG_URL,

@@ -2,7 +2,7 @@ import { APP_DETAIL_SHELL, appIdFromPath } from '../src/lib/app-routes.ts';
 import { mergedApps } from './apps.ts';
 import { isVisible, SOURCE_STATUSES, toCatalogDocument, toDirectoryView, type SourceStatus } from './directory.ts';
 import { kvOf, type Env } from './env.ts';
-import { rebuildInstalls, recordInstall } from './installs.ts';
+import { recordInstall, recountInstalls } from './installs.ts';
 import {
   entryView,
   jamGallery,
@@ -25,6 +25,7 @@ import {
   scoringHandle,
   type Principal,
 } from './principal.ts';
+import { injectStoreData, storeData, wantsStoreData } from './prerender.ts';
 import { SITE_ORIGIN } from './probe.ts';
 import { relayCatalog } from './relay.ts';
 import { recheckSource, setSourceStatus, submitSource } from './sources.ts';
@@ -307,9 +308,14 @@ export default {
     }
 
     if (url.pathname !== '/api' && !url.pathname.startsWith('/api/')) {
-      const asset = await env.ASSETS.fetch(request);
-      if (asset.status !== 404 || appIdFromPath(url.pathname) === null) return asset;
-      return env.ASSETS.fetch(new Request(new URL(APP_DETAIL_SHELL, url.origin), request));
+      const direct = await env.ASSETS.fetch(request);
+      const shell = direct.status === 404 && appIdFromPath(url.pathname) !== null;
+      const asset = shell
+        ? await env.ASSETS.fetch(new Request(new URL(APP_DETAIL_SHELL, url.origin), request))
+        : direct;
+
+      if (!asset.ok || request.method !== 'GET' || !wantsStoreData(url.pathname)) return asset;
+      return injectStoreData(asset, await storeData({ kv: kvOf(env), now: new Date().toISOString() }));
     }
 
     const head = request.method === 'HEAD';
@@ -332,7 +338,7 @@ export default {
     const kv = kvOf(env);
     const now = new Date().toISOString();
 
-    await rebuildInstalls(kv);
+    await recountInstalls(kv);
     await rebuildEntries(kv);
     await dropCached(SITE_ORIGIN, { routes: JAM_ROUTES });
 

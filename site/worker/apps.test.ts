@@ -160,14 +160,24 @@ describe('mergedApps', () => {
     const kv = await kvWithDirectory();
     await recordInstall({
       kv,
-      body: { app_id: '019e6701-13f8-71b5-ba04-000000000002', source_url: LISTED_URL },
+      body: {
+        app_id: '019e6701-13f8-71b5-ba04-000000000002',
+        source_url: LISTED_URL,
+        device_id: '8558R481Q61R',
+        version: '1.0.0',
+      },
       now: NOW,
     });
 
     const merged = await mergedApps({ kv, now: NOW, fetchImpl: stubFetch() });
 
     expect(merged.installs).toEqual([
-      { app_id: '019e6701-13f8-71b5-ba04-000000000002', source_url: LISTED_URL, count: 1 },
+      {
+        app_id: '019e6701-13f8-71b5-ba04-000000000002',
+        source_url: LISTED_URL,
+        count: 1,
+        versions: { '1.0.0': 1 },
+      },
     ]);
   });
 

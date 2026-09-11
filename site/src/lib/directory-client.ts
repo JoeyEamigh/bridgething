@@ -47,6 +47,20 @@ export async function unwrap<T>(response: Response): Promise<T> {
   return body as T;
 }
 
+export type StoreData = { apps: import('@bridgething/catalog').MergedApps; directory: DirectoryEntry[] };
+
+export function readStoreData(): StoreData | null {
+  if (typeof document === 'undefined') return null;
+  const tag = document.getElementById('store-data');
+  if (!tag?.textContent) return null;
+  try {
+    const parsed = JSON.parse(tag.textContent) as StoreData | null;
+    return parsed && Array.isArray(parsed.apps?.catalogs) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchDirectory(init?: { signal?: AbortSignal }): Promise<DirectoryEntry[]> {
   const response = await fetch('/api/directory.json', { cache: 'no-store', signal: init?.signal });
   const body = await unwrap<{ sources: DirectoryEntry[] }>(response);
