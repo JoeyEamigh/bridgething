@@ -428,9 +428,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     // MARK: - Webapps (per-device)
 
     public func listWebapps(deviceId: String) async throws -> [BridgethingWebappInfo] {
-        try await requireSession().listWebapps(deviceId: deviceId)
-            .filter { $0.role != .launcher }
-            .map(toRNWebappInfo)
+        try await requireSession().listWebapps(deviceId: deviceId).map(toRNWebappInfo)
     }
 
     public func currentWebapp(deviceId: String) async throws -> BridgethingActiveWebapp? {
@@ -462,12 +460,13 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         webappId: String?,
         webappName: String?
     ) async throws -> BridgethingWebappInfo {
-        _ = (webappId, webappName)
         let info = try await requireSession().installWebappFromUrl(
             deviceId: deviceId,
             url: url,
             expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
-            provenance: provenance
+            provenance: provenance,
+            webappId: webappId,
+            webappName: webappName
         )
         return toRNWebappInfo(info)
     }
@@ -892,10 +891,6 @@ private extension NSLock {
 
 // MARK: - Core -> RN projections
 
-private func visible(_ webapps: [WebappInfo]) -> [WebappInfo] {
-    webapps.filter { $0.role != .launcher }
-}
-
 private func toRNSnapshot(_ snap: SessionSnapshot) -> BridgethingSessionSnapshot {
     BridgethingSessionSnapshot(
         hostInfo: BridgethingHostInfo(
@@ -1132,8 +1127,9 @@ private func toRNVoiceModelState(_ state: VoiceModelState) -> BridgethingVoiceMo
 private func toRNWebappsEntry(_ entry: DeviceWebappsEntry) -> BridgethingDeviceWebappsEntry {
     BridgethingDeviceWebappsEntry(
         deviceId: entry.deviceId,
-        webapps: visible(entry.webapps).map(toRNWebappInfo),
-        active: entry.active.map(toRNActiveWebapp)
+        webapps: entry.webapps.map(toRNWebappInfo),
+        active: entry.active.map(toRNActiveWebapp),
+        listed: entry.listed
     )
 }
 

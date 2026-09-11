@@ -3356,9 +3356,9 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
     
-    func installWebapp(deviceId: String, archivePath: String, provenance: String?) async throws  -> WebappInfo
+    func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?) async throws  -> WebappInfo
     
-    func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink?) async throws  -> WebappInfo
+    func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink?, webappId: String?, webappName: String?) async throws  -> WebappInfo
     
     func listWebappConfig(deviceId: String, id: String) async throws  -> [ConfigEntry]
     
@@ -3797,12 +3797,12 @@ open func getWebappDoc(deviceId: String, id: String, key: String)async throws  -
         )
 }
     
-open func installWebapp(deviceId: String, archivePath: String, provenance: String?)async throws  -> WebappInfo  {
+open func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String? = nil, webappName: String? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_install_webapp(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(archivePath),FfiConverterOptionString.lower(provenance)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(archivePath),FfiConverterOptionString.lower(provenance),FfiConverterOptionString.lower(webappId),FfiConverterOptionString.lower(webappName)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -3813,12 +3813,12 @@ open func installWebapp(deviceId: String, archivePath: String, provenance: Strin
         )
 }
     
-open func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink? = nil)async throws  -> WebappInfo  {
+open func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink? = nil, webappId: String? = nil, webappName: String? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(url),FfiConverterOptionTypeArtifactDigest.lower(expected),FfiConverterOptionString.lower(provenance),FfiConverterOptionTypeWebappBundleSink.lower(sink)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(url),FfiConverterOptionTypeArtifactDigest.lower(expected),FfiConverterOptionString.lower(provenance),FfiConverterOptionTypeWebappBundleSink.lower(sink),FfiConverterOptionString.lower(webappId),FfiConverterOptionString.lower(webappName)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -24782,9 +24782,6 @@ public func FfiConverterTypeSessionEvent_lower(_ value: SessionEvent) -> RustBuf
 
 
 
-/**
- * How a provider gets signed in: a handshake the provider drives itself, or a server login the user types.
- */
 
 public enum SignInMethod: Equatable, Hashable {
     
@@ -28155,10 +28152,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 50155) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 57765) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 18104) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {

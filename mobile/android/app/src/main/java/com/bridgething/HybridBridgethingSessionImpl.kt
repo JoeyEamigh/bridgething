@@ -380,7 +380,7 @@ public class HybridBridgethingSessionImpl(
             ?: BridgethingAncsAuthStatus.UNKNOWN
 
     override suspend fun listWebapps(deviceId: String): Array<BridgethingWebappInfo> =
-        requireSession().listWebapps(deviceId).visible().map(::toRnWebappInfo).toTypedArray()
+        requireSession().listWebapps(deviceId).map(::toRnWebappInfo).toTypedArray()
 
     override suspend fun currentWebapp(deviceId: String): BridgethingActiveWebapp? =
         requireSession().currentWebapp(deviceId)?.let(::toRnActiveWebapp)
@@ -409,6 +409,8 @@ public class HybridBridgethingSessionImpl(
             url,
             ArtifactDigest(size = size.toLong().toULong(), sha256 = sha256.lowercase()),
             provenance,
+            webappId = webappId,
+            webappName = webappName,
         ),
     )
 

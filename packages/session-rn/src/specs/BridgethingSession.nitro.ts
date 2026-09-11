@@ -328,6 +328,7 @@ export type BridgethingDeviceWebappsEntry = {
   deviceId: string;
   webapps: BridgethingWebappInfo[];
   active?: BridgethingActiveWebapp;
+  listed: boolean;
 };
 
 export type BridgethingSessionSnapshot = {

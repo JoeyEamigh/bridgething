@@ -6,7 +6,7 @@ import {
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
   parseSourceUrl,
-  reportInstall,
+  reportInstalled,
   SOURCE_DIRECTORY_URL,
   SourceUrlError,
 } from '../src/sources.ts';
@@ -256,71 +256,108 @@ describe('fetchMergedApps', () => {
 });
 
 const DEVICE = '8558R481Q61R';
+const OTHER_DEVICE = '8558R58QQ716';
+const REFUSED_DEVICE = '8557R18NQN1P';
+const THROWN_DEVICE = '8558R481Q62R';
+const LOCAL_DEVICE = '8558R481Q63R';
+const OTHER_ID = '019e6701-13f8-71b5-ba04-81f347137de2';
 
-describe('reportInstall', () => {
+describe('reportInstalled', () => {
   test('a device that never announced a serial is not reported at all', async () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: null, version: '1.2.0' });
+      reportInstalled({ deviceId: null, apps: [{ appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' }] });
       await flush();
     });
 
     expect(beacons).toHaveLength(0);
   });
 
-  test('posts the app and the source it came from', async () => {
+  test('posts the whole inventory, so what is missing counts as gone', async () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE, version: '1.2.0' });
+      reportInstalled({
+        deviceId: DEVICE,
+        apps: [
+          { appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' },
+          { appId: OTHER_ID, sourceUrl: THIRD_PARTY, version: null },
+        ],
+      });
       await flush();
     });
 
     expect(beacons).toHaveLength(1);
-    expect(beacons[0]!.url).toBe('https://bridgething.com/api/installs');
+    expect(beacons[0]!.url).toBe('https://bridgething.com/api/installed');
     expect(beacons[0]!.init.method).toBe('POST');
-  });
-
-  test('carries nothing beyond the app, its source, and its version', async () => {
-    const beacons: Beacon[] = [];
-
-    await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE, version: '1.2.0' });
-      await flush();
-    });
-
     expect(JSON.parse(String(beacons[0]!.init.body))).toEqual({
-      app_id: APP_ID,
-      source_url: THIRD_PARTY,
       device_id: DEVICE,
-      version: '1.2.0',
+      apps: [
+        { app_id: OTHER_ID, source_url: THIRD_PARTY, version: null },
+        { app_id: APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+      ],
     });
   });
 
-  test('an install with no version still counts', async () => {
+  test('an empty device reports an empty inventory rather than staying silent', async () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE });
+      reportInstalled({ deviceId: DEVICE, apps: [] });
       await flush();
     });
 
-    expect(JSON.parse(String(beacons[0]!.init.body)).version).toBeNull();
+    expect(JSON.parse(String(beacons[0]!.init.body)).apps).toEqual([]);
   });
 
-  test('a directory that refuses the beacon never reaches the caller', async () => {
+  test('an unchanged inventory is not sent twice, whatever order it arrives in', async () => {
     const beacons: Beacon[] = [];
+    const one = { appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' };
+    const two = { appId: OTHER_ID, sourceUrl: THIRD_PARTY, version: '0.1.0' };
+
+    await withFetch(collect(beacons), async () => {
+      reportInstalled({ deviceId: DEVICE, apps: [one, two] });
+      await flush();
+      reportInstalled({ deviceId: DEVICE, apps: [two, one] });
+      await flush();
+    });
+
+    expect(beacons).toHaveLength(1);
+  });
+
+  test('a changed inventory is sent again', async () => {
+    const beacons: Beacon[] = [];
+    const one = { appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' };
+
+    await withFetch(collect(beacons), async () => {
+      reportInstalled({ deviceId: OTHER_DEVICE, apps: [one] });
+      await flush();
+      reportInstalled({ deviceId: OTHER_DEVICE, apps: [{ ...one, version: '1.3.0' }] });
+      await flush();
+    });
+
+    expect(beacons).toHaveLength(2);
+  });
+
+  test('a directory that refuses the report never reaches the caller, and the next report still goes', async () => {
+    const beacons: Beacon[] = [];
+    const apps = [{ appId: APP_ID, sourceUrl: THIRD_PARTY, version: '1.2.0' }];
 
     await withFetch(
       collect(beacons, () => Promise.reject(new Error('offline'))),
       async () => {
-        expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE })).not.toThrow();
+        expect(() => reportInstalled({ deviceId: REFUSED_DEVICE, apps })).not.toThrow();
         await flush();
       },
     );
 
-    expect(beacons).toHaveLength(1);
+    await withFetch(collect(beacons), async () => {
+      reportInstalled({ deviceId: REFUSED_DEVICE, apps });
+      await flush();
+    });
+
+    expect(beacons).toHaveLength(2);
   });
 
   test('a fetch that throws where it stands is swallowed too', async () => {
@@ -329,7 +366,9 @@ describe('reportInstall', () => {
     }) as unknown as typeof fetch;
 
     await withFetch(impl, async () => {
-      expect(() => reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE })).not.toThrow();
+      expect(() =>
+        reportInstalled({ deviceId: THROWN_DEVICE, apps: [{ appId: APP_ID, sourceUrl: THIRD_PARTY }] }),
+      ).not.toThrow();
       await flush();
     });
   });
@@ -338,10 +377,13 @@ describe('reportInstall', () => {
     const beacons: Beacon[] = [];
 
     await withFetch(collect(beacons), async () => {
-      reportInstall({ appId: APP_ID, sourceUrl: THIRD_PARTY, deviceId: DEVICE }, { origin: 'http://localhost:8787' });
+      reportInstalled(
+        { deviceId: LOCAL_DEVICE, apps: [{ appId: APP_ID, sourceUrl: THIRD_PARTY }] },
+        { origin: 'http://localhost:8787' },
+      );
       await flush();
     });
 
-    expect(beacons[0]!.url).toBe('http://localhost:8787/api/installs');
+    expect(beacons[0]!.url).toBe('http://localhost:8787/api/installed');
   });
 });

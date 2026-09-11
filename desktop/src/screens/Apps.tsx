@@ -1,4 +1,4 @@
-import { describeExtensionPermissions, listedWebapps } from '@bridgething/catalog';
+import { describeExtensionPermissions, listedWebapps, slotCandidates } from '@bridgething/catalog';
 import type { WebappInfo, WebappSlot, WebappSlots } from '@bridgething/companion-types';
 import {
   Button,
@@ -464,8 +464,8 @@ function SlotAssignment({ list }: { list: WebappInfo[] }): VNode {
     }
   };
 
-  const launchers = list.filter(app => app.role === 'launcher' && app.source === 'installed');
-  const overlays = list.filter(app => app.overlayHash !== null && app.source === 'installed');
+  const launchers = slotCandidates(list, 'launcher');
+  const overlays = slotCandidates(list, 'overlay');
   const held: WebappSlots = slots.data.value;
 
   return (

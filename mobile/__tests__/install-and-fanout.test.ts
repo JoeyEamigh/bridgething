@@ -177,21 +177,30 @@ describe('the apps grid', () => {
       [webapp({ id: 'b', name: 'second' }), webapp({ id: 'a', name: 'first' })],
       null,
       [],
+      null,
     );
 
     expect(tiles.map(t => t.id)).toEqual(['b', 'a']);
   });
 
   test('marks the app the car thing is showing', () => {
-    const [tile] = rig().webapps.appTiles([webapp()], 'com.example.app', []);
+    const [tile] = rig().webapps.appTiles(
+      [webapp()],
+      'com.example.app',
+      [],
+      null,
+    );
 
     expect(tile?.state).toEqual({ label: 'active', tone: 'ok' });
   });
 
   test('an update outranks being active, because it is the actionable one', () => {
-    const [tile] = rig().webapps.appTiles([webapp()], 'com.example.app', [
+    const [tile] = rig().webapps.appTiles(
+      [webapp()],
       'com.example.app',
-    ]);
+      ['com.example.app'],
+      null,
+    );
 
     expect(tile?.state).toEqual({ label: 'update', tone: 'accent' });
   });
@@ -201,6 +210,7 @@ describe('the apps grid', () => {
       [webapp({ id: 'Com.Example.App' })],
       'com.example.app',
       [],
+      null,
     );
 
     expect(tile?.state).toEqual({ label: 'active', tone: 'ok' });
@@ -211,6 +221,7 @@ describe('the apps grid', () => {
       [webapp({ source: 'builtin' })],
       null,
       [],
+      null,
     );
 
     expect(tile).toMatchObject({
@@ -227,6 +238,7 @@ describe('the apps grid', () => {
       ],
       null,
       [],
+      null,
     );
 
     expect(tiles.map(t => t.id)).toEqual(['browser']);
@@ -237,13 +249,14 @@ describe('the apps grid', () => {
       [webapp({ id: 'custom', role: 'launcher' })],
       null,
       [],
+      null,
     );
 
     expect(tiles.map(t => t.id)).toEqual(['custom']);
   });
 
   test('an idle installed app carries no state to explain', () => {
-    const [tile] = rig().webapps.appTiles([webapp()], 'other', []);
+    const [tile] = rig().webapps.appTiles([webapp()], 'other', [], null);
 
     expect(tile?.state).toBeNull();
   });

@@ -57,6 +57,8 @@ pub struct WebappActiveChanged {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 pub struct WebappUninstalled {
+  #[ts(type = "string")]
+  pub id: Uuid,
   pub name: String,
 }
 

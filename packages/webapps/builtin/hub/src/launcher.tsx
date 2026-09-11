@@ -36,40 +36,57 @@ export function Launcher({ client }: { client: BridgethingClient }) {
 
   useEffect(() => {
     let cancelled = false;
-    let revoke: string[] = [];
+    const icons = new Map<string, string>();
 
-    (async () => {
-      try {
-        const [listResult, currentResult] = await Promise.all([client.webapp.list(), client.webapp.current()]);
-        if (!listResult.ok) {
-          setError('failed to list webapps');
-          return;
-        }
-        const selfId = currentResult.ok ? currentResult.response.id : null;
-        const visible = listResult.response.webapps.filter(w => w.id !== selfId);
-        const entries: TileEntry[] = await Promise.all(
-          visible.map(async info => {
-            if (!info.iconHash) return { info, iconUrl: null };
-            const iconResult = await client.webapp.icon({ id: info.id });
-            if (!iconResult.ok) return { info, iconUrl: null };
-            const bytes = new Uint8Array(iconResult.response.bytes as unknown as number[]);
-            const blob = new Blob([bytes], {
-              type: iconResult.response.mime ?? 'application/octet-stream',
-            });
-            const url = URL.createObjectURL(blob);
-            revoke.push(url);
-            return { info, iconUrl: url };
-          }),
-        );
-        if (!cancelled) setTiles(entries);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+    const iconFor = async (info: WebappInfo): Promise<string | null> => {
+      if (!info.iconHash) return null;
+      const key = `${info.id}:${info.iconHash}`;
+      const held = icons.get(key);
+      if (held) return held;
+      const iconResult = await client.webapp.icon({ id: info.id });
+      if (!iconResult.ok) return null;
+      const bytes = new Uint8Array(iconResult.response.bytes as unknown as number[]);
+      const blob = new Blob([bytes], { type: iconResult.response.mime ?? 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      icons.set(key, url);
+      return url;
+    };
+
+    const reload = async () => {
+      const [listResult, currentResult] = await Promise.all([client.webapp.list(), client.webapp.current()]);
+      if (!listResult.ok) {
+        setError('failed to list webapps');
+        return;
       }
-    })();
+      const selfId = currentResult.ok ? currentResult.response.id : null;
+      const visible = listResult.response.webapps.filter(w => w.id !== selfId);
+      const entries: TileEntry[] = await Promise.all(
+        visible.map(async info => ({ info, iconUrl: await iconFor(info) })),
+      );
+      if (cancelled) return;
+      const live = new Set(visible.map(info => `${info.id}:${info.iconHash ?? ''}`));
+      for (const [key, url] of icons) {
+        if (live.has(key)) continue;
+        URL.revokeObjectURL(url);
+        icons.delete(key);
+      }
+      setError(null);
+      setTiles(entries);
+    };
+
+    const refresh = () => {
+      reload().catch(err => setError(err instanceof Error ? err.message : String(err)));
+    };
+
+    refresh();
+    const offInstalled = client.webapp.onWebappInstalled(refresh);
+    const offUninstalled = client.webapp.onWebappUninstalled(refresh);
 
     return () => {
       cancelled = true;
-      for (const url of revoke) URL.revokeObjectURL(url);
+      offInstalled();
+      offUninstalled();
+      for (const url of icons.values()) URL.revokeObjectURL(url);
     };
   }, [client]);
 

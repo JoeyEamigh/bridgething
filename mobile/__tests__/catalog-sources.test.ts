@@ -1,6 +1,6 @@
 import { aggregate, type AppEntry, type Catalog } from '@bridgething/catalog';
 
-import { DEVICE, meta, SERIAL } from './fixtures';
+import { DEVICE, meta, peer, SERIAL } from './fixtures';
 import { rig, type Rig } from './harness';
 
 const OFFICIAL = 'https://apps.bridgething.com/catalog.json';
@@ -57,6 +57,8 @@ function serve(served: Record<string, unknown>): jest.Mock {
 }
 
 const sourcesOf = (r: Rig) => r.catalog.useCatalogStore.getState().sources;
+
+const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
 describe('reading a source url a user typed', () => {
   test('a bare host resolves to the catalog it implies', () => {
@@ -325,7 +327,7 @@ describe('source priority', () => {
   });
 });
 
-const INSTALLS = 'https://bridgething.com/api/installs';
+const INSTALLED = 'https://bridgething.com/api/installed';
 const MERGED = 'https://bridgething.com/api/apps.json';
 const OTHER_APP_ID = '019e6701-13f8-71b5-ba04-81f347137de2';
 
@@ -348,62 +350,136 @@ function mergedApps(
 
 function beacons(fetchMock: jest.Mock): { url: string; init: RequestInit }[] {
   return fetchMock.mock.calls
-    .filter(([url]) => url === INSTALLS)
+    .filter(([url]) => url === INSTALLED)
     .map(([url, init]) => ({ url: url as string, init: init as RequestInit }));
 }
 
-describe('reporting an install to the directory', () => {
-  async function installed() {
+function bodyOf(fetchMock: jest.Mock, at = 0): Record<string, unknown> {
+  return JSON.parse(String(beacons(fetchMock)[at]!.init.body)) as Record<
+    string,
+    unknown
+  >;
+}
+
+function inventory(
+  apps: { id: string; provenance?: string | null; version?: string }[],
+) {
+  return {
+    deviceId: DEVICE,
+    webapps: apps.map(entry => ({
+      id: entry.id,
+      name: entry.id,
+      version: entry.version ?? '1.2.0',
+      source: 'installed' as const,
+      role: 'standard' as const,
+      provenance:
+        entry.provenance === null
+          ? undefined
+          : (entry.provenance ?? THIRD_PARTY),
+      config: [],
+      permissions: [],
+    })),
+    active: undefined,
+    listed: true,
+  };
+}
+
+describe('reporting what a device holds to the directory', () => {
+  function reporting(): { r: Rig; fetchMock: jest.Mock } {
     const r = rig();
     const fetchMock = serve({
       [OFFICIAL]: catalog('official'),
       [DIRECTORY]: catalog('dir'),
-      [THIRD_PARTY]: catalog('third', [app(APP_ID, 'my app')]),
     });
-    await r.catalog.addSource(THIRD_PARTY);
-
-    r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
+    r.catalog.startInstallCensus();
+    r.emit('peerConnected', peer());
     r.emit('deviceMetaChanged', DEVICE, meta());
-    const [listing] = aggregate({
-      orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
-      installed: [],
-      deviceLibVersion: '0.6.0',
-      extensions: 'omitted',
-    });
-    await r.catalog.installApp(DEVICE, listing!);
-    await new Promise(resolve => setTimeout(resolve, 0));
-
     return { r, fetchMock };
   }
 
-  test('a store install tells the directory which app and source it was', async () => {
-    const { fetchMock } = await installed();
+  test('a listed device tells the directory every app it holds', async () => {
+    const { r, fetchMock } = reporting();
 
-    const sent = beacons(fetchMock);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.init.method).toBe('POST');
-    expect(JSON.parse(String(sent[0]!.init.body))).toEqual({
-      app_id: APP_ID,
-      source_url: THIRD_PARTY,
+    r.emit('webappsChanged', inventory([{ id: APP_ID }, { id: OTHER_APP_ID }]));
+    await flush();
+
+    expect(beacons(fetchMock)).toHaveLength(1);
+    expect(beacons(fetchMock)[0]!.init.method).toBe('POST');
+    expect(bodyOf(fetchMock)).toEqual({
       device_id: SERIAL,
-      version: '1.2.0',
+      apps: [
+        { app_id: OTHER_APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+        { app_id: APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+      ],
     });
   });
 
   test('the car thing serial rides along but nothing about the phone does', async () => {
-    const { fetchMock } = await installed();
+    const { r, fetchMock } = reporting();
 
-    const body = JSON.parse(String(beacons(fetchMock)[0]!.init.body)) as Record<
-      string,
-      unknown
-    >;
-    expect(Object.keys(body).sort()).toEqual([
-      'app_id',
-      'device_id',
-      'source_url',
-      'version',
-    ]);
+    r.emit('webappsChanged', inventory([{ id: APP_ID }]));
+    await flush();
+
+    const body = bodyOf(fetchMock);
+    expect(Object.keys(body).sort()).toEqual(['apps', 'device_id']);
     expect(JSON.stringify(body)).not.toContain(DEVICE);
+  });
+
+  test('an app that left the device is reported gone', async () => {
+    const { r, fetchMock } = reporting();
+    r.emit('webappsChanged', inventory([{ id: APP_ID }, { id: OTHER_APP_ID }]));
+    await flush();
+
+    r.emit('webappsChanged', inventory([{ id: APP_ID }]));
+    await flush();
+
+    expect(beacons(fetchMock)).toHaveLength(2);
+    expect(bodyOf(fetchMock, 1).apps).toEqual([
+      { app_id: APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+    ]);
+  });
+
+  test('an unchanged inventory is not reported again', async () => {
+    const { r, fetchMock } = reporting();
+
+    r.emit('webappsChanged', inventory([{ id: APP_ID }]));
+    await flush();
+    r.emit('webappsChanged', inventory([{ id: APP_ID }]));
+    await flush();
+
+    expect(beacons(fetchMock)).toHaveLength(1);
+  });
+
+  test('a device that has not listed its apps is never reported as an empty one', async () => {
+    const { r, fetchMock } = reporting();
+
+    r.emit('webappsChanged', { ...inventory([]), listed: false });
+    await flush();
+
+    expect(beacons(fetchMock)).toHaveLength(0);
+  });
+
+  test('a listed device with nothing installed does report an empty inventory', async () => {
+    const { r, fetchMock } = reporting();
+
+    r.emit('webappsChanged', inventory([]));
+    await flush();
+
+    expect(bodyOf(fetchMock).apps).toEqual([]);
+  });
+
+  test('a sideloaded app with no source is left out, since no catalog can count it', async () => {
+    const { r, fetchMock } = reporting();
+
+    r.emit(
+      'webappsChanged',
+      inventory([{ id: APP_ID }, { id: OTHER_APP_ID, provenance: null }]),
+    );
+    await flush();
+
+    expect(bodyOf(fetchMock).apps).toEqual([
+      { app_id: APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+    ]);
   });
 
   test('a device that never announced a serial is not reported', async () => {
@@ -411,74 +487,27 @@ describe('reporting an install to the directory', () => {
     const fetchMock = serve({
       [OFFICIAL]: catalog('official'),
       [DIRECTORY]: catalog('dir'),
-      [THIRD_PARTY]: catalog('third', [app(APP_ID, 'my app')]),
     });
-    await r.catalog.addSource(THIRD_PARTY);
+    r.catalog.startInstallCensus();
+    r.emit('peerConnected', peer());
 
-    r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
-    const [listing] = aggregate({
-      orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
-      installed: [],
-      deviceLibVersion: '0.6.0',
-      extensions: 'omitted',
-    });
-    await r.catalog.installApp(DEVICE, listing!);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    r.emit('webappsChanged', inventory([{ id: APP_ID }]));
+    await flush();
 
     expect(beacons(fetchMock)).toHaveLength(0);
   });
 
-  test('a directory that refuses the report does not fail the install', async () => {
-    const r = rig();
-    serve({
-      [OFFICIAL]: catalog('official'),
-      [DIRECTORY]: catalog('dir'),
-      [THIRD_PARTY]: catalog('third', [app(APP_ID, 'my app')]),
-    });
-    await r.catalog.addSource(THIRD_PARTY);
-
-    r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
+  test('a directory that refuses the report never reaches the app', async () => {
+    const { r } = reporting();
     globalThis.fetch = jest.fn((url: string) => {
-      if (url === INSTALLS) return Promise.reject(new Error('offline'));
+      if (url === INSTALLED) return Promise.reject(new Error('offline'));
       return Promise.resolve({ ok: false, status: 503, json: () => ({}) });
     }) as unknown as typeof fetch;
 
-    const [listing] = aggregate({
-      orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
-      installed: [],
-      deviceLibVersion: '0.6.0',
-      extensions: 'omitted',
-    });
-
-    await expect(
-      r.catalog.installApp(DEVICE, listing!),
-    ).resolves.toBeUndefined();
-    await new Promise(resolve => setTimeout(resolve, 0));
-  });
-
-  test('an install the device refuses is never reported as one', async () => {
-    const r = rig();
-    const fetchMock = serve({
-      [OFFICIAL]: catalog('official'),
-      [DIRECTORY]: catalog('dir'),
-      [THIRD_PARTY]: catalog('third', [app(APP_ID, 'my app')]),
-    });
-    await r.catalog.addSource(THIRD_PARTY);
-
-    r.native.__returns.set('installWebappFromUrl', () =>
-      Promise.reject(new Error('the bundle hash did not match')),
-    );
-    const [listing] = aggregate({
-      orderedCatalogs: r.catalog.useCatalogStore.getState().catalogs,
-      installed: [],
-      deviceLibVersion: '0.6.0',
-      extensions: 'omitted',
-    });
-
-    await expect(r.catalog.installApp(DEVICE, listing!)).rejects.toThrow();
-    await new Promise(resolve => setTimeout(resolve, 0));
-
-    expect(beacons(fetchMock)).toHaveLength(0);
+    expect(() =>
+      r.emit('webappsChanged', inventory([{ id: APP_ID }])),
+    ).not.toThrow();
+    await flush();
   });
 });
 
@@ -497,6 +526,8 @@ describe('installing a version other than the newest', () => {
       calls.push(args);
       return Promise.resolve({});
     });
+    r.catalog.startInstallCensus();
+    r.emit('peerConnected', peer());
     r.emit('deviceMetaChanged', DEVICE, meta());
 
     const [listing] = aggregate({
@@ -536,16 +567,17 @@ describe('installing a version other than the newest', () => {
     expect(calls[0]?.[1]).toBe(`https://example.test/r/${APP_ID}/2.0.0.zip`);
   });
 
-  test('the directory hears the version that was actually installed', async () => {
+  test('the directory hears the version the device ended up holding', async () => {
     const { r, fetchMock, listing } = await listed(['2.0.0', '1.2.0']);
     const older = listing.app.versions.find(v => v.version === '1.2.0')!;
 
     await r.catalog.installApp(DEVICE, listing, older);
-    await new Promise(resolve => setTimeout(resolve, 0));
+    r.emit('webappsChanged', inventory([{ id: APP_ID, version: '1.2.0' }]));
+    await flush();
 
-    expect(JSON.parse(String(beacons(fetchMock)[0]!.init.body))).toMatchObject({
-      version: '1.2.0',
-    });
+    expect(bodyOf(fetchMock).apps).toEqual([
+      { app_id: APP_ID, source_url: THIRD_PARTY, version: '1.2.0' },
+    ]);
   });
 });
 

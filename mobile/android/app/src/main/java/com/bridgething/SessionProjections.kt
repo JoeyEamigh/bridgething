@@ -94,8 +94,6 @@ import uniffi.bridgething_companion.WebappSlots
 import uniffi.bridgething_companion.WebappSource
 import uniffi.bridgething_companion.parseOtaCompositeVersion
 
-internal fun List<WebappInfo>.visible(): List<WebappInfo> = filter { it.role != WebappRole.LAUNCHER }
-
 internal fun toRnSnapshot(snap: SessionSnapshot): BridgethingSessionSnapshot = BridgethingSessionSnapshot(
     hostInfo = BridgethingHostInfo(
         appName = snap.hostInfo.appName,
@@ -265,8 +263,9 @@ internal fun toRnVoiceModelState(state: VoiceModelState): BridgethingVoiceModelS
 internal fun toRnWebappsEntry(entry: DeviceWebappsEntry): BridgethingDeviceWebappsEntry =
     BridgethingDeviceWebappsEntry(
         deviceId = entry.deviceId,
-        webapps = entry.webapps.visible().map(::toRnWebappInfo).toTypedArray(),
+        webapps = entry.webapps.map(::toRnWebappInfo).toTypedArray(),
         active = entry.active?.let(::toRnActiveWebapp),
+        listed = entry.listed,
     )
 
 internal fun toRnActiveWebapp(active: ActiveWebapp): BridgethingActiveWebapp =

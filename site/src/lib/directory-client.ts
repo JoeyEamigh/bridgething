@@ -69,7 +69,7 @@ export async function fetchDirectory(init?: { signal?: AbortSignal }): Promise<D
 
 export {
   fetchMergedApps,
-  reportInstall,
+  reportInstalled,
   type InstallCount,
   type MergedApps,
   type MergedCatalog,

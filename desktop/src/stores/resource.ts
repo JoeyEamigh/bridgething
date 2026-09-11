@@ -5,6 +5,7 @@ export type Store<T> = {
   data: Signal<T>;
   error: Signal<string | undefined>;
   pending: Signal<boolean>;
+  settled: Signal<boolean>;
   refresh: () => Promise<void>;
 };
 
@@ -17,6 +18,7 @@ export function resource<T>(initial: T, pull: () => Promise<T>): Store<T> {
   const data = signal(initial);
   const error = signal<string | undefined>(undefined);
   const pending = signal(false);
+  const settled = signal(false);
 
   let inflight: Promise<void> | null = null;
   let again = false;
@@ -26,6 +28,7 @@ export function resource<T>(initial: T, pull: () => Promise<T>): Store<T> {
     try {
       data.value = await pull();
       error.value = undefined;
+      settled.value = true;
     } catch (reason) {
       data.value = initial;
       error.value = describeError(reason);
@@ -49,7 +52,7 @@ export function resource<T>(initial: T, pull: () => Promise<T>): Store<T> {
     return inflight;
   };
 
-  return { data, error, pending, refresh };
+  return { data, error, pending, settled, refresh };
 }
 
 export function keyed<T>(initial: T): Keyed<T> {

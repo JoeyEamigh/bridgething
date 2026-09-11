@@ -72,7 +72,7 @@ describe('a webapp list that arrives half filled', () => {
       webapp({ id: undefined as unknown as string, name: 'half' }),
     ];
 
-    expect(() => appTiles(list, null, [])).not.toThrow();
-    expect(appTiles(list, null, []).map(t => t.id)).toEqual(['ha']);
+    expect(() => appTiles(list, null, [], null)).not.toThrow();
+    expect(appTiles(list, null, [], null).map(t => t.id)).toEqual(['ha']);
   });
 });

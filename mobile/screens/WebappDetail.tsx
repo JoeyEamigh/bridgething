@@ -1,3 +1,4 @@
+import { fillsSlot } from '@bridgething/catalog';
 import {
   type BridgethingConfigEntry,
   type BridgethingConfigField,
@@ -18,6 +19,7 @@ import { Press } from '../components/Press';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { Segmented } from '../components/Segmented';
+import { SlotAction } from '../components/SlotAction';
 import { Spinner } from '../components/Spinner';
 import { Switch } from '../components/ui/switch';
 import { WebappIcon } from '../components/WebappIcon';
@@ -260,19 +262,14 @@ export function WebappDetailScreen({ navigation, route }: Props) {
         {actionError ? <Note tone="err">{actionError}</Note> : null}
       </View>
 
-      {info.role === 'launcher' || info.overlayHash ? (
-        <View className="mb-8">
-          <Button
-            onPress={() => navigation.navigate('WebappSlots', { deviceId })}
-            variant="secondary"
-            icon="LayoutGrid"
-          >
-            {info.role === 'launcher' && info.overlayHash
-              ? 'use as home screen or overlay'
-              : info.role === 'launcher'
-                ? 'use as home screen'
-                : 'use as system overlay'}
-          </Button>
+      {fillsSlot(info, 'launcher') || fillsSlot(info, 'overlay') ? (
+        <View className="mb-8 gap-2">
+          {fillsSlot(info, 'launcher') ? (
+            <SlotAction deviceId={deviceId} id={info.id} slot="launcher" />
+          ) : null}
+          {fillsSlot(info, 'overlay') ? (
+            <SlotAction deviceId={deviceId} id={info.id} slot="overlay" />
+          ) : null}
         </View>
       ) : null}
 

@@ -1,3 +1,4 @@
+import type { BridgethingWebappInfo } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
@@ -27,7 +28,7 @@ import {
   useSession,
 } from '../lib/session';
 import { TEXT } from '../lib/theme';
-import { appTiles, useWebapps } from '../lib/webapps';
+import { appTiles, heldBy, useSlots, useWebapps } from '../lib/webapps';
 import type { AppsScreenProps } from '../navigation';
 
 type Props = AppsScreenProps<'Apps'>;
@@ -138,23 +139,20 @@ function InstalledApps({
   navigation: Props['navigation'];
 }) {
   const { list, active } = useWebapps(deviceId);
+  const { slots } = useSlots(deviceId);
   const updates = useUpdates(deviceId);
 
+  const launcherId = heldBy(slots, 'launcher');
   const tiles = appTiles(
     list,
     active?.id ?? null,
     updates.map(u => u.appId),
+    launcherId,
   );
 
   return (
     <View>
-      <SectionHeader
-        title="on your car thing"
-        action={deviceId ? 'home screen' : undefined}
-        onAction={() =>
-          deviceId && navigation.navigate('WebappSlots', { deviceId })
-        }
-      />
+      <SectionHeader title="on your car thing" />
       {tiles.length === 0 ? (
         <SectionEmpty>
           {connected
@@ -197,8 +195,30 @@ function InstalledApps({
           ))}
         </ListGroup>
       )}
+
+      {deviceId ? (
+        <View className="mt-4">
+          <ListGroup>
+            <ListRow
+              icon="LayoutGrid"
+              title="home screen"
+              subtitle={launcherName(list, launcherId)}
+              chevron
+              onPress={() => navigation.navigate('WebappSlots', { deviceId })}
+            />
+          </ListGroup>
+        </View>
+      ) : null}
     </View>
   );
+}
+
+function launcherName(
+  list: BridgethingWebappInfo[],
+  launcherId: string | null,
+): string {
+  if (!launcherId) return 'built-in hub';
+  return list.find(w => w.id === launcherId)?.name ?? 'an installed app';
 }
 
 function PairButton({

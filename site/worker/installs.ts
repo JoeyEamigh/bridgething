@@ -14,7 +14,8 @@ import {
 
 const INSTALL_PREFIX = 'install:';
 const INSTALL_SNAPSHOT_KEY = 'directory:installs';
-const SEEN_PREFIX = 'seen:';
+const DEVICE_PREFIX = 'device:';
+const MAX_APPS = 200;
 
 const APP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SERIAL = /^[0-9]{4}[A-Z][0-9A-Z]{7}$/;
@@ -30,23 +31,26 @@ export type InstallRecord = {
   last_at: string;
 };
 
-export type SeenRecord = {
+export type DeviceApp = {
   app_id: string;
-  serial: string;
   source_url: string;
   version: string;
-  first_at: string;
+};
+
+export type DeviceRecord = {
+  serial: string;
+  apps: DeviceApp[];
   updated_at: string;
 };
 
-export type InstallOutcome = { ok: true; record: InstallRecord } | { ok: false; status: number; reason: string };
+export type InstalledOutcome = { ok: true; record: DeviceRecord } | { ok: false; status: number; reason: string };
 
 export function installKeyFor(appId: string, sourceUrl: string): string {
   return `${INSTALL_PREFIX}${appId}:${sourceUrl}`;
 }
 
-export function seenKeyFor(appId: string, serial: string): string {
-  return `${SEEN_PREFIX}${appId}:${serial}`;
+export function deviceKeyFor(serial: string): string {
+  return `${DEVICE_PREFIX}${serial}`;
 }
 
 export async function rebuildInstalls(kv: KvLike): Promise<InstallRecord[]> {
@@ -75,24 +79,26 @@ export function toInstallCounts(records: InstallRecord[]): InstallCount[] {
 }
 
 export async function recountInstalls(kv: KvLike): Promise<InstallRecord[]> {
-  const markers = await walkRecords<SeenRecord>(kv, SEEN_PREFIX);
+  const devices = await walkRecords<DeviceRecord>(kv, DEVICE_PREFIX);
   const derived = new Map<string, InstallRecord>();
 
-  for (const marker of markers) {
-    if (typeof marker.app_id !== 'string' || typeof marker.source_url !== 'string') continue;
-    const key = installKeyFor(marker.app_id, marker.source_url);
-    const held = derived.get(key) ?? {
-      app_id: marker.app_id,
-      source_url: marker.source_url,
-      count: 0,
-      versions: {},
-      last_at: marker.updated_at,
-    };
+  for (const device of devices) {
+    for (const app of Array.isArray(device.apps) ? device.apps : []) {
+      if (typeof app?.app_id !== 'string' || typeof app?.source_url !== 'string') continue;
+      const key = installKeyFor(app.app_id, app.source_url);
+      const held = derived.get(key) ?? {
+        app_id: app.app_id,
+        source_url: app.source_url,
+        count: 0,
+        versions: {},
+        last_at: device.updated_at,
+      };
 
-    held.count += 1;
-    held.versions = shift(held.versions, null, marker.version || UNKNOWN_VERSION);
-    if (marker.updated_at > held.last_at) held.last_at = marker.updated_at;
-    derived.set(key, held);
+      held.count += 1;
+      held.versions = shift(held.versions, null, app.version || UNKNOWN_VERSION);
+      if (device.updated_at > held.last_at) held.last_at = device.updated_at;
+      derived.set(key, held);
+    }
   }
 
   for (const [key, record] of derived) {
@@ -110,17 +116,12 @@ export async function recountInstalls(kv: KvLike): Promise<InstallRecord[]> {
   return records;
 }
 
-export async function recordInstall(args: {
+export async function recordInstalled(args: {
   kv: KvLike;
   body: Record<string, unknown> | null;
   now: string;
-}): Promise<InstallOutcome> {
+}): Promise<InstalledOutcome> {
   const { kv, body, now } = args;
-
-  const rawId = body?.['app_id'];
-  if (typeof rawId !== 'string') return { ok: false, status: 400, reason: 'send a json body with an "app_id" string' };
-  const appId = rawId.trim().toLowerCase();
-  if (!APP_ID.test(appId)) return { ok: false, status: 400, reason: '"app_id" must be a catalog app uuid' };
 
   const rawSerial = body?.['device_id'];
   if (typeof rawSerial !== 'string') {
@@ -129,74 +130,98 @@ export async function recordInstall(args: {
   const serial = rawSerial.trim().toUpperCase();
   if (!SERIAL.test(serial)) return { ok: false, status: 400, reason: '"device_id" must be a car thing serial' };
 
-  const rawSource = body?.['source_url'];
-  if (typeof rawSource !== 'string') {
-    return { ok: false, status: 400, reason: 'send a json body with a "source_url" string' };
+  const rawApps = body?.['apps'];
+  if (!Array.isArray(rawApps)) return { ok: false, status: 400, reason: 'send a json body with an "apps" array' };
+  if (rawApps.length > MAX_APPS) {
+    return { ok: false, status: 400, reason: `a device reports at most ${MAX_APPS} apps` };
   }
 
+  const held = new Map<string, DeviceApp>();
+  for (const raw of rawApps) {
+    const app = await accept(kv, raw);
+    if (app) held.set(installKeyFor(app.app_id, app.source_url), app);
+  }
+
+  const apps = [...held.values()].sort(
+    (a, b) => a.app_id.localeCompare(b.app_id) || a.source_url.localeCompare(b.source_url),
+  );
+  const record: DeviceRecord = { serial, apps, updated_at: now };
+
+  const key = deviceKeyFor(serial);
+  const before = await readRecord<DeviceRecord>(kv, key);
+  const known = new Map(
+    (Array.isArray(before?.apps) ? before.apps : []).map(app => [installKeyFor(app.app_id, app.source_url), app]),
+  );
+  if (before !== null && sameApps(known, held)) return { ok: true, record: before };
+
+  for (const [id, app] of held) {
+    const was = known.get(id);
+    if (was === undefined) {
+      await writeInstall(kv, app.app_id, app.source_url, now, tally => ({
+        ...tally,
+        count: tally.count + 1,
+        versions: shift(tally.versions, null, app.version),
+      }));
+    } else if (was.version !== app.version) {
+      await writeInstall(kv, app.app_id, app.source_url, now, tally => ({
+        ...tally,
+        versions: shift(tally.versions, was.version, app.version),
+      }));
+    }
+  }
+
+  for (const [id, was] of known) {
+    if (held.has(id)) continue;
+    await writeInstall(kv, was.app_id, was.source_url, now, tally => ({
+      ...tally,
+      count: Math.max(0, tally.count - 1),
+      versions: shift(tally.versions, was.version, null),
+    }));
+  }
+
+  await kv.put(key, JSON.stringify(record));
+  return { ok: true, record };
+}
+
+async function accept(kv: KvLike, raw: unknown): Promise<DeviceApp | null> {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const entry = raw as Record<string, unknown>;
+
+  const rawId = entry['app_id'];
+  if (typeof rawId !== 'string') return null;
+  const appId = rawId.trim().toLowerCase();
+  if (!APP_ID.test(appId)) return null;
+
+  const rawSource = entry['source_url'];
+  if (typeof rawSource !== 'string') return null;
   let sourceUrl: string;
   try {
     sourceUrl = normalizeSourceUrl(rawSource);
   } catch (reason) {
-    if (reason instanceof SourceUrlError) return { ok: false, status: 400, reason: reason.message };
+    if (reason instanceof SourceUrlError) return null;
     throw reason;
   }
+  if (!(await counted(kv, sourceUrl))) return null;
 
-  const rawVersion = body?.['version'];
-  if (rawVersion !== undefined && rawVersion !== null && typeof rawVersion !== 'string') {
-    return { ok: false, status: 400, reason: '"version" must be a string or null' };
-  }
+  const rawVersion = entry['version'];
   const version =
     (typeof rawVersion === 'string' ? rawVersion.trim().slice(0, VERSION_MAX_LEN) : '') || UNKNOWN_VERSION;
 
-  if (!(await counted(kv, sourceUrl))) {
-    return { ok: false, status: 404, reason: 'only sources published in the directory are counted' };
-  }
+  return { app_id: appId, source_url: sourceUrl, version };
+}
 
-  return { ok: true, record: await bump(kv, { appId, sourceUrl, serial, version, now }) };
+function sameApps(before: Map<string, DeviceApp>, after: Map<string, DeviceApp>): boolean {
+  if (before.size !== after.size) return false;
+  for (const [id, app] of after) {
+    if (before.get(id)?.version !== app.version) return false;
+  }
+  return true;
 }
 
 async function counted(kv: KvLike, sourceUrl: string): Promise<boolean> {
   if (sourceUrl === OFFICIAL_CATALOG_URL) return true;
   const record = await readSource(kv, sourceUrl);
   return record !== null && isPublished(record);
-}
-
-type Bump = { appId: string; sourceUrl: string; serial: string; version: string; now: string };
-
-async function bump(kv: KvLike, args: Bump): Promise<InstallRecord> {
-  const seenKey = seenKeyFor(args.appId, args.serial);
-  const seen = await readRecord<SeenRecord>(kv, seenKey);
-
-  if (seen === null) {
-    const record = await writeInstall(kv, args.appId, args.sourceUrl, args.now, held => ({
-      ...held,
-      count: held.count + 1,
-      versions: shift(held.versions, null, args.version),
-    }));
-    await kv.put(
-      seenKey,
-      JSON.stringify({
-        app_id: args.appId,
-        serial: args.serial,
-        source_url: args.sourceUrl,
-        version: args.version,
-        first_at: args.now,
-        updated_at: args.now,
-      } satisfies SeenRecord),
-    );
-    return record;
-  }
-
-  const home = seen.source_url;
-  if (seen.version === args.version) return await heldInstall(kv, args.appId, home, args.now);
-
-  const record = await writeInstall(kv, args.appId, home, args.now, held => ({
-    ...held,
-    versions: shift(held.versions, seen.version, args.version),
-  }));
-  await kv.put(seenKey, JSON.stringify({ ...seen, version: args.version, updated_at: args.now } satisfies SeenRecord));
-  return record;
 }
 
 function blank(appId: string, sourceUrl: string, now: string): InstallRecord {

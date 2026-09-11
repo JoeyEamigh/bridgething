@@ -12,7 +12,6 @@ import {
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
   recommendedSources,
-  reportInstall,
   sortNewestFirst,
   STORE_COPY,
   versionCompatible,
@@ -51,7 +50,7 @@ import { pickArtifact } from '../lib/picker.ts';
 import { CatalogIcon } from '../lib/webapp-icon.tsx';
 import { PATHS } from '../routes.ts';
 import { catalogFor, catalogsFor, mergedApps } from '../stores/catalog.ts';
-import { catalogSources, selectedMeta, webapps } from '../stores/session.ts';
+import { catalogSources, otaRuns, selectedMeta, webapps } from '../stores/session.ts';
 
 function deviceContext(): { installed: InstalledWebapp[]; libVersion: string | null } {
   return { installed: toInstalled(webapps.data.value), libVersion: selectedMeta.value?.libbridgethingVersion ?? null };
@@ -401,6 +400,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
   const { app, sourceUrl, newestCompatible, installedVersion, updateAvailable } = listing;
   const extension = extensionOf(newestCompatible);
   const actionable = newestCompatible !== null && (installedVersion === null || updateAvailable);
+  const queued = installing !== null && otaRuns.value.some(run => !run.outcome && run.webappId !== app.id);
 
   const install = async (version: AppVersion) => {
     setInstalling(version.version);
@@ -412,13 +412,8 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
         sourceUrl,
         { size: version.download.size, sha256: version.download.sha256 },
         extensionOf(version)?.permissions,
+        { id: app.id, name: app.name },
       );
-      reportInstall({
-        appId: app.id,
-        sourceUrl,
-        deviceId: selectedMeta.value?.serialNumber ?? null,
-        version: version.version,
-      });
       if (!subscribed.includes(sourceUrl)) {
         await session.addCatalogSource(sourceUrl);
         await catalogSources.refresh();
@@ -468,11 +463,13 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
           }}>
           {!newestCompatible
             ? 'needs newer firmware'
-            : updateAvailable
-              ? `update to v${newestCompatible.version}`
-              : installedVersion
-                ? 'installed'
-                : `install v${newestCompatible.version}`}
+            : queued
+              ? 'queued'
+              : updateAvailable
+                ? `update to v${newestCompatible.version}`
+                : installedVersion
+                  ? 'installed'
+                  : `install v${newestCompatible.version}`}
         </Button>
       </div>
 

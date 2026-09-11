@@ -2,16 +2,28 @@ import { listedWebapps } from '@bridgething/catalog';
 import type { WebappInfo, WebappSlot, WebappSlots } from '@bridgething/companion-types';
 import { Button, Dialog, ListGroup, ListRow, Pill, SectionEmpty, SectionHeader, Spinner } from '@bridgething/ui';
 import type { VNode } from 'preact';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 
 import { message } from '../../lib/browser-session';
 import { useBrowser, useBrowserQuery } from '../../lib/browser-tier';
+import { reportInstalled } from '../../lib/directory-client';
 import { ErrorNote, Hint, Section } from './Screen';
 
-export function Webapps(): VNode {
+export function Webapps({ serial }: { serial: string | null }): VNode {
   const webapps = useBrowserQuery(['webapps'], s => s.webapps());
   const active = useBrowserQuery(['webapps'], s => s.webappActive());
   const [opened, setOpened] = useState<string | null>(null);
+
+  const held = webapps.data;
+  useEffect(() => {
+    if (!serial || !held) return;
+    reportInstalled({
+      deviceId: serial,
+      apps: held
+        .filter(webapp => webapp.source === 'installed' && webapp.provenance)
+        .map(webapp => ({ appId: webapp.id, sourceUrl: webapp.provenance!, version: webapp.version })),
+    });
+  }, [serial, held]);
 
   const list = webapps.data ?? [];
   const listed = listedWebapps(list);

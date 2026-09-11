@@ -19,7 +19,7 @@ pub async fn run_install(url: &str, chaos: ChaosConfig, bundle: &Path, provenanc
 pub async fn install(session: &DeliverySession, bundle: &Path, provenance: Option<&str>) -> Result<()> {
   match session
     .ota
-    .install_webapp(DEVICE_ID, Arc::new(FileSource::open(bundle)), provenance)
+    .install_webapp(DEVICE_ID, Arc::new(FileSource::open(bundle)), provenance, None)
     .await
   {
     WebappInstallResult::Installed(info) => {

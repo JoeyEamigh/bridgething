@@ -1,10 +1,11 @@
 import type { SessionPeer } from '@bridgething/companion-types';
-import { Wordmark, cx } from '@bridgething/ui';
+import { Button, Wordmark, cx } from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
 
 import { Icon } from '../lib/icons.tsx';
 import { SECTIONS, sectionFor } from '../routes.ts';
+import { applySelfUpdate, selfUpdate } from '../stores/self-update.ts';
 
 export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
   const { path, route } = useLocation();
@@ -39,7 +40,16 @@ export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
         ))}
       </ul>
 
-      <div class="mt-auto border-t border-rule px-5 py-4">
+      {selfUpdate.value.kind === 'ready' ? (
+        <div class="mt-auto flex flex-col gap-2 border-t border-rule px-5 py-4">
+          <span class="font-mono text-eyebrow text-accent uppercase">v{selfUpdate.value.update.version} ready</span>
+          <Button size="sm" variant="primary" icon={<Icon name="refresh" />} onClick={() => void applySelfUpdate()}>
+            restart to update
+          </Button>
+        </div>
+      ) : null}
+
+      <div class={cx(selfUpdate.value.kind === 'ready' ? '' : 'mt-auto', 'border-t border-rule px-5 py-4')}>
         <span class="flex items-center gap-2">
           <span
             aria-hidden="true"

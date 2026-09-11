@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bridgething_gateway::RequestFailure;
 use bridgething_test_harness::Harness;
 use libbridgething::{
@@ -7,6 +9,7 @@ use libbridgething::{
 use uuid::Uuid;
 
 const CUSTOM_OVERLAY_BODY: &str = "/* a custom overlay */";
+const SETTLE: Duration = Duration::from_secs(3);
 
 struct Planted {
   id: Uuid,
@@ -262,6 +265,42 @@ async fn uninstalling_a_slot_holder_releases_both_slots() {
     !script.contains(CUSTOM_OVERLAY_BODY),
     "overlay falls back to the builtin script"
   );
+}
+
+#[tokio::test]
+async fn an_uninstall_reaches_the_launcher_that_is_drawing_the_grid() {
+  let harness = Harness::start().await.expect("harness start");
+  let planted = plant(&harness, None, false).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+  let mut client = harness.connect_modern_client().await.expect("connect modern client");
+
+  companion
+    .webapp()
+    .uninstall(WebappUninstall { id: planted.id })
+    .await
+    .expect("uninstall");
+
+  let mut seen: Vec<String> = Vec::new();
+  let deadline = tokio::time::Instant::now() + SETTLE;
+  loop {
+    let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+    assert!(
+      !left.is_zero(),
+      "a launcher only redraws its grid when the daemon says an app left; it saw {seen:?}"
+    );
+    match tokio::time::timeout(left, client.recv()).await {
+      Ok(Some(text)) if text.contains("webappUninstalled") => {
+        assert!(
+          text.contains(&planted.id.to_string()),
+          "the event names the app that left so a grid can drop the right tile: {text}"
+        );
+        return;
+      }
+      Ok(Some(text)) => seen.push(text),
+      Ok(None) => panic!("the client link closed before the event arrived"),
+      Err(_) => {}
+    }
+  }
 }
 
 #[tokio::test]

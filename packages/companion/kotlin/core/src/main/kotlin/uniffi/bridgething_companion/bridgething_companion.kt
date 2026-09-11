@@ -3153,6 +3153,8 @@ internal object UniffiLib {
         `deviceId`: RustBuffer.ByValue,
         `archivePath`: RustBuffer.ByValue,
         `provenance`: RustBuffer.ByValue,
+        `webappId`: RustBuffer.ByValue,
+        `webappName`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
@@ -3162,6 +3164,8 @@ internal object UniffiLib {
         `expected`: RustBuffer.ByValue,
         `provenance`: RustBuffer.ByValue,
         `sink`: RustBuffer.ByValue,
+        `webappId`: RustBuffer.ByValue,
+        `webappName`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_list_webapp_config(
@@ -5471,10 +5475,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 50155) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 57765) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 18104) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -11133,6 +11137,8 @@ public interface CompanionSessionInterface {
         `deviceId`: kotlin.String,
         `archivePath`: kotlin.String,
         `provenance`: kotlin.String?,
+        `webappId`: kotlin.String? = null,
+        `webappName`: kotlin.String? = null,
     ): WebappInfo
 
     suspend fun `installWebappFromUrl`(
@@ -11141,6 +11147,8 @@ public interface CompanionSessionInterface {
         `expected`: ArtifactDigest?,
         `provenance`: kotlin.String?,
         `sink`: WebappBundleSink? = null,
+        `webappId`: kotlin.String? = null,
+        `webappName`: kotlin.String? = null,
     ): WebappInfo
 
     suspend fun `listWebappConfig`(
@@ -11781,6 +11789,8 @@ open class CompanionSession :
         `deviceId`: kotlin.String,
         `archivePath`: kotlin.String,
         `provenance`: kotlin.String?,
+        `webappId`: kotlin.String?,
+        `webappName`: kotlin.String?,
     ): WebappInfo =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -11789,6 +11799,8 @@ open class CompanionSession :
                     FfiConverterString.lower(`deviceId`),
                     FfiConverterString.lower(`archivePath`),
                     FfiConverterOptionalString.lower(`provenance`),
+                    FfiConverterOptionalString.lower(`webappId`),
+                    FfiConverterOptionalString.lower(`webappName`),
                 )
             },
             {
@@ -11814,6 +11826,8 @@ open class CompanionSession :
         `expected`: ArtifactDigest?,
         `provenance`: kotlin.String?,
         `sink`: WebappBundleSink?,
+        `webappId`: kotlin.String?,
+        `webappName`: kotlin.String?,
     ): WebappInfo =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -11824,6 +11838,8 @@ open class CompanionSession :
                     FfiConverterOptionalTypeArtifactDigest.lower(`expected`),
                     FfiConverterOptionalString.lower(`provenance`),
                     FfiConverterOptionalTypeWebappBundleSink.lower(`sink`),
+                    FfiConverterOptionalString.lower(`webappId`),
+                    FfiConverterOptionalString.lower(`webappName`),
                 )
             },
             {
@@ -35057,10 +35073,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
-
-/**
- * How a provider gets signed in: a handshake the provider drives itself, or a server login the user types.
- */
 
 enum class SignInMethod {
     HANDSHAKE,

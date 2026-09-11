@@ -1191,4 +1191,4 @@ export type WebappIconReply = {
 
 export type WebappListReply = { webapps: Array<WebappInfo> };
 
-export type WebappUninstalled = { name: string };
+export type WebappUninstalled = { id: string; name: string };

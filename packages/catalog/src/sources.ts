@@ -97,34 +97,49 @@ export async function fetchMergedApps(init?: { origin?: string; signal?: AbortSi
   return { ...body, installs: Array.isArray(body.installs) ? body.installs : [] };
 }
 
-export type InstallReport = {
+export type InstalledApp = {
   appId: string;
   sourceUrl: string;
-  deviceId: string | null;
   version?: string | null;
 };
 
-export function reportInstall(install: InstallReport, init?: { origin?: string }): void {
-  if (!install.deviceId) return;
+export type InstalledReport = {
+  deviceId: string | null;
+  apps: InstalledApp[];
+};
+
+const reported = new Map<string, string>();
+
+export function installedBody(report: InstalledReport): string {
+  const apps = report.apps
+    .map(app => ({
+      app_id: app.appId.toLowerCase(),
+      source_url: app.sourceUrl,
+      version: app.version ?? null,
+    }))
+    .sort((a, b) => a.app_id.localeCompare(b.app_id) || a.source_url.localeCompare(b.source_url));
+  return JSON.stringify({ device_id: report.deviceId, apps });
+}
+
+export function reportInstalled(report: InstalledReport, init?: { origin?: string }): void {
+  const serial = report.deviceId;
+  if (!serial) return;
+
+  const body = installedBody(report);
+  if (reported.get(serial) === body) return;
+  reported.set(serial, body);
 
   const origin = init?.origin ?? DIRECTORY_ORIGIN;
-  const body = JSON.stringify({
-    app_id: install.appId,
-    source_url: install.sourceUrl,
-    device_id: install.deviceId,
-    version: install.version ?? null,
-  });
-
   void Promise.resolve()
     .then(() =>
-      fetch(`${origin}/api/installs`, {
+      fetch(`${origin}/api/installed`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         keepalive: true,
         body,
       }),
     )
-    .catch(() => undefined);
+    .catch(() => reported.delete(serial));
 }
 
 export async function fetchSources(urls: string[]): Promise<CatalogSnapshot> {

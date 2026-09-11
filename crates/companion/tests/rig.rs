@@ -836,6 +836,8 @@ async fn the_bundle_sink_is_handed_the_artifact_while_it_is_still_on_disk() {
       None,
       None,
       Some(sink.clone()),
+      None,
+      None,
     )
     .await
     .expect("the device installs the bundle");
@@ -883,6 +885,8 @@ async fn the_bundle_sink_runs_off_the_worker_that_is_driving_the_link() {
       None,
       None,
       Some(sink.clone()),
+      None,
+      None,
     )
     .await
     .expect("the device installs the bundle");
@@ -911,6 +915,8 @@ async fn a_device_install_that_fails_never_reaches_the_bundle_sink() {
       None,
       None,
       Some(sink.clone()),
+      None,
+      None,
     )
     .await;
 

@@ -37,7 +37,7 @@ use crate::{
     progress::{OtaRunProgress, ota_progress},
     range::RangeServer,
     rate::RateTracker,
-    run_store::{OtaAvailable, OtaPollStatus, OtaRun, OtaRunStore, OtaStoreChange},
+    run_store::{OtaAvailable, OtaPollStatus, OtaRun, OtaRunStore, OtaStoreChange, WebappLabel},
     stream::{Artifact, ArtifactStreamer, FileSource},
     watchdog::{IDLE_DEADLINE_MS, IDLE_POLL_MS, ProgressClock, stalled_reason},
   },
@@ -107,6 +107,13 @@ pub fn bandaid_plan(pieces: &[(String, u64)]) -> Vec<OtaPlanStep> {
   steps
 }
 
+pub fn webapp_plan(bytes: u64) -> Vec<OtaPlanStep> {
+  vec![
+    step(0, OtaStepKind::Stream, "webapp", bytes),
+    step(1, OtaStepKind::Apply, "installing", 0),
+  ]
+}
+
 fn step(id: u32, kind: OtaStepKind, label: &str, bytes: u64) -> OtaPlanStep {
   OtaPlanStep {
     id,
@@ -152,6 +159,7 @@ struct Feed {
   events: broadcast::Sender<OtaPollEvent>,
   store_changes: broadcast::Sender<OtaStoreChange>,
   identities: Mutex<BTreeMap<String, String>>,
+  webapp_labels: Mutex<BTreeMap<String, WebappLabel>>,
 }
 
 impl Feed {
@@ -159,7 +167,27 @@ impl Feed {
     let identity = event
       .device_id()
       .and_then(|device_id| self.identities.lock().unwrap().get(device_id).cloned());
-    for change in self.store.lock().unwrap().ingest(event.clone(), identity.as_deref()) {
+    let label = event
+      .device_id()
+      .and_then(|device_id| self.webapp_labels.lock().unwrap().get(device_id).cloned());
+    let mut changes = self.store.lock().unwrap().ingest(event.clone(), identity.as_deref());
+    if let Some(label) = label {
+      for change in &mut changes {
+        let OtaStoreChange::Run(run) = change else { continue };
+        if run.kind != OtaKind::InstalledWebapp || run.webapp_id.as_deref() == Some(label.id.as_str()) {
+          continue;
+        }
+        let annotated = self
+          .store
+          .lock()
+          .unwrap()
+          .annotate_webapp(&run.device_id, Some(&label.id), Some(&label.name));
+        if let Some(annotated) = annotated {
+          *run = Box::new(annotated);
+        }
+      }
+    }
+    for change in changes {
       let _ = self.store_changes.send(change);
     }
     let _ = self.events.send(event);
@@ -228,8 +256,6 @@ pub enum WebappInstallResult {
   Installed(Box<WebappInfo>),
   Failed { reason: String },
 }
-
-pub const IN_FLIGHT_REASON: &str = "another update is already in flight for this device";
 
 #[derive(Debug, Clone)]
 struct DaemonPatchPlan {
@@ -371,6 +397,8 @@ pub struct OtaService {
   recheck_soon: AtomicBool,
   image_targets: Mutex<BTreeMap<String, String>>,
   in_flight: Mutex<BTreeSet<String>>,
+  install_turns: Mutex<BTreeMap<String, Arc<tokio::sync::Mutex<()>>>>,
+  idle: Notify,
   poll: Mutex<PollState>,
   wake: Notify,
 }
@@ -382,6 +410,7 @@ impl OtaService {
       events: broadcast::channel(256).0,
       store_changes: broadcast::channel(256).0,
       identities: Mutex::new(BTreeMap::new()),
+      webapp_labels: Mutex::new(BTreeMap::new()),
     };
 
     Arc::new(Self {
@@ -392,6 +421,8 @@ impl OtaService {
       recheck_soon: AtomicBool::new(false),
       image_targets: Mutex::new(BTreeMap::new()),
       in_flight: Mutex::new(BTreeSet::new()),
+      install_turns: Mutex::new(BTreeMap::new()),
+      idle: Notify::new(),
       poll: Mutex::new(PollState::default()),
       wake: Notify::new(),
     })
@@ -775,12 +806,32 @@ impl OtaService {
     device_id: &str,
     bundle: Arc<dyn Artifact>,
     provenance: Option<&str>,
+    webapp: Option<WebappLabel>,
   ) -> WebappInstallResult {
-    if !self.try_begin_in_flight(device_id) {
-      return WebappInstallResult::Failed {
-        reason: IN_FLIGHT_REASON.to_owned(),
-      };
+    let turn = self.install_turn(device_id);
+    let _queued = turn.lock().await;
+    self.claim_device(device_id).await;
+    if let Some(label) = webapp {
+      self
+        .feed
+        .webapp_labels
+        .lock()
+        .unwrap()
+        .insert(device_id.to_owned(), label);
     }
+    let plan = webapp_plan(bundle.size().unwrap_or(0));
+    self.feed.emit(OtaPollEvent::Planned {
+      device_id: device_id.to_owned(),
+      kind: OtaKind::InstalledWebapp,
+      release: String::new(),
+      daemon_version: String::new(),
+      image_version: String::new(),
+      channel: String::new(),
+      root_url: String::new(),
+      steps: plan.clone(),
+    });
+    let progress = StepRouter::sink(self.feed.clone(), device_id, OtaKind::InstalledWebapp, plan);
+
     let outcome = self
       .drive(
         device_id,
@@ -792,10 +843,22 @@ impl OtaService {
         None,
         provenance,
         None,
-        &direct_sink(self.feed.clone(), device_id, OtaKind::InstalledWebapp),
+        &progress,
       )
       .await;
+    let installed_version = outcome
+      .installed
+      .as_ref()
+      .map(|info| info.version.clone())
+      .unwrap_or_default();
+    self.emit_terminal(
+      device_id,
+      OtaKind::InstalledWebapp,
+      &installed_version,
+      &outcome.terminal,
+    );
     self.end_in_flight(device_id);
+    self.feed.webapp_labels.lock().unwrap().remove(device_id);
 
     match (outcome.terminal, outcome.installed) {
       (_, Some(info)) => WebappInstallResult::Installed(Box::new(info)),
@@ -877,8 +940,29 @@ impl OtaService {
     self.in_flight.lock().unwrap().insert(device_id.to_owned())
   }
 
+  fn install_turn(&self, device_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    self
+      .install_turns
+      .lock()
+      .unwrap()
+      .entry(device_id.to_owned())
+      .or_default()
+      .clone()
+  }
+
+  async fn claim_device(&self, device_id: &str) {
+    loop {
+      let freed = self.idle.notified();
+      if self.try_begin_in_flight(device_id) {
+        return;
+      }
+      freed.await;
+    }
+  }
+
   fn end_in_flight(&self, device_id: &str) {
     self.in_flight.lock().unwrap().remove(device_id);
+    self.idle.notify_waiters();
     let open = self.feed.store.lock().unwrap().open_run_kind(device_id);
     if let Some(kind) = open {
       self.fail(device_id, kind, ABANDONED_REASON);
@@ -1716,8 +1800,8 @@ mod tests {
   use uuid::Uuid;
 
   use super::{
-    BOOT_ZCK_ASSET, BandaidArtifact, CACHE_BUDGET_BYTES, IMAGE_SWU_ASSET, IN_FLIGHT_REASON, OtaService, OtaServiceDeps,
-    SYSTEM_ZCK_ASSET, WebappInstallResult, bandaid_plan, daemon_piece, image_plan, route_step,
+    BOOT_ZCK_ASSET, BandaidArtifact, CACHE_BUDGET_BYTES, IMAGE_SWU_ASSET, OtaService, OtaServiceDeps, SYSTEM_ZCK_ASSET,
+    WebappInstallResult, WebappLabel, bandaid_plan, daemon_piece, image_plan, route_step,
   };
   use crate::{
     bundle::ArtifactDigest,
@@ -2462,6 +2546,7 @@ mod tests {
             DEVICE,
             Arc::new(FileSource::open(bundle)),
             Some("https://catalog.test/app.zip"),
+            None,
           )
           .await;
         assert_eq!(result, WebappInstallResult::Installed(Box::new(expected)));
@@ -2497,7 +2582,7 @@ mod tests {
       let service = rig.service.clone();
       tokio::spawn(async move {
         service
-          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None)
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, None)
           .await
       })
     };
@@ -2523,7 +2608,7 @@ mod tests {
       let service = rig.service.clone();
       tokio::spawn(async move {
         service
-          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None)
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, None)
           .await
       })
     };
@@ -2540,31 +2625,83 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn an_install_on_a_device_with_an_update_running_is_refused() {
+  async fn an_install_names_the_app_on_its_run() {
     let mut rig = rig().await;
     let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
-    let artifact = rig.spool.write("daemon", &pattern(8 * 1024));
 
-    let pushing = {
+    let driving = {
       let service = rig.service.clone();
       tokio::spawn(async move {
         service
-          .install_webapp(DEVICE, Arc::new(FileSource::open(artifact)), None)
+          .install_webapp(
+            DEVICE,
+            Arc::new(FileSource::open(bundle)),
+            None,
+            Some(WebappLabel {
+              id: "01890000-0000-7000-8000-0000000000ab".into(),
+              name: "FlowState".into(),
+            }),
+          )
           .await
       })
     };
-    rig.device.await_ota_begin().await;
 
-    assert_eq!(
-      rig
-        .service
-        .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None)
-        .await,
-      WebappInstallResult::Failed {
-        reason: IN_FLIGHT_REASON.into()
-      }
+    stream_through(&mut rig.device).await;
+    rig.device.webapp_installed(installed_info("0.1.0"));
+    driving.await.expect("the install task");
+
+    let runs = rig.service.retained_runs().await;
+    let [run] = runs.as_slice() else {
+      panic!("expected one run, got {runs:?}");
+    };
+    assert_eq!(run.webapp_id.as_deref(), Some("01890000-0000-7000-8000-0000000000ab"));
+    assert_eq!(run.webapp_name.as_deref(), Some("FlowState"));
+  }
+
+  #[tokio::test]
+  async fn an_install_on_a_busy_device_waits_its_turn() {
+    let mut rig = rig().await;
+    let first = rig.spool.write("first.zip", &pattern(16 * 1024));
+    let second = rig.spool.write("second.zip", &pattern(16 * 1024));
+
+    let driving = {
+      let service = rig.service.clone();
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(first)), None, None)
+          .await
+      })
+    };
+    stream_through(&mut rig.device).await;
+
+    let queued = {
+      let service = rig.service.clone();
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(second)), None, None)
+          .await
+      })
+    };
+    for _ in 0..16 {
+      tokio::task::yield_now().await;
+    }
+    assert!(!queued.is_finished(), "a second install waits instead of being refused");
+
+    rig.device.webapp_installed(installed_info("0.1.0"));
+    assert!(matches!(
+      driving.await.expect("the first install task"),
+      WebappInstallResult::Installed(_)
+    ));
+
+    stream_through(&mut rig.device).await;
+    rig.device.webapp_installed(installed_info("0.2.0"));
+    assert!(
+      matches!(
+        queued.await.expect("the queued install task"),
+        WebappInstallResult::Installed(_)
+      ),
+      "the queued install takes the device once it is free"
     );
-    pushing.abort();
   }
 
   #[tokio::test]

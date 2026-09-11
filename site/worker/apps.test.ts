@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { AppEntry, Catalog } from '@bridgething/catalog';
 import { mergedApps, OFFICIAL_CATALOG_URL } from './apps.ts';
 import type { SourceRecord, SourceStatus } from './directory.ts';
-import { recordInstall } from './installs.ts';
+import { recordInstalled } from './installs.ts';
 import { fakeKv } from './kv-fake.ts';
 import { writeSource } from './store.ts';
 
@@ -158,13 +158,11 @@ describe('mergedApps', () => {
 
   test('install counts ride along, so a client can sort by popularity from one request', async () => {
     const kv = await kvWithDirectory();
-    await recordInstall({
+    await recordInstalled({
       kv,
       body: {
-        app_id: '019e6701-13f8-71b5-ba04-000000000002',
-        source_url: LISTED_URL,
         device_id: '8558R481Q61R',
-        version: '1.0.0',
+        apps: [{ app_id: '019e6701-13f8-71b5-ba04-000000000002', source_url: LISTED_URL, version: '1.0.0' }],
       },
       now: NOW,
     });

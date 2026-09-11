@@ -1,6 +1,9 @@
 use libbridgething::{
   ConfigEntry, ConfigField, DocEntry, WebappError,
-  client::{BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, ConfigChanged, DocChanged},
+  client::{
+    BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, BridgeToClientWebappMsgEvent, ConfigChanged, DocChanged,
+    WebappUninstalled,
+  },
   gateway::{
     BridgeToGatewayWebappMsgEvent, GatewayToBridgeWebappMsgRequestDispatch, GetActiveWebapp, GetWebappSlots,
     ListWebapps, TransferBody, TransferRef, WebappActive, WebappConfigAck, WebappConfigChanged, WebappConfigDelete,
@@ -85,9 +88,17 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
       return Ok(());
     }
 
+    let name = self
+      .handle
+      .state
+      .webapps
+      .manifest(id)
+      .await
+      .map(|manifest| manifest.name.clone());
     let removed = self.handle.state.webapps.uninstall(id).await?;
     if removed {
       self.handle.state.kv.webapp_purge(id).await?;
+      self.broadcast_uninstalled(id, name.unwrap_or_default()).await;
     } else {
       tracing::debug!(
         "({:?}) webapp {id} was not installed; nothing to do",
@@ -558,6 +569,13 @@ impl WebappHandler {
     let url = navigate_url_for_active(&self.handle.state).await;
     if let Err(e) = self.handle.state.chrome.send(ChromeCommand::Navigate(url)).await {
       tracing::warn!("failed to reload kiosk after webapp switch: {:?}", e);
+    }
+  }
+
+  async fn broadcast_uninstalled(&self, id: Uuid, name: String) {
+    let event = BridgeToClientWebappMsgEvent::WebappUninstalled(WebappUninstalled { id, name });
+    if let Err(errs) = self.handle.state.bus.broadcast_event(event).await {
+      tracing::debug!("webapp uninstalled client broadcast: {} non-fatal errors", errs.len());
     }
   }
 

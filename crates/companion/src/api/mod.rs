@@ -374,11 +374,14 @@ impl CompanionSession {
     }))
   }
 
+  #[uniffi::method(default(webapp_id = None, webapp_name = None))]
   pub async fn install_webapp(
     &self,
     device_id: String,
     archive_path: String,
     provenance: Option<String>,
+    webapp_id: Option<String>,
+    webapp_name: Option<String>,
   ) -> Result<WebappInfo, CompanionError> {
     self.gateway_checked(&device_id)?;
     let source = std::sync::Arc::new(bridgething_delivery::ota::stream::FileSource::open(
@@ -390,7 +393,12 @@ impl CompanionSession {
     match self
       .session
       .ota()
-      .install_webapp(&device_id, source, provenance.as_deref())
+      .install_webapp(
+        &device_id,
+        source,
+        provenance.as_deref(),
+        webapp_label(webapp_id, webapp_name),
+      )
       .await
     {
       bridgething_delivery::ota::service::WebappInstallResult::Installed(info) => {
@@ -401,7 +409,7 @@ impl CompanionSession {
     }
   }
 
-  #[uniffi::method(default(sink = None))]
+  #[uniffi::method(default(sink = None, webapp_id = None, webapp_name = None))]
   pub async fn install_webapp_from_url(
     &self,
     device_id: String,
@@ -409,6 +417,8 @@ impl CompanionSession {
     expected: Option<ArtifactDigest>,
     provenance: Option<String>,
     sink: Option<Arc<dyn WebappBundleSink>>,
+    webapp_id: Option<String>,
+    webapp_name: Option<String>,
   ) -> Result<WebappInfo, CompanionError> {
     self.gateway_checked(&device_id)?;
     let path = self
@@ -428,7 +438,13 @@ impl CompanionSession {
       .await
       .map_err(|failure| CompanionError::Device(failure.to_string()))?;
     let installed = self
-      .install_webapp(device_id, path.display().to_string(), provenance)
+      .install_webapp(
+        device_id,
+        path.display().to_string(),
+        provenance,
+        webapp_id,
+        webapp_name,
+      )
       .await;
     if let (Ok(_), Some(sink)) = (&installed, sink) {
       let bundle = path.display().to_string();
@@ -768,6 +784,10 @@ impl CompanionSession {
 
 fn device_error<E: std::fmt::Debug>(failure: bridgething_sdk_runtime::RequestFailure<E>) -> CompanionError {
   CompanionError::Device(format!("{failure:?}"))
+}
+
+fn webapp_label(id: Option<String>, name: Option<String>) -> Option<bridgething_delivery::ota::run_store::WebappLabel> {
+  Some(bridgething_delivery::ota::run_store::WebappLabel { id: id?, name: name? })
 }
 
 fn webapp_id(raw: &str) -> Result<uuid::Uuid, CompanionError> {

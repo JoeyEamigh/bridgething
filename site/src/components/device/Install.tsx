@@ -17,7 +17,6 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { message } from '../../lib/browser-session';
 import { useBrowser, useBrowserQuery, type BrowserBackend } from '../../lib/browser-tier';
 import { fetchBundle, fetchCatalog } from '../../lib/catalog-source';
-import { reportInstall } from '../../lib/directory-client';
 import { isPlaceholderDownload, type PendingInstall } from '../../lib/pending-install';
 import { ErrorNote, Hint, Section, bytes } from './Screen';
 import { RunCard } from './Update';
@@ -54,12 +53,10 @@ function InstallProgress(): VNode | null {
 export function StagedInstall({
   pending,
   libVersion,
-  serial,
   onDone,
 }: {
   pending: PendingInstall;
   libVersion: string | null;
-  serial: string | null;
   onDone: () => void;
 }): VNode {
   const session = useBrowser();
@@ -91,18 +88,12 @@ export function StagedInstall({
       setNote('sha256 matches the catalog, sending it over');
       try {
         setNote(`installed ${await deliver(session, fetched.blob, pending.provenance)}`);
-        reportInstall({
-          appId: pending.appId,
-          sourceUrl: pending.provenance,
-          deviceId: serial,
-          version: pending.version,
-        });
         onDone();
       } catch (reason) {
         setFailure(message(reason));
       }
     })();
-  }, [pending, libVersion, serial, session, onDone]);
+  }, [pending, libVersion, session, onDone]);
 
   return (
     <Section>

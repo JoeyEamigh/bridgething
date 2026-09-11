@@ -551,7 +551,7 @@ pub async fn ota_install_webapp(
   let source = spool(bundle.clone())?;
   let outcome = shell
     .ota()
-    .install_webapp(&device_id, source, provenance.as_deref())
+    .install_webapp(&device_id, source, provenance.as_deref(), None)
     .await;
   Ok(match outcome {
     WebappInstallResult::Installed(info) => {
@@ -572,13 +572,15 @@ pub async fn install_webapp_from_url(
   expected: Option<ArtifactDigest>,
   provenance: Option<String>,
   confirmed: Option<Vec<String>>,
+  webapp_id: Option<String>,
+  webapp_name: Option<String>,
 ) -> Answer<WebappInfo> {
   let device_id = peer(&shell)?;
   let sink = extensions.inner().sink(&device_id, consented(confirmed)?);
   Ok(
     shell
       .session()
-      .install_webapp_from_url(device_id, url, expected, provenance, Some(sink))
+      .install_webapp_from_url(device_id, url, expected, provenance, Some(sink), webapp_id, webapp_name)
       .await?,
   )
 }

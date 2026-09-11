@@ -2,7 +2,7 @@ import { APP_DETAIL_SHELL, appIdFromPath } from '../src/lib/app-routes.ts';
 import { mergedApps } from './apps.ts';
 import { isVisible, SOURCE_STATUSES, toCatalogDocument, toDirectoryView, type SourceStatus } from './directory.ts';
 import { kvOf, type Env } from './env.ts';
-import { recordInstall, recountInstalls } from './installs.ts';
+import { recordInstalled, recountInstalls } from './installs.ts';
 import {
   entryView,
   jamGallery,
@@ -277,14 +277,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     return json({ source: outcome.record }, { status: outcome.created ? 201 : 200 });
   }
 
-  if (url.pathname === '/api/installs' && request.method === 'POST') {
+  if (url.pathname === '/api/installed' && request.method === 'POST') {
     if (!(await takeRateLimitToken(kv, `install:${clientOf(request)}`, INSTALL_LIMIT, INSTALL_WINDOW_SECONDS))) {
       return fail(429, `at most ${INSTALL_LIMIT} install reports per hour. try again later.`);
     }
 
-    const outcome = await recordInstall({ kv, body: await readJsonBody(request), now });
+    const outcome = await recordInstalled({ kv, body: await readJsonBody(request), now });
     if (!outcome.ok) return fail(outcome.status, outcome.reason);
-    return json({ installs: outcome.record.count }, { status: 202 });
+    return json({ apps: outcome.record.apps.length }, { status: 202 });
   }
 
   if (url.pathname.startsWith('/api/admin/') || url.pathname.startsWith('/api/jam/')) {

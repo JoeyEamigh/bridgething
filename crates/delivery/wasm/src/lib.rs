@@ -351,7 +351,7 @@ impl WasmSession {
       self
         .session
         .ota
-        .install_webapp(self.session.device_id(), source, provenance.as_deref())
+        .install_webapp(self.session.device_id(), source, provenance.as_deref(), None)
         .await,
     )?;
     to_js(&installed)

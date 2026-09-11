@@ -48,10 +48,8 @@ function Console(): VNode {
     <Screen>
       <Header peer={linked} meta={held} />
       <Update channel={held?.channel ?? null} />
-      {pending ? (
-        <StagedInstall pending={pending} libVersion={lib} serial={serial} onDone={() => setPending(null)} />
-      ) : null}
-      <Webapps />
+      {pending ? <StagedInstall pending={pending} libVersion={lib} onDone={() => setPending(null)} /> : null}
+      <Webapps serial={serial} />
       <AddApp libVersion={lib} />
       <DeviceInfo meta={held} />
     </Screen>

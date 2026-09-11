@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import { injectStoreData, storeData, STORE_DATA_ID } from './prerender.ts';
 import { fakeKv } from './kv-fake.ts';
-import { recordInstall } from './installs.ts';
+import { recordInstalled } from './installs.ts';
 
 const NOW = '2026-07-25T00:00:00.000Z';
 const APP_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
@@ -52,9 +52,9 @@ function page(body = `<script id="${STORE_DATA_ID}" type="application/json">null
 
 async function injected(body?: string): Promise<string> {
   const kv = fakeKv();
-  await recordInstall({
+  await recordInstalled({
     kv,
-    body: { app_id: APP_ID, source_url: OFFICIAL_CATALOG_URL, device_id: DEVICE, version: '1.0.0' },
+    body: { device_id: DEVICE, apps: [{ app_id: APP_ID, source_url: OFFICIAL_CATALOG_URL, version: '1.0.0' }] },
     now: NOW,
   });
   const data = await storeData({ kv, now: NOW, fetchImpl: stubFetch() });

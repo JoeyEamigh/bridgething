@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import type { SourceRecord, SourceStatus } from './directory.ts';
 import {
+  deviceKeyFor,
   installKeyFor,
   listInstalls,
   rebuildInstalls,
-  recordInstall,
+  recordInstalled,
   recountInstalls,
-  seenKeyFor,
   toInstallCounts,
   UNKNOWN_VERSION,
 } from './installs.ts';
@@ -54,34 +54,77 @@ async function directory(): Promise<FakeKv> {
   return kv;
 }
 
-function beacon(
-  appId: string,
-  sourceUrl: string,
-  device: string = ONE,
-  version: string | null = null,
-): Record<string, unknown> {
-  return { app_id: appId, source_url: sourceUrl, device_id: device, version };
+function app(appId: string, sourceUrl: string = LISTED_URL, version: unknown = null): Record<string, unknown> {
+  return { app_id: appId, source_url: sourceUrl, version };
+}
+
+function census(device: string, ...apps: Record<string, unknown>[]): Record<string, unknown> {
+  return { device_id: device, apps };
 }
 
 function counted(appId: string, sourceUrl: string, count: number, versions: Record<string, number>) {
   return { app_id: appId, source_url: sourceUrl, count, versions };
 }
 
-describe('recordInstall', () => {
-  test('the first device to install an app starts its tally at one', async () => {
+describe('recordInstalled', () => {
+  test('the first device holding an app starts its tally at one', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.ok && outcome.record.count).toBe(1);
+    expect(toInstallCounts(await listInstalls(kv))[0]!.count).toBe(1);
   });
 
-  test('distinct devices installing one app accumulate', async () => {
+  test('a device that had an app before anyone was counting backfills on its first report', async () => {
+    const kv = await directory();
+
+    await recordInstalled({
+      kv,
+      body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0'), app(WEATHER_ID, LISTED_URL, '2.0.0')),
+      now: NOW,
+    });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([
+      counted(WEATHER_ID, LISTED_URL, 1, { '2.0.0': 1 }),
+      counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 }),
+    ]);
+  });
+
+  test('an app the device no longer holds leaves the tally with it', async () => {
+    const kv = await directory();
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID), app(WEATHER_ID)), now: NOW });
+
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID)), now: LATER });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([
+      counted(WEATHER_ID, LISTED_URL, 1, { [UNKNOWN_VERSION]: 1 }),
+    ]);
+  });
+
+  test('a device that gives everything up counts for nothing', async () => {
+    const kv = await directory();
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+
+    await recordInstalled({ kv, body: census(ONE), now: LATER });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([]);
+  });
+
+  test('one device dropping an app never takes another device down with it', async () => {
+    const kv = await directory();
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID)), now: NOW });
+
+    await recordInstalled({ kv, body: census(ONE), now: LATER });
+
+    expect(toInstallCounts(await listInstalls(kv))[0]!.count).toBe(1);
+  });
+
+  test('distinct devices holding one app accumulate', async () => {
     const kv = await directory();
 
     for (const device of [ONE, TWO, THREE]) {
-      await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, device), now: NOW });
+      await recordInstalled({ kv, body: census(device, app(CALENDAR_ID)), now: NOW });
     }
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
@@ -89,22 +132,32 @@ describe('recordInstall', () => {
     ]);
   });
 
-  test('one device reinstalling the same version never moves the tally', async () => {
+  test('one device reporting the same inventory over and over never moves the tally', async () => {
     const kv = await directory();
 
     for (let i = 0; i < 5; i += 1) {
-      await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+      await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
     }
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 })]);
   });
 
-  test('a repeat of the same version costs one kv read and writes nothing', async () => {
+  test('an unchanged inventory writes nothing', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
     kv.resetCounts();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: LATER });
+
+    expect(kv.counts.put).toBe(0);
+  });
+
+  test('the order apps arrive in is not a change', async () => {
+    const kv = await directory();
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID), app(WEATHER_ID)), now: NOW });
+    kv.resetCounts();
+
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID), app(CALENDAR_ID)), now: LATER });
 
     expect(kv.counts.put).toBe(0);
   });
@@ -112,8 +165,8 @@ describe('recordInstall', () => {
   test('serials differing only in case are one device', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE.toLowerCase()), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(ONE.toLowerCase(), app(CALENDAR_ID)), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))[0]!.count).toBe(1);
   });
@@ -122,38 +175,54 @@ describe('recordInstall', () => {
     const kv = await directory();
 
     for (const device of ['', '   ', 'superbird0', '8558R481Q61', '8558R481Q61RR', '8558:481Q61R', '../../etc']) {
-      expect(await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, device), now: NOW })).toMatchObject({
+      expect(await recordInstalled({ kv, body: census(device, app(CALENDAR_ID)), now: NOW })).toMatchObject({
         ok: false,
         status: 400,
       });
     }
   });
 
-  test('a beacon with no device is refused rather than counted anonymously', async () => {
+  test('an inventory with no device is refused rather than counted anonymously', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({
-      kv,
-      body: { app_id: CALENDAR_ID, source_url: LISTED_URL, version: '1.0.0' },
-      now: NOW,
-    });
+    const outcome = await recordInstalled({ kv, body: { apps: [app(CALENDAR_ID)] }, now: NOW });
 
     expect(outcome).toMatchObject({ ok: false, status: 400 });
     expect(await listInstalls(kv)).toHaveLength(0);
   });
 
+  test('a body with no apps array is refused, because it is not an empty device', async () => {
+    const kv = await directory();
+
+    expect(await recordInstalled({ kv, body: null, now: NOW })).toMatchObject({ ok: false, status: 400 });
+    expect(await recordInstalled({ kv, body: { device_id: ONE }, now: NOW })).toMatchObject({
+      ok: false,
+      status: 400,
+    });
+  });
+
+  test('a device claiming more apps than one could hold is refused whole', async () => {
+    const kv = await directory();
+    const apps = Array.from({ length: 201 }, () => app(CALENDAR_ID));
+
+    expect(await recordInstalled({ kv, body: census(ONE, ...apps), now: NOW })).toMatchObject({
+      ok: false,
+      status: 400,
+    });
+  });
+
   test('the same app from two sources is counted per source', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, OFFICIAL_CATALOG_URL, TWO), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID, OFFICIAL_CATALOG_URL)), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))).toHaveLength(2);
   });
 
-  test('a tally is readable straight after the install that made it', async () => {
+  test('a tally is readable straight after the report that made it', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID)), now: NOW });
 
     expect(await listInstalls(kv)).toHaveLength(1);
   });
@@ -161,19 +230,19 @@ describe('recordInstall', () => {
   test('a fresh tally is served before kv list can enumerate the record behind it', async () => {
     const kv = withListLag(await directory());
 
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID)), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
       counted(WEATHER_ID, LISTED_URL, 1, { [UNKNOWN_VERSION]: 1 }),
     ]);
   });
 
-  test('two installs recorded at once both land in the tally under list lag', async () => {
+  test('two devices reporting at once both land in the tally under list lag', async () => {
     const kv = withListLag(await directory());
 
     await Promise.all([
-      recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW }),
-      recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW }),
+      recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW }),
+      recordInstalled({ kv, body: census(TWO, app(WEATHER_ID)), now: NOW }),
     ]);
 
     expect(
@@ -185,7 +254,7 @@ describe('recordInstall', () => {
 
   test('a warm tally reads with one kv get, not one per app', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID)), now: NOW });
     await listInstalls(kv);
     kv.resetCounts();
 
@@ -197,33 +266,45 @@ describe('recordInstall', () => {
   test('the official catalog counts without being submitted to the directory', async () => {
     const kv = fakeKv();
 
-    const outcome = await recordInstall({ kv, body: beacon(CALENDAR_ID, OFFICIAL_CATALOG_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, OFFICIAL_CATALOG_URL)), now: NOW });
 
-    expect(outcome.ok).toBe(true);
+    expect(toInstallCounts(await listInstalls(kv))).toHaveLength(1);
   });
 
-  test('a source nobody submitted is refused, so the tally cannot be stuffed from anywhere', async () => {
+  test('an app from a source nobody submitted is dropped, so the tally cannot be stuffed from anywhere', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({ kv, body: beacon(CALENDAR_ID, UNKNOWN_URL), now: NOW });
+    const outcome = await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, UNKNOWN_URL)), now: NOW });
 
-    expect(outcome).toMatchObject({ ok: false, status: 404 });
+    expect(outcome.ok).toBe(true);
     expect(await listInstalls(kv)).toHaveLength(0);
   });
 
-  test('a quarantined source is refused the same way, matching what the store will merge', async () => {
+  test('a quarantined source is dropped the same way, matching what the store will merge', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({ kv, body: beacon(CALENDAR_ID, QUARANTINED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, QUARANTINED_URL)), now: NOW });
 
-    expect(outcome).toMatchObject({ ok: false, status: 404 });
+    expect(await listInstalls(kv)).toHaveLength(0);
+  });
+
+  test('one uncountable app never costs the device the rest of its inventory', async () => {
+    const kv = await directory();
+
+    await recordInstalled({
+      kv,
+      body: census(ONE, app(CALENDAR_ID, UNKNOWN_URL), app(WEATHER_ID, LISTED_URL, '2.0.0')),
+      now: NOW,
+    });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([counted(WEATHER_ID, LISTED_URL, 1, { '2.0.0': 1 })]);
   });
 
   test('two spellings of one source url are one tally', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, `${LISTED_URL}#apps`, TWO), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID, `${LISTED_URL}#apps`)), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
       counted(CALENDAR_ID, LISTED_URL, 2, { [UNKNOWN_VERSION]: 2 }),
@@ -233,81 +314,75 @@ describe('recordInstall', () => {
   test('two spellings of one app id are one tally', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID.toUpperCase(), LISTED_URL, TWO), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID.toUpperCase())), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
       counted(CALENDAR_ID, LISTED_URL, 2, { [UNKNOWN_VERSION]: 2 }),
     ]);
   });
 
-  test('an app id that is not a catalog uuid is refused', async () => {
+  test('one device listing an app twice is still one device', async () => {
+    const kv = await directory();
+
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID), app(CALENDAR_ID)), now: NOW });
+
+    expect(toInstallCounts(await listInstalls(kv))[0]!.count).toBe(1);
+  });
+
+  test('an app id that is not a catalog uuid is dropped', async () => {
     const kv = await directory();
 
     for (const id of ['', '  ', 'calendar', '../../etc/passwd', `${CALENDAR_ID}extra`]) {
-      expect(await recordInstall({ kv, body: beacon(id, LISTED_URL), now: NOW })).toMatchObject({
-        ok: false,
-        status: 400,
-      });
+      await recordInstalled({ kv, body: census(ONE, app(id)), now: NOW });
     }
+
+    expect(await listInstalls(kv)).toHaveLength(0);
   });
 
-  test('a body missing its fields is refused rather than counted as something', async () => {
+  test('a source url that cannot be a source is dropped', async () => {
     const kv = await directory();
 
-    expect(await recordInstall({ kv, body: null, now: NOW })).toMatchObject({ ok: false, status: 400 });
-    expect(await recordInstall({ kv, body: { app_id: CALENDAR_ID }, now: NOW })).toMatchObject({
-      ok: false,
-      status: 400,
-    });
-    expect(await recordInstall({ kv, body: { source_url: LISTED_URL }, now: NOW })).toMatchObject({
-      ok: false,
-      status: 400,
-    });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, 'ftp://listed.example/c.json')), now: NOW });
+
+    expect(await listInstalls(kv)).toHaveLength(0);
   });
 
-  test('a source url that cannot be a source is refused by name', async () => {
+  test('an app entry that is not an object is dropped', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({
-      kv,
-      body: beacon(CALENDAR_ID, 'ftp://listed.example/c.json'),
-      now: NOW,
-    });
+    await recordInstalled({ kv, body: { device_id: ONE, apps: ['calendar', null, 7] }, now: NOW });
 
-    expect(outcome).toMatchObject({ ok: false, status: 400 });
+    expect(await listInstalls(kv)).toHaveLength(0);
   });
 
-  test('a version that is not a string is refused rather than stored', async () => {
+  test('a version that is not a string lands in the unknown bucket rather than refusing the device', async () => {
     const kv = await directory();
 
-    const outcome = await recordInstall({
-      kv,
-      body: { app_id: CALENDAR_ID, source_url: LISTED_URL, device_id: ONE, version: { major: 1 } },
-      now: NOW,
-    });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, { major: 1 })), now: NOW });
 
-    expect(outcome).toMatchObject({ ok: false, status: 400 });
+    expect(toInstallCounts(await listInstalls(kv))[0]!.versions).toEqual({ [UNKNOWN_VERSION]: 1 });
   });
 
   test('a corrupt tally restarts at one instead of poisoning the sort', async () => {
     const kv = await directory();
     await kv.put(installKeyFor(CALENDAR_ID, LISTED_URL), JSON.stringify({ count: 'lots', versions: 'nope' }));
 
-    const outcome = await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
 
-    expect(outcome.ok && outcome.record.count).toBe(1);
-    expect(outcome.ok && outcome.record.versions).toEqual({ [UNKNOWN_VERSION]: 1 });
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([
+      counted(CALENDAR_ID, LISTED_URL, 1, { [UNKNOWN_VERSION]: 1 }),
+    ]);
   });
 });
 
 describe('version tallies', () => {
-  test('each device lands in the bucket for the version it installed', async () => {
+  test('each device lands in the bucket for the version it holds', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, TWO, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, THREE, '1.1.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(THREE, app(CALENDAR_ID, LISTED_URL, '1.1.0')), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
       counted(CALENDAR_ID, LISTED_URL, 3, { '1.0.0': 2, '1.1.0': 1 }),
@@ -316,69 +391,72 @@ describe('version tallies', () => {
 
   test('an upgrade moves a device between buckets and leaves the count alone', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.1.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.1.0')), now: LATER });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.1.0': 1 })]);
   });
 
   test('a downgrade moves the device back the same way', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.1.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.1.0')), now: LATER });
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: LATER });
 
     expect(toInstallCounts(await listInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 })]);
   });
 
   test('an emptied bucket is dropped rather than left at zero', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.1.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.1.0')), now: LATER });
 
-    const counts = toInstallCounts(await listInstalls(kv));
-
-    expect(Object.keys(counts[0]!.versions)).toEqual(['1.1.0']);
+    expect(Object.keys(toInstallCounts(await listInstalls(kv))[0]!.versions)).toEqual(['1.1.0']);
   });
 
   test('the buckets always sum to the count', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, TWO, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.2.0'), now: LATER });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, THREE, '1.2.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.2.0')), now: LATER });
+    await recordInstalled({ kv, body: census(THREE, app(CALENDAR_ID, LISTED_URL, '1.2.0')), now: LATER });
 
     const [tally] = toInstallCounts(await listInstalls(kv));
 
     expect(Object.values(tally!.versions).reduce((sum, each) => sum + each, 0)).toBe(tally!.count);
   });
 
-  test('an install with no version lands in the unknown bucket', async () => {
+  test('an app with no version lands in the unknown bucket', async () => {
     const kv = await directory();
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
 
     expect(toInstallCounts(await listInstalls(kv))[0]!.versions).toEqual({ [UNKNOWN_VERSION]: 1 });
   });
 
-  test('an upgrade arriving from a second source stays credited to the first', async () => {
+  test('an app that moves to another source takes its tally with it', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
 
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, OFFICIAL_CATALOG_URL, ONE, '1.1.0'), now: LATER });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, OFFICIAL_CATALOG_URL, '1.1.0')), now: LATER });
 
-    expect(toInstallCounts(await listInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.1.0': 1 })]);
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([
+      counted(CALENDAR_ID, OFFICIAL_CATALOG_URL, 1, { '1.1.0': 1 }),
+    ]);
   });
 });
 
 describe('recountInstalls', () => {
-  test('derives every record from the device markers', async () => {
+  test('derives every record from the device inventories', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, TWO, '1.1.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL, ONE, '2.0.0'), now: NOW });
+    await recordInstalled({
+      kv,
+      body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0'), app(WEATHER_ID, LISTED_URL, '2.0.0')),
+      now: NOW,
+    });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID, LISTED_URL, '1.1.0')), now: NOW });
 
     expect(toInstallCounts(await recountInstalls(kv))).toEqual([
       counted(CALENDAR_ID, LISTED_URL, 2, { '1.0.0': 1, '1.1.0': 1 }),
@@ -386,9 +464,9 @@ describe('recountInstalls', () => {
     ]);
   });
 
-  test('repairs a record that drifted away from its markers', async () => {
+  test('repairs a record that drifted away from the inventories', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
     await kv.put(
       installKeyFor(CALENDAR_ID, LISTED_URL),
       JSON.stringify({ app_id: CALENDAR_ID, source_url: LISTED_URL, count: 99, versions: { '9.9.9': 99 } }),
@@ -397,19 +475,19 @@ describe('recountInstalls', () => {
     expect(toInstallCounts(await recountInstalls(kv))).toEqual([counted(CALENDAR_ID, LISTED_URL, 1, { '1.0.0': 1 })]);
   });
 
-  test('never lowers a count that the markers still back', async () => {
+  test('never lowers a count the inventories still back', async () => {
     const kv = await directory();
     for (const device of [ONE, TWO, THREE]) {
-      await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, device, '1.0.0'), now: NOW });
+      await recordInstalled({ kv, body: census(device, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
     }
 
     expect(toInstallCounts(await recountInstalls(kv))[0]!.count).toBe(3);
     expect(toInstallCounts(await recountInstalls(kv))[0]!.count).toBe(3);
   });
 
-  test('rewrites nothing when the records already match the markers', async () => {
+  test('rewrites nothing when the records already match the inventories', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
     await recountInstalls(kv);
     kv.resetCounts();
 
@@ -418,13 +496,13 @@ describe('recountInstalls', () => {
     expect(kv.counts.put).toBe(1);
   });
 
-  test('drops a record no marker backs, so the read path cannot resurrect it', async () => {
+  test('drops a record no device backs, so the read path cannot resurrect it', async () => {
     const kv = await directory();
     await kv.put(
       installKeyFor(WEATHER_ID, LISTED_URL),
       JSON.stringify({ app_id: WEATHER_ID, source_url: LISTED_URL, count: 500, versions: { '1.0.0': 500 } }),
     );
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE, '1.0.0'), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID, LISTED_URL, '1.0.0')), now: NOW });
 
     await recountInstalls(kv);
     await kv.delete('directory:installs');
@@ -434,7 +512,7 @@ describe('recountInstalls', () => {
 
   test('leaves the source directory alone', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
     const sources = await listSources(kv);
 
     expect(await recountInstalls(kv)).toHaveLength(1);
@@ -445,7 +523,7 @@ describe('recountInstalls', () => {
 describe('rebuildInstalls', () => {
   test('repairs a snapshot that drifted from the per-app records', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
     await kv.put('directory:installs', JSON.stringify([{ app_id: WEATHER_ID, source_url: LISTED_URL, count: 99 }]));
 
     expect(toInstallCounts(await rebuildInstalls(kv))).toEqual([
@@ -455,7 +533,7 @@ describe('rebuildInstalls', () => {
 
   test('rebuilds from the records when the snapshot is missing or corrupt', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
 
     await kv.delete('directory:installs');
     expect(await listInstalls(kv)).toHaveLength(1);
@@ -466,8 +544,8 @@ describe('rebuildInstalls', () => {
 
   test('keeps a fresh tally the snapshot holds but kv list cannot enumerate yet', async () => {
     const kv = withListLag(await directory());
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(WEATHER_ID)), now: NOW });
 
     expect(toInstallCounts(await rebuildInstalls(kv))).toHaveLength(2);
     expect(toInstallCounts(await listInstalls(kv))).toHaveLength(2);
@@ -475,8 +553,8 @@ describe('rebuildInstalls', () => {
 
   test('drops a snapshot tally whose backing record is gone', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL), now: NOW });
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(WEATHER_ID)), now: NOW });
     await kv.delete(installKeyFor(WEATHER_ID, LISTED_URL));
 
     expect(toInstallCounts(await rebuildInstalls(kv))).toEqual([
@@ -484,15 +562,15 @@ describe('rebuildInstalls', () => {
     ]);
   });
 
-  test('does not walk the device markers on the read path', async () => {
+  test('does not walk the device inventories on the read path', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(CALENDAR_ID)), now: NOW });
     await kv.delete('directory:installs');
     kv.resetCounts();
 
     await listInstalls(kv);
 
-    expect(kv.snapshot()[seenKeyFor(CALENDAR_ID, ONE)]).toBeDefined();
+    expect(kv.snapshot()[deviceKeyFor(ONE)]).toBeDefined();
     expect(kv.counts.get).toBeLessThan(5);
   });
 });
@@ -500,9 +578,8 @@ describe('rebuildInstalls', () => {
 describe('toInstallCounts', () => {
   test('drops what a client has no business seeing and orders by tally', async () => {
     const kv = await directory();
-    await recordInstall({ kv, body: beacon(WEATHER_ID, LISTED_URL, ONE, '2.0.0'), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, ONE), now: NOW });
-    await recordInstall({ kv, body: beacon(CALENDAR_ID, LISTED_URL, TWO), now: NOW });
+    await recordInstalled({ kv, body: census(ONE, app(WEATHER_ID, LISTED_URL, '2.0.0'), app(CALENDAR_ID)), now: NOW });
+    await recordInstalled({ kv, body: census(TWO, app(CALENDAR_ID)), now: NOW });
 
     const counts = toInstallCounts(await listInstalls(kv));
 

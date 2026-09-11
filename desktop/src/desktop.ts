@@ -65,6 +65,7 @@ export interface DesktopSession extends CompanionSession {
     provenance?: string,
     expected?: api.ArtifactDigest | null,
     confirmed?: string[],
+    webapp?: { id: string; name: string },
   ): Promise<api.WebappInfo>;
 
   extensions(): Promise<ExtensionEntry[]>;

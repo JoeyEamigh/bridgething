@@ -96,6 +96,19 @@ export function listedWebapps<T extends { role: string; source: string }>(list: 
   return list.filter(isListedWebapp);
 }
 
+export type WebappSlotName = 'launcher' | 'overlay';
+
+type SlotCandidate = { role: string; source: string; overlayHash?: string | null };
+
+export function fillsSlot(webapp: SlotCandidate, slot: WebappSlotName): boolean {
+  if (webapp.source !== 'installed') return false;
+  return slot === 'launcher' ? webapp.role === 'launcher' : webapp.overlayHash != null;
+}
+
+export function slotCandidates<T extends SlotCandidate>(list: T[], slot: WebappSlotName): T[] {
+  return list.filter(webapp => fillsSlot(webapp, slot));
+}
+
 function installsById(counts: InstallCount[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const entry of counts) {
@@ -166,7 +179,7 @@ export function updates(args: {
   const out: CatalogAppUpdate[] = [];
 
   for (const info of installed) {
-    if (info.source !== 'installed' || info.role !== 'standard') continue;
+    if (info.source !== 'installed') continue;
     const id = info.id.toLowerCase();
     const sourceUrl = pins.get(id);
     if (!sourceUrl) continue;
