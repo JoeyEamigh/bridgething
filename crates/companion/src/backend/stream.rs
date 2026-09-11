@@ -17,6 +17,15 @@ pub struct StreamMetadata {
   pub artist: Option<String>,
   pub album: Option<String>,
   pub artwork_url: Option<String>,
+  pub artwork: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct StreamPresentation {
+  pub title: String,
+  pub artist: Option<String>,
+  pub album: Option<String>,
+  pub artwork: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, uniffi::Record)]
@@ -44,6 +53,7 @@ pub enum StreamEvent {
 pub trait StreamBackend: Send + Sync {
   fn app_bundle(&self) -> String;
   fn play(&self, source: StreamSource, sink: Arc<StreamSink>);
+  fn present(&self, presentation: StreamPresentation);
   fn pause(&self);
   fn resume(&self);
   fn seek_to(&self, position_ms: u32);

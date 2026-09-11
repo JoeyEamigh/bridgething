@@ -144,7 +144,14 @@ private final class DownloadRouter: NSObject, URLSessionDataDelegate, @unchecked
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        sink(for: dataTask)?.onChunk(chunk: data)
+        guard let sink = sink(for: dataTask) else { return }
+        guard sink.onChunk(chunk: data) else {
+            lock.lock()
+            refused.insert(dataTask.taskIdentifier)
+            lock.unlock()
+            dataTask.cancel()
+            return
+        }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

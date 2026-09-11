@@ -6,6 +6,7 @@
 
     #if os(iOS)
         import MediaPlayer
+        import UIKit
     #endif
 
     public final class StreamPlayer: StreamBackend, StreamDucker, @unchecked Sendable {
@@ -24,7 +25,8 @@
         private var metadataRelay: StreamMetadataRelay?
         private var assetLoad: Task<Void, Never>?
         private var discovered = MetadataFields()
-        private var published = StreamMetadata(title: nil, artist: nil, album: nil, artworkUrl: nil)
+        private var published = StreamMetadata(title: nil, artist: nil, album: nil, artworkUrl: nil, artwork: nil)
+        private var presentation: StreamPresentation?
         private var station: String?
         private var lastStatus: StreamStatus?
         private var terminal = false
@@ -45,6 +47,13 @@
 
         public func play(source: StreamSource, sink: StreamSink) {
             queue.async { self.start(source: source, sink: sink) }
+        }
+
+        public func present(presentation: StreamPresentation) {
+            queue.async {
+                self.presentation = presentation
+                self.publishNowPlaying()
+            }
         }
 
         public func pause() {
@@ -175,7 +184,8 @@
             item = nil
             sink = nil
             discovered = MetadataFields()
-            published = StreamMetadata(title: nil, artist: nil, album: nil, artworkUrl: nil)
+            published = StreamMetadata(title: nil, artist: nil, album: nil, artworkUrl: nil, artwork: nil)
+            presentation = nil
             station = nil
             lastStatus = nil
             terminal = false
@@ -237,7 +247,8 @@
                 title: discovered.title ?? station,
                 artist: discovered.artist,
                 album: discovered.album,
-                artworkUrl: nil
+                artworkUrl: nil,
+                artwork: discovered.artwork
             )
             guard next != published else { return }
             published = next
@@ -328,6 +339,7 @@
             var title: String?
             var artist: String?
             var album: String?
+            var artwork: Data?
         }
 
         private func attachMetadata(to item: AVPlayerItem, generation: UInt64) {
@@ -347,6 +359,10 @@
             var fields = MetadataFields()
             for entry in items {
                 guard let identifier = entry.identifier else { continue }
+                if identifier == .commonIdentifierArtwork {
+                    fields.artwork = await Self.artwork(of: entry) ?? fields.artwork
+                    continue
+                }
                 guard let value = try? await entry.load(.stringValue), !value.isEmpty else { continue }
                 switch identifier {
                 case .icyMetadataStreamTitle, .commonIdentifierTitle: fields.title = value
@@ -367,10 +383,12 @@
                 guard let items = try? await asset.load(.commonMetadata), !items.isEmpty else { return }
                 var fields = MetadataFields()
                 for entry in items {
-                    guard let key = entry.commonKey,
-                        let value = try? await entry.load(.stringValue),
-                        !value.isEmpty
-                    else { continue }
+                    guard let key = entry.commonKey else { continue }
+                    if key == .commonKeyArtwork {
+                        fields.artwork = await Self.artwork(of: entry) ?? fields.artwork
+                        continue
+                    }
+                    guard let value = try? await entry.load(.stringValue), !value.isEmpty else { continue }
                     switch key {
                     case .commonKeyTitle: fields.title = value
                     case .commonKeyArtist: fields.artist = value
@@ -387,10 +405,16 @@
             }
         }
 
+        private static func artwork(of entry: AVMetadataItem) async -> Data? {
+            guard let data = try? await entry.load(.dataValue), !data.isEmpty else { return nil }
+            return data
+        }
+
         private func merge(_ fields: MetadataFields, overwrite: Bool) {
             discovered.title = overwrite ? fields.title ?? discovered.title : discovered.title ?? fields.title
             discovered.artist = overwrite ? fields.artist ?? discovered.artist : discovered.artist ?? fields.artist
             discovered.album = overwrite ? fields.album ?? discovered.album : discovered.album ?? fields.album
+            discovered.artwork = overwrite ? fields.artwork ?? discovered.artwork : discovered.artwork ?? fields.artwork
             publishMetadata()
         }
 
@@ -471,12 +495,13 @@
             }
 
             private func publishNowPlaying() {
-                guard let player, let item, sink != nil else { return }
+                guard let player, let item, let presentation, sink != nil else { return }
                 let durationMs = live ? nil : Self.finiteMillis(item.duration)
                 let snapshot = NowPlayingSnapshot(
-                    title: published.title,
-                    artist: published.artist,
-                    album: published.album,
+                    title: presentation.title,
+                    artist: presentation.artist,
+                    album: presentation.album,
+                    artwork: presentation.artwork,
                     durationSeconds: durationMs.map { Double($0) / 1000 },
                     elapsedSeconds: Double(Self.millis(player.currentTime()) ?? 0) / 1000,
                     rate: Double(player.rate),
@@ -520,9 +545,10 @@
     #if os(iOS)
 
         private struct NowPlayingSnapshot: Sendable {
-            let title: String?
+            let title: String
             let artist: String?
             let album: String?
+            let artwork: Data?
             let durationSeconds: Double?
             let elapsedSeconds: Double
             let rate: Double
@@ -530,13 +556,16 @@
 
             func publish() {
                 var info: [String: Any] = [:]
-                info[MPMediaItemPropertyTitle] = title ?? ""
+                info[MPMediaItemPropertyTitle] = title
                 if let artist { info[MPMediaItemPropertyArtist] = artist }
                 if let album { info[MPMediaItemPropertyAlbumTitle] = album }
                 if let durationSeconds { info[MPMediaItemPropertyPlaybackDuration] = durationSeconds }
                 info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedSeconds
                 info[MPNowPlayingInfoPropertyPlaybackRate] = rate
                 info[MPNowPlayingInfoPropertyIsLiveStream] = isLive
+                if let artwork, let image = UIImage(data: artwork) {
+                    info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                }
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             }
         }

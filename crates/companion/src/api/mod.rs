@@ -97,12 +97,19 @@ pub struct DeviceLogLine {
   pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
-pub struct ProviderTokens {
-  pub access_token: String,
-  pub refresh_token: String,
+pub enum ProviderCredentials {
+  OauthTokens {
+    access_token: String,
+    refresh_token: String,
+  },
+  ServerLogin {
+    server_url: String,
+    username: String,
+    password: String,
+  },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -279,8 +286,12 @@ impl CompanionSession {
     self.session.cancel_auth(&id).await;
   }
 
-  pub async fn complete_provider_auth(&self, id: String, tokens: ProviderTokens) -> Result<(), CompanionError> {
-    self.session.complete_provider_auth(&id, tokens).await
+  pub async fn complete_provider_auth(
+    &self,
+    id: String,
+    credentials: ProviderCredentials,
+  ) -> Result<(), CompanionError> {
+    self.session.complete_provider_auth(&id, credentials).await
   }
 
   pub fn device_log_snapshot(&self, limit: u32) -> Vec<DeviceLogLine> {

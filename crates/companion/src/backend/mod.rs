@@ -59,5 +59,7 @@ pub use phone::{
 };
 pub use secrets::SecretStore;
 pub use speech::{PrepareEvent, PrepareSink, SpeechRecognizer, SpeechSegment, Transcription, TranscriptionSink};
-pub use stream::{StreamBackend, StreamEvent, StreamMetadata, StreamSink, StreamSource, StreamStatus, StreamTiming};
+pub use stream::{
+  StreamBackend, StreamEvent, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
+};
 pub use wake::{DeviceWaker, WakeReason};

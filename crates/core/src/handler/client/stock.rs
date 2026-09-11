@@ -15,19 +15,18 @@ use serde_json::{Value, json};
 
 use super::{HandlerResult, MsgHandle, asset::AssetLane};
 use crate::{
-  asset::{CachedAsset, Retention, wait::FetchOutcome},
+  asset::{CachedAsset, Retention, art, wait::FetchOutcome},
   bluetooth::BluetoothMan,
   state::State,
   stock::{
     GraphqlError, StockConnectionType, StockInterAppSend, StockInterAppSendPayload, StockPermissionsSend, StockTip,
+    interapp::{stock_art, stock_art_id},
     presets,
   },
 };
 
 const DJ_PLAYLIST_URI: &str = "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
 const STOCK_BROWSE_LIMIT_MAX: u32 = 100;
-const STOCK_THUMBNAIL_EDGE: u32 = 96;
-const STOCK_HERO_EDGE: u32 = 248;
 const STOCK_IMAGE_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const STOCK_IMAGE_DEADLINE: Duration = Duration::from_secs(25);
 const STOCK_HOME_SECTIONS: u32 = 10;
@@ -99,12 +98,12 @@ impl LegacyStockHandler {
   }
 
   async fn get_image(self, id: String) -> HandlerResult {
-    self.serve_asset_to_stock(art_id_with_edge(&id, STOCK_HERO_EDGE)).await
+    self.serve_asset_to_stock(art::hero(&id)).await
   }
 
   async fn get_thumbnail_image(self, id: String) -> HandlerResult {
     self
-      .serve_asset_to_stock(art_id_with_edge(&id, STOCK_THUMBNAIL_EDGE))
+      .serve_asset_to_stock(art::with_edge(&id, art::THUMBNAIL_EDGE))
       .await
   }
 
@@ -702,18 +701,6 @@ fn limit_to_u32(limit: usize) -> u32 {
   u32::try_from(limit).unwrap_or(STOCK_BROWSE_LIMIT_MAX)
 }
 
-fn art_id_with_edge(id: &str, edge: u32) -> String {
-  let mut parts = id.splitn(4, '/');
-  let (Some(ns), Some("img"), Some(old_edge), Some(rest)) = (parts.next(), parts.next(), parts.next(), parts.next())
-  else {
-    return id.to_string();
-  };
-  if old_edge.parse::<u32>().is_err() {
-    return id.to_string();
-  }
-  format!("{ns}/img/{edge}/{rest}")
-}
-
 fn offset_to_u32(offset: Option<usize>) -> u32 {
   offset.and_then(|o| u32::try_from(o).ok()).unwrap_or(0)
 }
@@ -801,7 +788,7 @@ fn graphql_child_value(entry: BrowseEntry) -> Value {
       "uri": f.node_id,
       "title": f.title,
       "subtitle": f.subtitle.unwrap_or_default(),
-      "image_id": f.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(f.artwork_id),
     }),
     BrowseEntry::Item(item) => library_item_to_graphql_child(item),
   }
@@ -813,43 +800,43 @@ fn library_item_to_graphql_child(item: LibraryItem) -> Value {
       "uri": t.id,
       "title": t.name,
       "subtitle": t.artist.name,
-      "image_id": t.image_id,
+      "image_id": stock_art_id(t.image_id),
     }),
     LibraryItem::Album(a) => json!({
       "uri": a.id,
       "title": a.name,
       "subtitle": "",
-      "image_id": a.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(a.artwork_id),
     }),
     LibraryItem::Playlist(p) => json!({
       "uri": p.uri,
       "title": p.name,
       "subtitle": p.owner_name.unwrap_or_default(),
-      "image_id": p.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(p.artwork_id),
     }),
     LibraryItem::PodcastEpisode(e) => json!({
       "uri": e.uri,
       "title": e.name,
       "subtitle": e.show_name.unwrap_or_default(),
-      "image_id": e.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(e.artwork_id),
     }),
     LibraryItem::Show(s) => json!({
       "uri": s.uri,
       "title": s.name,
       "subtitle": s.publisher.unwrap_or_default(),
-      "image_id": s.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(s.artwork_id),
     }),
     LibraryItem::Artist(a) => json!({
       "uri": a.id,
       "title": a.name,
       "subtitle": "",
-      "image_id": a.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(a.artwork_id),
     }),
     LibraryItem::Station(s) => json!({
       "uri": s.uri,
       "title": s.name,
       "subtitle": "",
-      "image_id": s.artwork_id.unwrap_or_default(),
+      "image_id": stock_art(s.artwork_id),
     }),
   }
 }
@@ -939,52 +926,6 @@ fn canned_tips() -> Vec<StockTip> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  #[test]
-  fn thumbnail_rewrites_spotify_art_edge() {
-    assert_eq!(
-      art_id_with_edge("spotify/img/248/iabc123", 96),
-      "spotify/img/96/iabc123"
-    );
-    assert_eq!(
-      art_id_with_edge("spotify/img/248/uhttps%3A%2F%2Fx", 96),
-      "spotify/img/96/uhttps%3A%2F%2Fx"
-    );
-    assert_eq!(
-      art_id_with_edge("applemusic/img/248/umusicKit%3A%2F%2Fartwork%2Fx", 96),
-      "applemusic/img/96/umusicKit%3A%2F%2Fartwork%2Fx"
-    );
-  }
-
-  #[test]
-  fn hero_rewrites_queue_minted_thumb_edge_up() {
-    assert_eq!(
-      art_id_with_edge("spotify/img/96/iabc123", STOCK_HERO_EDGE),
-      "spotify/img/248/iabc123"
-    );
-    assert_eq!(
-      art_id_with_edge("spotify/img/248/iabc123", STOCK_HERO_EDGE),
-      "spotify/img/248/iabc123"
-    );
-  }
-
-  #[test]
-  fn hero_and_thumbnail_edges_do_not_collide() {
-    let queue_minted = "spotify/img/96/iabc123";
-    assert_ne!(
-      art_id_with_edge(queue_minted, STOCK_HERO_EDGE),
-      art_id_with_edge(queue_minted, STOCK_THUMBNAIL_EDGE)
-    );
-  }
-
-  #[test]
-  fn thumbnail_passes_through_non_spotify_ids() {
-    assert_eq!(art_id_with_edge("iap2/art/deadbeef/3", 96), "iap2/art/deadbeef/3");
-    assert_eq!(
-      art_id_with_edge("spotify/img/notanumber/x", 96),
-      "spotify/img/notanumber/x"
-    );
-  }
 
   #[test]
   fn classify_shelf() {

@@ -82,7 +82,10 @@ async fn streamed(request: HttpRequest, sink: &Arc<HttpDownloadSink>) -> Result<
     let bytes = value
       .dyn_into::<Uint8Array>()
       .map_err(|e| js_reason("body chunk", &e))?;
-    sink.on_chunk(bytes.to_vec());
+    if !sink.on_chunk(bytes.to_vec()) {
+      let _ = reader.cancel();
+      return Ok(());
+    }
   }
 }
 

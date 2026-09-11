@@ -12,8 +12,8 @@ import type {
   OtaPollConfig,
   OtaPollStatus,
   OtaRun,
+  ProviderCredentials,
   ProviderInfo,
-  ProviderTokens,
   SessionHostInfo,
   SessionPeer,
   SessionSnapshot,
@@ -117,7 +117,7 @@ export interface CompanionSession extends DeviceSession {
   libraryProvider(): Promise<string | null>;
   connectProvider(id: string): Promise<void>;
   disconnectProvider(id: string): Promise<void>;
-  completeProviderAuth(id: string, tokens: ProviderTokens): Promise<void>;
+  completeProviderAuth(id: string, credentials: ProviderCredentials): Promise<void>;
   cancelProviderAuth(id: string): Promise<void>;
 }
 

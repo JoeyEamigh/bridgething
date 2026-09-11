@@ -8,7 +8,7 @@ use std::{
 };
 
 use bridgething_companion::backend::{
-  StreamBackend, StreamMetadata, StreamSink, StreamSource, StreamStatus, StreamTiming,
+  StreamBackend, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };
 use windows::{
   Foundation::{Collections::IVectorChangedEventArgs, TimeSpan, TypedEventHandler, Uri},
@@ -31,6 +31,7 @@ const BUNDLE: &str = "com.bridgething.desktop";
 const TICK: Duration = Duration::from_secs(1);
 const TICKS_PER_MS: i64 = 10_000;
 const UNSAID: &str = "windows would not say why the stream stopped";
+const THUMBNAIL_LIMIT: u64 = 4 * 1024 * 1024;
 
 enum Task {
   Play {
@@ -76,6 +77,8 @@ impl StreamBackend for MediaPlayerStream {
   fn app_bundle(&self) -> String {
     BUNDLE.to_owned()
   }
+
+  fn present(&self, _presentation: StreamPresentation) {}
 
   fn play(&self, source: StreamSource, sink: Arc<StreamSink>) {
     let mut held = self.engine.lock().unwrap();
@@ -572,8 +575,22 @@ fn described(item: &MediaPlaybackItem) -> (StreamMetadata, Option<RandomAccessSt
     artist: text(music.Artist()).or_else(|| text(music.AlbumArtist())),
     album: text(music.AlbumTitle()),
     artwork_url: None,
+    artwork: thumbnail.as_ref().and_then(|reference| thumbnail_bytes(reference).ok()),
   };
   (metadata, thumbnail)
+}
+
+fn thumbnail_bytes(reference: &RandomAccessStreamReference) -> windows::core::Result<Vec<u8>> {
+  let stream = reference.OpenReadAsync()?.join()?;
+  let size = stream.Size()?;
+  if size == 0 || size > THUMBNAIL_LIMIT {
+    return Err(Error::empty());
+  }
+  let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0)?)?;
+  reader.LoadAsync(size as u32)?.join()?;
+  let mut bytes = vec![0u8; reader.UnconsumedBufferLength()? as usize];
+  reader.ReadBytes(&mut bytes)?;
+  Ok(bytes)
 }
 
 fn on_event<S: RuntimeType + 'static, A: RuntimeType + 'static>(

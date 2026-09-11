@@ -222,6 +222,58 @@ async fn a_writer_error_fails_the_download() {
   assert_eq!(seen.lock().unwrap().len(), 1, "writing stops at the first failure");
 }
 
+struct Counting {
+  chunks: Vec<Vec<u8>>,
+  delivered: Arc<Mutex<usize>>,
+}
+
+impl HttpTransport for Counting {
+  fn execute(&self, _request: HttpRequest, _sink: Arc<HttpSink>) {
+    unreachable!("the download suite never takes the whole-body arm");
+  }
+
+  fn download(&self, _request: HttpRequest, sink: Arc<HttpDownloadSink>) {
+    sink.on_response(200, Vec::new(), None);
+    for chunk in &self.chunks {
+      *self.delivered.lock().unwrap() += 1;
+      if !sink.on_chunk(chunk.clone()) {
+        break;
+      }
+    }
+    sink.on_finished();
+  }
+}
+
+#[tokio::test]
+async fn a_writer_that_refuses_a_chunk_tells_the_transport_to_stop_feeding() {
+  let seen = Arc::new(Mutex::new(Vec::new()));
+  let delivered = Arc::new(Mutex::new(0));
+  let exec = HttpExecutor::new(Arc::new(Counting {
+    chunks: vec![b"one".to_vec(), b"two".to_vec(), b"three".to_vec()],
+    delivered: delivered.clone(),
+  }));
+
+  let err = exec
+    .download(
+      request("https://radio.example/live"),
+      Box::new(RecordingBody {
+        chunks: seen.clone(),
+        fail_at: Some(1),
+        takes_any_status: false,
+      }),
+    )
+    .await
+    .unwrap_err();
+
+  assert!(matches!(err, HttpError::Body(_)));
+  assert_eq!(
+    *delivered.lock().unwrap(),
+    2,
+    "the transport stops at the refused chunk"
+  );
+  assert_eq!(seen.lock().unwrap().len(), 1);
+}
+
 #[tokio::test]
 async fn a_transport_that_fails_mid_stream_surfaces_the_reason() {
   let seen = Arc::new(Mutex::new(Vec::new()));

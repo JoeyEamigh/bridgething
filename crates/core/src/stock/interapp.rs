@@ -15,7 +15,10 @@ use libbridgething::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::handler::client::{PossibleRecvMsg, RecvMsgData};
+use crate::{
+  asset::art,
+  handler::client::{PossibleRecvMsg, RecvMsgData},
+};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -502,7 +505,7 @@ fn browse_entry_to_home_section(entry: BrowseEntry) -> Option<HomeSection> {
 fn browse_entry_to_home_child(entry: BrowseEntry) -> HomeChild {
   let child = browse_entry_to_child(entry);
   HomeChild {
-    image_id: child.image_id,
+    image_id: stock_art_id(child.image_id),
     subtitle: child.subtitle,
     title: child.title,
     uri: child.uri,
@@ -514,7 +517,7 @@ fn browse_entry_to_child(entry: BrowseEntry) -> ChildItem {
     BrowseEntry::Folder(folder) => ChildItem {
       id: folder.node_id.clone(),
       uri: folder.node_id,
-      image_id: folder.artwork_id.unwrap_or_default(),
+      image_id: stock_art(folder.artwork_id),
       title: folder.title,
       subtitle: folder.subtitle.unwrap_or_default(),
       playable: false,
@@ -531,7 +534,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Track(t) => ChildItem {
       id: t.id.clone(),
       uri: t.id,
-      image_id: t.image_id,
+      image_id: stock_art_id(t.image_id),
       title: t.name,
       subtitle: t.artist.name,
       playable: true,
@@ -545,7 +548,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Album(a) => ChildItem {
       id: a.id.clone(),
       uri: a.id,
-      image_id: a.artwork_id.unwrap_or_default(),
+      image_id: stock_art(a.artwork_id),
       title: a.name,
       subtitle: String::new(),
       playable: true,
@@ -556,7 +559,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Playlist(p) => ChildItem {
       id: p.uri.clone(),
       uri: p.uri,
-      image_id: p.artwork_id.unwrap_or_default(),
+      image_id: stock_art(p.artwork_id),
       title: p.name,
       subtitle: p.owner_name.unwrap_or_default(),
       playable: true,
@@ -567,7 +570,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::PodcastEpisode(e) => ChildItem {
       id: e.uri.clone(),
       uri: e.uri,
-      image_id: e.artwork_id.unwrap_or_default(),
+      image_id: stock_art(e.artwork_id),
       title: e.name,
       subtitle: e.show_name.unwrap_or_default(),
       playable: true,
@@ -581,7 +584,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Show(s) => ChildItem {
       id: s.uri.clone(),
       uri: s.uri,
-      image_id: s.artwork_id.unwrap_or_default(),
+      image_id: stock_art(s.artwork_id),
       title: s.name,
       subtitle: s.publisher.unwrap_or_default(),
       playable: false,
@@ -592,7 +595,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Artist(a) => ChildItem {
       id: a.id.clone(),
       uri: a.id,
-      image_id: a.artwork_id.unwrap_or_default(),
+      image_id: stock_art(a.artwork_id),
       title: a.name,
       subtitle: String::new(),
       playable: false,
@@ -603,7 +606,7 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
     LibraryItem::Station(s) => ChildItem {
       id: s.uri.clone(),
       uri: s.uri,
-      image_id: s.artwork_id.unwrap_or_default(),
+      image_id: stock_art(s.artwork_id),
       title: s.name,
       subtitle: String::new(),
       playable: true,
@@ -612,6 +615,14 @@ fn library_item_to_child(item: LibraryItem) -> ChildItem {
       metadata: ChildMeta::default(),
     },
   }
+}
+
+pub fn stock_art_id(id: String) -> String {
+  art::hero(&id)
+}
+
+pub fn stock_art(id: Option<String>) -> String {
+  id.map(stock_art_id).unwrap_or_default()
 }
 
 pub fn player_queue_to_stock(reply: PlayerQueueReply) -> StockInterAppSendPayload {
@@ -660,7 +671,7 @@ fn media_item_to_stock_track(item: MediaItem) -> StockTrack {
     artist: artist.clone(),
     artists: vec![artist],
     duration_ms: item.duration_ms.unwrap_or(0) as usize,
-    image_id: item.artwork_id.unwrap_or_default(),
+    image_id: stock_art(item.artwork_id),
     is_episode: false,
     is_podcast: false,
     saved: item.liked.unwrap_or(false),
@@ -681,7 +692,7 @@ fn queue_item_to_stock(item: QueueItem) -> StockQueueTrack {
     uri: item.uri,
     name: item.title.unwrap_or_default(),
     artists,
-    image_uri: item.artwork_id.unwrap_or_default(),
+    image_uri: stock_art(item.artwork_id),
     provider: if item.queued { "queue" } else { "context" }.to_string(),
   }
 }
@@ -755,7 +766,7 @@ impl From<Track> for StockTrack {
       artist: track.artists.first().cloned().unwrap_or_default().into(),
       artists: track.artists.into_iter().map(|a| a.into()).collect(),
       duration_ms: track.duration_ms as usize,
-      image_id: track.image_id,
+      image_id: stock_art_id(track.image_id),
       is_episode: false,
       is_podcast: false,
       saved: track.saved,
@@ -783,7 +794,7 @@ impl From<Track> for StockQueueTrack {
       uri: track.id,
       name: track.name,
       artists: track.artists.into_iter().map(|a| a.into()).collect(),
-      image_uri: track.image_id,
+      image_uri: stock_art_id(track.image_id),
       provider: "context".to_string(),
     }
   }
@@ -985,7 +996,7 @@ mod test {
   };
   use uuid::Uuid;
 
-  use super::StockInterAppRecv;
+  use super::{StockInterAppRecv, StockInterAppSendPayload};
   use crate::handler::client::{PossibleRecvMsg, RecvMsgData};
 
   #[test]
@@ -1521,6 +1532,53 @@ mod test {
         restrictions.keys().collect::<Vec<_>>()
       );
     }
+  }
+
+  #[test]
+  fn the_stock_webapp_sees_one_art_id_per_image_wherever_it_appears() {
+    let queued = libbridgething::QueueItem {
+      uri: "spotify:track:next".into(),
+      title: Some("Next".into()),
+      artist: None,
+      artist_uri: None,
+      album: None,
+      album_uri: None,
+      artwork_id: Some("spotify/img/96/inext".into()),
+      duration_ms: None,
+      persistent_id: None,
+      queued: false,
+    };
+    let reply = libbridgething::client::PlayerQueueReply {
+      current: Some(libbridgething::QueueItem {
+        uri: "spotify:track:now".into(),
+        artwork_id: Some("spotify/img/248/inow".into()),
+        ..queued.clone()
+      }),
+      items: vec![queued],
+      previous: Vec::new(),
+    };
+    let StockInterAppSendPayload::PlayerQueue { next, current, .. } = super::player_queue_to_stock(reply) else {
+      panic!("a player queue payload");
+    };
+    assert_eq!(current.image_uri, "spotify/img/248/inow");
+    assert_eq!(
+      next[0].image_uri, "spotify/img/248/inext",
+      "the queue carries the id the now-playing view will ask for once the track advances"
+    );
+
+    let reply = reply_with(
+      None,
+      libbridgething::MediaItem {
+        uri: Some("spotify:track:next".into()),
+        artwork_id: Some("spotify/img/96/inext".into()),
+        ..libbridgething::MediaItem::default()
+      },
+    );
+    let StockInterAppSendPayload::SpotifyPlayerState { track, .. } = super::player_state_to_stock(reply) else {
+      panic!("a player state payload");
+    };
+    assert_eq!(track.image_id, "spotify/img/248/inext");
+    assert_eq!(super::stock_art_id("iap2/art/deadbeef/3".into()), "iap2/art/deadbeef/3");
   }
 
   #[test]

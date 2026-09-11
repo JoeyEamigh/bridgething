@@ -99,7 +99,7 @@ public class KtorHttpTransport : HttpTransport {
                         while (true) {
                             val read = channel.readAvailable(buf, 0, buf.size)
                             if (read < 0) break
-                            if (read > 0) held.onChunk(buf.copyOf(read))
+                            if (read > 0 && !held.onChunk(buf.copyOf(read))) break
                         }
                         held.onFinished()
                     }

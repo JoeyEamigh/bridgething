@@ -1596,6 +1596,7 @@ internal interface UniffiCallbackInterfaceStreamBackendMethod1 : com.sun.jna.Cal
 internal interface UniffiCallbackInterfaceStreamBackendMethod2 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
+        `presentation`: RustBuffer.ByValue,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
@@ -1612,13 +1613,21 @@ internal interface UniffiCallbackInterfaceStreamBackendMethod3 : com.sun.jna.Cal
 internal interface UniffiCallbackInterfaceStreamBackendMethod4 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `positionMs`: Int,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
 }
 
 internal interface UniffiCallbackInterfaceStreamBackendMethod5 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `positionMs`: Int,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceStreamBackendMethod6 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
         `uniffiOutReturn`: Pointer,
@@ -2390,27 +2399,39 @@ internal open class UniffiVTableCallbackInterfaceSpeechRecognizer(
     }
 }
 
-@Structure.FieldOrder("uniffiFree", "uniffiClone", "appBundle", "play", "pause", "resume", "seekTo", "stop")
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "appBundle", "play", "present", "pause", "resume", "seekTo", "stop")
 internal open class UniffiVTableCallbackInterfaceStreamBackend(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
     @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
     @JvmField internal var `appBundle`: UniffiCallbackInterfaceStreamBackendMethod0? = null,
     @JvmField internal var `play`: UniffiCallbackInterfaceStreamBackendMethod1? = null,
-    @JvmField internal var `pause`: UniffiCallbackInterfaceStreamBackendMethod2? = null,
-    @JvmField internal var `resume`: UniffiCallbackInterfaceStreamBackendMethod3? = null,
-    @JvmField internal var `seekTo`: UniffiCallbackInterfaceStreamBackendMethod4? = null,
-    @JvmField internal var `stop`: UniffiCallbackInterfaceStreamBackendMethod5? = null,
+    @JvmField internal var `present`: UniffiCallbackInterfaceStreamBackendMethod2? = null,
+    @JvmField internal var `pause`: UniffiCallbackInterfaceStreamBackendMethod3? = null,
+    @JvmField internal var `resume`: UniffiCallbackInterfaceStreamBackendMethod4? = null,
+    @JvmField internal var `seekTo`: UniffiCallbackInterfaceStreamBackendMethod5? = null,
+    @JvmField internal var `stop`: UniffiCallbackInterfaceStreamBackendMethod6? = null,
 ) : Structure() {
     class UniffiByValue(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
         `appBundle`: UniffiCallbackInterfaceStreamBackendMethod0? = null,
         `play`: UniffiCallbackInterfaceStreamBackendMethod1? = null,
-        `pause`: UniffiCallbackInterfaceStreamBackendMethod2? = null,
-        `resume`: UniffiCallbackInterfaceStreamBackendMethod3? = null,
-        `seekTo`: UniffiCallbackInterfaceStreamBackendMethod4? = null,
-        `stop`: UniffiCallbackInterfaceStreamBackendMethod5? = null,
-    ) : UniffiVTableCallbackInterfaceStreamBackend(`uniffiFree`, `uniffiClone`, `appBundle`, `play`, `pause`, `resume`, `seekTo`, `stop`),
+        `present`: UniffiCallbackInterfaceStreamBackendMethod2? = null,
+        `pause`: UniffiCallbackInterfaceStreamBackendMethod3? = null,
+        `resume`: UniffiCallbackInterfaceStreamBackendMethod4? = null,
+        `seekTo`: UniffiCallbackInterfaceStreamBackendMethod5? = null,
+        `stop`: UniffiCallbackInterfaceStreamBackendMethod6? = null,
+    ) : UniffiVTableCallbackInterfaceStreamBackend(
+            `uniffiFree`,
+            `uniffiClone`,
+            `appBundle`,
+            `play`,
+            `present`,
+            `pause`,
+            `resume`,
+            `seekTo`,
+            `stop`,
+        ),
         Structure.ByValue
 
     internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceStreamBackend) {
@@ -2418,6 +2439,7 @@ internal open class UniffiVTableCallbackInterfaceStreamBackend(
         `uniffiClone` = other.`uniffiClone`
         `appBundle` = other.`appBundle`
         `play` = other.`play`
+        `present` = other.`present`
         `pause` = other.`pause`
         `resume` = other.`resume`
         `seekTo` = other.`seekTo`
@@ -2934,6 +2956,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_streambackend_play(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_streambackend_present(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_streambackend_pause(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_streambackend_resume(): Int
@@ -3038,7 +3062,7 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_complete_provider_auth(
         `ptr`: Long,
         `id`: RustBuffer.ByValue,
-        `tokens`: RustBuffer.ByValue,
+        `credentials`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_connect_network(
@@ -4492,7 +4516,7 @@ internal object UniffiLib {
         `ptr`: Long,
         `chunk`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
+    ): Byte
 
     external fun uniffi_bridgething_companion_fn_method_httpdownloadsink_on_failed(
         `ptr`: Long,
@@ -4984,6 +5008,12 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_method_streambackend_present(
+        `ptr`: Long,
+        `presentation`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_bridgething_companion_fn_method_streambackend_pause(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -5393,7 +5423,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_companion_debug() != 26391) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_complete_provider_auth() != 52876) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_complete_provider_auth() != 21862) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_connect_network() != 17882) {
@@ -5891,7 +5921,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_transferpolicy_allows_large_transfer() != 54961) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_chunk() != 43867) {
+    if (lib.uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_chunk() != 59003) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_httpdownloadsink_on_failed() != 48694) {
@@ -6038,16 +6068,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_streambackend_play() != 53203) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_pause() != 64195) {
+    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_present() != 50594) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_resume() != 63510) {
+    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_pause() != 5385) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_seek_to() != 2174) {
+    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_resume() != 59746) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_stop() != 51811) {
+    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_seek_to() != 44303) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_streambackend_stop() != 18345) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_streamsink_on_metadata() != 27607) {
@@ -11041,7 +11074,7 @@ public interface CompanionSessionInterface {
 
     suspend fun `completeProviderAuth`(
         `id`: kotlin.String,
-        `tokens`: ProviderTokens,
+        `credentials`: ProviderCredentials,
     )
 
     suspend fun `connectNetwork`(
@@ -11405,13 +11438,13 @@ open class CompanionSession :
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `completeProviderAuth`(
         `id`: kotlin.String,
-        `tokens`: ProviderTokens,
+        `credentials`: ProviderCredentials,
     ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_complete_provider_auth(
                 uniffiHandle,
                 FfiConverterString.lower(`id`),
-                FfiConverterTypeProviderTokens.lower(`tokens`),
+                FfiConverterTypeProviderCredentials.lower(`credentials`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
@@ -15473,7 +15506,7 @@ public object FfiConverterTypeHostEnvironment : FfiConverter<HostEnvironment, Lo
 //
 
 public interface HttpDownloadSinkInterface {
-    fun `onChunk`(`chunk`: kotlin.ByteArray)
+    fun `onChunk`(`chunk`: kotlin.ByteArray): kotlin.Boolean
 
     fun `onFailed`(`reason`: kotlin.String)
 
@@ -15592,16 +15625,18 @@ open class HttpDownloadSink :
         }
     }
 
-    override fun `onChunk`(`chunk`: kotlin.ByteArray) =
-        callWithHandle {
-            uniffiRustCall { _status ->
-                UniffiLib.uniffi_bridgething_companion_fn_method_httpdownloadsink_on_chunk(
-                    it,
-                    FfiConverterByteArray.lower(`chunk`),
-                    _status,
-                )
-            }
-        }
+    override fun `onChunk`(`chunk`: kotlin.ByteArray): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_httpdownloadsink_on_chunk(
+                        it,
+                        FfiConverterByteArray.lower(`chunk`),
+                        _status,
+                    )
+                }
+            },
+        )
 
     override fun `onFailed`(`reason`: kotlin.String) =
         callWithHandle {
@@ -23833,13 +23868,6 @@ public object FfiConverterTypeSpeechRecognizer : FfiConverter<SpeechRecognizer, 
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-/**
- * Native playback of a raw http(s) media url on the phone. The host owns the audio session,
- * audio focus, lock-screen presence and background survival; it reports what its player is
- * actually doing through the sink and never assumes a verb succeeded. `live` on the source is
- * settled before play from the origin's icy headers, since native players fabricate a finite
- * duration behind a fake content length and never expose the headers themselves.
- */
 public interface StreamBackend {
     fun `appBundle`(): kotlin.String
 
@@ -23847,6 +23875,8 @@ public interface StreamBackend {
         `source`: StreamSource,
         `sink`: StreamSink,
     )
+
+    fun `present`(`presentation`: StreamPresentation)
 
     fun `pause`()
 
@@ -23859,13 +23889,6 @@ public interface StreamBackend {
     companion object
 }
 
-/**
- * Native playback of a raw http(s) media url on the phone. The host owns the audio session,
- * audio focus, lock-screen presence and background survival; it reports what its player is
- * actually doing through the sink and never assumes a verb succeeded. `live` on the source is
- * settled before play from the origin's icy headers, since native players fabricate a finite
- * duration behind a fake content length and never expose the headers themselves.
- */
 open class StreamBackendImpl :
     Disposable,
     AutoCloseable,
@@ -23996,6 +24019,17 @@ open class StreamBackendImpl :
         }
     }
 
+    override fun `present`(`presentation`: StreamPresentation) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_streambackend_present(
+                    it,
+                    FfiConverterTypeStreamPresentation.lower(`presentation`),
+                    _status,
+                )
+            }
+        }
+
     override fun `pause`() =
         callWithHandle {
             uniffiRustCall { _status ->
@@ -24077,7 +24111,24 @@ internal object uniffiCallbackInterfaceStreamBackend {
         }
     }
 
-    internal object `pause` : UniffiCallbackInterfaceStreamBackendMethod2 {
+    internal object `present` : UniffiCallbackInterfaceStreamBackendMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `presentation`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeStreamBackend.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`present`(
+                FfiConverterTypeStreamPresentation.lift(`presentation`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `pause` : UniffiCallbackInterfaceStreamBackendMethod3 {
         override fun callback(
             `uniffiHandle`: Long,
             `uniffiOutReturn`: Pointer,
@@ -24090,7 +24141,7 @@ internal object uniffiCallbackInterfaceStreamBackend {
         }
     }
 
-    internal object `resume` : UniffiCallbackInterfaceStreamBackendMethod3 {
+    internal object `resume` : UniffiCallbackInterfaceStreamBackendMethod4 {
         override fun callback(
             `uniffiHandle`: Long,
             `uniffiOutReturn`: Pointer,
@@ -24103,7 +24154,7 @@ internal object uniffiCallbackInterfaceStreamBackend {
         }
     }
 
-    internal object `seekTo` : UniffiCallbackInterfaceStreamBackendMethod4 {
+    internal object `seekTo` : UniffiCallbackInterfaceStreamBackendMethod5 {
         override fun callback(
             `uniffiHandle`: Long,
             `positionMs`: Int,
@@ -24120,7 +24171,7 @@ internal object uniffiCallbackInterfaceStreamBackend {
         }
     }
 
-    internal object `stop` : UniffiCallbackInterfaceStreamBackendMethod5 {
+    internal object `stop` : UniffiCallbackInterfaceStreamBackendMethod6 {
         override fun callback(
             `uniffiHandle`: Long,
             `uniffiOutReturn`: Pointer,
@@ -24149,6 +24200,7 @@ internal object uniffiCallbackInterfaceStreamBackend {
             uniffiClone,
             `appBundle`,
             `play`,
+            `present`,
             `pause`,
             `resume`,
             `seekTo`,
@@ -29851,6 +29903,7 @@ data class ProviderInfo(
     var `displayName`: kotlin.String,
     var `available`: kotlin.Boolean,
     var `connected`: kotlin.Boolean,
+    var `signIn`: SignInMethod,
     var `authState`: AuthState,
     var `serviceHealth`: ServiceHealth,
 ) {
@@ -29867,6 +29920,7 @@ public object FfiConverterTypeProviderInfo : FfiConverterRustBuffer<ProviderInfo
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterTypeSignInMethod.read(buf),
             FfiConverterTypeAuthState.read(buf),
             FfiConverterTypeServiceHealth.read(buf),
         )
@@ -29877,6 +29931,7 @@ public object FfiConverterTypeProviderInfo : FfiConverterRustBuffer<ProviderInfo
                 FfiConverterString.allocationSize(value.`displayName`) +
                 FfiConverterBoolean.allocationSize(value.`available`) +
                 FfiConverterBoolean.allocationSize(value.`connected`) +
+                FfiConverterTypeSignInMethod.allocationSize(value.`signIn`) +
                 FfiConverterTypeAuthState.allocationSize(value.`authState`) +
                 FfiConverterTypeServiceHealth.allocationSize(value.`serviceHealth`)
         )
@@ -29889,40 +29944,9 @@ public object FfiConverterTypeProviderInfo : FfiConverterRustBuffer<ProviderInfo
         FfiConverterString.write(value.`displayName`, buf)
         FfiConverterBoolean.write(value.`available`, buf)
         FfiConverterBoolean.write(value.`connected`, buf)
+        FfiConverterTypeSignInMethod.write(value.`signIn`, buf)
         FfiConverterTypeAuthState.write(value.`authState`, buf)
         FfiConverterTypeServiceHealth.write(value.`serviceHealth`, buf)
-    }
-}
-
-data class ProviderTokens(
-    var `accessToken`: kotlin.String,
-    var `refreshToken`: kotlin.String,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeProviderTokens : FfiConverterRustBuffer<ProviderTokens> {
-    override fun read(buf: ByteBuffer): ProviderTokens =
-        ProviderTokens(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-        )
-
-    override fun allocationSize(value: ProviderTokens) =
-        (
-            FfiConverterString.allocationSize(value.`accessToken`) +
-                FfiConverterString.allocationSize(value.`refreshToken`)
-        )
-
-    override fun write(
-        value: ProviderTokens,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`accessToken`, buf)
-        FfiConverterString.write(value.`refreshToken`, buf)
     }
 }
 
@@ -30215,6 +30239,7 @@ data class StreamMetadata(
     var `artist`: kotlin.String?,
     var `album`: kotlin.String?,
     var `artworkUrl`: kotlin.String?,
+    var `artwork`: kotlin.ByteArray?,
 ) {
     companion object
 }
@@ -30229,6 +30254,7 @@ public object FfiConverterTypeStreamMetadata : FfiConverterRustBuffer<StreamMeta
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
         )
 
     override fun allocationSize(value: StreamMetadata) =
@@ -30236,7 +30262,8 @@ public object FfiConverterTypeStreamMetadata : FfiConverterRustBuffer<StreamMeta
             FfiConverterOptionalString.allocationSize(value.`title`) +
                 FfiConverterOptionalString.allocationSize(value.`artist`) +
                 FfiConverterOptionalString.allocationSize(value.`album`) +
-                FfiConverterOptionalString.allocationSize(value.`artworkUrl`)
+                FfiConverterOptionalString.allocationSize(value.`artworkUrl`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`artwork`)
         )
 
     override fun write(
@@ -30247,6 +30274,47 @@ public object FfiConverterTypeStreamMetadata : FfiConverterRustBuffer<StreamMeta
         FfiConverterOptionalString.write(value.`artist`, buf)
         FfiConverterOptionalString.write(value.`album`, buf)
         FfiConverterOptionalString.write(value.`artworkUrl`, buf)
+        FfiConverterOptionalByteArray.write(value.`artwork`, buf)
+    }
+}
+
+data class StreamPresentation(
+    var `title`: kotlin.String,
+    var `artist`: kotlin.String?,
+    var `album`: kotlin.String?,
+    var `artwork`: kotlin.ByteArray?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeStreamPresentation : FfiConverterRustBuffer<StreamPresentation> {
+    override fun read(buf: ByteBuffer): StreamPresentation =
+        StreamPresentation(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+        )
+
+    override fun allocationSize(value: StreamPresentation) =
+        (
+            FfiConverterString.allocationSize(value.`title`) +
+                FfiConverterOptionalString.allocationSize(value.`artist`) +
+                FfiConverterOptionalString.allocationSize(value.`album`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`artwork`)
+        )
+
+    override fun write(
+        value: StreamPresentation,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterOptionalString.write(value.`artist`, buf)
+        FfiConverterOptionalString.write(value.`album`, buf)
+        FfiConverterOptionalByteArray.write(value.`artwork`, buf)
     }
 }
 
@@ -34281,6 +34349,96 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
     }
 }
 
+sealed class ProviderCredentials {
+    data class OauthTokens(
+        val `accessToken`: kotlin.String,
+        val `refreshToken`: kotlin.String,
+    ) : ProviderCredentials() {
+        companion object
+    }
+
+    data class ServerLogin(
+        val `serverUrl`: kotlin.String,
+        val `username`: kotlin.String,
+        val `password`: kotlin.String,
+    ) : ProviderCredentials() {
+        companion object
+    }
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeProviderCredentials : FfiConverterRustBuffer<ProviderCredentials> {
+    override fun read(buf: ByteBuffer): ProviderCredentials =
+        when (buf.getInt()) {
+            1 -> {
+                ProviderCredentials.OauthTokens(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            2 -> {
+                ProviderCredentials.ServerLogin(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ProviderCredentials): ULong =
+        when (value) {
+            is ProviderCredentials.OauthTokens -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`accessToken`) +
+                        FfiConverterString.allocationSize(value.`refreshToken`)
+                )
+            }
+
+            is ProviderCredentials.ServerLogin -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`serverUrl`) +
+                        FfiConverterString.allocationSize(value.`username`) +
+                        FfiConverterString.allocationSize(value.`password`)
+                )
+            }
+        }
+
+    override fun write(
+        value: ProviderCredentials,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ProviderCredentials.OauthTokens -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`accessToken`, buf)
+                FfiConverterString.write(value.`refreshToken`, buf)
+                Unit
+            }
+
+            is ProviderCredentials.ServerLogin -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`serverUrl`, buf)
+                FfiConverterString.write(value.`username`, buf)
+                FfiConverterString.write(value.`password`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
 enum class RegistrationStatus {
     UNKNOWN,
     NOT_REGISTERED,
@@ -34897,6 +35055,39 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+/**
+ * How a provider gets signed in: a handshake the provider drives itself, or a server login the user types.
+ */
+
+enum class SignInMethod {
+    HANDSHAKE,
+    SERVER_LOGIN,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSignInMethod : FfiConverterRustBuffer<SignInMethod> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            SignInMethod.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: SignInMethod) = 4UL
+
+    override fun write(
+        value: SignInMethod,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
     }
 }
 

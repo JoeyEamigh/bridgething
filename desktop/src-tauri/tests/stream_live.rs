@@ -1,95 +1,27 @@
-#[cfg(target_os = "macos")]
 use std::{
-  panic::AssertUnwindSafe,
-  sync::atomic::{AtomicBool, Ordering},
+  sync::{Arc, Mutex},
+  time::Duration,
 };
-use std::{sync::Arc, time::Duration};
 
 use bridgething_desktop::{commands, shell::Shell};
-use libbridgething::{BRIDGETHING_WS_MODERN_PORT, client::PlayUri};
-#[cfg(target_os = "macos")]
-use objc2_core_foundation::{CFRunLoop, CFRunLoopRunResult, kCFRunLoopDefaultMode};
-use support::{Channel, DRIVE_DEADLINE, Daemon, SETTLE, daemon_host, mock_app, shell_config};
-use tauri::{Manager, test::MockRuntime};
+use bridgething_io::{DownloadBody, HttpExecutor, HttpHeader, HttpMethod, HttpRequest, ReqwestTransport};
+use libbridgething::client::PlayUri;
+use live::{client_url_for, drive, now_playing_settles};
+use support::{Channel, DRIVE_DEADLINE, Daemon, SETTLE, mock_app, shell_config};
+use tauri::Manager;
 use tokio::sync::mpsc;
 
+#[path = "support/live.rs"]
+mod live;
 #[path = "support/mod.rs"]
 mod support;
-
-fn client_url_for(gateway_url: &str) -> String {
-  format!("ws://{}:{BRIDGETHING_WS_MODERN_PORT}/", daemon_host(gateway_url))
-}
-
-async fn now_playing_settles(
-  app: &tauri::App<MockRuntime>,
-  holds: impl Fn(Option<&bridgething_companion::api::NowPlaying>) -> bool,
-) -> Option<bridgething_companion::api::NowPlaying> {
-  let deadline = tokio::time::Instant::now() + DRIVE_DEADLINE;
-  loop {
-    let held = commands::now_playing(app.state()).await.expect("now playing answers");
-    if holds(held.as_ref()) {
-      return held;
-    }
-    if tokio::time::Instant::now() >= deadline {
-      let source = app.state::<Arc<Shell>>().session().companion_debug().arbitrated_source;
-      panic!("now playing never settled; last seen {held:?} from {source:?}");
-    }
-    tokio::time::sleep(Duration::from_millis(250)).await;
-  }
-}
-
-#[cfg(target_os = "macos")]
-const IDLE: Duration = Duration::from_millis(25);
-#[cfg(target_os = "macos")]
-const PUMP_SECONDS: f64 = 0.25;
 
 fn main() {
   let Ok(stream_url) = std::env::var("BRIDGETHING_STREAM_LIVE_URL") else {
     eprintln!("skipped: set BRIDGETHING_STREAM_LIVE_URL to an http(s) media url to run the live stream lane");
     return;
   };
-  drive(stream_url);
-}
-
-fn runtime() -> tokio::runtime::Runtime {
-  tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()
-    .expect("a multi-thread runtime")
-}
-
-#[cfg(target_os = "macos")]
-fn drive(stream_url: String) {
-  let done = Arc::new(AtomicBool::new(false));
-  let failed = Arc::new(AtomicBool::new(false));
-  let worker = {
-    let done = Arc::clone(&done);
-    let failed = Arc::clone(&failed);
-    std::thread::spawn(move || {
-      let outcome = std::panic::catch_unwind(AssertUnwindSafe(|| runtime().block_on(lane(stream_url))));
-      failed.store(outcome.is_err(), Ordering::SeqCst);
-      done.store(true, Ordering::SeqCst);
-      if let Some(main) = CFRunLoop::main() {
-        main.stop();
-      }
-    })
-  };
-
-  while !done.load(Ordering::SeqCst) {
-    let spun = CFRunLoop::run_in_mode(unsafe { kCFRunLoopDefaultMode }, PUMP_SECONDS, false);
-    if spun == CFRunLoopRunResult::Finished {
-      std::thread::sleep(IDLE);
-    }
-  }
-
-  if worker.join().is_err() || failed.load(Ordering::SeqCst) {
-    std::process::exit(1);
-  }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn drive(stream_url: String) {
-  runtime().block_on(lane(stream_url));
+  drive(move || lane(stream_url));
 }
 
 async fn lane(stream_url: String) {
@@ -159,6 +91,22 @@ async fn lane(stream_url: String) {
     .expect("the origin named the station before playback started");
   eprintln!("stream title: {titled}");
 
+  let origin = origin_of(&stream_url).await;
+  eprintln!("origin: {origin:?}");
+  if origin.metaint {
+    let song = now_playing_settles(&app, |held| {
+      held
+        .and_then(|now| now.track.as_ref().and_then(|track| track.title.clone()))
+        .is_some_and(|title| Some(title.as_str()) != origin.station.as_deref() && title != host_of(&stream_url))
+    })
+    .await
+    .and_then(|now| now.track.and_then(|track| track.title))
+    .expect("a relayed icy origin hands a per-song title to the wire");
+    eprintln!("icy title: {song}");
+  } else {
+    eprintln!("the origin sends no icy-metaint; skipping the per-song title check");
+  }
+
   let live = now_playing_settles(&app, |held| {
     held.is_some_and(|now| {
       now.playback.position_ms > 0 && now.track.as_ref().is_some_and(|track| track.duration_ms.is_none())
@@ -181,13 +129,77 @@ async fn lane(stream_url: String) {
   commands::disconnect(app.state(), Some(device_id))
     .await
     .expect("the link drops");
-  now_playing_settles(&app, |held| held.is_none()).await;
+  tokio::time::sleep(SETTLE).await;
+  now_playing_settles(&app, |held| held.is_some_and(|now| now.playback.playing))
+    .await
+    .expect("the stream outlives the link");
+}
+
+#[derive(Debug, Default)]
+struct Origin {
+  metaint: bool,
+  station: Option<String>,
+}
+
+struct HeaderPeek {
+  seen: Arc<Mutex<Origin>>,
+}
+
+impl DownloadBody for HeaderPeek {
+  fn on_response(&mut self, _status: u16, headers: &[HttpHeader], _content_length: Option<u64>) -> bool {
+    let header = |name: &str| {
+      headers
+        .iter()
+        .find(|header| header.name.eq_ignore_ascii_case(name))
+        .map(|header| header.value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+    };
+    *self.seen.lock().unwrap() = Origin {
+      metaint: header("icy-metaint").is_some(),
+      station: header("icy-name"),
+    };
+    false
+  }
+
+  fn write(&mut self, _chunk: &[u8]) -> Result<(), String> {
+    Ok(())
+  }
+}
+
+async fn origin_of(stream_url: &str) -> Origin {
+  let seen = Arc::new(Mutex::new(Origin::default()));
+  let http = HttpExecutor::new(Arc::new(ReqwestTransport::default()));
+  let _ = tokio::time::timeout(
+    SETTLE,
+    http.download(
+      HttpRequest {
+        method: HttpMethod::Get,
+        url: stream_url.to_owned(),
+        headers: vec![HttpHeader {
+          name: "Icy-MetaData".into(),
+          value: "1".into(),
+        }],
+        body: Vec::new(),
+        timeout_ms: SETTLE.as_millis() as u32,
+      },
+      Box::new(HeaderPeek {
+        seen: Arc::clone(&seen),
+      }),
+    ),
+  )
+  .await;
+  std::mem::take(&mut *seen.lock().unwrap())
+}
+
+fn host_of(url: &str) -> String {
+  url::Url::parse(url)
+    .ok()
+    .and_then(|parsed| parsed.host_str().map(str::to_owned))
+    .unwrap_or_default()
 }
 
 async fn named(app: &tauri::App<tauri::test::MockRuntime>, stream_url: &str) -> Option<String> {
-  let host = url::Url::parse(stream_url)
-    .ok()
-    .and_then(|parsed| parsed.host_str().map(str::to_owned));
+  let host = Some(host_of(stream_url));
   let deadline = tokio::time::Instant::now() + DRIVE_DEADLINE;
   loop {
     let held = commands::now_playing(app.state()).await.expect("now playing answers");

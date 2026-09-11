@@ -137,16 +137,20 @@ impl HttpDownloadSink {
     !refused
   }
 
-  pub fn on_chunk(&self, chunk: Vec<u8>) {
+  pub fn on_chunk(&self, chunk: Vec<u8>) -> bool {
     let mut state = self.state.lock().unwrap();
     let Some(body) = state.body.as_mut() else {
-      return;
+      return false;
     };
     match body.write(&chunk) {
-      Ok(()) => state.received += chunk.len() as u64,
+      Ok(()) => {
+        state.received += chunk.len() as u64;
+        true
+      }
       Err(reason) => {
         state.failure = Some(HttpError::Body(reason));
         state.body = None;
+        false
       }
     }
   }

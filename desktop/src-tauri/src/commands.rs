@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc};
 use bridgething_companion::{
   api::{
     ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
-    OtaPollConfig, ProviderInfo, ProviderTokens, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
+    OtaPollConfig, ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
     WebappInfo, WebappSlot, WebappSlots,
     ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
   },
@@ -364,8 +364,12 @@ pub async fn cancel_provider_auth(shell: State<'_, Arc<Shell>>, id: String) -> A
 }
 
 #[tauri::command]
-pub async fn complete_provider_auth(shell: State<'_, Arc<Shell>>, id: String, tokens: ProviderTokens) -> Answer<()> {
-  Ok(shell.session().complete_provider_auth(id, tokens).await?)
+pub async fn complete_provider_auth(
+  shell: State<'_, Arc<Shell>>,
+  id: String,
+  credentials: ProviderCredentials,
+) -> Answer<()> {
+  Ok(shell.session().complete_provider_auth(id, credentials).await?)
 }
 
 #[tauri::command]

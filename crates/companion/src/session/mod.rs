@@ -36,23 +36,23 @@ use uuid::Uuid;
 use crate::{
   api::{
     AuthKind, AuthState, CapabilityFlags, CompanionBackends, CompanionConfig, CompanionDebug, CompanionError,
-    DeviceAutoResume, DeviceResumeTarget, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderInfo, ProviderTokens,
-    ServiceHealth, ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer, SessionSnapshot,
-    VoiceDebug, VoiceModelPaths, VoiceModelState, VoiceModelStatus,
+    DeviceAutoResume, DeviceResumeTarget, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderCredentials,
+    ProviderInfo, ServiceHealth, ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer,
+    SessionSnapshot, SignInMethod, VoiceDebug, VoiceModelPaths, VoiceModelState, VoiceModelStatus,
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
   dispatch::{
-    ask, asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
+    asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
     library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
     phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
   hub::Hub,
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
-    catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry},
+    catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry, SubsonicEntry},
     stream::StreamProvider,
     system_media::SystemMediaProvider,
   },
@@ -232,6 +232,14 @@ impl Session {
             backends.image.clone(),
           ) as Arc<dyn crate::provider::catalog::CatalogEntry>
         }))
+        .chain(backends.stream.clone().map(|stream| {
+          SubsonicEntry::new(
+            stream,
+            backends.http.clone(),
+            backends.secrets.clone(),
+            backends.image.clone(),
+          ) as Arc<dyn crate::provider::catalog::CatalogEntry>
+        }))
         .collect(),
     );
     let broadcast = Arc::new(Broadcast::default());
@@ -405,13 +413,13 @@ impl Session {
   pub async fn complete_provider_auth(
     self: &Arc<Self>,
     id: &str,
-    tokens: ProviderTokens,
+    credentials: ProviderCredentials,
   ) -> Result<(), CompanionError> {
     let entry = self
       .catalog
       .get(id)
       .ok_or_else(|| CompanionError::Device(format!("unknown provider {id}")))?;
-    entry.adopt_tokens(tokens);
+    entry.adopt_credentials(credentials).map_err(CompanionError::Device)?;
     self.connect_provider(id).await
   }
 
@@ -635,10 +643,7 @@ impl Session {
     let http = self.backends.http.clone();
     let scaler = self.backends.image.clone();
     tokio::spawn(async move {
-      let Some(app_bundle) = ask(&backend, |backend| backend.app_bundle()).await else {
-        return;
-      };
-      let provider = StreamProvider::new(backend, app_bundle, Arc::new(ForeignHttp::new(http)), scaler);
+      let provider = StreamProvider::new(backend, Arc::new(ForeignHttp::new(http)), scaler);
       if let Err(error) = hub.attach(provider).await {
         tracing::warn!(%error, "the stream provider did not attach");
       }
@@ -1123,7 +1128,7 @@ impl Session {
   async fn release(&self, device_id: &str, link: Option<Link>) {
     self.log_stream.lock().unwrap().tokens.remove(device_id);
     self.broadcast.release(device_id);
-    self.hub.peer_disconnected(device_id).await;
+    self.hub.peer_disconnected(device_id);
     let Some(link) = link else { return };
     tracing::info!(%device_id, "a peer link is being torn down");
     if let Some(extensions) = &self.extensions {
@@ -1249,9 +1254,10 @@ impl Session {
     let auth = self.auth.lock().unwrap().clone();
     let connected = self.connected.lock().unwrap().clone();
     let registered = self.providers.lock().unwrap().clone();
-    let info = |id: String, display_name: String, live: bool| ProviderInfo {
+    let info = |id: String, display_name: String, sign_in: SignInMethod, live: bool| ProviderInfo {
       available: true,
       connected: live && (connected.contains(&id) || attached.contains(&id)),
+      sign_in,
       auth_state: if live {
         auth.get(&id).map_or_else(idle_auth, project_auth)
       } else {
@@ -1270,7 +1276,12 @@ impl Session {
       .iter()
       .map(|entry| {
         let live = registered.iter().any(|provider| provider.name() == entry.id());
-        info(entry.id().to_owned(), entry.display_name().to_owned(), live)
+        info(
+          entry.id().to_owned(),
+          entry.display_name().to_owned(),
+          entry.sign_in(),
+          live,
+        )
       })
       .collect();
     for provider in &registered {
@@ -1278,6 +1289,7 @@ impl Session {
         infos.push(info(
           provider.name().to_owned(),
           provider.display_name().to_owned(),
+          SignInMethod::Handshake,
           true,
         ));
       }

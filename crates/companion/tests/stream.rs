@@ -1,5 +1,7 @@
 #[path = "rig/backends.rs"]
 mod backends;
+#[path = "rig/icecast.rs"]
+mod icecast;
 #[path = "rig/log_sink.rs"]
 mod log_sink;
 #[path = "support/poll.rs"]
@@ -17,13 +19,14 @@ use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo},
   backend::{
-    ForeignHttp, StreamMetadata, StreamStatus, StreamTiming,
+    ForeignHttp, ImageScaler, NativeHttp, StreamMetadata, StreamPresentation, StreamStatus, StreamTiming,
     net::{HttpDownloadSink, HttpHeader, HttpRequest, HttpSink, HttpTransport},
   },
   hub::Hub,
   provider::{PlayerTransport, Provider, ProviderError, ProviderRegistry, stream::StreamProvider},
   session::Session,
 };
+use icecast::{Icecast, Station, authority, fetch};
 use libbridgething::{
   PlaybackState, PlayerError,
   gateway::{GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, PlayUri},
@@ -69,16 +72,15 @@ impl HttpTransport for IcyOrigin {
           value: STATION.into(),
         },
         HttpHeader {
-          name: "icy-metaint".into(),
-          value: "16000".into(),
-        },
-        HttpHeader {
           name: "Content-Length".into(),
           value: "1073741824".into(),
         },
       ];
       let wanted = sink.on_response(200, headers, Some(1_073_741_824));
-      assert!(!wanted, "the probe refuses the body");
+      assert!(
+        !wanted,
+        "an origin without icy-metaint is not relayed, so the body is refused"
+      );
       sink.on_finished();
     });
   }
@@ -128,11 +130,27 @@ impl Rig {
   }
 }
 
+struct TagScaler;
+
+impl ImageScaler for TagScaler {
+  fn downsample_jpeg(&self, bytes: Vec<u8>, max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
+    Some(format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes())
+  }
+}
+
+fn title_of(msg: &GatewayToBridgeMsg) -> Option<String> {
+  snapshot_of(msg)?.track?.title
+}
+
 async fn boot() -> Rig {
   boot_with(Arc::new(Offline)).await
 }
 
 async fn boot_with(http: Arc<dyn HttpTransport>) -> Rig {
+  boot_with_scaler(http, None).await
+}
+
+async fn boot_with_scaler(http: Arc<dyn HttpTransport>, scaler: Option<Arc<dyn ImageScaler>>) -> Rig {
   let (gateway, peer) = Peer::link();
   let hub = Hub::new(
     Arc::new(gateway),
@@ -155,12 +173,7 @@ async fn boot_with(http: Arc<dyn HttpTransport>) -> Rig {
   );
   hub.start();
   let backend = FakeStreamBackend::new();
-  let provider = StreamProvider::new(
-    backend.clone(),
-    APP_BUNDLE.into(),
-    Arc::new(ForeignHttp::new(http)),
-    None,
-  );
+  let provider = StreamProvider::new(backend.clone(), Arc::new(ForeignHttp::new(http)), scaler);
   hub
     .attach(provider.clone())
     .await
@@ -223,6 +236,10 @@ async fn an_icy_origin_marks_the_stream_live_and_names_the_station() {
   let source = rig.backend.last_source().expect("the phone got a source");
   assert!(source.live, "icy headers mean live radio");
   assert_eq!(source.station.as_deref(), Some(STATION));
+  assert_eq!(
+    source.url, URL,
+    "without icy-metaint the phone plays the origin directly"
+  );
 
   let named = rig
     .peer
@@ -336,7 +353,7 @@ async fn pause_and_resume_only_ask_the_phone() {
   rig.provider.pause().await.expect("pause");
   rig.provider.resume().await.expect("resume");
   assert_eq!(
-    rig.backend.calls(),
+    rig.backend.transport_calls(),
     vec![StreamCall::Play(URL.into()), StreamCall::Pause, StreamCall::Resume]
   );
 }
@@ -386,6 +403,7 @@ async fn metadata_from_the_phone_becomes_the_track() {
       artist: Some("Miles Davis".into()),
       album: None,
       artwork_url: Some("https://radio.example/art.jpg".into()),
+      artwork: None,
     });
   let state = rig
     .peer
@@ -447,7 +465,7 @@ async fn playing_a_second_url_stops_the_first() {
   rig.play(URL).await;
   rig.play("https://other.example/pop").await;
   assert_eq!(
-    rig.backend.calls(),
+    rig.backend.transport_calls(),
     vec![
       StreamCall::Play(URL.into()),
       StreamCall::Stop,
@@ -457,20 +475,22 @@ async fn playing_a_second_url_stops_the_first() {
 }
 
 #[tokio::test]
-async fn the_last_peer_leaving_stops_the_stream() {
+async fn the_last_peer_leaving_leaves_the_stream_playing() {
   let rig = boot().await;
   rig.hub.peer_connected("car-1").await;
-  rig.hub.peer_connected("car-2").await;
   rig.play(URL).await;
   rig.playing_snapshot().await;
 
-  rig.hub.peer_disconnected("car-1").await;
-  assert!(!rig.backend.calls().contains(&StreamCall::Stop));
+  rig.hub.peer_disconnected("car-1");
+  tokio::time::sleep(Duration::from_millis(100)).await;
+  assert!(
+    !rig.backend.calls().contains(&StreamCall::Stop),
+    "the phone owns the stream; the car leaving is not a stop"
+  );
   assert_eq!(rig.hub.now_playing().current_source().as_deref(), Some("stream"));
 
-  rig.hub.peer_disconnected("car-2").await;
-  assert!(rig.backend.calls().contains(&StreamCall::Stop));
-  assert!(eventually(|| rig.hub.now_playing().current_source().is_none()).await);
+  rig.hub.peer_connected("car-1").await;
+  assert_eq!(rig.hub.now_playing().current_source().as_deref(), Some("stream"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -539,4 +559,298 @@ async fn session_start_attaches_the_stream_provider_with_the_host_bundle() {
     .await
   );
   session.stop().await;
+}
+
+fn tone(len: usize) -> Vec<u8> {
+  (0..len).map(|index| (index * 7 % 251) as u8).collect()
+}
+
+fn groove(trickle: bool) -> Station {
+  Station {
+    name: "Test Radio",
+    content_type: "audio/mpeg",
+    metaint: 64,
+    audio: tone(1_000),
+    titles: vec![Some("first"), None, Some("second")],
+    trickle,
+    logo: None,
+  }
+}
+
+async fn boot_native() -> Rig {
+  boot_with(Arc::new(NativeHttp::default())).await
+}
+
+async fn relayed_source(rig: &Rig, url: &str) -> bridgething_companion::backend::StreamSource {
+  rig.play(url).await;
+  let source = rig.backend.last_source().expect("the phone got a source");
+  assert!(
+    source.url.starts_with("http://127.0.0.1:"),
+    "a metaint origin is relayed through loopback, got {}",
+    source.url
+  );
+  assert!(source.live);
+  source
+}
+
+#[tokio::test]
+async fn a_metaint_origin_is_relayed_clean_and_its_titles_reach_the_wire() {
+  let origin = Icecast::serve(groove(false));
+  let rig = boot_native().await;
+  let source = relayed_source(&rig, &origin.url).await;
+  assert_eq!(source.station.as_deref(), Some("Test Radio"));
+  assert!(
+    origin
+      .requests()
+      .iter()
+      .all(|request| request.to_ascii_lowercase().contains("icy-metadata: 1")),
+    "the relay asks the origin for icy metadata"
+  );
+
+  rig
+    .peer
+    .wait("the first icy title", |msg| {
+      title_of(msg).filter(|title| title == "first")
+    })
+    .await;
+  rig
+    .peer
+    .wait("the second icy title", |msg| {
+      title_of(msg).filter(|title| title == "second")
+    })
+    .await;
+  let titles: Vec<String> = rig.peer.seen.lock().unwrap().iter().filter_map(title_of).collect();
+  let first = titles.iter().position(|title| title == "first").unwrap();
+  let second = titles.iter().position(|title| title == "second").unwrap();
+  assert!(first < second, "titles land in stream order: {titles:?}");
+
+  let served = fetch(&source.url, &[]).await.expect("the relay answers a player");
+  assert_eq!(served.status, 200);
+  assert_eq!(served.header("content-type"), Some("audio/mpeg"));
+  assert_eq!(served.header("transfer-encoding"), Some("chunked"));
+  assert_eq!(served.header("accept-ranges"), Some("none"));
+  assert_eq!(served.header("content-length"), None);
+  assert_eq!(
+    served.body, origin.audio,
+    "the player hears the audio with every metadata block removed"
+  );
+
+  let before = rig.peer.seen.lock().unwrap().len();
+  let sink = rig.backend.last_sink().expect("the backend kept its sink");
+  sink.on_metadata(StreamMetadata {
+    title: Some("Test Radio".into()),
+    ..Default::default()
+  });
+  assert!(eventually(|| rig.peer.seen.lock().unwrap().len() > before).await);
+  let latest = rig.peer.seen.lock().unwrap().iter().rev().find_map(title_of);
+  assert_eq!(
+    latest.as_deref(),
+    Some("second"),
+    "the icy title outranks whatever the phone reports"
+  );
+}
+
+#[tokio::test]
+async fn a_range_probe_and_a_second_player_both_get_the_whole_live_stream() {
+  let origin = Icecast::serve(groove(false));
+  let rig = boot_native().await;
+  let source = relayed_source(&rig, &origin.url).await;
+
+  let (probe, real) = tokio::join!(fetch(&source.url, &[("Range", "bytes=0-1")]), fetch(&source.url, &[]));
+  let probe = probe.expect("the range probe is answered");
+  assert_eq!(
+    probe.status, 200,
+    "a range request is answered with the live stream, never a partial"
+  );
+  assert_eq!(probe.body, origin.audio);
+  assert_eq!(real.expect("the second connection is answered").body, origin.audio);
+}
+
+#[tokio::test]
+async fn a_player_with_the_wrong_token_is_refused() {
+  let origin = Icecast::serve(groove(false));
+  let rig = boot_native().await;
+  let source = relayed_source(&rig, &origin.url).await;
+  let wrong = format!("http://{}/not-the-token", authority(&source.url));
+  let refused = fetch(&wrong, &[]).await.expect("the relay answers");
+  assert_eq!(refused.status, 404);
+  assert!(refused.body.is_empty());
+}
+
+#[tokio::test]
+async fn the_relay_outlives_the_peer_and_stop_hangs_up_on_the_origin() {
+  let origin = Icecast::serve(groove(true));
+  let rig = boot_native().await;
+  rig.hub.peer_connected("car-1").await;
+  let source = relayed_source(&rig, &origin.url).await;
+  assert_eq!(origin.closed(), 0);
+  let port = authority(&source.url).to_owned();
+
+  rig.hub.peer_disconnected("car-1");
+  tokio::time::sleep(Duration::from_millis(200)).await;
+  assert!(!rig.backend.calls().contains(&StreamCall::Stop));
+  assert!(
+    std::net::TcpStream::connect(&port).is_ok(),
+    "the relay keeps serving after the car leaves"
+  );
+  assert_eq!(origin.closed(), 0);
+
+  rig.provider.detach().await;
+  assert!(rig.backend.calls().contains(&StreamCall::Stop));
+  assert!(
+    eventually(|| std::net::TcpStream::connect(&port).is_err()).await,
+    "the relay port closes with the stream"
+  );
+  assert!(
+    eventually(|| origin.closed() == 1).await,
+    "the origin sees its connection dropped once the relay stops"
+  );
+}
+
+#[tokio::test]
+async fn a_superseded_play_never_serves_the_old_stream() {
+  let first = Icecast::serve(groove(true));
+  let second = Icecast::serve(Station {
+    name: "Other Radio",
+    audio: tone(500),
+    titles: vec![Some("elsewhere")],
+    ..groove(false)
+  });
+  let rig = boot_native().await;
+  let stale = relayed_source(&rig, &first.url).await;
+  let fresh = relayed_source(&rig, &second.url).await;
+  assert_ne!(stale.url, fresh.url, "every playback gets its own port and token");
+
+  let stale_port = authority(&stale.url).to_owned();
+  assert!(eventually(|| std::net::TcpStream::connect(&stale_port).is_err()).await);
+  assert!(eventually(|| first.closed() == 1).await);
+  assert_eq!(
+    fetch(&fresh.url, &[]).await.expect("the new relay serves").body,
+    second.audio
+  );
+  rig
+    .peer
+    .wait("the new station's title", |msg| {
+      title_of(msg).filter(|title| title == "elsewhere")
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn artwork_bytes_from_the_phone_become_a_scaled_asset() {
+  let rig = boot_with_scaler(Arc::new(Offline), Some(Arc::new(TagScaler))).await;
+  rig.play(URL).await;
+  rig
+    .backend
+    .last_sink()
+    .expect("the backend kept its sink")
+    .on_metadata(StreamMetadata {
+      title: Some("Blue in Green".into()),
+      artwork: Some(b"cover".to_vec()),
+      ..Default::default()
+    });
+  let state = rig
+    .peer
+    .wait("the artful snapshot", |msg| {
+      snapshot_of(msg).filter(|state| state.track.as_ref().is_some_and(|track| track.artwork_id.is_some()))
+    })
+    .await;
+  let artwork = state.track.and_then(|track| track.artwork_id).expect("an artwork id");
+  assert!(artwork.starts_with("stream/img/248/"), "{artwork}");
+  let asset = rig
+    .provider
+    .asset(&artwork)
+    .await
+    .expect("the asset path answers")
+    .expect("embedded bytes are served without any fetch");
+  assert_eq!(asset.bytes, b"cover@248");
+  assert_eq!(asset.mime.as_deref(), Some("image/jpeg"));
+}
+
+#[tokio::test]
+async fn the_phone_is_shown_exactly_what_the_wire_shows() {
+  let origin = Icecast::serve(Station {
+    titles: vec![Some("first")],
+    logo: Some(b"logo-bytes"),
+    ..groove(true)
+  });
+  let rig = boot_with_scaler(Arc::new(NativeHttp::default()), Some(Arc::new(TagScaler))).await;
+  relayed_source(&rig, &origin.url).await;
+
+  assert!(
+    eventually(|| {
+      rig
+        .backend
+        .presentations()
+        .iter()
+        .any(|shown| shown.title == "first" && shown.artwork.as_deref() == Some(b"logo-bytes".as_slice()))
+    })
+    .await,
+    "the phone never saw the icy title with the station logo: {:?}",
+    rig.backend.presentations()
+  );
+
+  let state = rig
+    .peer
+    .wait("the artful snapshot", |msg| {
+      snapshot_of(msg).filter(|state| state.track.as_ref().is_some_and(|track| track.artwork_id.is_some()))
+    })
+    .await;
+  let artwork = state.track.and_then(|track| track.artwork_id).expect("an artwork id");
+  let asset = rig
+    .provider
+    .asset(&artwork)
+    .await
+    .expect("the asset path answers")
+    .expect("the logo scales for the wire");
+  assert_eq!(asset.bytes, b"logo-bytes@248");
+  assert_eq!(
+    origin
+      .requests()
+      .iter()
+      .filter(|head| head.starts_with("GET /logo"))
+      .count(),
+    1,
+    "the phone and the wire share one logo fetch"
+  );
+}
+
+#[tokio::test]
+async fn the_phone_s_own_tags_are_shown_back_to_it() {
+  let rig = boot().await;
+  rig.play(URL).await;
+  assert!(
+    eventually(|| rig.backend.presentations().last().map(|shown| shown.title.as_str()) == Some("radio.example")).await,
+    "before any metadata the phone shows the host, like the wire does: {:?}",
+    rig.backend.presentations()
+  );
+  rig
+    .backend
+    .last_sink()
+    .expect("the backend kept its sink")
+    .on_metadata(StreamMetadata {
+      title: Some("Blue in Green".into()),
+      artist: Some("Miles Davis".into()),
+      artwork: Some(b"cover".to_vec()),
+      ..Default::default()
+    });
+  let expected = StreamPresentation {
+    title: "Blue in Green".into(),
+    artist: Some("Miles Davis".into()),
+    album: None,
+    artwork: Some(b"cover".to_vec()),
+  };
+  assert!(
+    eventually(|| rig.backend.presentations().last() == Some(&expected)).await,
+    "the phone's tags never came back as its presentation: {:?}",
+    rig.backend.presentations()
+  );
+
+  rig.provider.pause().await.expect("pause");
+  rig.provider.resume().await.expect("resume");
+  assert_eq!(
+    rig.backend.presentations().len(),
+    2,
+    "an unchanged presentation is not re-sent on every tick"
+  );
 }

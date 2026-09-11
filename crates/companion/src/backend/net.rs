@@ -92,8 +92,8 @@ impl HttpDownloadSink {
       .on_response(status, headers.into_iter().map(Into::into).collect(), content_length)
   }
 
-  pub fn on_chunk(&self, chunk: Vec<u8>) {
-    self.inner.on_chunk(chunk);
+  pub fn on_chunk(&self, chunk: Vec<u8>) -> bool {
+    self.inner.on_chunk(chunk)
   }
 
   pub fn on_finished(&self) {

@@ -330,16 +330,19 @@ export type OtaStoreChange =
 
 export type PeerLinkStatus = 'connected' | 'linkFailed';
 
+export type ProviderCredentials =
+  | { kind: 'oauthTokens'; accessToken: string; refreshToken: string }
+  | { kind: 'serverLogin'; serverUrl: string; username: string; password: string };
+
 export type ProviderInfo = {
   id: string;
   displayName: string;
   available: boolean;
   connected: boolean;
+  signIn: SignInMethod;
   authState: AuthState;
   serviceHealth: ServiceHealth;
 };
-
-export type ProviderTokens = { accessToken: string; refreshToken: string };
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -398,6 +401,8 @@ export type SessionSnapshot = {
   otaAvailable: Array<OtaAvailable>;
   otaPoll: OtaPollStatus;
 };
+
+export type SignInMethod = 'handshake' | 'serverLogin';
 
 export type SpotifyProviderConfig = { workerBase: string; psk: string };
 

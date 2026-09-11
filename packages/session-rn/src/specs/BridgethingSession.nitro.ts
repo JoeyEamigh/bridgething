@@ -28,13 +28,27 @@ export type BridgethingServiceHealth = {
   retryAfterSeconds?: number;
 };
 
+export type BridgethingSignInMethod = 'handshake' | 'serverLogin';
+
 export type BridgethingProviderInfo = {
   id: string;
   displayName: string;
   available: boolean;
   connected: boolean;
+  signIn: BridgethingSignInMethod;
   authState: BridgethingAuthState;
   serviceHealth: BridgethingServiceHealth;
+};
+
+export type BridgethingProviderCredentialsKind = 'oauthTokens' | 'serverLogin';
+
+export type BridgethingProviderCredentials = {
+  kind: BridgethingProviderCredentialsKind;
+  accessToken?: string;
+  refreshToken?: string;
+  serverUrl?: string;
+  username?: string;
+  password?: string;
 };
 
 export type BridgethingRepeatMode = 'off' | 'one' | 'all';
@@ -386,6 +400,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   connectProvider(id: string): Promise<void>;
   disconnectProvider(id: string): Promise<void>;
   cancelAuth(id: string): Promise<void>;
+  completeProviderAuth(id: string, credentials: BridgethingProviderCredentials): Promise<void>;
   setProviderPriority(ids: string[]): Promise<void>;
 
   snapshot(): Promise<BridgethingSessionSnapshot>;

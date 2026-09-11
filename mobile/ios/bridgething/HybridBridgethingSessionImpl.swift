@@ -280,6 +280,21 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         try? await requireSession().cancelAuth(id: id)
     }
 
+    public func completeProviderAuth(id: String, credentials: BridgethingProviderCredentials) async throws {
+        let mapped: ProviderCredentials = switch credentials.kind {
+        case .oauthtokens: .oauthTokens(
+            accessToken: credentials.accessToken ?? "",
+            refreshToken: credentials.refreshToken ?? ""
+        )
+        case .serverlogin: .serverLogin(
+            serverUrl: credentials.serverUrl ?? "",
+            username: credentials.username ?? "",
+            password: credentials.password ?? ""
+        )
+        }
+        try await requireSession().completeProviderAuth(id: id, credentials: mapped)
+    }
+
     public func disconnectProvider(id: String) async {
         try? await requireSession().disconnectProvider(id: id)
     }
@@ -920,11 +935,16 @@ private func toRNProviderInfo(_ info: ProviderInfo) -> BridgethingProviderInfo {
     case .rateLimited: .ratelimited
     case .unreachable: .unreachable
     }
+    let signIn: BridgethingSignInMethod = switch info.signIn {
+    case .handshake: .handshake
+    case .serverLogin: .serverlogin
+    }
     return BridgethingProviderInfo(
         id: info.id,
         displayName: info.displayName,
         available: info.available,
         connected: info.connected,
+        signIn: signIn,
         authState: toRNAuthState(info.authState),
         serviceHealth: BridgethingServiceHealth(
             kind: healthKind,

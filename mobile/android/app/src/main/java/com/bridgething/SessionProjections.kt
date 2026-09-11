@@ -38,6 +38,7 @@ import com.margelo.nitro.bridgething.session.BridgethingServiceHealth
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealthKind
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
+import com.margelo.nitro.bridgething.session.BridgethingSignInMethod
 import com.margelo.nitro.bridgething.session.BridgethingVoiceDebug
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelState
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelStatus
@@ -80,6 +81,7 @@ import uniffi.bridgething_companion.ResumeTarget
 import uniffi.bridgething_companion.ServiceHealthKind
 import uniffi.bridgething_companion.SessionPeer
 import uniffi.bridgething_companion.SessionSnapshot
+import uniffi.bridgething_companion.SignInMethod
 import uniffi.bridgething_companion.VoiceModelState
 import uniffi.bridgething_companion.VoiceModelStatus
 import uniffi.bridgething_companion.VoiceTurn
@@ -130,6 +132,10 @@ internal fun toRnProviderInfo(info: ProviderInfo): BridgethingProviderInfo = Bri
     displayName = info.displayName,
     available = info.available,
     connected = info.connected,
+    signIn = when (info.signIn) {
+        SignInMethod.HANDSHAKE -> BridgethingSignInMethod.HANDSHAKE
+        SignInMethod.SERVER_LOGIN -> BridgethingSignInMethod.SERVERLOGIN
+    },
     authState = toRnAuthState(info.authState),
     serviceHealth = BridgethingServiceHealth(
         kind = when (info.serviceHealth.kind) {

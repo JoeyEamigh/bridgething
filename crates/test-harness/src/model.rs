@@ -300,7 +300,12 @@ impl Model {
   fn merged_metadata(&self) -> MediaItemUpdate {
     if self.companion_authoritative(CompanionAuthorityScope::NowPlayingMetadata) {
       let c = &self.companion_metadata;
-      let i = &self.iap2_metadata;
+      let same_item = match (c.title.as_deref(), self.iap2_metadata.title.as_deref()) {
+        (Some(companion), Some(iap2)) => companion.trim().eq_ignore_ascii_case(iap2.trim()),
+        _ => false,
+      };
+      let none = MediaItemUpdate::default();
+      let i = if same_item { &self.iap2_metadata } else { &none };
       MediaItemUpdate {
         persistent_id: c.persistent_id.clone().or_else(|| i.persistent_id.clone()),
         title: c.title.clone().or_else(|| i.title.clone()),

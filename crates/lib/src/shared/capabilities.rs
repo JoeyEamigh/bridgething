@@ -61,6 +61,7 @@ pub enum MusicProvider {
   None,
   Spotify,
   AppleMusic,
+  Subsonic,
 }
 
 #[serde_with::skip_serializing_none]

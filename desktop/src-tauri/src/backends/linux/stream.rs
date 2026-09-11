@@ -14,7 +14,7 @@ use std::{
 };
 
 use bridgething_companion::backend::{
-  StreamBackend, StreamMetadata, StreamSink, StreamSource, StreamStatus, StreamTiming,
+  StreamBackend, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };
 use futures::executor::block_on;
 use pulseaudio::{Client, PlaybackSource, PlaybackStream, protocol};
@@ -24,11 +24,10 @@ use symphonia::core::{
   errors::Error as DecodeFailure,
   formats::{FormatReader, SeekMode, SeekTo, TrackType, probe::Hint},
   io::{MediaSource, MediaSourceStream},
+  meta::StandardTag,
   units::{Time, TimeBase},
 };
 use tokio::{runtime::Runtime, sync::Notify};
-
-use crate::backends::stream::{IcyReader, is_hls};
 
 const APP_BUNDLE: &str = "com.bridgething.desktop";
 const CLIENT_NAME: &CStr = c"bridgething";
@@ -43,6 +42,15 @@ const TICK: Duration = Duration::from_millis(50);
 const WAIT: Duration = Duration::from_millis(100);
 const TIMING_PERIOD: Duration = Duration::from_secs(1);
 const SERVER_PERIOD: Duration = Duration::from_millis(200);
+
+const HLS_TYPES: [&str; 6] = [
+  "application/vnd.apple.mpegurl",
+  "application/x-mpegurl",
+  "application/mpegurl",
+  "audio/mpegurl",
+  "audio/x-mpegurl",
+  "vnd.apple.mpegurl",
+];
 
 const POSITIONS: [protocol::ChannelPosition; MAX_CHANNELS] = [
   protocol::ChannelPosition::FrontLeft,
@@ -85,6 +93,8 @@ impl StreamBackend for PulseStream {
     sink.on_status(StreamStatus::Buffering);
     *active = Playback::start(source, sink);
   }
+
+  fn present(&self, _presentation: StreamPresentation) {}
 
   fn pause(&self) {
     self.send(Command::Pause);
@@ -538,42 +548,13 @@ impl Seek for BodyReader {
   }
 }
 
-enum Source {
-  Plain(BodyReader),
-  Icy(IcyReader<BodyReader>),
-}
-
-impl Read for Source {
-  fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-    match self {
-      Source::Plain(reader) => reader.read(buf),
-      Source::Icy(reader) => reader.read(buf),
-    }
-  }
-}
-
-impl Seek for Source {
-  fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-    match self {
-      Source::Plain(reader) => reader.seek(pos),
-      Source::Icy(_) => Err(io::Error::new(io::ErrorKind::Unsupported, "the stream is live")),
-    }
-  }
-}
-
-impl MediaSource for Source {
+impl MediaSource for BodyReader {
   fn is_seekable(&self) -> bool {
-    match self {
-      Source::Plain(reader) => reader.0.retain,
-      Source::Icy(_) => false,
-    }
+    self.0.retain
   }
 
   fn byte_len(&self) -> Option<u64> {
-    match self {
-      Source::Plain(reader) => reader.0.total,
-      Source::Icy(_) => None,
-    }
+    self.0.total
   }
 }
 
@@ -618,7 +599,7 @@ fn fetch(shared: &Arc<Shared>, runtime: &Runtime, stream: StreamSource) {
     Err(error) => return shared.fail(format!("no http client for the stream: {error}")),
   };
 
-  let request = client.get(&stream.url).header("icy-metadata", "1").send();
+  let request = client.get(&stream.url).send();
   let response = match runtime.block_on(request) {
     Ok(response) => response,
     Err(error) => return shared.fail(format!("the stream could not be reached: {error}")),
@@ -632,23 +613,16 @@ fn fetch(shared: &Arc<Shared>, runtime: &Runtime, stream: StreamSource) {
   if is_hls(&stream.url, content_type.as_deref()) {
     return shared.fail("hls is not supported on desktop".to_owned());
   }
-  let metaint = header(response.headers(), "icy-metaint")
-    .and_then(|value| value.trim().parse::<usize>().ok())
-    .filter(|metaint| *metaint > 0);
-  let name = header(response.headers(), "icy-name")
-    .map(|name| name.trim().to_owned())
-    .filter(|name| !name.is_empty())
-    .or_else(|| stream.station.clone());
   let length = response.content_length();
 
-  if let Some(name) = name.filter(|_| !shared.cancelled()) {
+  if let Some(name) = stream.station.clone().filter(|_| !shared.cancelled()) {
     shared.sink.on_metadata(StreamMetadata {
       title: Some(name),
       ..StreamMetadata::default()
     });
   }
 
-  let retain = metaint.is_none() && length.is_some_and(|length| length <= RETAIN_LIMIT);
+  let retain = length.is_some_and(|length| length <= RETAIN_LIMIT);
   let body = Arc::new(Bytestream::new(
     Arc::clone(&shared.cancelled),
     retain,
@@ -656,27 +630,13 @@ fn fetch(shared: &Arc<Shared>, runtime: &Runtime, stream: StreamSource) {
   ));
   runtime.spawn(pump(response, Arc::clone(&body)));
 
-  let source = match metaint {
-    Some(metaint) => {
-      let sink = Arc::clone(&shared.sink);
-      let cancelled = Arc::clone(&shared.cancelled);
-      Source::Icy(IcyReader::new(
-        BodyReader(Arc::clone(&body)),
-        metaint,
-        Box::new(move |title| {
-          if !cancelled.load(Ordering::SeqCst) {
-            sink.on_metadata(StreamMetadata {
-              title: Some(title),
-              ..StreamMetadata::default()
-            });
-          }
-        }),
-      ))
-    }
-    None => Source::Plain(BodyReader(Arc::clone(&body))),
-  };
-
-  decode(shared, source, &stream.url, content_type.as_deref(), length.is_some());
+  decode(
+    shared,
+    BodyReader(Arc::clone(&body)),
+    &stream,
+    content_type.as_deref(),
+    length.is_some(),
+  );
   if let Some(reason) = body.failure() {
     shared.fail(format!("the stream stopped: {reason}"));
   }
@@ -703,13 +663,33 @@ async fn pump(mut response: reqwest::Response, body: Arc<Bytestream>) {
   }
 }
 
-fn decode(shared: &Arc<Shared>, source: Source, url: &str, content_type: Option<&str>, sized: bool) {
+fn tagged(format: &mut dyn FormatReader, station: Option<&str>) -> Option<StreamMetadata> {
+  let mut log = format.metadata();
+  let revision = log.skip_to_latest()?;
+  let mut found = StreamMetadata::default();
+  for tag in &revision.media.tags {
+    match &tag.std {
+      Some(StandardTag::TrackTitle(title)) => found.title = Some(title.to_string()),
+      Some(StandardTag::Artist(artist)) => found.artist = Some(artist.to_string()),
+      Some(StandardTag::Album(album)) => found.album = Some(album.to_string()),
+      _ => {}
+    }
+  }
+  found.artwork = revision.media.visuals.first().map(|visual| visual.data.to_vec());
+  if found == StreamMetadata::default() {
+    return None;
+  }
+  found.title = found.title.or_else(|| station.map(str::to_owned));
+  Some(found)
+}
+
+fn decode(shared: &Arc<Shared>, source: BodyReader, played: &StreamSource, content_type: Option<&str>, sized: bool) {
   let seekable = source.is_seekable();
   let mut hint = Hint::new();
   if let Some(content_type) = content_type {
     hint.mime_type(content_type.split(';').next().unwrap_or(content_type).trim());
   }
-  if let Some(extension) = extension(url) {
+  if let Some(extension) = extension(&played.url) {
     hint.with_extension(&extension);
   }
 
@@ -723,6 +703,10 @@ fn decode(shared: &Arc<Shared>, source: Source, url: &str, content_type: Option<
       return;
     }
   };
+
+  if let Some(metadata) = tagged(format.as_mut(), played.station.as_deref()).filter(|_| !shared.cancelled()) {
+    shared.sink.on_metadata(metadata);
+  }
 
   let Some(track) = format.default_track(TrackType::Audio) else {
     return shared.fail("the stream carries no audio".to_owned());
@@ -999,6 +983,10 @@ fn params(format: Format) -> Option<protocol::PlaybackStreamParams> {
     channel_map: map,
     cvolume: Some(protocol::ChannelVolume::norm(channels)),
     sink_name: Some(protocol::DEFAULT_SINK.to_owned()),
+    buffer_attr: protocol::stream::BufferAttr {
+      pre_buffering: 0,
+      ..Default::default()
+    },
     ..Default::default()
   })
 }
@@ -1008,6 +996,23 @@ fn header(headers: &HeaderMap, name: &str) -> Option<String> {
     .get(name)
     .and_then(|value| value.to_str().ok())
     .map(|value| value.to_owned())
+}
+
+fn is_hls(url: &str, content_type: Option<&str>) -> bool {
+  let path = url.split(['?', '#']).next().unwrap_or(url).to_ascii_lowercase();
+  if path.ends_with(".m3u8") {
+    return true;
+  }
+  let Some(content_type) = content_type else {
+    return false;
+  };
+  let mime = content_type
+    .split(';')
+    .next()
+    .unwrap_or(content_type)
+    .trim()
+    .to_ascii_lowercase();
+  HLS_TYPES.contains(&mime.as_str())
 }
 
 fn extension(url: &str) -> Option<String> {
@@ -1055,24 +1060,41 @@ mod tests {
     out
   }
 
-  fn icy_framed(body: &[u8], metaint: usize, title: &str) -> Vec<u8> {
-    let mut payload = format!("StreamTitle='{title}';").into_bytes();
-    let units = payload.len().div_ceil(16);
-    payload.resize(units * 16, 0);
+  fn id3_frame(id: &[u8; 4], body: &[u8]) -> Vec<u8> {
+    let mut frame = id.to_vec();
+    frame.extend_from_slice(&(body.len() as u32).to_be_bytes());
+    frame.extend_from_slice(&[0, 0]);
+    frame.extend_from_slice(body);
+    frame
+  }
 
-    let mut out = Vec::new();
-    for (index, block) in body.chunks(metaint).enumerate() {
-      out.extend_from_slice(block);
-      if block.len() < metaint {
-        break;
-      }
-      if index == 0 {
-        out.push(units as u8);
-        out.extend_from_slice(&payload);
-      } else {
-        out.push(0);
-      }
-    }
+  fn id3_text(id: &[u8; 4], said: &str) -> Vec<u8> {
+    let mut body = vec![3u8];
+    body.extend_from_slice(said.as_bytes());
+    id3_frame(id, &body)
+  }
+
+  fn id3_tagged(audio: &[u8], artwork: &[u8]) -> Vec<u8> {
+    let mut frames = id3_text(b"TIT2", "Watussi");
+    frames.extend_from_slice(&id3_text(b"TPE1", "Harmonia"));
+    frames.extend_from_slice(&id3_text(b"TALB", "Musik von Harmonia"));
+    let mut apic = vec![0u8];
+    apic.extend_from_slice(b"image/png\0");
+    apic.push(3);
+    apic.push(0);
+    apic.extend_from_slice(artwork);
+    frames.extend_from_slice(&id3_frame(b"APIC", &apic));
+    let size = frames.len();
+    let mut out = b"ID3".to_vec();
+    out.extend_from_slice(&[3, 0, 0]);
+    out.extend_from_slice(&[
+      ((size >> 21) & 0x7f) as u8,
+      ((size >> 14) & 0x7f) as u8,
+      ((size >> 7) & 0x7f) as u8,
+      (size & 0x7f) as u8,
+    ]);
+    out.extend_from_slice(&frames);
+    out.extend_from_slice(audio);
     out
   }
 
@@ -1183,25 +1205,21 @@ mod tests {
   }
 
   #[test]
-  fn an_icy_framed_body_is_unwrapped_reports_its_titles_and_never_seeks() {
-    let head = concat!(
-      "HTTP/1.1 200 OK\r\n",
-      "Content-Type: audio/wav\r\n",
-      "icy-metaint: 4096\r\n",
-      "icy-name: Test Radio\r\n",
-      "Connection: close\r\n\r\n"
-    )
-    .to_owned();
-    let url = serve(head, icy_framed(&wav(), 4096, "Harmonia - Watussi"));
-    let (shared, seen) = fetched(url);
+  fn embedded_tags_and_cover_art_are_reported_before_the_first_sample() {
+    let (shared, seen) = fetched(sized("audio/mpeg", id3_tagged(&wav(), b"cover-png")));
 
     assert_eq!(shared.take_failure(), None);
-    assert_eq!(
-      titles(&seen),
-      vec!["Test Radio".to_owned(), "Harmonia - Watussi".to_owned()]
-    );
-    assert!(!shared.seekable.load(Ordering::SeqCst), "a live stream never seeks");
-    assert_eq!(shared.duration_ms.load(Ordering::SeqCst), 0);
+    let tagged = seen
+      .iter()
+      .find_map(|event| match event {
+        StreamEvent::Metadata(metadata) if metadata.artwork.is_some() => Some(metadata.clone()),
+        _ => None,
+      })
+      .expect("the tag reaches the sink");
+    assert_eq!(tagged.title.as_deref(), Some("Watussi"));
+    assert_eq!(tagged.artist.as_deref(), Some("Harmonia"));
+    assert_eq!(tagged.album.as_deref(), Some("Musik von Harmonia"));
+    assert_eq!(tagged.artwork.as_deref(), Some(&b"cover-png"[..]));
     assert_eq!(drained(&shared), FRAMES * SAMPLE_BYTES);
   }
 
@@ -1219,23 +1237,19 @@ mod tests {
   }
 
   #[test]
-  fn an_origin_that_names_itself_outranks_the_station_on_the_source() {
-    let head = concat!(
-      "HTTP/1.1 200 OK\r\n",
-      "Content-Type: audio/wav\r\n",
-      "icy-name: Drone Zone\r\n",
-      "Connection: close\r\n\r\n"
-    )
-    .to_owned();
-    let stream = StreamSource {
-      url: serve(head, wav()),
-      live: true,
-      station: Some("Groove Salad".to_owned()),
-    };
-    let (shared, seen) = fetched_from(stream);
-
-    assert_eq!(shared.take_failure(), None);
-    assert_eq!(titles(&seen), vec!["Drone Zone".to_owned()]);
+  fn a_playlist_url_or_content_type_is_recognised_as_hls() {
+    assert!(is_hls("https://example/live/master.m3u8", None));
+    assert!(is_hls("https://example/live/master.M3U8?token=1", None));
+    assert!(is_hls(
+      "https://example/live/stream",
+      Some("application/vnd.apple.mpegurl")
+    ));
+    assert!(is_hls(
+      "https://example/live/stream",
+      Some("audio/x-mpegurl; charset=utf-8")
+    ));
+    assert!(!is_hls("https://example/live/stream.mp3", Some("audio/mpeg")));
+    assert!(!is_hls("https://example/live/stream", None));
   }
 
   #[test]
@@ -1289,7 +1303,7 @@ mod tests {
 
     assert!(
       statuses.contains(&StreamStatus::Playing),
-      "the sink reports playing once the server starts: {statuses:?}"
+      "the sink reports playing once the server starts: {seen:?}"
     );
     assert_eq!(statuses.last(), Some(&StreamStatus::Ended), "{statuses:?}");
     let timings: Vec<StreamTiming> = seen

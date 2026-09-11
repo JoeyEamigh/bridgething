@@ -28,7 +28,7 @@ import uniffi.bridgething_companion.HttpSink
 import uniffi.bridgething_companion.HttpTransport
 import uniffi.bridgething_companion.LogLevel
 import uniffi.bridgething_companion.LogSink
-import uniffi.bridgething_companion.ProviderTokens
+import uniffi.bridgething_companion.ProviderCredentials
 import uniffi.bridgething_companion.SecretStore
 import uniffi.bridgething_companion.SessionEvent
 import uniffi.bridgething_companion.SessionEventSink
@@ -207,7 +207,7 @@ class ProviderAuthFfiTest {
       withTimeout(AWAIT_MS) {
         session.completeProviderAuth(
           "spotify",
-          ProviderTokens(accessToken = "pkce-bearer", refreshToken = "pkce-refresh"),
+          ProviderCredentials.OauthTokens(accessToken = "pkce-bearer", refreshToken = "pkce-refresh"),
         )
       }
 
@@ -225,7 +225,7 @@ class ProviderAuthFfiTest {
       withTimeout(AWAIT_MS) {
         session.completeProviderAuth(
           "spotify",
-          ProviderTokens(accessToken = "pkce-bearer", refreshToken = "pkce-refresh"),
+          ProviderCredentials.OauthTokens(accessToken = "pkce-bearer", refreshToken = "pkce-refresh"),
         )
       }
       assertTrue(events.awaitAuthKind(AuthKind.AUTHENTICATED))

@@ -368,20 +368,9 @@ impl Hub {
     }
   }
 
-  pub async fn peer_disconnected(&self, device_id: &str) {
-    let none_left = {
-      let mut resume = self.resume.lock().unwrap();
-      resume.connected.remove(device_id);
-      resume.connected.is_empty()
-    };
+  pub fn peer_disconnected(&self, device_id: &str) {
+    self.resume.lock().unwrap().connected.remove(device_id);
     self.push_resume_target();
-    if none_left {
-      for id in self.ordered_ids() {
-        if let Some(provider) = self.provider(&id) {
-          provider.last_peer_gone().await;
-        }
-      }
-    }
   }
 
   fn allow_auto_resume(&self, device_id: &str) -> bool {
@@ -443,13 +432,26 @@ impl Hub {
 
 impl ProviderRegistry for Hub {
   fn library(&self) -> Option<Arc<dyn Provider>> {
+    let ordered: Vec<Arc<dyn Provider>> = self
+      .ordered_ids()
+      .into_iter()
+      .filter_map(|id| self.provider(&id))
+      .collect();
+    let with_catalog: Vec<&Arc<dyn Provider>> = ordered
+      .iter()
+      .filter(|provider| provider.music_provider() != MusicProvider::None)
+      .collect();
+    let candidates: Vec<&Arc<dyn Provider>> = if with_catalog.is_empty() {
+      ordered.iter().collect()
+    } else {
+      with_catalog
+    };
     let last = self.attached.lock().unwrap().last_played_from.clone();
-    if let Some(id) = last
-      && let Some(provider) = self.provider(&id)
-    {
-      return Some(provider);
-    }
-    self.ordered_ids().into_iter().next().and_then(|id| self.provider(&id))
+    candidates
+      .iter()
+      .find(|provider| Some(provider.name()) == last.as_deref())
+      .or_else(|| candidates.first())
+      .map(|provider| Arc::clone(provider))
   }
 
   fn audible(&self) -> Option<Arc<dyn Provider>> {

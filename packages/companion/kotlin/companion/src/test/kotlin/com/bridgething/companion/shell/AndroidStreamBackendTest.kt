@@ -3,9 +3,13 @@ package com.bridgething.companion.shell
 import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import uniffi.bridgething_companion.StreamPresentation
 import uniffi.bridgething_companion.StreamStatus
 
 class AndroidStreamBackendTest {
@@ -73,6 +77,35 @@ class AndroidStreamBackendTest {
     }
 
     @Test
+    fun aPresentationBecomesTheSessionMetadataTheNotificationShows() {
+        val metadata = presentedMetadataFor(
+            StreamPresentation(
+                title = "Blue in Green",
+                artist = "Miles Davis",
+                album = null,
+                artwork = byteArrayOf(1, 2, 3),
+            ),
+        )
+        assertEquals("Blue in Green", metadata.title.toString())
+        assertEquals("Miles Davis", metadata.artist.toString())
+        assertNull(metadata.albumTitle)
+        assertArrayEquals(byteArrayOf(1, 2, 3), metadata.artworkData)
+        assertEquals(MediaMetadata.PICTURE_TYPE_FRONT_COVER, metadata.artworkDataType)
+
+        val bare = presentedMetadataFor(StreamPresentation(title = "Radio", artist = null, album = null, artwork = null))
+        assertNull(bare.artworkData)
+    }
+
+    @Test
+    fun thePlayerEchoingAPresentationIsNotReportedAsStreamMetadata() {
+        val shown = presentedMetadataFor(StreamPresentation("Radio", "Host", null, byteArrayOf(9)))
+        assertTrue(isEchoOf(presentedMetadataFor(StreamPresentation("Radio", "Host", null, byteArrayOf(9))), shown))
+        assertFalse(isEchoOf(MediaMetadata.Builder().setTitle("Radio").setArtist("Host").build(), shown))
+        assertFalse(isEchoOf(MediaMetadata.Builder().setTitle("Song").build(), shown))
+        assertFalse(isEchoOf(shown, null))
+    }
+
+    @Test
     fun metadataPrefersTheIcyTitle() {
         val metadata = MediaMetadata.Builder()
             .setTitle("Song")
@@ -85,6 +118,21 @@ class AndroidStreamBackendTest {
         assertEquals("Band", mapped.artist)
         assertEquals("Record", mapped.album)
         assertNull(mapped.artworkUrl)
+        assertNull(mapped.artwork)
+    }
+
+    @Test
+    fun embeddedArtworkBytesRideAlongWithTheTags() {
+        val cover = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
+        val metadata = MediaMetadata.Builder()
+            .setTitle("Song")
+            .setArtworkData(cover, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            .build()
+        val mapped = streamMetadataFor(metadata)
+        assertArrayEquals(cover, mapped.artwork)
+
+        val bare = streamMetadataFor(MediaMetadata.Builder().setArtworkData(ByteArray(0), null).build())
+        assertNull(bare.artwork)
     }
 
     @Test

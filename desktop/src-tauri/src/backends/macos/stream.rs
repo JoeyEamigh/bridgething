@@ -9,7 +9,7 @@ use std::{
 
 use block2::RcBlock;
 use bridgething_companion::backend::{
-  StreamBackend, StreamMetadata, StreamSink, StreamSource, StreamStatus, StreamTiming,
+  StreamBackend, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };
 use dispatch2::{DispatchQueue, DispatchTime, MainThreadBound};
 use objc2::{
@@ -18,9 +18,9 @@ use objc2::{
   runtime::{AnyObject, Bool, ProtocolObject},
 };
 use objc2_av_foundation::{
-  AVAsset, AVMetadataCommonIdentifierAlbumName, AVMetadataCommonIdentifierArtist, AVMetadataCommonIdentifierTitle,
-  AVMetadataCommonKeyAlbumName, AVMetadataCommonKeyArtist, AVMetadataCommonKeyTitle,
-  AVMetadataIdentifierIcyMetadataStreamTitle, AVMetadataItem, AVPlayer, AVPlayerItem,
+  AVAsset, AVMetadataCommonIdentifierAlbumName, AVMetadataCommonIdentifierArtist, AVMetadataCommonIdentifierArtwork,
+  AVMetadataCommonIdentifierTitle, AVMetadataCommonKeyAlbumName, AVMetadataCommonKeyArtist, AVMetadataCommonKeyArtwork,
+  AVMetadataCommonKeyTitle, AVMetadataIdentifierIcyMetadataStreamTitle, AVMetadataItem, AVPlayer, AVPlayerItem,
   AVPlayerItemDidPlayToEndTimeNotification, AVPlayerItemFailedToPlayToEndTimeErrorKey,
   AVPlayerItemFailedToPlayToEndTimeNotification, AVPlayerItemMetadataOutput, AVPlayerItemMetadataOutputPushDelegate,
   AVPlayerItemOutputPushDelegate, AVPlayerItemStatus, AVPlayerItemTrack, AVPlayerTimeControlStatus,
@@ -55,6 +55,8 @@ impl StreamBackend for AvPlayerStream {
   fn play(&self, source: StreamSource, sink: Arc<StreamSink>) {
     self.inner.on_main(move |inner, mtm| inner.start(mtm, source, sink));
   }
+
+  fn present(&self, _presentation: StreamPresentation) {}
 
   fn pause(&self) {
     self.inner.on_main(|inner, mtm| {
@@ -379,6 +381,7 @@ impl Inner {
       metadata.title = metadata.title.take().or(common.title);
       metadata.artist = metadata.artist.take().or(common.artist);
       metadata.album = metadata.album.take().or(common.album);
+      metadata.artwork = metadata.artwork.take().or(common.artwork);
     });
   }
 
@@ -389,6 +392,10 @@ impl Inner {
           let Some(identifier) = (unsafe { entry.identifier() }) else {
             continue;
           };
+          if same(&identifier, unsafe { AVMetadataCommonIdentifierArtwork }) {
+            metadata.artwork = artwork(&entry);
+            continue;
+          }
           let Some(value) = text(&entry) else { continue };
           if same(&identifier, unsafe { AVMetadataIdentifierIcyMetadataStreamTitle })
             || same(&identifier, unsafe { AVMetadataCommonIdentifierTitle })
@@ -464,6 +471,10 @@ fn common_metadata(asset: &AVAsset) -> StreamMetadata {
     let Some(key) = (unsafe { entry.commonKey() }) else {
       continue;
     };
+    if same(&key, unsafe { AVMetadataCommonKeyArtwork }) {
+      found.artwork = artwork(&entry);
+      continue;
+    }
     let Some(value) = text(&entry) else { continue };
     if same(&key, unsafe { AVMetadataCommonKeyTitle }) {
       found.title = Some(value);
@@ -474,6 +485,12 @@ fn common_metadata(asset: &AVAsset) -> StreamMetadata {
     }
   }
   found
+}
+
+fn artwork(entry: &AVMetadataItem) -> Option<Vec<u8>> {
+  unsafe { entry.dataValue() }
+    .map(|data| data.to_vec())
+    .filter(|bytes| !bytes.is_empty())
 }
 
 fn text(entry: &AVMetadataItem) -> Option<String> {

@@ -104,8 +104,17 @@ pub struct ProviderInfo {
   pub display_name: String,
   pub available: bool,
   pub connected: bool,
+  pub sign_in: SignInMethod,
   pub auth_state: AuthState,
   pub service_health: ServiceHealth,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub enum SignInMethod {
+  Handshake,
+  ServerLogin,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]

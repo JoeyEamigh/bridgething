@@ -46,8 +46,9 @@ private class RecordingDownloadSink(private val accept: Boolean = true) : HttpDo
         return accept
     }
 
-    override fun onChunk(chunk: ByteArray) {
+    override fun onChunk(chunk: ByteArray): Boolean {
         synchronized(chunks) { chunks.add(chunk) }
+        return true
     }
 
     override fun onFinished() {

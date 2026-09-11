@@ -24,6 +24,7 @@ import { useState } from 'preact/hooks';
 import { Progress } from '../components/Progress.tsx';
 import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import { SelfUpdate } from '../components/SelfUpdate.tsx';
+import { ServerLoginDialog } from '../components/ServerLoginDialog.tsx';
 import { useDesktop } from '../desktop.ts';
 import { bytes } from '../lib/format.ts';
 import { Icon, type IconName } from '../lib/icons.tsx';
@@ -214,6 +215,7 @@ function ProviderRow({
 }): VNode {
   const session = useDesktop();
   const [busy, setBusy] = useState(false);
+  const [login, setLogin] = useState(false);
 
   const promote = async () => {
     setBusy(true);
@@ -225,6 +227,10 @@ function ProviderRow({
   };
 
   const signIn = async () => {
+    if (provider.signIn === 'serverLogin') {
+      setLogin(true);
+      return;
+    }
     setBusy(true);
     await session.connectProvider(provider.id).catch(() => undefined);
     setBusy(false);
@@ -232,16 +238,19 @@ function ProviderRow({
 
   if (!provider.connected) {
     return (
-      <ListRow
-        icon={<Icon name="signIn" />}
-        iconTint="accent"
-        title={`sign in to ${provider.displayName}`}
-        subtitle={healthLine(provider)}
-        trailing={busy ? <Spinner /> : undefined}
-        chevron
-        disabled={busy}
-        onClick={() => void signIn()}
-      />
+      <>
+        <ListRow
+          icon={<Icon name="signIn" />}
+          iconTint="accent"
+          title={`sign in to ${provider.displayName}`}
+          subtitle={healthLine(provider)}
+          trailing={busy ? <Spinner /> : undefined}
+          chevron
+          disabled={busy}
+          onClick={() => void signIn()}
+        />
+        <ServerLoginDialog provider={provider} open={login} onClose={() => setLogin(false)} />
+      </>
     );
   }
 
@@ -280,6 +289,15 @@ function healthLine(provider: ProviderInfo): string | undefined {
 function AuthCard({ provider }: { provider: ProviderInfo }): VNode | null {
   const session = useDesktop();
   const state: AuthState = provider.authState;
+  const [login, setLogin] = useState(false);
+
+  const retry = () => {
+    if (provider.signIn === 'serverLogin') {
+      setLogin(true);
+      return;
+    }
+    void session.connectProvider(provider.id);
+  };
 
   if (state.kind === 'pending') {
     const url = state.verificationUrlComplete ?? state.verificationUrl;
@@ -313,15 +331,11 @@ function AuthCard({ provider }: { provider: ProviderInfo }): VNode | null {
         <span class="font-mono text-eyebrow tracking-[0.18em] text-err uppercase">sign-in failed</span>
         <p class="m-0 mt-1 text-body text-err">{state.message ?? 'unknown error'}</p>
         <div class="mt-3">
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              void session.connectProvider(provider.id);
-            }}>
+          <Button size="sm" variant="secondary" onClick={retry}>
             try again
           </Button>
         </div>
+        <ServerLoginDialog provider={provider} open={login} onClose={() => setLogin(false)} />
       </div>
     );
   }

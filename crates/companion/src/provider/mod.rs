@@ -1,8 +1,10 @@
 pub mod apple_music;
 pub mod art;
 pub mod catalog;
+pub mod playback;
 pub mod spotify;
 pub mod stream;
+pub mod subsonic;
 pub mod system_media;
 
 use std::sync::Arc;
@@ -45,6 +47,9 @@ pub struct ProviderNowPlaying {
   pub update: libbridgething::NowPlayingUpdate,
   pub artwork_url: Option<String>,
 }
+
+pub type NowPlayingObserver = Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>;
+pub type AuthObserver = Arc<dyn Fn(ProviderAuthState) + Send + Sync>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAuthState {
@@ -130,7 +135,6 @@ pub trait Provider: PlayerTransport {
   async fn attach(&self, link: ProviderLink) -> Result<(), ProviderError>;
   async fn detach(&self);
   async fn handle_peer_connected(&self, _allow_auto_resume: bool) {}
-  async fn last_peer_gone(&self) {}
   async fn resumed(&self) {}
   async fn connectivity_changed(&self, _online: bool) {}
   fn set_resume_target(&self, _target: ResumeTarget) {}

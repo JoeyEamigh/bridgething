@@ -13,6 +13,7 @@ import androidx.media3.common.Player
 import com.bridgething.companion.BridgethingStreamService
 import uniffi.bridgething_companion.StreamBackend
 import uniffi.bridgething_companion.StreamMetadata
+import uniffi.bridgething_companion.StreamPresentation
 import uniffi.bridgething_companion.StreamSink
 import uniffi.bridgething_companion.StreamSource
 import uniffi.bridgething_companion.StreamStatus
@@ -46,7 +47,7 @@ internal fun initialMetadataFor(
 ): StreamMetadata? = if (metadataSeen || station.isNullOrBlank()) {
     null
 } else {
-    StreamMetadata(title = station, artist = null, album = null, artworkUrl = null)
+    StreamMetadata(title = station, artist = null, album = null, artworkUrl = null, artwork = null)
 }
 
 internal fun streamMetadataFor(metadata: MediaMetadata): StreamMetadata = StreamMetadata(
@@ -54,7 +55,30 @@ internal fun streamMetadataFor(metadata: MediaMetadata): StreamMetadata = Stream
     artist = metadata.artist?.toString(),
     album = metadata.albumTitle?.toString(),
     artworkUrl = metadata.artworkUri?.toString(),
+    artwork = metadata.artworkData?.takeIf { it.isNotEmpty() },
 )
+
+internal fun presentedMetadataFor(presentation: StreamPresentation): MediaMetadata =
+    MediaMetadata.Builder()
+        .setTitle(presentation.title)
+        .setArtist(presentation.artist)
+        .setAlbumTitle(presentation.album)
+        .apply {
+            presentation.artwork?.takeIf { it.isNotEmpty() }?.let { bytes ->
+                setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            }
+        }
+        .build()
+
+internal fun isEchoOf(
+    metadata: MediaMetadata,
+    presented: MediaMetadata?,
+): Boolean =
+    presented != null &&
+        metadata.title?.toString() == presented.title?.toString() &&
+        metadata.artist?.toString() == presented.artist?.toString() &&
+        metadata.albumTitle?.toString() == presented.albumTitle?.toString() &&
+        metadata.artworkData.contentEquals(presented.artworkData)
 
 private fun clampToUInt(value: Long): UInt = value.coerceIn(0L, UInt.MAX_VALUE.toLong()).toUInt()
 
@@ -71,6 +95,7 @@ public class AndroidStreamBackend(
     private var metadataSeen = false
     private var suppressIdle = false
     private var lastStatus: StreamStatus? = null
+    private var presented: MediaMetadata? = null
 
     private val listener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) = report()
@@ -95,6 +120,7 @@ public class AndroidStreamBackend(
         }
 
         override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+            if (isEchoOf(mediaMetadata, presented)) return
             metadataSeen = true
             val held = sink ?: return
             runCatching { held.onMetadata(streamMetadataFor(mediaMetadata)) }
@@ -137,6 +163,7 @@ public class AndroidStreamBackend(
                 listening = true
             }
             startService()
+            presented = null
             player.setMediaItem(MediaItem.fromUri(source.url))
             player.prepare()
             player.play()
@@ -144,6 +171,17 @@ public class AndroidStreamBackend(
             initialMetadataFor(source.station, metadataSeen)?.let { initial ->
                 runCatching { sink.onMetadata(initial) }
             }
+        }
+    }
+
+    override fun present(presentation: StreamPresentation) {
+        main.post {
+            val player = StreamPlayerHolder.current() ?: return@post
+            if (player.mediaItemCount == 0) return@post
+            val metadata = presentedMetadataFor(presentation)
+            presented = metadata
+            val item = player.getMediaItemAt(0)
+            player.replaceMediaItem(0, item.buildUpon().setMediaMetadata(metadata).build())
         }
     }
 
@@ -171,6 +209,7 @@ public class AndroidStreamBackend(
                 it.clearMediaItems()
             }
             stopService()
+            presented = null
             lastStatus = null
             swapSink(null)
         }

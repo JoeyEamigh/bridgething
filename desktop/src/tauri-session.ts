@@ -171,7 +171,7 @@ export class TauriSession implements CompanionSession {
   setProviderPriority = (ids: string[]) => invoke<void>('set_provider_priority', { ids });
   connectProvider = (id: string) => invoke<void>('connect_provider', { id });
   disconnectProvider = (id: string) => invoke<void>('disconnect_provider', { id });
-  completeProviderAuth = (id: string, tokens: api.ProviderTokens) =>
-    invoke<void>('complete_provider_auth', { id, tokens });
+  completeProviderAuth = (id: string, credentials: api.ProviderCredentials) =>
+    invoke<void>('complete_provider_auth', { id, credentials });
   cancelProviderAuth = (id: string) => invoke<void>('cancel_provider_auth', { id });
 }

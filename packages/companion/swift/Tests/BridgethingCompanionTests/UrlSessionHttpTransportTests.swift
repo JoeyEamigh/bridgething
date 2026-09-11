@@ -63,10 +63,11 @@ private final class RecordingDownloadSink: HttpDownloadSink, @unchecked Sendable
         return accepts
     }
 
-    override func onChunk(chunk: Data) {
+    override func onChunk(chunk: Data) -> Bool {
         condition.lock()
         received.append(chunk)
         condition.unlock()
+        return true
     }
 
     override func onFinished() {

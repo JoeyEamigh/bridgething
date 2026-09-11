@@ -30,6 +30,8 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
+import com.margelo.nitro.bridgething.session.BridgethingProviderCredentials
+import com.margelo.nitro.bridgething.session.BridgethingProviderCredentialsKind
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
 import com.margelo.nitro.bridgething.session.BridgethingResourceOrigin
 import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
@@ -56,6 +58,7 @@ import kotlinx.coroutines.withContext
 import uniffi.bridgething_companion.ArtifactDigest
 import uniffi.bridgething_companion.CompanionException
 import uniffi.bridgething_companion.CompanionSession
+import uniffi.bridgething_companion.ProviderCredentials
 import uniffi.bridgething_companion.HostInfo
 import uniffi.bridgething_companion.LinkDevice
 import uniffi.bridgething_companion.LogOrigin
@@ -281,6 +284,21 @@ public class HybridBridgethingSessionImpl(
 
     override suspend fun cancelAuth(id: String) {
         requireSession().cancelAuth(id)
+    }
+
+    override suspend fun completeProviderAuth(id: String, credentials: BridgethingProviderCredentials) {
+        val mapped = when (credentials.kind) {
+            BridgethingProviderCredentialsKind.OAUTHTOKENS -> ProviderCredentials.OauthTokens(
+                accessToken = credentials.accessToken.orEmpty(),
+                refreshToken = credentials.refreshToken.orEmpty(),
+            )
+            BridgethingProviderCredentialsKind.SERVERLOGIN -> ProviderCredentials.ServerLogin(
+                serverUrl = credentials.serverUrl.orEmpty(),
+                username = credentials.username.orEmpty(),
+                password = credentials.password.orEmpty(),
+            )
+        }
+        requireSession().completeProviderAuth(id, mapped)
     }
 
     override suspend fun disconnectProvider(id: String) {

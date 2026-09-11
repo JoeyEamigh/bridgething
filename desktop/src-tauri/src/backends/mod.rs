@@ -14,8 +14,6 @@ mod models;
 mod nlu;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod portable;
-#[cfg(any(target_os = "linux", all(any(target_os = "macos", target_os = "windows"), test)))]
-mod stream;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod utterance;
 #[cfg(target_os = "windows")]
