@@ -45,6 +45,7 @@ pub struct WebappBundle {
   pub icon_hash: Option<String>,
   pub settings_hash: Option<String>,
   pub overlay_hash: Option<String>,
+  pub has_app_entry: bool,
   pub extension: Option<ExtensionInfo>,
   pub bundle_hash: Arc<OnceCell<String>>,
   pub provenance: Option<String>,
@@ -172,18 +173,12 @@ impl WebappRegistry {
 
   pub async fn list(&self) -> Vec<WebappInfo> {
     let bundles = self.bundles.read().await;
-    let mut infos: BTreeMap<String, WebappInfo> = BTreeMap::new();
-    for b in bundles.values() {
-      let info = bundle_to_info(b);
-      infos.insert(format!("{}-{}", info.name, info.id.simple()), info);
-    }
-    infos.into_values().collect()
+    sorted_infos(bundles.values())
   }
 
   pub async fn list_for_clients(&self) -> Vec<WebappInfo> {
-    self
-      .list()
-      .await
+    let bundles = self.bundles.read().await;
+    sorted_infos(bundles.values().filter(|b| b.has_app_entry))
       .into_iter()
       .filter(|info| !matches!(info.role, WebappRole::Launcher))
       .collect()
@@ -242,7 +237,7 @@ impl WebappRegistry {
       return Err(e);
     }
 
-    if !is_valid_bundle(&staging) {
+    if !is_valid_bundle(&staging).await {
       let _ = fs::remove_dir_all(&staging).await;
       return Err(WebappError::MissingIndexHtml);
     }
@@ -378,8 +373,25 @@ fn is_safe_name(name: &str) -> bool {
   matches!(first, Component::Normal(_))
 }
 
-fn is_valid_bundle(path: &Path) -> bool {
-  path.is_dir() && path.join("index.html").is_file()
+async fn is_valid_bundle(path: &Path) -> bool {
+  if !path.is_dir() {
+    return false;
+  }
+  if path.join("index.html").is_file() {
+    return true;
+  }
+  declares_overlay(path).await
+}
+
+async fn declares_overlay(path: &Path) -> bool {
+  #[derive(serde::Deserialize)]
+  struct OverlayOnly {
+    overlay: Option<String>,
+  }
+  let Ok(bytes) = fs::read(path.join("manifest.json")).await else {
+    return false;
+  };
+  serde_json::from_slice::<OverlayOnly>(&bytes).is_ok_and(|m| m.overlay.is_some())
 }
 
 async fn scan_root(root: &Path) -> Vec<PathBuf> {
@@ -398,7 +410,7 @@ async fn scan_root(root: &Path) -> Vec<PathBuf> {
     if name.starts_with('.') {
       continue;
     }
-    if is_valid_bundle(&path) {
+    if is_valid_bundle(&path).await {
       out.push(path);
     }
   }
@@ -438,7 +450,7 @@ async fn reconcile_installed_names(root: &Path) {
       continue;
     }
     let dest = root.join(&canonical);
-    if is_valid_bundle(&dest) {
+    if is_valid_bundle(&dest).await {
       tracing::warn!("webapp dir '{name}' duplicates {id}, already installed as '{canonical}'; discarding it");
       if let Err(e) = trash_dir(root, &path).await {
         tracing::warn!("could not discard duplicate webapp dir '{name}': {e:?}");
@@ -463,7 +475,7 @@ async fn read_manifest_id(path: &Path) -> Option<Uuid> {
 }
 
 async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> {
-  if !is_valid_bundle(path) {
+  if !is_valid_bundle(path).await {
     return None;
   }
   let dir_name = path.file_name().and_then(|n| n.to_str())?.to_string();
@@ -523,6 +535,8 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     None => None,
   };
 
+  let has_app_entry = path.join("index.html").is_file();
+
   Some(WebappBundle {
     path: path.to_path_buf(),
     source,
@@ -531,6 +545,7 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     icon_hash,
     settings_hash,
     overlay_hash,
+    has_app_entry,
     extension,
     bundle_hash: Arc::new(OnceCell::new()),
     provenance: None,
@@ -727,6 +742,15 @@ fn remap_to_dev_shadow(bundle: WebappBundle) -> WebappBundle {
   }
 }
 
+fn sorted_infos<'a>(bundles: impl Iterator<Item = &'a WebappBundle>) -> Vec<WebappInfo> {
+  let mut infos: BTreeMap<String, WebappInfo> = BTreeMap::new();
+  for b in bundles {
+    let info = bundle_to_info(b);
+    infos.insert(format!("{}-{}", info.name, info.id.simple()), info);
+  }
+  infos.into_values().collect()
+}
+
 fn bundle_to_info(b: &WebappBundle) -> WebappInfo {
   WebappInfo {
     id: b.manifest.id,
@@ -881,6 +905,49 @@ mod tests {
     WebappRegistry::init(root.to_path_buf(), root.join("builtin"), WebappProvenanceStore::new(db))
       .await
       .expect("registry")
+  }
+
+  #[tokio::test]
+  async fn an_overlay_only_webapp_installs_but_is_not_listed_to_clients() {
+    let root = TempDir::new().expect("tempdir");
+    let visible = plant(root.path(), None, false);
+    let overlay_only = Uuid::now_v7();
+    let dir = root.path().join(bundle_dir_name(overlay_only));
+    std::fs::create_dir_all(&dir).expect("bundle dir");
+    std::fs::write(dir.join("overlay.js"), b"console.log('overlay')").expect("overlay");
+    std::fs::write(
+      dir.join("manifest.json"),
+      format!(r#"{{"id":"{overlay_only}","name":"overlay-only","version":"0.1.0","overlay":"overlay.js"}}"#),
+    )
+    .expect("manifest");
+
+    let registry = registry(root.path()).await;
+    let all: Vec<Uuid> = registry.list().await.into_iter().map(|info| info.id).collect();
+    assert!(all.contains(&visible));
+    assert!(all.contains(&overlay_only));
+    let clients: Vec<Uuid> = registry
+      .list_for_clients()
+      .await
+      .into_iter()
+      .map(|info| info.id)
+      .collect();
+    assert!(clients.contains(&visible));
+    assert!(!clients.contains(&overlay_only));
+  }
+
+  #[tokio::test]
+  async fn a_bundle_with_no_app_entry_and_no_overlay_is_rejected() {
+    let root = TempDir::new().expect("tempdir");
+    let id = Uuid::now_v7();
+    let dir = root.path().join(bundle_dir_name(id));
+    std::fs::create_dir_all(&dir).expect("bundle dir");
+    std::fs::write(
+      dir.join("manifest.json"),
+      format!(r#"{{"id":"{id}","name":"broken","version":"0.1.0"}}"#),
+    )
+    .expect("manifest");
+    assert!(!is_valid_bundle(&dir).await);
+    assert!(load_bundle(&dir, WebappSource::Installed).await.is_none());
   }
 
   #[tokio::test]

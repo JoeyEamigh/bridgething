@@ -129,6 +129,11 @@ if (cfg.surfaces.pairing) wirePairing(client);`;
       while your bundle holds the overlay slot, the daemon injects <code>overlay.js</code> into every webapp's document as
       it loads.
     </p>
+    <p class="mt-3 text-white/60">
+      <strong class="text-white/80">overlay-only.</strong> an overlay with no launcher ui ships no
+      <code>index.html</code>: the daemon installs the bundle on the strength of the <code>overlay</code> field alone,
+      and leaves it out of the launcher grid. it stays installed and manageable from the companion.
+    </p>
     <Snippet code={overlayGlobal} />
     <p class="mt-3 text-white/60">
       <strong class="text-white/80">honor <code>surfaces</code>.</strong> draw only what its keys allow, or the screen shows
