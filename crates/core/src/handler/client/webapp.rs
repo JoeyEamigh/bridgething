@@ -63,6 +63,14 @@ impl ClientToBridgeWebappMsgDispatch for WebappHandler {
         .await?;
       return Ok(());
     }
+    if !self.handle.state.webapps.has_app_entry(id).await {
+      tracing::warn!("refusing to activate {id}: the bundle has no app entry to show");
+      self
+        .handle
+        .respond_err::<WebappActivate>(WebappError::MissingIndexHtml)
+        .await?;
+      return Ok(());
+    }
 
     self.handle.state.set_active_webapp(id).await?;
     let url = navigate_url_for_active(&self.handle.state).await;

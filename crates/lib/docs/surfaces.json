@@ -1,5 +1,5 @@
 {
-  "version": "0.12.8",
+  "version": "0.12.10",
   "surfaces": [
     {
       "name": "asset",
@@ -6019,7 +6019,7 @@
         },
         {
           "name": "MissingIndexHtml",
-          "description": "Put an `index.html` at the root of the bundle."
+          "description": "The bundle has no `index.html` to show. Only a bundle that ships a usable overlay may omit it."
         },
         {
           "name": "InvalidManifest",

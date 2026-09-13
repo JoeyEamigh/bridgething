@@ -4,7 +4,8 @@ use bridgething_gateway::RequestFailure;
 use bridgething_test_harness::Harness;
 use libbridgething::{
   WebappError,
-  gateway::{WebappResource, WebappResourceKind, WebappSetSlot, WebappSlot, WebappUninstall},
+  client::WebappActivate,
+  gateway::{WebappResource, WebappResourceKind, WebappSetSlot, WebappSlot, WebappSwitchTo, WebappUninstall},
 };
 use uuid::Uuid;
 
@@ -16,10 +17,16 @@ struct Planted {
 }
 
 async fn plant(harness: &Harness, role: Option<&str>, overlay: bool) -> Planted {
+  plant_bundle(harness, role, overlay, true).await
+}
+
+async fn plant_bundle(harness: &Harness, role: Option<&str>, overlay: bool, app_entry: bool) -> Planted {
   let id = Uuid::now_v7();
   let dir = harness.state_dir().join("webapps").join(id.simple().to_string());
   std::fs::create_dir_all(&dir).expect("bundle dir");
-  std::fs::write(dir.join("index.html"), b"<h1>planted</h1>").expect("index");
+  if app_entry {
+    std::fs::write(dir.join("index.html"), b"<h1>planted</h1>").expect("index");
+  }
 
   let mut fields = format!(r#""id":"{id}","name":"planted","version":"0.1.0""#);
   if let Some(role) = role {
@@ -364,4 +371,94 @@ async fn the_overlay_is_fetchable_as_a_resource() {
     .expect("overlay resource");
   assert_eq!(reply.mime.as_deref(), Some("text/javascript"));
   assert_eq!(reply.sha256, info.overlay_hash.clone().expect("hash"));
+}
+
+#[tokio::test]
+async fn an_overlay_only_bundle_cannot_become_the_active_webapp() {
+  let harness = Harness::start().await.expect("harness start");
+  let planted = plant_bundle(&harness, None, true, false).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+
+  let before = harness.state().active_webapp().await.expect("active");
+  assert_ne!(before, Some(planted.id), "an overlay-only bundle does not start active");
+
+  let err = companion
+    .webapp()
+    .switch_to(WebappSwitchTo { id: planted.id })
+    .await
+    .expect_err("a bundle with nothing to show must not become the active webapp");
+  assert!(
+    matches!(&err, RequestFailure::Domain(WebappError::MissingIndexHtml)),
+    "expected MissingIndexHtml, got {err:?}"
+  );
+  assert_eq!(
+    harness.state().active_webapp().await.expect("active"),
+    before,
+    "the refused switch leaves the screen where it was"
+  );
+}
+
+#[tokio::test]
+async fn an_overlay_only_bundle_is_refused_the_launcher_slot() {
+  let harness = Harness::start().await.expect("harness start");
+  let planted = plant_bundle(&harness, Some("launcher"), true, false).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+
+  let err = companion
+    .webapp()
+    .set_slot(WebappSetSlot {
+      slot: WebappSlot::Launcher,
+      id: Some(planted.id),
+    })
+    .await
+    .expect_err("a bundle with no app entry cannot be the home screen");
+  assert!(
+    matches!(&err, RequestFailure::Domain(WebappError::NotALauncher { id }) if id == &planted.id.to_string()),
+    "expected NotALauncher, got {err:?}"
+  );
+}
+
+#[tokio::test]
+async fn losing_an_app_entry_on_disk_drops_the_active_webapp_back_to_the_home_screen() {
+  let harness = Harness::start().await.expect("harness start");
+  let planted = plant(&harness, None, true).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+
+  companion
+    .webapp()
+    .switch_to(WebappSwitchTo { id: planted.id })
+    .await
+    .expect("switch to the planted app");
+  assert_eq!(harness.state().active_webapp().await.expect("active"), Some(planted.id));
+
+  let dir = harness
+    .state_dir()
+    .join("webapps")
+    .join(planted.id.simple().to_string());
+  std::fs::remove_file(dir.join("index.html")).expect("strip the app entry");
+  harness.state().webapps.rescan().await;
+
+  let home = harness.state().launcher_webapp().await.expect("launcher");
+  assert_eq!(
+    harness.state().active_webapp().await.expect("active"),
+    home,
+    "a bundle that lost its app entry cannot stay active"
+  );
+}
+
+#[tokio::test]
+async fn the_on_device_launcher_cannot_activate_an_overlay_only_bundle() {
+  let harness = Harness::start().await.expect("harness start");
+  let planted = plant_bundle(&harness, None, true, false).await;
+  let client = harness.connect_command_client().await.expect("connect client");
+
+  let err = client
+    .webapp()
+    .activate(WebappActivate { id: planted.id })
+    .await
+    .expect_err("the launcher must not put a bundle with nothing to show on screen");
+  assert!(
+    matches!(&err, RequestFailure::Domain(WebappError::MissingIndexHtml)),
+    "expected MissingIndexHtml, got {err:?}"
+  );
 }

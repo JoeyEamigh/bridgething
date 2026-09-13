@@ -26,7 +26,7 @@ impl MetaStore {
     let stored = self.read_meta(KEY_ACTIVE_WEBAPP).await?;
     let parsed = stored.as_deref().and_then(|s| Uuid::parse_str(s).ok());
     if let Some(id) = parsed
-      && webapps.resolve(id).await.is_some()
+      && webapps.has_app_entry(id).await
     {
       return Ok(Some(id));
     }
@@ -102,14 +102,14 @@ impl MetaStore {
     let stored = self.read_meta(KEY_ACTIVE_WEBAPP).await?;
     let parsed = stored.as_deref().and_then(|s| Uuid::parse_str(s).ok());
     if let Some(id) = parsed
-      && webapps.resolve(id).await.is_some()
+      && webapps.has_app_entry(id).await
     {
       return Ok(());
     }
     match self.launcher_webapp(webapps).await? {
       Some(id) => {
         tracing::warn!(
-          "persisted active webapp ({:?}) does not resolve; falling back to {}",
+          "persisted active webapp ({:?}) is gone or has no app entry to show; falling back to {}",
           stored,
           id
         );

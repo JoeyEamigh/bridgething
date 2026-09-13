@@ -68,6 +68,17 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
         .await;
       return Ok(());
     }
+    if !self.handle.state.webapps.has_app_entry(id).await {
+      tracing::warn!(
+        "({:?}) refusing switch to {id}: the bundle has no app entry to show",
+        &self.handle.address
+      );
+      self
+        .handle
+        .respond_err::<WebappSwitchTo>(WebappError::MissingIndexHtml)
+        .await;
+      return Ok(());
+    }
 
     self.handle.state.set_active_webapp(id).await?;
     self.reload_kiosk().await;

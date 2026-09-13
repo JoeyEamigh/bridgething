@@ -33,7 +33,7 @@ pub enum WebappError {
   ZipMalformed {
     reason: String,
   },
-  /// Put an `index.html` at the root of the bundle.
+  /// The bundle has no `index.html` to show. Only a bundle that ships a usable overlay may omit it.
   MissingIndexHtml,
   /// `manifest.json` is missing, unparseable, or failed validation. `reason` says which.
   InvalidManifest {

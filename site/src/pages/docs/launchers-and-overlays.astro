@@ -131,8 +131,9 @@ if (cfg.surfaces.pairing) wirePairing(client);`;
     </p>
     <p class="mt-3 text-white/60">
       <strong class="text-white/80">overlay-only.</strong> an overlay with no launcher ui ships no
-      <code>index.html</code>: the daemon installs the bundle on the strength of the <code>overlay</code> field alone,
-      and leaves it out of the launcher grid. it stays installed and manageable from the companion.
+      <code>index.html</code>: the daemon installs the bundle as long as the <code>overlay</code> it declares is really
+      in there, and leaves it out of the launcher grid. it stays installed and manageable from the companion, but it can
+      never be the active app.
     </p>
     <Snippet code={overlayGlobal} />
     <p class="mt-3 text-white/60">

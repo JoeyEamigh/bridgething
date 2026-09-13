@@ -133,7 +133,7 @@ impl WebappRegistry {
     let bundles = self.bundles.read().await;
     let candidates: Vec<(Uuid, String)> = bundles
       .values()
-      .filter(|b| !matches!(b.manifest.role, WebappRole::Launcher))
+      .filter(|b| b.has_app_entry && !matches!(b.manifest.role, WebappRole::Launcher))
       .map(|b| (b.manifest.id, normalize_webapp_name(&b.manifest.name)))
       .collect();
 
@@ -247,7 +247,7 @@ impl WebappRegistry {
       _ => {
         let _ = fs::remove_dir_all(&staging).await;
         return Err(WebappError::InvalidManifest {
-          reason: "manifest.json missing, unparseable, or failed schema validation".into(),
+          reason: "manifest.json is missing or invalid, or the bundle has no app entry and no overlay".into(),
         });
       }
     };
@@ -328,10 +328,16 @@ impl WebappRegistry {
   }
 
   pub async fn is_launcher(&self, id: Uuid) -> bool {
-    matches!(
-      self.bundles.read().await.get(&id).map(|b| b.manifest.role),
-      Some(WebappRole::Launcher)
-    )
+    self
+      .bundles
+      .read()
+      .await
+      .get(&id)
+      .is_some_and(|b| b.has_app_entry && matches!(b.manifest.role, WebappRole::Launcher))
+  }
+
+  pub async fn has_app_entry(&self, id: Uuid) -> bool {
+    self.bundles.read().await.get(&id).is_some_and(|b| b.has_app_entry)
   }
 
   pub async fn provides_overlay(&self, id: Uuid) -> bool {
@@ -521,6 +527,12 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     None => None,
   };
 
+  let has_app_entry = path.join("index.html").is_file();
+  if !has_app_entry && overlay_hash.is_none() {
+    tracing::warn!("webapp '{dir_name}' has no index.html and no usable overlay; skipping");
+    return None;
+  }
+
   let extension = match &manifest.extension {
     Some(declared) => match extension_rejection(path, declared).await {
       Some(reason) => {
@@ -534,8 +546,6 @@ async fn load_bundle(path: &Path, source: WebappSource) -> Option<WebappBundle> 
     },
     None => None,
   };
-
-  let has_app_entry = path.join("index.html").is_file();
 
   Some(WebappBundle {
     path: path.to_path_buf(),
@@ -907,19 +917,26 @@ mod tests {
       .expect("registry")
   }
 
+  fn plant_overlay_only(root: &Path, overlay_file: bool) -> Uuid {
+    let id = Uuid::now_v7();
+    let dir = root.join(bundle_dir_name(id));
+    std::fs::create_dir_all(&dir).expect("bundle dir");
+    if overlay_file {
+      std::fs::write(dir.join("overlay.js"), b"console.log('overlay')").expect("overlay");
+    }
+    std::fs::write(
+      dir.join("manifest.json"),
+      format!(r#"{{"id":"{id}","name":"overlay-only","version":"0.1.0","overlay":"overlay.js"}}"#),
+    )
+    .expect("manifest");
+    id
+  }
+
   #[tokio::test]
   async fn an_overlay_only_webapp_installs_but_is_not_listed_to_clients() {
     let root = TempDir::new().expect("tempdir");
     let visible = plant(root.path(), None, false);
-    let overlay_only = Uuid::now_v7();
-    let dir = root.path().join(bundle_dir_name(overlay_only));
-    std::fs::create_dir_all(&dir).expect("bundle dir");
-    std::fs::write(dir.join("overlay.js"), b"console.log('overlay')").expect("overlay");
-    std::fs::write(
-      dir.join("manifest.json"),
-      format!(r#"{{"id":"{overlay_only}","name":"overlay-only","version":"0.1.0","overlay":"overlay.js"}}"#),
-    )
-    .expect("manifest");
+    let overlay_only = plant_overlay_only(root.path(), true);
 
     let registry = registry(root.path()).await;
     let all: Vec<Uuid> = registry.list().await.into_iter().map(|info| info.id).collect();
@@ -933,6 +950,37 @@ mod tests {
       .collect();
     assert!(clients.contains(&visible));
     assert!(!clients.contains(&overlay_only));
+    assert!(!registry.has_app_entry(overlay_only).await);
+    assert!(registry.has_app_entry(visible).await);
+  }
+
+  #[tokio::test]
+  async fn an_overlay_only_webapp_is_not_a_spoken_open_target() {
+    let root = TempDir::new().expect("tempdir");
+    let visible = plant(root.path(), None, false);
+    plant_overlay_only(root.path(), true);
+    let registry = registry(root.path()).await;
+
+    assert_eq!(registry.resolve_by_name("planted").await, Some(visible));
+    assert_eq!(
+      registry.resolve_by_name("overlay only").await,
+      None,
+      "voice must not open a bundle with nothing to show"
+    );
+    assert_eq!(registry.resolve_by_name("overlay").await, None, "nor by partial match");
+  }
+
+  #[tokio::test]
+  async fn a_bundle_whose_declared_overlay_is_missing_does_not_load() {
+    let root = TempDir::new().expect("tempdir");
+    let id = plant_overlay_only(root.path(), false);
+    let dir = root.path().join(bundle_dir_name(id));
+
+    assert!(is_valid_bundle(&dir).await, "the cheap gate only reads the declaration");
+    assert!(
+      load_bundle(&dir, WebappSource::Installed).await.is_none(),
+      "a bundle with no app entry and no loadable overlay is not a webapp"
+    );
   }
 
   #[tokio::test]
