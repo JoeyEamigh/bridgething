@@ -183,7 +183,7 @@ impl Feed {
           .unwrap()
           .annotate_webapp(&run.device_id, Some(&label.id), Some(&label.name));
         if let Some(annotated) = annotated {
-          *run = Box::new(annotated);
+          **run = annotated;
         }
       }
     }
