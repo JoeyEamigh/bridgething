@@ -308,6 +308,8 @@ export type ItemRef = {
   persistentId: string | null;
 };
 
+export type LauncherGesture = 'longPress' | 'fivePress';
+
 export type LibraryError =
   | { type: 'notFound'; data: { uri: string } }
   | { type: 'notSupported'; data: { reason: string } }

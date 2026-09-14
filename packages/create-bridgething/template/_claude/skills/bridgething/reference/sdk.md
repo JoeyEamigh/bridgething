@@ -164,6 +164,7 @@ Read a surface's class in `dispatch.generated.d.ts` for its exact methods.
 | `geo` | location watches, sourced from the phone | watch, unwatch, getOnce, onPosition |
 | `net` | HTTP, WS, and SOCKS through the phone | fetch, wsOpen, wsSend, wsClose, streamOpen, streamCancel |
 | `hardware` | backlight and ambient light sensor | displaySetMode, displaySetLevel, stateGet, onAmbientLightUpdate, onBrightnessChanged |
+| `input` | M-button launcher gesture | setGesture, getGesture, onGestureChanged |
 | `bluetooth` | adapter alias, bonds, discoverable | list, connect, forget, setAlias, enableDiscoverable |
 | `system` | version, logs, power, diagnostics | versionRequest, logsTail, logsSubscribe, reboot, powerOff, factoryReset, onVersion, onLogEntry, onOtaProgress |
 | `time` | wall clock | get, onSnapshot, onChanged |

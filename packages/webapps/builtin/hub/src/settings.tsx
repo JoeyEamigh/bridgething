@@ -6,15 +6,17 @@ import {
   type ConnectedDevice,
   type Device,
   type Diagnostics,
+  type LauncherGesture,
   type TimeInfo,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
 
-type Section = 'bluetooth' | 'display' | 'system' | 'power';
+type Section = 'bluetooth' | 'display' | 'controls' | 'system' | 'power';
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'bluetooth', label: 'bluetooth' },
   { id: 'display', label: 'display' },
+  { id: 'controls', label: 'controls' },
   { id: 'system', label: 'system' },
   { id: 'power', label: 'power' },
 ];
@@ -53,6 +55,7 @@ export function Settings({ client, onClose }: { client: BridgethingClient; onClo
         <main className="flex-1 overflow-y-auto px-5 py-3 pb-6">
           {section === 'bluetooth' && <BluetoothPanel client={client} />}
           {section === 'display' && <DisplayPanel client={client} />}
+          {section === 'controls' && <GesturePanel client={client} />}
           {section === 'system' && <SystemPanel client={client} />}
           {section === 'power' && <PowerPanel client={client} />}
         </main>
@@ -297,6 +300,70 @@ function DisplayPanel({ client }: { client: BridgethingClient }) {
           />
         </Card>
       )}
+    </div>
+  );
+}
+
+function GesturePanel({ client }: { client: BridgethingClient }) {
+  const [gesture, setGestureState] = useState<LauncherGesture | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    client.input
+      .getGesture()
+      .then(r => {
+        if (cancelled || !r.ok) return;
+        setGestureState(r.response.gesture);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    return client.input.onGestureChanged(c => setGestureState(c.gesture));
+  }, [client]);
+
+  const choose = async (next: LauncherGesture) => {
+    setGestureState(next);
+    try {
+      await client.input.setGesture({ gesture: next });
+    } catch {
+      client.input
+        .getGesture()
+        .then(r => {
+          if (r.ok) setGestureState(r.response.gesture);
+        })
+        .catch(() => {});
+    }
+  };
+
+  const options: { value: LauncherGesture; label: string; hint: string }[] = [
+    { value: 'longPress', label: 'hold m', hint: 'press and hold the m button for a moment' },
+    { value: 'fivePress', label: 'press m 5 times', hint: 'tap the m button five times, quickly' },
+  ];
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card title="launcher gesture" hint="how you jump back to apps">
+        <div className="flex flex-col gap-2">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => choose(o.value)}
+              className={`border px-4 py-3 text-left transition ${
+                gesture === o.value ? 'border-accent bg-accent-soft' : 'border-rule active:bg-neutral-soft'
+              }`}>
+              <span className={`block font-mono text-row ${gesture === o.value ? 'text-accent' : 'text-off-white'}`}>
+                {o.label}
+              </span>
+              <span className="block pt-1 text-body text-soft">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }

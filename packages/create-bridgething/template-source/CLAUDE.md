@@ -33,7 +33,7 @@ Construct it once and reuse it. It connects and reconnects on its own. Call `dae
 
 Now-playing and library data come from the phone's Spotify, so render a placeholder when no phone is connected. Fetch artwork with `client.asset.get` using the opaque id on the track.
 
-Every surface: `player asset config store doc capabilities library audio notifications phone peer geo net hardware bluetooth system time voice lyrics webapp forward`. Each method is an event, a request, or a command.
+Every surface: `player asset config store doc capabilities library audio notifications phone peer geo net hardware input bluetooth system time voice lyrics webapp forward`. Each method is an event, a request, or a command.
 
 Methods, types, and examples: `.claude/skills/bridgething/reference/sdk.md`. That skill lives once at the repo root and every app symlinks it, so it is one copy for the whole workspace. `bun run skills` refreshes it from the published `create-bridgething`; `bun run check` says when it is behind.
 
