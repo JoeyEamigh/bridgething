@@ -26,6 +26,7 @@ import type {
   InitiateCallType,
   ItemKind,
   ItemRef,
+  LauncherGesture,
   LibraryError,
   LogEntry,
   LogLevel,
@@ -211,6 +212,14 @@ export type BridgeToClientHardwareMsg =
   | { event: 'stateReply'; data: HardwareStateReply };
 
 /**
+ * Reports the M-button launcher gesture. `getGesture` reads the current
+ * choice and `onGestureChanged` fires on every change.
+ */
+export type BridgeToClientInputMsg =
+  | { event: 'gestureChanged'; data: LauncherGestureChanged }
+  | { event: 'getGestureReply'; data: LauncherGestureReply };
+
+/**
  * The music library on the connected phone. `browse`, `search`, and `favoritesList` read it,
  * `favoritesToggle` and `favoritesSet` edit saved state, and `onFavoriteChanged` reports every change.
  */
@@ -246,6 +255,7 @@ export type BridgeToClientMsgData =
   | { type: 'doc'; data: BridgeToClientDocMsg }
   | { type: 'geo'; data: BridgeToClientGeoMsg }
   | { type: 'hardware'; data: BridgeToClientHardwareMsg }
+  | { type: 'input'; data: BridgeToClientInputMsg }
   | { type: 'library'; data: BridgeToClientLibraryMsg }
   | { type: 'lyrics'; data: BridgeToClientLyricsMsg }
   | { type: 'net'; data: BridgeToClientNetMsg }
@@ -448,6 +458,12 @@ export type ClientToBridgeHardwareMsg =
   | { event: 'stateGet' };
 
 /**
+ * Which M-button gesture jumps to the launcher. `setGesture` persists the
+ * choice on the daemon; `getGesture` reads it back.
+ */
+export type ClientToBridgeInputMsg = { event: 'setGesture'; data: LauncherGestureSet } | { event: 'getGesture' };
+
+/**
  * Browses, searches, and edits the music library on the connected phone.
  */
 export type ClientToBridgeLibraryMsg =
@@ -477,6 +493,7 @@ export type ClientToBridgeMsgData =
   | { type: 'doc'; data: ClientToBridgeDocMsg }
   | { type: 'geo'; data: ClientToBridgeGeoMsg }
   | { type: 'hardware'; data: ClientToBridgeHardwareMsg }
+  | { type: 'input'; data: ClientToBridgeInputMsg }
   | { type: 'library'; data: ClientToBridgeLibraryMsg }
   | { type: 'lyrics'; data: ClientToBridgeLyricsMsg }
   | { type: 'net'; data: ClientToBridgeNetMsg }
@@ -717,6 +734,12 @@ export type KVDelete = { key: string };
 export type KVGet = { key: string };
 
 export type KVPut = { key: string; value: string };
+
+export type LauncherGestureChanged = { gesture: LauncherGesture };
+
+export type LauncherGestureReply = { gesture: LauncherGesture };
+
+export type LauncherGestureSet = { gesture: LauncherGesture };
 
 /**
  * Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.

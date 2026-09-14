@@ -173,6 +173,7 @@ pub fn server_event_to_stock(
     | BridgeToClientMsgData::Doc(_)
     | BridgeToClientMsgData::Geo(_)
     | BridgeToClientMsgData::Hardware(_)
+    | BridgeToClientMsgData::Input(_)
     | BridgeToClientMsgData::Library(_)
     | BridgeToClientMsgData::Lyrics(_)
     | BridgeToClientMsgData::Net(_)
