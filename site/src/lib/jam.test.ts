@@ -6,11 +6,13 @@ import {
   JAM_CATEGORY_IDS,
   JAM_PANEL,
   JAM_PRIZE_POOL,
+  JAM_CLOSE_OFFSET_MS,
   JAM_TIMELINE,
   jamPrizeLabel,
   jamCategoryLabel,
   jamClosedReason,
   jamDate,
+  jamDateLong,
   jamWindow,
   JAM_DATE_PENDING,
   type JamCategory,
@@ -71,6 +73,16 @@ describe('jamDate', () => {
   test('a set date renders in utc so the copy does not shift by timezone', () => {
     expect(jamDate('2026-09-01T00:00:00.000Z')).toBe('Sep 1, 2026');
   });
+
+  test('the close offset reads the deadline as its anywhere-on-earth date', () => {
+    expect(jamDate(JAM_TIMELINE.closesAt, JAM_CLOSE_OFFSET_MS)).toBe('Sep 13, 2026');
+    expect(jamDateLong(JAM_TIMELINE.closesAt, JAM_CLOSE_OFFSET_MS)).toBe('September 13th, 2026');
+  });
+
+  test('an offset does not turn an unset or unparseable date into a real one', () => {
+    expect(jamDate(null, JAM_CLOSE_OFFSET_MS)).toBe(JAM_DATE_PENDING);
+    expect(jamDateLong('not a date', JAM_CLOSE_OFFSET_MS)).toBe(JAM_DATE_PENDING);
+  });
 });
 
 describe('jamWindow', () => {
@@ -80,8 +92,9 @@ describe('jamWindow', () => {
     resultsAt: '2026-09-22T00:00:00.000Z',
   };
 
-  test('a timeline with no dates is open, which is what ships today', () => {
-    expect(jamWindow(JAM_TIMELINE)).toEqual({ open: true });
+  test('the shipped jam stays open through midnight in the last timezone on earth', () => {
+    expect(jamWindow(JAM_TIMELINE, new Date('2026-09-14T11:59:59.000Z'))).toEqual({ open: true });
+    expect(jamWindow(JAM_TIMELINE, new Date('2026-09-14T12:00:00.000Z'))).toEqual({ open: false, reason: 'after' });
   });
 
   test('it is shut before the open date and after the close date', () => {
@@ -112,8 +125,8 @@ describe('jamWindow', () => {
     expect(jamWindow({ opensAt: 'soon', closesAt: 'later', resultsAt: null })).toEqual({ open: true });
   });
 
-  test('the closed copy names the date it is talking about', () => {
+  test('the closed copy names the open date in utc and the close date anywhere on earth', () => {
     expect(jamClosedReason(timeline, { open: false, reason: 'before' })).toContain('Sep 1, 2026');
-    expect(jamClosedReason(timeline, { open: false, reason: 'after' })).toContain('Sep 15, 2026');
+    expect(jamClosedReason(timeline, { open: false, reason: 'after' })).toContain('Sep 14, 2026');
   });
 });

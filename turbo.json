@@ -54,7 +54,7 @@
     },
     "@bridgething/lib#build": {
       "dependsOn": ["^build"],
-      "inputs": ["ts/**", "scripts/**", "tsconfig*.json", "package.json"],
+      "inputs": ["ts/**", "scripts/**", "tsconfig*.json", "package.json", "$TURBO_ROOT$/Cargo.toml"],
       "outputs": ["dist/**"]
     },
     "@bridgething/lib#typecheck": {

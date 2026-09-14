@@ -161,17 +161,28 @@ export type JamTimeline = {
 
 export const JAM_TIMELINE: JamTimeline = {
   opensAt: '2026-08-30T00:00:00.000Z',
-  closesAt: '2026-09-13T23:59:59.999Z',
+  closesAt: '2026-09-14T11:59:59.999Z',
   resultsAt: null,
 };
 
+export const JAM_CLOSE_OFFSET_MS = -12 * 60 * 60 * 1000;
 export const JAM_DATE_PENDING = 'dates announced soon';
 
-export function jamDate(iso: string | null): string {
-  if (iso === null) return JAM_DATE_PENDING;
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return JAM_DATE_PENDING;
-  return at.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+function instant(iso: string | null): number | null {
+  if (iso === null) return null;
+  const at = Date.parse(iso);
+  return Number.isNaN(at) ? null : at;
+}
+
+export function jamDate(iso: string | null, offsetMs = 0): string {
+  const at = instant(iso);
+  if (at === null) return JAM_DATE_PENDING;
+  return new Date(at + offsetMs).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function ordinal(day: number): string {
@@ -189,21 +200,15 @@ function ordinal(day: number): string {
   }
 }
 
-export function jamDateLong(iso: string | null): string {
-  if (iso === null) return JAM_DATE_PENDING;
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return JAM_DATE_PENDING;
+export function jamDateLong(iso: string | null, offsetMs = 0): string {
+  const parsed = instant(iso);
+  if (parsed === null) return JAM_DATE_PENDING;
+  const at = new Date(parsed + offsetMs);
   const month = at.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
   return `${month} ${ordinal(at.getUTCDate())}, ${at.getUTCFullYear()}`;
 }
 
 export type JamWindow = { open: true } | { open: false; reason: 'before' | 'after' };
-
-function instant(iso: string | null): number | null {
-  if (iso === null) return null;
-  const at = Date.parse(iso);
-  return Number.isNaN(at) ? null : at;
-}
 
 export function jamWindow(timeline: JamTimeline, at: Date = new Date()): JamWindow {
   const now = at.getTime();
@@ -218,7 +223,7 @@ export function jamWindow(timeline: JamTimeline, at: Date = new Date()): JamWind
 export function jamClosedReason(timeline: JamTimeline, window: Extract<JamWindow, { open: false }>): string {
   return window.reason === 'before'
     ? `the jam opens ${jamDate(timeline.opensAt)}.`
-    : `the jam closed ${jamDate(timeline.closesAt)}.`;
+    : `the jam closed ${jamDate(timeline.closesAt, JAM_CLOSE_OFFSET_MS)}.`;
 }
 
 export function jamCategoryLabel(id: JamCategory): string {

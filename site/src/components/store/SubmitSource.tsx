@@ -1,7 +1,7 @@
 import { normalizeSourceUrl, SourceUrlError } from '@bridgething/catalog';
 import { useState } from 'preact/hooks';
 import { DirectoryApiError, submitSource, type DirectoryEntry } from '../../lib/directory-client';
-import { JAM_PRIZE_POOL, JAM_TIMELINE, jamDate, jamWindow } from '../../lib/jam';
+import { JAM_CLOSE_OFFSET_MS, JAM_PRIZE_POOL, JAM_TIMELINE, jamDate, jamWindow } from '../../lib/jam';
 
 type Outcome = { kind: 'ok'; message: string; sourceUrl: string } | { kind: 'err'; message: string } | null;
 
@@ -91,7 +91,7 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
 
       {outcome?.kind === 'ok' && jam.open ? (
         <div class="border-accent/40 bg-accent-soft mt-4 border p-4">
-          <p class="m-0 font-medium">the app jam is on until {jamDate(JAM_TIMELINE.closesAt)}.</p>
+          <p class="m-0 font-medium">the app jam is on until {jamDate(JAM_TIMELINE.closesAt, JAM_CLOSE_OFFSET_MS)}.</p>
           <p class="m-0 mt-1 text-sm text-white/70">${JAM_PRIZE_POOL} in prizes</p>
           <p class="m-0 mt-3">
             <a class="btn btn-primary" href={jamEntryPath(outcome.sourceUrl)}>

@@ -1335,6 +1335,7 @@ async fn a_stream_switched_off_while_its_subscribe_was_in_flight_hands_the_tap_b
   });
   let subscribe = awaited(&link, |msg| matches!(msg, GatewayToBridgeSystemMsg::LogsSubscribe(_))).await;
   link.say(DEVICE, said(log_line("spoken while the subscribe was in flight")));
+  drained(&link, 7).await;
 
   session.set_device_log_streaming(false).await;
   link.say(
