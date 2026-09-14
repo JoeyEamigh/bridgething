@@ -242,6 +242,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   let (mic, mic_handle) = MicManager::init(bus.clone(), bluetooth.clone(), MicConfig::default())
     .await
     .spawn();
+  let input = input::InputSettings::load();
 
   let transfer_sinks = transfer::sinks::TransferSinks::default();
 
@@ -324,6 +325,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     time,
     audio,
     als,
+    input,
     mic,
     devices,
     kv,

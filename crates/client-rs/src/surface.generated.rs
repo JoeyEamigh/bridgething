@@ -41,6 +41,10 @@ impl Client {
   pub fn hardware(&self) -> HardwareSurface<'_> {
     HardwareSurface(self)
   }
+  /// The `Input` surface.
+  pub fn input(&self) -> InputSurface<'_> {
+    InputSurface(self)
+  }
   /// The `Library` surface.
   pub fn library(&self) -> LibrarySurface<'_> {
     LibrarySurface(self)
@@ -335,6 +339,30 @@ impl<'a> HardwareSurface<'a> {
       ready(match msg {
         Ok(msg) => match msg.data {
           BridgeToClientMsgData::Hardware(inner) => inner.into_event(),
+          _ => None,
+        },
+        Err(_) => None,
+      })
+    })
+  }
+}
+
+/// Methods scoped to the `Input` wire surface.
+pub struct InputSurface<'a>(&'a Client);
+
+impl<'a> InputSurface<'a> {
+  pub async fn set_gesture(&self, payload: LauncherGestureSet) -> Result<(), SdkError> {
+    self.0.command(ClientToBridgeInputMsgCommand::SetGesture(payload)).await
+  }
+  pub async fn get_gesture(&self) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(LauncherGestureGet).await
+  }
+  /// Stream of `Input` events.
+  pub fn events(&self) -> impl Stream<Item = BridgeToClientInputMsgEvent> + 'static {
+    BroadcastStream::new(self.0.events()).filter_map(|msg| {
+      ready(match msg {
+        Ok(msg) => match msg.data {
+          BridgeToClientMsgData::Input(inner) => inner.into_event(),
           _ => None,
         },
         Err(_) => None,

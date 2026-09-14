@@ -347,6 +347,33 @@
       "handlers": []
     },
     {
+      "name": "input",
+      "title": "Input",
+      "description": "Reports the M-button launcher gesture. `getGesture` reads the current\nchoice and `onGestureChanged` fires on every change.",
+      "events": [
+        {
+          "method": "onGestureChanged",
+          "payload": "LauncherGestureChanged",
+          "payload_ref": "LauncherGestureChanged"
+        }
+      ],
+      "requests": [
+        {
+          "method": "getGesture",
+          "response": "LauncherGestureReply",
+          "response_event": "onGetGestureReply"
+        }
+      ],
+      "commands": [
+        {
+          "method": "setGesture",
+          "payload": "LauncherGestureSet",
+          "payload_ref": "LauncherGestureSet"
+        }
+      ],
+      "handlers": []
+    },
+    {
       "name": "library",
       "title": "Library",
       "description": "The music library on the connected phone. `browse`, `search`, and `favoritesList` read it,\n`favoritesToggle` and `favoritesSet` edit saved state, and `onFavoriteChanged` reports every change.",
@@ -2524,6 +2551,49 @@
         {
           "name": "value",
           "type": "string"
+        }
+      ]
+    },
+    "LauncherGesture": {
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "LongPress",
+          "description": "Hold M to jump to the launcher."
+        },
+        {
+          "name": "FivePress",
+          "description": "Press M five times within 1.5 seconds to jump to the launcher."
+        }
+      ]
+    },
+    "LauncherGestureChanged": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
+        }
+      ]
+    },
+    "LauncherGestureReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
+        }
+      ]
+    },
+    "LauncherGestureSet": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
         }
       ]
     },
