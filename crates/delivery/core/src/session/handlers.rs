@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use bridgething_gateway::{
-  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, LibraryHandler, LyricsHandler,
-  NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler, TunnelHandler,
-  VoiceHandler, WebappHandler,
+  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, InputHandler, LibraryHandler,
+  LyricsHandler, NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler,
+  TunnelHandler, VoiceHandler, WebappHandler,
 };
 use libbridgething::{gateway::*, wire::WireError, *};
 use tokio::sync::Notify;
@@ -86,6 +86,12 @@ impl GeoHandler for DeliveryHandlers {
     Err(WireError::Unsupported)
   }
   async fn unwatch(&self) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
+}
+
+impl InputHandler for DeliveryHandlers {
+  async fn gesture_changed(&self, _payload: InputGestureChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
 }

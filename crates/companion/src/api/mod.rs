@@ -143,6 +143,10 @@ pub enum SessionEvent {
     device_id: String,
     status: AncsAuthStatus,
   },
+  LauncherGestureChanged {
+    device_id: String,
+    gesture: LauncherGesture,
+  },
   Log {
     origin: LogOrigin,
     level: LogLevel,
@@ -368,6 +372,23 @@ impl CompanionSession {
       .await
       .map(|_| ())
       .map_err(device_error)
+  }
+
+  pub async fn get_launcher_gesture(&self, device_id: String) -> Result<LauncherGesture, CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    let reply = gateway.input().get_gesture().await.map_err(device_error)?;
+    Ok(session::launcher_gesture_from_wire(reply.gesture))
+  }
+
+  pub async fn set_launcher_gesture(&self, device_id: String, gesture: LauncherGesture) -> Result<(), CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    gateway
+      .input()
+      .set_gesture(libbridgething::gateway::InputSetGesture {
+        gesture: session::launcher_gesture_into_wire(gesture),
+      })
+      .await
+      .map_err(|failure| CompanionError::Device(format!("{failure:?}")))
   }
 
   pub async fn list_webapps(&self, device_id: String) -> Result<Vec<WebappInfo>, CompanionError> {

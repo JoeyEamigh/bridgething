@@ -8,6 +8,7 @@ mod capabilities;
 mod chrome;
 mod forward;
 mod geo;
+mod input;
 mod library;
 mod net;
 mod notifications;
@@ -27,6 +28,7 @@ use capabilities::*;
 use chrome::*;
 use forward::*;
 use geo::*;
+use input::*;
 use libbridgething::{
   gateway::{
     BridgeToGatewayTransferMsgEvent, GatewayToBridgeAssetMsg, GatewayToBridgeMsg, GatewayToBridgeMsgData,
@@ -200,6 +202,14 @@ impl GatewayHandler {
           tokio::spawn(async move { req.dispatch(&SystemHandler::new(handle, ota)).await });
         } else if let Some(cmd) = system_msg.into_command() {
           tokio::spawn(async move { cmd.dispatch(&SystemHandler::new(handle, ota)).await });
+        }
+      }
+      GatewayToBridgeMsgData::Input(input_msg) => {
+        if input_msg.is_request_variant() {
+          let req = input_msg.into_request().expect("checked above");
+          tokio::spawn(async move { req.dispatch(&InputHandler::new(handle)).await });
+        } else if let Some(cmd) = input_msg.into_command() {
+          tokio::spawn(async move { cmd.dispatch(&InputHandler::new(handle)).await });
         }
       }
       GatewayToBridgeMsgData::Time(time_msg) => {
