@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
 use bridgething_gateway::{
-  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, Gateway, GeoHandler, HandlerError, LibraryHandler,
-  LyricsHandler, NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler,
-  TunnelHandler, VoiceHandler, WebappHandler, route,
+  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, Gateway, GeoHandler, HandlerError, InputHandler,
+  LibraryHandler, LyricsHandler, NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler,
+  TransferHandler, TunnelHandler, VoiceHandler, WebappHandler, route,
 };
 use libbridgething::{
   gateway::*,
@@ -73,6 +73,13 @@ impl GeoHandler for Unsupported {
     Err(WireError::Unsupported)
   }
   async fn unwatch(&self) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
+}
+
+impl InputHandler for Unsupported {
+  async fn gesture_changed(&self, _payload: InputGestureChanged) -> Result<(), WireError> {
+    self.saw("gesture_changed".to_string());
     Err(WireError::Unsupported)
   }
 }

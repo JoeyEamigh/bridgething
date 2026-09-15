@@ -3,13 +3,13 @@
 
 use std::{future::Future, sync::Arc};
 
+use crate::{Gateway, GatewayProtocol, HandlerError};
 use bridgething_sdk_runtime::{Connection, Reply, RequestFailure, SdkError, rt};
 use futures::{Stream, StreamExt, future::ready};
-use libbridgething::{gateway::*, wire::WireError, *};
+use libbridgething::wire::WireError;
+use libbridgething::{gateway::*, *};
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
-
-use crate::{Gateway, GatewayProtocol, HandlerError};
 
 impl Gateway {
   /// The `Audio` surface.
@@ -19,6 +19,10 @@ impl Gateway {
   /// The `Geo` surface.
   pub fn geo(&self) -> GeoSurface<'_> {
     GeoSurface(self)
+  }
+  /// The `Input` surface.
+  pub fn input(&self) -> InputSurface<'_> {
+    InputSurface(self)
   }
   /// The `Library` surface.
   pub fn library(&self) -> LibrarySurface<'_> {
@@ -113,6 +117,33 @@ impl<'a> GeoSurface<'a> {
   }
   pub async fn error_event(&self, payload: GeoErrorReply) -> Result<(), SdkError> {
     self.0.event(GatewayToBridgeGeoMsgEvent::ErrorEvent(payload)).await
+  }
+}
+
+/// Methods scoped to the `Input` wire surface.
+pub struct InputSurface<'a>(&'a Gateway);
+
+impl<'a> InputSurface<'a> {
+  pub async fn set_gesture(&self, payload: InputSetGesture) -> Result<(), SdkError> {
+    self
+      .0
+      .command(GatewayToBridgeInputMsgCommand::SetGesture(payload))
+      .await
+  }
+  pub async fn get_gesture(&self) -> Result<InputGestureReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(InputGetGesture).await
+  }
+  /// Stream of `Input` events.
+  pub fn events(&self) -> impl Stream<Item = BridgeToGatewayInputMsgEvent> + 'static {
+    BroadcastStream::new(self.0.events()).filter_map(|msg| {
+      ready(match msg {
+        Ok(msg) => match msg.data {
+          BridgeToGatewayMsgData::Input(inner) => inner.into_event(),
+          _ => None,
+        },
+        Err(_) => None,
+      })
+    })
   }
 }
 
@@ -573,6 +604,10 @@ pub trait GeoHandler {
   fn unwatch(&self) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
+pub trait InputHandler {
+  fn gesture_changed(&self, payload: InputGestureChanged) -> impl Future<Output = Result<(), WireError>> + Send;
+}
+
 pub trait LibraryHandler {
   fn browse(
     &self,
@@ -737,6 +772,7 @@ pub trait GatewayHandlers:
   AssetHandler
   + AudioHandler
   + GeoHandler
+  + InputHandler
   + LibraryHandler
   + LyricsHandler
   + NetHandler
@@ -759,6 +795,7 @@ impl<T> GatewayHandlers for T where
   T: AssetHandler
     + AudioHandler
     + GeoHandler
+    + InputHandler
     + LibraryHandler
     + LyricsHandler
     + NetHandler
@@ -914,6 +951,25 @@ where
       if let Err(error) = <H as GeoHandler>::unwatch(handlers).await {
         tracing::warn!(surface = "geo", variant = "unwatch", ?error, "inbound not handled");
       }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Input(BridgeToGatewayInputMsg::GestureChanged(payload)) => {
+      if let Err(error) = <H as InputHandler>::gesture_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "input",
+          variant = "gestureChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Input(BridgeToGatewayInputMsg::GetGestureReply(_)) => {
+      tracing::debug!(
+        surface = "input",
+        variant = "getGestureReply",
+        "response with no pending request"
+      );
       Ok(())
     }
     BridgeToGatewayMsgData::Library(BridgeToGatewayLibraryMsg::Browse(request)) => {

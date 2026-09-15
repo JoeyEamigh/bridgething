@@ -3,10 +3,13 @@ use libbridgething::{
     BridgeToClientInputMsg, ClientToBridgeInputMsgDispatch, LauncherGestureChanged, LauncherGestureGet,
     LauncherGestureReply, LauncherGestureSet,
   },
+  gateway::{BridgeToGatewayInputMsg, BridgeToGatewayMsg, InputGestureChanged},
   wire::MsgMeta,
 };
+use uuid::Uuid;
 
 use super::{HandlerResult, MsgHandle};
+use crate::bluetooth::OutboundGatewayMessage;
 
 pub struct InputHandler {
   handle: MsgHandle,
@@ -29,6 +32,22 @@ impl ClientToBridgeInputMsgDispatch for InputHandler {
     if let Err(errors) = self.handle.state.bus.broadcast(event, MsgMeta::Event).await {
       tracing::trace!("input broadcast had {} ws error(s)", errors.len());
     }
+    self
+      .handle
+      .bluetooth
+      .gateway_man
+      .send_all(OutboundGatewayMessage::new(
+        None,
+        BridgeToGatewayMsg {
+          id: Uuid::now_v7(),
+          meta: MsgMeta::Event,
+          data: BridgeToGatewayInputMsg::GestureChanged(InputGestureChanged {
+            gesture: params.gesture,
+          })
+          .into(),
+        },
+      ))
+      .await;
     Ok(())
   }
 
