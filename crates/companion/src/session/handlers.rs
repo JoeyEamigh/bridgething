@@ -5,9 +5,9 @@ use bridgething_delivery::{
   transfer::TransferReceiver,
 };
 use bridgething_gateway::{
-  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, LibraryHandler, LyricsHandler,
-  NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler, TunnelHandler,
-  VoiceHandler, WebappHandler,
+  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, InputHandler, LibraryHandler,
+  LyricsHandler, NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler,
+  TunnelHandler, VoiceHandler, WebappHandler,
 };
 use libbridgething::{gateway::*, wire::WireError, *};
 use uuid::Uuid;
@@ -114,6 +114,13 @@ impl GeoHandler for Peer {
   }
   async fn unwatch(&self) -> Result<(), WireError> {
     self.geo()?.unwatch().await
+  }
+}
+
+impl InputHandler for Peer {
+  async fn gesture_changed(&self, payload: InputGestureChanged) -> Result<(), WireError> {
+    self.observer.launcher_gesture_changed(&self.device_id, payload.gesture);
+    Ok(())
   }
 }
 
