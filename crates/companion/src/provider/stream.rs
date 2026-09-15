@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bridgething_io::{HttpExecutor, HttpTransport as IoHttpTransport};
 use libbridgething::{
-  BrowseResult, FavoritesPage, ItemRef, Lyrics, MusicProvider, RecommendationsResult, SearchResult,
+  BrowseResult, FavoritesPage, ItemRef, Lyrics, MusicProvider, PlaybackContext, RecommendationsResult, SearchResult,
   gateway::{
     ContextResolveReply, FavoritesSet, LibraryBrowseRequest, LibraryFavoritesContainsRequest,
     LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibrarySearchRequest, PlayUri, TrackIdentity,
@@ -46,7 +46,14 @@ impl StreamProvider {
 #[async_trait::async_trait]
 impl PlayerTransport for StreamProvider {
   async fn play(&self, uri: PlayUri) -> Result<(), ProviderError> {
-    self.playback.play(vec![QueueEntry::bare(&uri.uri)], 0, None).await;
+    let context = uri
+      .context
+      .filter(|c| !c.context_uri.is_empty())
+      .map(|c| PlaybackContext {
+        uri: c.context_uri,
+        name: None,
+      });
+    self.playback.play(vec![QueueEntry::bare(&uri.uri)], 0, context).await;
     Ok(())
   }
 

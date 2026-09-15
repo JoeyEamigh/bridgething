@@ -28,7 +28,7 @@ use bridgething_companion::{
 };
 use icecast::{Icecast, Station, authority, fetch};
 use libbridgething::{
-  PlaybackState, PlayerError,
+  PlayContext, PlaybackState, PlayerError,
   gateway::{GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, PlayUri},
 };
 use log_sink::Quiet;
@@ -216,8 +216,30 @@ async fn play_hands_the_url_to_the_phone_and_publishes_a_buffering_track() {
   assert_eq!(track.uri.as_deref(), Some(URL));
   assert_eq!(track.title.as_deref(), Some("radio.example"));
   assert_eq!(track.artwork_id, None);
+  assert_eq!(state.context, None);
   assert_eq!(state.playback.set_elapsed_time_available, Some(false));
   assert_eq!(rig.hub.now_playing().current_source().as_deref(), Some("stream"));
+}
+
+#[tokio::test]
+async fn the_play_context_is_reported_as_the_playback_context() {
+  let rig = boot().await;
+  PlayerTransport::play(
+    rig.provider.as_ref(),
+    PlayUri {
+      uri: URL.into(),
+      context: Some(PlayContext {
+        context_uri: "radio-atlas:station:abc".into(),
+      }),
+    },
+  )
+  .await
+  .expect("play routes to the stream provider");
+
+  let state = rig.playing_snapshot().await;
+  let context = state.context.as_ref().expect("the play context is reported");
+  assert_eq!(context.uri, "radio-atlas:station:abc");
+  assert_eq!(context.name, None);
 }
 
 #[tokio::test]
