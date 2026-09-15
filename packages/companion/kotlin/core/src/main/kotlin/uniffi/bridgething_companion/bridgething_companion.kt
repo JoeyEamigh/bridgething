@@ -18,17 +18,11 @@ package uniffi.bridgething_companion
 // helpers directly inline like we're doing here.
 
 import com.sun.jna.Callback
-import com.sun.jna.IntegerType
-import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import com.sun.jna.ptr.*
 import kotlinx.coroutines.CancellableContinuation
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -2556,6 +2550,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_install_webapp(): Int
@@ -2581,6 +2577,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_set_launcher_gesture(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config(): Int
 
@@ -3141,6 +3139,11 @@ internal object UniffiLib {
         `rootUrl`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_get_webapp_doc(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
@@ -3219,6 +3222,12 @@ internal object UniffiLib {
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
         `target`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_set_launcher_gesture(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `gesture`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_ota_poll_config(
@@ -5472,6 +5481,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture() != 45277) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -5509,6 +5521,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_launcher_gesture() != 33595) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config() != 63985) {
@@ -6183,10 +6198,7 @@ interface Disposable {
         fun destroy(vararg args: Any?) {
             for (arg in args) {
                 when (arg) {
-                    is Disposable -> {
-                        arg.destroy()
-                    }
-
+                    is Disposable -> arg.destroy()
                     is ArrayList<*> -> {
                         for (idx in arg.indices) {
                             val element = arg[idx]
@@ -6195,7 +6207,6 @@ interface Disposable {
                             }
                         }
                     }
-
                     is Map<*, *> -> {
                         for (element in arg.values) {
                             if (element is Disposable) {
@@ -6203,7 +6214,6 @@ interface Disposable {
                             }
                         }
                     }
-
                     is Iterable<*> -> {
                         for (element in arg) {
                             if (element is Disposable) {
@@ -11127,6 +11137,8 @@ public interface CompanionSessionInterface {
 
     suspend fun `fetchOtaManifest`(`rootUrl`: kotlin.String): OtaDiscoverManifest
 
+    suspend fun `getLauncherGesture`(`deviceId`: kotlin.String): LauncherGesture
+
     suspend fun `getWebappDoc`(
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
@@ -11184,6 +11196,11 @@ public interface CompanionSessionInterface {
     suspend fun `setDeviceResumeTarget`(
         `deviceId`: kotlin.String,
         `target`: ResumeTarget,
+    )
+
+    suspend fun `setLauncherGesture`(
+        `deviceId`: kotlin.String,
+        `gesture`: LauncherGesture,
     )
 
     suspend fun `setOtaPollConfig`(`config`: OtaPollConfig?)
@@ -11754,6 +11771,31 @@ open class CompanionSession :
 
     @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getLauncherGesture`(`deviceId`: kotlin.String): LauncherGesture =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
+                    uniffiHandle,
+                    FfiConverterString.lower(`deviceId`),
+                )
+            },
+            {
+                future,
+                callback,
+                continuation,
+                ->
+                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
+            },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeLauncherGesture.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
+        )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getWebappDoc`(
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
@@ -12062,6 +12104,28 @@ open class CompanionSession :
         { Unit },
         // Error FFI converter
         UniffiNullRustCallStatusErrorHandler,
+    )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `setLauncherGesture`(
+        `deviceId`: kotlin.String,
+        `gesture`: LauncherGesture,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_launcher_gesture(
+                uniffiHandle,
+                FfiConverterString.lower(`deviceId`),
+                FfiConverterTypeLauncherGesture.lower(`gesture`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        CompanionException.ErrorHandler,
     )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -18339,7 +18403,10 @@ open class LogStore :
         fun `install`(`root`: kotlin.String): LogStore =
             FfiConverterTypeLogStore.lift(
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_bridgething_companion_fn_constructor_logstore_install(FfiConverterString.lower(`root`), _status)
+                    UniffiLib.uniffi_bridgething_companion_fn_constructor_logstore_install(
+                        FfiConverterString.lower(`root`),
+                        _status,
+                    )
                 },
             )
     }
@@ -21035,7 +21102,9 @@ open class OtaRunStore :
         this(
             UniffiWithHandle,
             uniffiRustCall { _status ->
-                UniffiLib.uniffi_bridgething_companion_fn_constructor_otarunstore_new(_status)
+                UniffiLib.uniffi_bridgething_companion_fn_constructor_otarunstore_new(
+                    _status,
+                )
             },
         )
 
@@ -31044,35 +31113,16 @@ sealed class AmLibraryScope {
 public object FfiConverterTypeAmLibraryScope : FfiConverterRustBuffer<AmLibraryScope> {
     override fun read(buf: ByteBuffer): AmLibraryScope =
         when (buf.getInt()) {
-            1 -> {
-                AmLibraryScope.Playlists
-            }
-
-            2 -> {
-                AmLibraryScope.Albums
-            }
-
-            3 -> {
-                AmLibraryScope.Artists
-            }
-
-            4 -> {
-                AmLibraryScope.Songs
-            }
-
-            5 -> {
-                AmLibraryScope.RecentlyPlayed
-            }
-
-            6 -> {
+            1 -> AmLibraryScope.Playlists
+            2 -> AmLibraryScope.Albums
+            3 -> AmLibraryScope.Artists
+            4 -> AmLibraryScope.Songs
+            5 -> AmLibraryScope.RecentlyPlayed
+            6 ->
                 AmLibraryScope.Children(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: AmLibraryScope): ULong =
@@ -31083,35 +31133,30 @@ public object FfiConverterTypeAmLibraryScope : FfiConverterRustBuffer<AmLibraryS
                     4UL
                 )
             }
-
             is AmLibraryScope.Albums -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmLibraryScope.Artists -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmLibraryScope.Songs -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmLibraryScope.RecentlyPlayed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmLibraryScope.Children -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31130,27 +31175,22 @@ public object FfiConverterTypeAmLibraryScope : FfiConverterRustBuffer<AmLibraryS
                 buf.putInt(1)
                 Unit
             }
-
             is AmLibraryScope.Albums -> {
                 buf.putInt(2)
                 Unit
             }
-
             is AmLibraryScope.Artists -> {
                 buf.putInt(3)
                 Unit
             }
-
             is AmLibraryScope.Songs -> {
                 buf.putInt(4)
                 Unit
             }
-
             is AmLibraryScope.RecentlyPlayed -> {
                 buf.putInt(5)
                 Unit
             }
-
             is AmLibraryScope.Children -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.`uri`, buf)
@@ -31196,43 +31236,23 @@ sealed class AmPlayerCommand {
 public object FfiConverterTypeAmPlayerCommand : FfiConverterRustBuffer<AmPlayerCommand> {
     override fun read(buf: ByteBuffer): AmPlayerCommand =
         when (buf.getInt()) {
-            1 -> {
-                AmPlayerCommand.Play
-            }
-
-            2 -> {
-                AmPlayerCommand.Pause
-            }
-
-            3 -> {
-                AmPlayerCommand.SkipNext
-            }
-
-            4 -> {
-                AmPlayerCommand.SkipPrev
-            }
-
-            5 -> {
+            1 -> AmPlayerCommand.Play
+            2 -> AmPlayerCommand.Pause
+            3 -> AmPlayerCommand.SkipNext
+            4 -> AmPlayerCommand.SkipPrev
+            5 ->
                 AmPlayerCommand.SeekTo(
                     FfiConverterUInt.read(buf),
                 )
-            }
-
-            6 -> {
+            6 ->
                 AmPlayerCommand.SetShuffle(
                     FfiConverterBoolean.read(buf),
                 )
-            }
-
-            7 -> {
+            7 ->
                 AmPlayerCommand.SetRepeat(
                     FfiConverterTypeAmRepeatMode.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: AmPlayerCommand): ULong =
@@ -31243,28 +31263,24 @@ public object FfiConverterTypeAmPlayerCommand : FfiConverterRustBuffer<AmPlayerC
                     4UL
                 )
             }
-
             is AmPlayerCommand.Pause -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmPlayerCommand.SkipNext -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmPlayerCommand.SkipPrev -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is AmPlayerCommand.SeekTo -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31272,7 +31288,6 @@ public object FfiConverterTypeAmPlayerCommand : FfiConverterRustBuffer<AmPlayerC
                         FfiConverterUInt.allocationSize(value.`positionMs`)
                 )
             }
-
             is AmPlayerCommand.SetShuffle -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31280,7 +31295,6 @@ public object FfiConverterTypeAmPlayerCommand : FfiConverterRustBuffer<AmPlayerC
                         FfiConverterBoolean.allocationSize(value.`on`)
                 )
             }
-
             is AmPlayerCommand.SetRepeat -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31299,34 +31313,28 @@ public object FfiConverterTypeAmPlayerCommand : FfiConverterRustBuffer<AmPlayerC
                 buf.putInt(1)
                 Unit
             }
-
             is AmPlayerCommand.Pause -> {
                 buf.putInt(2)
                 Unit
             }
-
             is AmPlayerCommand.SkipNext -> {
                 buf.putInt(3)
                 Unit
             }
-
             is AmPlayerCommand.SkipPrev -> {
                 buf.putInt(4)
                 Unit
             }
-
             is AmPlayerCommand.SeekTo -> {
                 buf.putInt(5)
                 FfiConverterUInt.write(value.`positionMs`, buf)
                 Unit
             }
-
             is AmPlayerCommand.SetShuffle -> {
                 buf.putInt(6)
                 FfiConverterBoolean.write(value.`on`, buf)
                 Unit
             }
-
             is AmPlayerCommand.SetRepeat -> {
                 buf.putInt(7)
                 FfiConverterTypeAmRepeatMode.write(value.`mode`, buf)
@@ -31452,31 +31460,15 @@ sealed class CallEndReason {
 public object FfiConverterTypeCallEndReason : FfiConverterRustBuffer<CallEndReason> {
     override fun read(buf: ByteBuffer): CallEndReason =
         when (buf.getInt()) {
-            1 -> {
-                CallEndReason.Local
-            }
-
-            2 -> {
-                CallEndReason.Remote
-            }
-
-            3 -> {
-                CallEndReason.Missed
-            }
-
-            4 -> {
-                CallEndReason.Declined
-            }
-
-            5 -> {
+            1 -> CallEndReason.Local
+            2 -> CallEndReason.Remote
+            3 -> CallEndReason.Missed
+            4 -> CallEndReason.Declined
+            5 ->
                 CallEndReason.Failed(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: CallEndReason): ULong =
@@ -31487,28 +31479,24 @@ public object FfiConverterTypeCallEndReason : FfiConverterRustBuffer<CallEndReas
                     4UL
                 )
             }
-
             is CallEndReason.Remote -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is CallEndReason.Missed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is CallEndReason.Declined -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is CallEndReason.Failed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31527,22 +31515,18 @@ public object FfiConverterTypeCallEndReason : FfiConverterRustBuffer<CallEndReas
                 buf.putInt(1)
                 Unit
             }
-
             is CallEndReason.Remote -> {
                 buf.putInt(2)
                 Unit
             }
-
             is CallEndReason.Missed -> {
                 buf.putInt(3)
                 Unit
             }
-
             is CallEndReason.Declined -> {
                 buf.putInt(4)
                 Unit
             }
-
             is CallEndReason.Failed -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`reason`, buf)
@@ -31605,22 +31589,18 @@ public object FfiConverterTypeCompanionError : FfiConverterRustBuffer<CompanionE
                 buf.putInt(1)
                 Unit
             }
-
             is CompanionException.Runtime -> {
                 buf.putInt(2)
                 Unit
             }
-
             is CompanionException.NotConnected -> {
                 buf.putInt(3)
                 Unit
             }
-
             is CompanionException.Device -> {
                 buf.putInt(4)
                 Unit
             }
-
             is CompanionException.ResourceNotAvailable -> {
                 buf.putInt(5)
                 Unit
@@ -31787,27 +31767,19 @@ sealed class ExtensionMessage {
 public object FfiConverterTypeExtensionMessage : FfiConverterRustBuffer<ExtensionMessage> {
     override fun read(buf: ByteBuffer): ExtensionMessage =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 ExtensionMessage.Text(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 ExtensionMessage.Json(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 ExtensionMessage.Binary(
                     FfiConverterByteArray.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: ExtensionMessage): ULong =
@@ -31819,7 +31791,6 @@ public object FfiConverterTypeExtensionMessage : FfiConverterRustBuffer<Extensio
                         FfiConverterString.allocationSize(value.`text`)
                 )
             }
-
             is ExtensionMessage.Json -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31827,7 +31798,6 @@ public object FfiConverterTypeExtensionMessage : FfiConverterRustBuffer<Extensio
                         FfiConverterString.allocationSize(value.`json`)
                 )
             }
-
             is ExtensionMessage.Binary -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -31847,13 +31817,11 @@ public object FfiConverterTypeExtensionMessage : FfiConverterRustBuffer<Extensio
                 FfiConverterString.write(value.`text`, buf)
                 Unit
             }
-
             is ExtensionMessage.Json -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`json`, buf)
                 Unit
             }
-
             is ExtensionMessage.Binary -> {
                 buf.putInt(3)
                 FfiConverterByteArray.write(value.`bytes`, buf)
@@ -31953,43 +31921,18 @@ sealed class HttpMethod {
 public object FfiConverterTypeHttpMethod : FfiConverterRustBuffer<HttpMethod> {
     override fun read(buf: ByteBuffer): HttpMethod =
         when (buf.getInt()) {
-            1 -> {
-                HttpMethod.Get
-            }
-
-            2 -> {
-                HttpMethod.Head
-            }
-
-            3 -> {
-                HttpMethod.Post
-            }
-
-            4 -> {
-                HttpMethod.Put
-            }
-
-            5 -> {
-                HttpMethod.Patch
-            }
-
-            6 -> {
-                HttpMethod.Delete
-            }
-
-            7 -> {
-                HttpMethod.Options
-            }
-
-            8 -> {
+            1 -> HttpMethod.Get
+            2 -> HttpMethod.Head
+            3 -> HttpMethod.Post
+            4 -> HttpMethod.Put
+            5 -> HttpMethod.Patch
+            6 -> HttpMethod.Delete
+            7 -> HttpMethod.Options
+            8 ->
                 HttpMethod.Other(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: HttpMethod): ULong =
@@ -32000,49 +31943,42 @@ public object FfiConverterTypeHttpMethod : FfiConverterRustBuffer<HttpMethod> {
                     4UL
                 )
             }
-
             is HttpMethod.Head -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Post -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Put -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Patch -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Delete -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Options -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is HttpMethod.Other -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32061,37 +31997,30 @@ public object FfiConverterTypeHttpMethod : FfiConverterRustBuffer<HttpMethod> {
                 buf.putInt(1)
                 Unit
             }
-
             is HttpMethod.Head -> {
                 buf.putInt(2)
                 Unit
             }
-
             is HttpMethod.Post -> {
                 buf.putInt(3)
                 Unit
             }
-
             is HttpMethod.Put -> {
                 buf.putInt(4)
                 Unit
             }
-
             is HttpMethod.Patch -> {
                 buf.putInt(5)
                 Unit
             }
-
             is HttpMethod.Delete -> {
                 buf.putInt(6)
                 Unit
             }
-
             is HttpMethod.Options -> {
                 buf.putInt(7)
                 Unit
             }
-
             is HttpMethod.Other -> {
                 buf.putInt(8)
                 FfiConverterString.write(value.`verb`, buf)
@@ -32125,6 +32054,35 @@ public object FfiConverterTypeInitiateCallType : FfiConverterRustBuffer<Initiate
 
     override fun write(
         value: InitiateCallType,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+enum class LauncherGesture {
+    LONG_PRESS,
+    FIVE_PRESS,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLauncherGesture : FfiConverterRustBuffer<LauncherGesture> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            LauncherGesture.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: LauncherGesture) = 4UL
+
+    override fun write(
+        value: LauncherGesture,
         buf: ByteBuffer,
     ) {
         buf.putInt(value.ordinal + 1)
@@ -32280,61 +32238,35 @@ sealed class MediaControl {
 public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl> {
     override fun read(buf: ByteBuffer): MediaControl =
         when (buf.getInt()) {
-            1 -> {
-                MediaControl.Play
-            }
-
-            2 -> {
-                MediaControl.Pause
-            }
-
-            3 -> {
-                MediaControl.SkipNext
-            }
-
-            4 -> {
-                MediaControl.SkipPrev
-            }
-
-            5 -> {
+            1 -> MediaControl.Play
+            2 -> MediaControl.Pause
+            3 -> MediaControl.SkipNext
+            4 -> MediaControl.SkipPrev
+            5 ->
                 MediaControl.SeekTo(
                     FfiConverterLong.read(buf),
                 )
-            }
-
-            6 -> {
+            6 ->
                 MediaControl.SkipToQueueItem(
                     FfiConverterLong.read(buf),
                 )
-            }
-
-            7 -> {
+            7 ->
                 MediaControl.SetShuffle(
                     FfiConverterBoolean.read(buf),
                 )
-            }
-
-            8 -> {
+            8 ->
                 MediaControl.SetRepeat(
                     FfiConverterTypeMediaRepeatMode.read(buf),
                 )
-            }
-
-            9 -> {
+            9 ->
                 MediaControl.SetSpeed(
                     FfiConverterFloat.read(buf),
                 )
-            }
-
-            10 -> {
+            10 ->
                 MediaControl.SetLiked(
                     FfiConverterBoolean.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: MediaControl): ULong =
@@ -32345,28 +32277,24 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                     4UL
                 )
             }
-
             is MediaControl.Pause -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is MediaControl.SkipNext -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is MediaControl.SkipPrev -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is MediaControl.SeekTo -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32374,7 +32302,6 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                         FfiConverterLong.allocationSize(value.`positionMs`)
                 )
             }
-
             is MediaControl.SkipToQueueItem -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32382,7 +32309,6 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                         FfiConverterLong.allocationSize(value.`queueId`)
                 )
             }
-
             is MediaControl.SetShuffle -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32390,7 +32316,6 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                         FfiConverterBoolean.allocationSize(value.`on`)
                 )
             }
-
             is MediaControl.SetRepeat -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32398,7 +32323,6 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                         FfiConverterTypeMediaRepeatMode.allocationSize(value.`mode`)
                 )
             }
-
             is MediaControl.SetSpeed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32406,7 +32330,6 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                         FfiConverterFloat.allocationSize(value.`speed`)
                 )
             }
-
             is MediaControl.SetLiked -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32425,52 +32348,43 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                 buf.putInt(1)
                 Unit
             }
-
             is MediaControl.Pause -> {
                 buf.putInt(2)
                 Unit
             }
-
             is MediaControl.SkipNext -> {
                 buf.putInt(3)
                 Unit
             }
-
             is MediaControl.SkipPrev -> {
                 buf.putInt(4)
                 Unit
             }
-
             is MediaControl.SeekTo -> {
                 buf.putInt(5)
                 FfiConverterLong.write(value.`positionMs`, buf)
                 Unit
             }
-
             is MediaControl.SkipToQueueItem -> {
                 buf.putInt(6)
                 FfiConverterLong.write(value.`queueId`, buf)
                 Unit
             }
-
             is MediaControl.SetShuffle -> {
                 buf.putInt(7)
                 FfiConverterBoolean.write(value.`on`, buf)
                 Unit
             }
-
             is MediaControl.SetRepeat -> {
                 buf.putInt(8)
                 FfiConverterTypeMediaRepeatMode.write(value.`mode`, buf)
                 Unit
             }
-
             is MediaControl.SetSpeed -> {
                 buf.putInt(9)
                 FfiConverterFloat.write(value.`speed`, buf)
                 Unit
             }
-
             is MediaControl.SetLiked -> {
                 buf.putInt(10)
                 FfiConverterBoolean.write(value.`liked`, buf)
@@ -32827,25 +32741,16 @@ sealed class NluRejectionOutcome {
 public object FfiConverterTypeNluRejectionOutcome : FfiConverterRustBuffer<NluRejectionOutcome> {
     override fun read(buf: ByteBuffer): NluRejectionOutcome =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 NluRejectionOutcome.Accept(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
-                NluRejectionOutcome.NoIntent
-            }
-
-            3 -> {
+            2 -> NluRejectionOutcome.NoIntent
+            3 ->
                 NluRejectionOutcome.Clarify(
                     FfiConverterSequenceString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: NluRejectionOutcome): ULong =
@@ -32857,14 +32762,12 @@ public object FfiConverterTypeNluRejectionOutcome : FfiConverterRustBuffer<NluRe
                         FfiConverterString.allocationSize(value.`intent`)
                 )
             }
-
             is NluRejectionOutcome.NoIntent -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is NluRejectionOutcome.Clarify -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -32884,12 +32787,10 @@ public object FfiConverterTypeNluRejectionOutcome : FfiConverterRustBuffer<NluRe
                 FfiConverterString.write(value.`intent`, buf)
                 Unit
             }
-
             is NluRejectionOutcome.NoIntent -> {
                 buf.putInt(2)
                 Unit
             }
-
             is NluRejectionOutcome.Clarify -> {
                 buf.putInt(3)
                 FfiConverterSequenceString.write(value.`alternates`, buf)
@@ -32923,19 +32824,12 @@ sealed class NluRunnerException : kotlin.Exception() {
 public object FfiConverterTypeNluRunnerError : FfiConverterRustBuffer<NluRunnerException> {
     override fun read(buf: ByteBuffer): NluRunnerException =
         when (buf.getInt()) {
-            1 -> {
-                NluRunnerException.NotLoaded()
-            }
-
-            2 -> {
+            1 -> NluRunnerException.NotLoaded()
+            2 ->
                 NluRunnerException.Failed(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid error enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: NluRunnerException): ULong =
@@ -32944,7 +32838,6 @@ public object FfiConverterTypeNluRunnerError : FfiConverterRustBuffer<NluRunnerE
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
             )
-
             is NluRunnerException.Failed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL +
@@ -32961,7 +32854,6 @@ public object FfiConverterTypeNluRunnerError : FfiConverterRustBuffer<NluRunnerE
                 buf.putInt(1)
                 Unit
             }
-
             is NluRunnerException.Failed -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`reason`, buf)
@@ -32995,25 +32887,16 @@ sealed class NotificationActionError {
 public object FfiConverterTypeNotificationActionError : FfiConverterRustBuffer<NotificationActionError> {
     override fun read(buf: ByteBuffer): NotificationActionError =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 NotificationActionError.NotFound(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 NotificationActionError.ActionRejected(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            3 -> {
-                NotificationActionError.NoTarget
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            3 -> NotificationActionError.NoTarget
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: NotificationActionError): ULong =
@@ -33025,7 +32908,6 @@ public object FfiConverterTypeNotificationActionError : FfiConverterRustBuffer<N
                         FfiConverterString.allocationSize(value.`id`)
                 )
             }
-
             is NotificationActionError.ActionRejected -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33033,7 +32915,6 @@ public object FfiConverterTypeNotificationActionError : FfiConverterRustBuffer<N
                         FfiConverterString.allocationSize(value.`reason`)
                 )
             }
-
             is NotificationActionError.NoTarget -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33052,13 +32933,11 @@ public object FfiConverterTypeNotificationActionError : FfiConverterRustBuffer<N
                 FfiConverterString.write(value.`id`, buf)
                 Unit
             }
-
             is NotificationActionError.ActionRejected -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
-
             is NotificationActionError.NoTarget -> {
                 buf.putInt(3)
                 Unit
@@ -33257,20 +33136,15 @@ sealed class OtaPhaseSnapshot {
 public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhaseSnapshot> {
     override fun read(buf: ByteBuffer): OtaPhaseSnapshot =
         when (buf.getInt()) {
-            1 -> {
-                OtaPhaseSnapshot.Idle
-            }
-
-            2 -> {
+            1 -> OtaPhaseSnapshot.Idle
+            2 ->
                 OtaPhaseSnapshot.Downloading(
                     FfiConverterString.read(buf),
                     FfiConverterULong.read(buf),
                     FfiConverterULong.read(buf),
                     FfiConverterOptionalDouble.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 OtaPhaseSnapshot.Streaming(
                     FfiConverterString.read(buf),
                     FfiConverterULong.read(buf),
@@ -33278,34 +33152,20 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                     FfiConverterOptionalDouble.read(buf),
                     FfiConverterOptionalDouble.read(buf),
                 )
-            }
-
-            4 -> {
+            4 ->
                 OtaPhaseSnapshot.Applying(
                     FfiConverterTypeOtaApplyPhase.read(buf),
                     FfiConverterUInt.read(buf),
                     FfiConverterUInt.read(buf),
                     FfiConverterULong.read(buf),
                 )
-            }
-
-            5 -> {
-                OtaPhaseSnapshot.Staged
-            }
-
-            6 -> {
-                OtaPhaseSnapshot.Completed
-            }
-
-            7 -> {
+            5 -> OtaPhaseSnapshot.Staged
+            6 -> OtaPhaseSnapshot.Completed
+            7 ->
                 OtaPhaseSnapshot.Failed(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: OtaPhaseSnapshot): ULong =
@@ -33316,7 +33176,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                     4UL
                 )
             }
-
             is OtaPhaseSnapshot.Downloading -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33327,7 +33186,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                         FfiConverterOptionalDouble.allocationSize(value.`ratePerSec`)
                 )
             }
-
             is OtaPhaseSnapshot.Streaming -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33339,7 +33197,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                         FfiConverterOptionalDouble.allocationSize(value.`etaSeconds`)
                 )
             }
-
             is OtaPhaseSnapshot.Applying -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33350,21 +33207,18 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                         FfiConverterULong.allocationSize(value.`dwlBytes`)
                 )
             }
-
             is OtaPhaseSnapshot.Staged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is OtaPhaseSnapshot.Completed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is OtaPhaseSnapshot.Failed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33383,7 +33237,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 buf.putInt(1)
                 Unit
             }
-
             is OtaPhaseSnapshot.Downloading -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`asset`, buf)
@@ -33392,7 +33245,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 FfiConverterOptionalDouble.write(value.`ratePerSec`, buf)
                 Unit
             }
-
             is OtaPhaseSnapshot.Streaming -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.`asset`, buf)
@@ -33402,7 +33254,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 FfiConverterOptionalDouble.write(value.`etaSeconds`, buf)
                 Unit
             }
-
             is OtaPhaseSnapshot.Applying -> {
                 buf.putInt(4)
                 FfiConverterTypeOtaApplyPhase.write(value.`phase`, buf)
@@ -33411,17 +33262,14 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 FfiConverterULong.write(value.`dwlBytes`, buf)
                 Unit
             }
-
             is OtaPhaseSnapshot.Staged -> {
                 buf.putInt(5)
                 Unit
             }
-
             is OtaPhaseSnapshot.Completed -> {
                 buf.putInt(6)
                 Unit
             }
-
             is OtaPhaseSnapshot.Failed -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`reason`, buf)
@@ -33500,28 +33348,22 @@ sealed class OtaPollEvent {
 public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent> {
     override fun read(buf: ByteBuffer): OtaPollEvent =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 OtaPollEvent.ManifestPolled(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 OtaPollEvent.ManifestPollFailed(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 OtaPollEvent.UpdateAvailable(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            4 -> {
+            4 ->
                 OtaPollEvent.Planned(
                     FfiConverterString.read(buf),
                     FfiConverterTypeOtaKind.read(buf),
@@ -33532,36 +33374,26 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                     FfiConverterString.read(buf),
                     FfiConverterSequenceTypeOtaPlanStep.read(buf),
                 )
-            }
-
-            5 -> {
+            5 ->
                 OtaPollEvent.Progress(
                     FfiConverterString.read(buf),
                     FfiConverterTypeOtaKind.read(buf),
                     FfiConverterUInt.read(buf),
                     FfiConverterTypeOtaPhaseSnapshot.read(buf),
                 )
-            }
-
-            6 -> {
+            6 ->
                 OtaPollEvent.Updated(
                     FfiConverterString.read(buf),
                     FfiConverterTypeOtaKind.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            7 -> {
+            7 ->
                 OtaPollEvent.Failed(
                     FfiConverterString.read(buf),
                     FfiConverterTypeOtaKind.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: OtaPollEvent): ULong =
@@ -33573,7 +33405,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterString.allocationSize(value.`updatedAt`)
                 )
             }
-
             is OtaPollEvent.ManifestPollFailed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33581,7 +33412,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterString.allocationSize(value.`reason`)
                 )
             }
-
             is OtaPollEvent.UpdateAvailable -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33592,7 +33422,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterString.allocationSize(value.`imageVersion`)
                 )
             }
-
             is OtaPollEvent.Planned -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33607,7 +33436,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterSequenceTypeOtaPlanStep.allocationSize(value.`steps`)
                 )
             }
-
             is OtaPollEvent.Progress -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33618,7 +33446,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterTypeOtaPhaseSnapshot.allocationSize(value.`snapshot`)
                 )
             }
-
             is OtaPollEvent.Updated -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33628,7 +33455,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                         FfiConverterString.allocationSize(value.`version`)
                 )
             }
-
             is OtaPollEvent.Failed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33650,13 +33476,11 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 FfiConverterString.write(value.`updatedAt`, buf)
                 Unit
             }
-
             is OtaPollEvent.ManifestPollFailed -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
-
             is OtaPollEvent.UpdateAvailable -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.`deviceId`, buf)
@@ -33665,7 +33489,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 FfiConverterString.write(value.`imageVersion`, buf)
                 Unit
             }
-
             is OtaPollEvent.Planned -> {
                 buf.putInt(4)
                 FfiConverterString.write(value.`deviceId`, buf)
@@ -33678,7 +33501,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 FfiConverterSequenceTypeOtaPlanStep.write(value.`steps`, buf)
                 Unit
             }
-
             is OtaPollEvent.Progress -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`deviceId`, buf)
@@ -33687,7 +33509,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 FfiConverterTypeOtaPhaseSnapshot.write(value.`snapshot`, buf)
                 Unit
             }
-
             is OtaPollEvent.Updated -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.`deviceId`, buf)
@@ -33695,7 +33516,6 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 FfiConverterString.write(value.`version`, buf)
                 Unit
             }
-
             is OtaPollEvent.Failed -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`deviceId`, buf)
@@ -33832,27 +33652,19 @@ sealed class OtaStoreChange {
 public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreChange> {
     override fun read(buf: ByteBuffer): OtaStoreChange =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 OtaStoreChange.Run(
                     FfiConverterTypeOtaRun.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 OtaStoreChange.Available(
                     FfiConverterTypeOtaAvailable.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 OtaStoreChange.Poll(
                     FfiConverterTypeOtaPollStatus.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: OtaStoreChange): ULong =
@@ -33864,7 +33676,6 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
                         FfiConverterTypeOtaRun.allocationSize(value.`run`)
                 )
             }
-
             is OtaStoreChange.Available -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33872,7 +33683,6 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
                         FfiConverterTypeOtaAvailable.allocationSize(value.`available`)
                 )
             }
-
             is OtaStoreChange.Poll -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -33892,13 +33702,11 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
                 FfiConverterTypeOtaRun.write(value.`run`, buf)
                 Unit
             }
-
             is OtaStoreChange.Available -> {
                 buf.putInt(2)
                 FfiConverterTypeOtaAvailable.write(value.`available`, buf)
                 Unit
             }
-
             is OtaStoreChange.Poll -> {
                 buf.putInt(3)
                 FfiConverterTypeOtaPollStatus.write(value.`status`, buf)
@@ -34108,80 +33916,52 @@ sealed class PhoneCommand {
 public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand> {
     override fun read(buf: ByteBuffer): PhoneCommand =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 PhoneCommand.Answer(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 PhoneCommand.Accept(
                     FfiConverterString.read(buf),
                     FfiConverterTypeAcceptCallAction.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 PhoneCommand.Decline(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            4 -> {
+            4 ->
                 PhoneCommand.End(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            5 -> {
+            5 ->
                 PhoneCommand.EndTyped(
                     FfiConverterString.read(buf),
                     FfiConverterTypeEndCallAction.read(buf),
                 )
-            }
-
-            6 -> {
+            6 ->
                 PhoneCommand.Hold(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            7 -> {
+            7 ->
                 PhoneCommand.Unhold(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            8 -> {
+            8 ->
                 PhoneCommand.Initiate(
                     FfiConverterTypePhoneInitiate.read(buf),
                 )
-            }
-
-            9 -> {
-                PhoneCommand.Swap
-            }
-
-            10 -> {
-                PhoneCommand.Merge
-            }
-
-            11 -> {
+            9 -> PhoneCommand.Swap
+            10 -> PhoneCommand.Merge
+            11 ->
                 PhoneCommand.Mute(
                     FfiConverterBoolean.read(buf),
                 )
-            }
-
-            12 -> {
+            12 ->
                 PhoneCommand.Dtmf(
                     FfiConverterOptionalString.read(buf),
                     FfiConverterTypeDtmfTone.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: PhoneCommand): ULong =
@@ -34193,7 +33973,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterString.allocationSize(value.`callId`)
                 )
             }
-
             is PhoneCommand.Accept -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34202,7 +33981,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterTypeAcceptCallAction.allocationSize(value.`action`)
                 )
             }
-
             is PhoneCommand.Decline -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34210,7 +33988,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterString.allocationSize(value.`callId`)
                 )
             }
-
             is PhoneCommand.End -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34218,7 +33995,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterString.allocationSize(value.`callId`)
                 )
             }
-
             is PhoneCommand.EndTyped -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34227,7 +34003,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterTypeEndCallAction.allocationSize(value.`action`)
                 )
             }
-
             is PhoneCommand.Hold -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34235,7 +34010,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterString.allocationSize(value.`callId`)
                 )
             }
-
             is PhoneCommand.Unhold -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34243,7 +34017,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterString.allocationSize(value.`callId`)
                 )
             }
-
             is PhoneCommand.Initiate -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34251,21 +34024,18 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterTypePhoneInitiate.allocationSize(value.`action`)
                 )
             }
-
             is PhoneCommand.Swap -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is PhoneCommand.Merge -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is PhoneCommand.Mute -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34273,7 +34043,6 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                         FfiConverterBoolean.allocationSize(value.`muted`)
                 )
             }
-
             is PhoneCommand.Dtmf -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34294,67 +34063,56 @@ public object FfiConverterTypePhoneCommand : FfiConverterRustBuffer<PhoneCommand
                 FfiConverterString.write(value.`callId`, buf)
                 Unit
             }
-
             is PhoneCommand.Accept -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`callId`, buf)
                 FfiConverterTypeAcceptCallAction.write(value.`action`, buf)
                 Unit
             }
-
             is PhoneCommand.Decline -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.`callId`, buf)
                 Unit
             }
-
             is PhoneCommand.End -> {
                 buf.putInt(4)
                 FfiConverterString.write(value.`callId`, buf)
                 Unit
             }
-
             is PhoneCommand.EndTyped -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`callId`, buf)
                 FfiConverterTypeEndCallAction.write(value.`action`, buf)
                 Unit
             }
-
             is PhoneCommand.Hold -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.`callId`, buf)
                 Unit
             }
-
             is PhoneCommand.Unhold -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`callId`, buf)
                 Unit
             }
-
             is PhoneCommand.Initiate -> {
                 buf.putInt(8)
                 FfiConverterTypePhoneInitiate.write(value.`action`, buf)
                 Unit
             }
-
             is PhoneCommand.Swap -> {
                 buf.putInt(9)
                 Unit
             }
-
             is PhoneCommand.Merge -> {
                 buf.putInt(10)
                 Unit
             }
-
             is PhoneCommand.Mute -> {
                 buf.putInt(11)
                 FfiConverterBoolean.write(value.`muted`, buf)
                 Unit
             }
-
             is PhoneCommand.Dtmf -> {
                 buf.putInt(12)
                 FfiConverterOptionalString.write(value.`callId`, buf)
@@ -34390,24 +34148,18 @@ sealed class ProviderCredentials {
 public object FfiConverterTypeProviderCredentials : FfiConverterRustBuffer<ProviderCredentials> {
     override fun read(buf: ByteBuffer): ProviderCredentials =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 ProviderCredentials.OauthTokens(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 ProviderCredentials.ServerLogin(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: ProviderCredentials): ULong =
@@ -34420,7 +34172,6 @@ public object FfiConverterTypeProviderCredentials : FfiConverterRustBuffer<Provi
                         FfiConverterString.allocationSize(value.`refreshToken`)
                 )
             }
-
             is ProviderCredentials.ServerLogin -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34443,7 +34194,6 @@ public object FfiConverterTypeProviderCredentials : FfiConverterRustBuffer<Provi
                 FfiConverterString.write(value.`refreshToken`, buf)
                 Unit
             }
-
             is ProviderCredentials.ServerLogin -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`serverUrl`, buf)
@@ -34616,6 +34366,13 @@ sealed class SessionEvent {
         companion object
     }
 
+    data class LauncherGestureChanged(
+        val `deviceId`: kotlin.String,
+        val `gesture`: uniffi.bridgething_companion.LauncherGesture,
+    ) : SessionEvent() {
+        companion object
+    }
+
     data class Log(
         val `origin`: uniffi.bridgething_companion.LogOrigin,
         val `level`: uniffi.bridgething_companion.LogLevel,
@@ -34695,118 +34452,86 @@ sealed class SessionEvent {
 public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent> {
     override fun read(buf: ByteBuffer): SessionEvent =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 SessionEvent.ProvidersChanged(
                     FfiConverterSequenceTypeProviderInfo.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 SessionEvent.PeerConnected(
                     FfiConverterTypeSessionPeer.read(buf),
                 )
-            }
-
-            3 -> {
+            3 ->
                 SessionEvent.PeerDisconnected(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            4 -> {
+            4 ->
                 SessionEvent.PeerLinkFailed(
                     FfiConverterTypeSessionPeer.read(buf),
                 )
-            }
-
-            5 -> {
+            5 ->
                 SessionEvent.NowPlayingChanged(
                     FfiConverterOptionalTypeNowPlaying.read(buf),
                 )
-            }
-
-            6 -> {
+            6 ->
                 SessionEvent.AncsAuthStatusChanged(
                     FfiConverterString.read(buf),
                     FfiConverterTypeAncsAuthStatus.read(buf),
                 )
-            }
-
-            7 -> {
+            7 ->
+                SessionEvent.LauncherGestureChanged(
+                    FfiConverterString.read(buf),
+                    FfiConverterTypeLauncherGesture.read(buf),
+                )
+            8 ->
                 SessionEvent.Log(
                     FfiConverterTypeLogOrigin.read(buf),
                     FfiConverterTypeLogLevel.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                 )
-            }
-
-            8 -> {
+            9 ->
                 SessionEvent.WebappsChanged(
                     FfiConverterTypeDeviceWebappsEntry.read(buf),
                 )
-            }
-
-            9 -> {
+            10 ->
                 SessionEvent.WebappDocChanged(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
                     FfiConverterOptionalString.read(buf),
                 )
-            }
-
-            10 -> {
+            11 ->
                 SessionEvent.DeviceMetaChanged(
                     FfiConverterString.read(buf),
                     FfiConverterTypeDeviceMeta.read(buf),
                 )
-            }
-
-            11 -> {
+            12 ->
                 SessionEvent.VoiceModelStateChanged(
                     FfiConverterTypeVoiceModelState.read(buf),
                 )
-            }
-
-            12 -> {
+            13 ->
                 SessionEvent.VoiceTurnChanged(
                     FfiConverterTypeVoiceTurn.read(buf),
                 )
-            }
-
-            13 -> {
+            14 ->
                 SessionEvent.OtaRunChanged(
                     FfiConverterTypeOtaRun.read(buf),
                 )
-            }
-
-            14 -> {
+            15 ->
                 SessionEvent.OtaAvailableChanged(
                     FfiConverterTypeOtaAvailable.read(buf),
                 )
-            }
-
-            15 -> {
+            16 ->
                 SessionEvent.OtaPollChanged(
                     FfiConverterTypeOtaPollStatus.read(buf),
                 )
-            }
-
-            16 -> {
+            17 ->
                 SessionEvent.CompanionUpdateProgress(
                     FfiConverterULong.read(buf),
                     FfiConverterULong.read(buf),
                 )
-            }
-
-            17 -> {
-                SessionEvent.Resumed
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            18 -> SessionEvent.Resumed
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: SessionEvent): ULong =
@@ -34818,7 +34543,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterSequenceTypeProviderInfo.allocationSize(value.`providers`)
                 )
             }
-
             is SessionEvent.PeerConnected -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34826,7 +34550,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeSessionPeer.allocationSize(value.`peer`)
                 )
             }
-
             is SessionEvent.PeerDisconnected -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34834,7 +34557,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterString.allocationSize(value.`deviceId`)
                 )
             }
-
             is SessionEvent.PeerLinkFailed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34842,7 +34564,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeSessionPeer.allocationSize(value.`peer`)
                 )
             }
-
             is SessionEvent.NowPlayingChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34850,7 +34571,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterOptionalTypeNowPlaying.allocationSize(value.`nowPlaying`)
                 )
             }
-
             is SessionEvent.AncsAuthStatusChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34859,7 +34579,14 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeAncsAuthStatus.allocationSize(value.`status`)
                 )
             }
-
+            is SessionEvent.LauncherGestureChanged -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`deviceId`) +
+                        FfiConverterTypeLauncherGesture.allocationSize(value.`gesture`)
+                )
+            }
             is SessionEvent.Log -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34870,7 +34597,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterString.allocationSize(value.`message`)
                 )
             }
-
             is SessionEvent.WebappsChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34878,7 +34604,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeDeviceWebappsEntry.allocationSize(value.`entry`)
                 )
             }
-
             is SessionEvent.WebappDocChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34889,7 +34614,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterOptionalString.allocationSize(value.`value`)
                 )
             }
-
             is SessionEvent.DeviceMetaChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34898,7 +34622,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeDeviceMeta.allocationSize(value.`meta`)
                 )
             }
-
             is SessionEvent.VoiceModelStateChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34906,7 +34629,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeVoiceModelState.allocationSize(value.`state`)
                 )
             }
-
             is SessionEvent.VoiceTurnChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34914,7 +34636,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeVoiceTurn.allocationSize(value.`turn`)
                 )
             }
-
             is SessionEvent.OtaRunChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34922,7 +34643,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeOtaRun.allocationSize(value.`run`)
                 )
             }
-
             is SessionEvent.OtaAvailableChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34930,7 +34650,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeOtaAvailable.allocationSize(value.`available`)
                 )
             }
-
             is SessionEvent.OtaPollChanged -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34938,7 +34657,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterTypeOtaPollStatus.allocationSize(value.`status`)
                 )
             }
-
             is SessionEvent.CompanionUpdateProgress -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34947,7 +34665,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                         FfiConverterULong.allocationSize(value.`total`)
                 )
             }
-
             is SessionEvent.Resumed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -34966,108 +34683,98 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 FfiConverterSequenceTypeProviderInfo.write(value.`providers`, buf)
                 Unit
             }
-
             is SessionEvent.PeerConnected -> {
                 buf.putInt(2)
                 FfiConverterTypeSessionPeer.write(value.`peer`, buf)
                 Unit
             }
-
             is SessionEvent.PeerDisconnected -> {
                 buf.putInt(3)
                 FfiConverterString.write(value.`deviceId`, buf)
                 Unit
             }
-
             is SessionEvent.PeerLinkFailed -> {
                 buf.putInt(4)
                 FfiConverterTypeSessionPeer.write(value.`peer`, buf)
                 Unit
             }
-
             is SessionEvent.NowPlayingChanged -> {
                 buf.putInt(5)
                 FfiConverterOptionalTypeNowPlaying.write(value.`nowPlaying`, buf)
                 Unit
             }
-
             is SessionEvent.AncsAuthStatusChanged -> {
                 buf.putInt(6)
                 FfiConverterString.write(value.`deviceId`, buf)
                 FfiConverterTypeAncsAuthStatus.write(value.`status`, buf)
                 Unit
             }
-
-            is SessionEvent.Log -> {
+            is SessionEvent.LauncherGestureChanged -> {
                 buf.putInt(7)
+                FfiConverterString.write(value.`deviceId`, buf)
+                FfiConverterTypeLauncherGesture.write(value.`gesture`, buf)
+                Unit
+            }
+            is SessionEvent.Log -> {
+                buf.putInt(8)
                 FfiConverterTypeLogOrigin.write(value.`origin`, buf)
                 FfiConverterTypeLogLevel.write(value.`level`, buf)
                 FfiConverterString.write(value.`target`, buf)
                 FfiConverterString.write(value.`message`, buf)
                 Unit
             }
-
             is SessionEvent.WebappsChanged -> {
-                buf.putInt(8)
+                buf.putInt(9)
                 FfiConverterTypeDeviceWebappsEntry.write(value.`entry`, buf)
                 Unit
             }
-
             is SessionEvent.WebappDocChanged -> {
-                buf.putInt(9)
+                buf.putInt(10)
                 FfiConverterString.write(value.`deviceId`, buf)
                 FfiConverterString.write(value.`webappId`, buf)
                 FfiConverterString.write(value.`key`, buf)
                 FfiConverterOptionalString.write(value.`value`, buf)
                 Unit
             }
-
             is SessionEvent.DeviceMetaChanged -> {
-                buf.putInt(10)
+                buf.putInt(11)
                 FfiConverterString.write(value.`deviceId`, buf)
                 FfiConverterTypeDeviceMeta.write(value.`meta`, buf)
                 Unit
             }
-
             is SessionEvent.VoiceModelStateChanged -> {
-                buf.putInt(11)
+                buf.putInt(12)
                 FfiConverterTypeVoiceModelState.write(value.`state`, buf)
                 Unit
             }
-
             is SessionEvent.VoiceTurnChanged -> {
-                buf.putInt(12)
+                buf.putInt(13)
                 FfiConverterTypeVoiceTurn.write(value.`turn`, buf)
                 Unit
             }
-
             is SessionEvent.OtaRunChanged -> {
-                buf.putInt(13)
+                buf.putInt(14)
                 FfiConverterTypeOtaRun.write(value.`run`, buf)
                 Unit
             }
-
             is SessionEvent.OtaAvailableChanged -> {
-                buf.putInt(14)
+                buf.putInt(15)
                 FfiConverterTypeOtaAvailable.write(value.`available`, buf)
                 Unit
             }
-
             is SessionEvent.OtaPollChanged -> {
-                buf.putInt(15)
+                buf.putInt(16)
                 FfiConverterTypeOtaPollStatus.write(value.`status`, buf)
                 Unit
             }
-
             is SessionEvent.CompanionUpdateProgress -> {
-                buf.putInt(16)
+                buf.putInt(17)
                 FfiConverterULong.write(value.`received`, buf)
                 FfiConverterULong.write(value.`total`, buf)
                 Unit
             }
-
             is SessionEvent.Resumed -> {
-                buf.putInt(17)
+                buf.putInt(18)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -35127,31 +34834,15 @@ sealed class StreamStatus {
 public object FfiConverterTypeStreamStatus : FfiConverterRustBuffer<StreamStatus> {
     override fun read(buf: ByteBuffer): StreamStatus =
         when (buf.getInt()) {
-            1 -> {
-                StreamStatus.Buffering
-            }
-
-            2 -> {
-                StreamStatus.Playing
-            }
-
-            3 -> {
-                StreamStatus.Paused
-            }
-
-            4 -> {
-                StreamStatus.Ended
-            }
-
-            5 -> {
+            1 -> StreamStatus.Buffering
+            2 -> StreamStatus.Playing
+            3 -> StreamStatus.Paused
+            4 -> StreamStatus.Ended
+            5 ->
                 StreamStatus.Failed(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: StreamStatus): ULong =
@@ -35162,28 +34853,24 @@ public object FfiConverterTypeStreamStatus : FfiConverterRustBuffer<StreamStatus
                     4UL
                 )
             }
-
             is StreamStatus.Playing -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is StreamStatus.Paused -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is StreamStatus.Ended -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL
                 )
             }
-
             is StreamStatus.Failed -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -35202,22 +34889,18 @@ public object FfiConverterTypeStreamStatus : FfiConverterRustBuffer<StreamStatus
                 buf.putInt(1)
                 Unit
             }
-
             is StreamStatus.Playing -> {
                 buf.putInt(2)
                 Unit
             }
-
             is StreamStatus.Paused -> {
                 buf.putInt(3)
                 Unit
             }
-
             is StreamStatus.Ended -> {
                 buf.putInt(4)
                 Unit
             }
-
             is StreamStatus.Failed -> {
                 buf.putInt(5)
                 FfiConverterString.write(value.`reason`, buf)
@@ -35486,21 +35169,15 @@ sealed class WsFrame {
 public object FfiConverterTypeWsFrame : FfiConverterRustBuffer<WsFrame> {
     override fun read(buf: ByteBuffer): WsFrame =
         when (buf.getInt()) {
-            1 -> {
+            1 ->
                 WsFrame.Text(
                     FfiConverterString.read(buf),
                 )
-            }
-
-            2 -> {
+            2 ->
                 WsFrame.Binary(
                     FfiConverterByteArray.read(buf),
                 )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
 
     override fun allocationSize(value: WsFrame): ULong =
@@ -35512,7 +35189,6 @@ public object FfiConverterTypeWsFrame : FfiConverterRustBuffer<WsFrame> {
                         FfiConverterString.allocationSize(value.`text`)
                 )
             }
-
             is WsFrame.Binary -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -35532,7 +35208,6 @@ public object FfiConverterTypeWsFrame : FfiConverterRustBuffer<WsFrame> {
                 FfiConverterString.write(value.`text`, buf)
                 Unit
             }
-
             is WsFrame.Binary -> {
                 buf.putInt(2)
                 FfiConverterByteArray.write(value.`bytes`, buf)
@@ -38466,21 +38141,29 @@ public object FfiConverterMapStringTypeOtaPatchDigest : FfiConverterRustBuffer<M
 fun `parseLrc`(`text`: kotlin.String): List<LrcLine> =
     FfiConverterSequenceTypeLrcLine.lift(
         uniffiRustCall { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_parse_lrc(FfiConverterString.lower(`text`), _status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_parse_lrc(
+                FfiConverterString.lower(`text`),
+                _status,
+            )
         },
     )
 
 fun `nluFastPathMatch`(`transcript`: kotlin.String): NluFastPathHit? =
     FfiConverterOptionalTypeNluFastPathHit.lift(
         uniffiRustCall { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_nlu_fast_path_match(FfiConverterString.lower(`transcript`), _status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_nlu_fast_path_match(
+                FfiConverterString.lower(`transcript`),
+                _status,
+            )
         },
     )
 
 fun `nluIntentCatalog`(): NluIntentCatalog =
     FfiConverterTypeNluIntentCatalog.lift(
         uniffiRustCall { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_nlu_intent_catalog(_status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_nlu_intent_catalog(
+                _status,
+            )
         },
     )
 
@@ -38542,7 +38225,9 @@ fun `otaBuiltinWebappUrl`(
 fun `otaCancelledReason`(): kotlin.String =
     FfiConverterString.lift(
         uniffiRustCall { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_ota_cancelled_reason(_status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_ota_cancelled_reason(
+                _status,
+            )
         },
     )
 
@@ -38605,7 +38290,10 @@ fun `otaRunProgress`(
 fun `parseOtaCompositeVersion`(`raw`: kotlin.String): OtaCompositeVersion? =
     FfiConverterOptionalTypeOtaCompositeVersion.lift(
         uniffiRustCall { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_parse_ota_composite_version(FfiConverterString.lower(`raw`), _status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_parse_ota_composite_version(
+                FfiConverterString.lower(`raw`),
+                _status,
+            )
         },
     )
 
@@ -38613,6 +38301,9 @@ fun `parseOtaCompositeVersion`(`raw`: kotlin.String): OtaCompositeVersion? =
 fun `parseOtaDiscoverManifest`(`json`: kotlin.String): OtaDiscoverManifest =
     FfiConverterTypeOtaDiscoverManifest.lift(
         uniffiRustCallWithError(OtaManifestException) { _status ->
-            UniffiLib.uniffi_bridgething_companion_fn_func_parse_ota_discover_manifest(FfiConverterString.lower(`json`), _status)
+            UniffiLib.uniffi_bridgething_companion_fn_func_parse_ota_discover_manifest(
+                FfiConverterString.lower(`json`),
+                _status,
+            )
         },
     )

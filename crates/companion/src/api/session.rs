@@ -178,6 +178,28 @@ pub struct AncsAuthStatusEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
+pub enum LauncherGesture {
+  LongPress,
+  FivePress,
+}
+
+pub(crate) fn launcher_gesture_from_wire(gesture: libbridgething::LauncherGesture) -> LauncherGesture {
+  match gesture {
+    libbridgething::LauncherGesture::LongPress => LauncherGesture::LongPress,
+    libbridgething::LauncherGesture::FivePress => LauncherGesture::FivePress,
+  }
+}
+
+pub(crate) fn launcher_gesture_into_wire(gesture: LauncherGesture) -> libbridgething::LauncherGesture {
+  match gesture {
+    LauncherGesture::LongPress => libbridgething::LauncherGesture::LongPress,
+    LauncherGesture::FivePress => libbridgething::LauncherGesture::FivePress,
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
 pub enum WebappSource {
   Builtin,
   Installed,
@@ -490,4 +512,39 @@ pub struct SessionSnapshot {
   pub ota_runs: Vec<OtaRun>,
   pub ota_available: Vec<OtaAvailable>,
   pub ota_poll: OtaPollStatus,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn launcher_gesture_mappers_cover_every_variant() {
+    assert_eq!(
+      launcher_gesture_from_wire(libbridgething::LauncherGesture::LongPress),
+      LauncherGesture::LongPress
+    );
+    assert_eq!(
+      launcher_gesture_from_wire(libbridgething::LauncherGesture::FivePress),
+      LauncherGesture::FivePress
+    );
+    assert_eq!(
+      launcher_gesture_into_wire(LauncherGesture::LongPress),
+      libbridgething::LauncherGesture::LongPress
+    );
+    assert_eq!(
+      launcher_gesture_into_wire(LauncherGesture::FivePress),
+      libbridgething::LauncherGesture::FivePress
+    );
+  }
+
+  #[test]
+  fn launcher_gesture_mappers_round_trip() {
+    for wire in [
+      libbridgething::LauncherGesture::LongPress,
+      libbridgething::LauncherGesture::FivePress,
+    ] {
+      assert_eq!(launcher_gesture_into_wire(launcher_gesture_from_wire(wire)), wire);
+    }
+  }
 }

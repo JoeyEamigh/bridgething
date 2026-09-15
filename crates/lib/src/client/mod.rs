@@ -47,6 +47,8 @@ pub enum ClientToBridgeMsgData {
   #[from]
   Hardware(ClientToBridgeHardwareMsg),
   #[from]
+  Input(ClientToBridgeInputMsg),
+  #[from]
   Library(ClientToBridgeLibraryMsg),
   #[from]
   Lyrics(ClientToBridgeLyricsMsg),
@@ -108,6 +110,8 @@ pub enum BridgeToClientMsgData {
   Geo(BridgeToClientGeoMsg),
   #[from]
   Hardware(BridgeToClientHardwareMsg),
+  #[from]
+  Input(BridgeToClientInputMsg),
   #[from]
   Library(BridgeToClientLibraryMsg),
   #[from]

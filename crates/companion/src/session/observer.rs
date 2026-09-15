@@ -155,6 +155,13 @@ impl SessionObserver {
     self.held.lock().unwrap().ancs.clone()
   }
 
+  pub fn launcher_gesture_changed(&self, device_id: &str, gesture: libbridgething::LauncherGesture) {
+    self.emit(SessionEvent::LauncherGestureChanged {
+      device_id: device_id.to_owned(),
+      gesture: crate::api::session::launcher_gesture_from_wire(gesture),
+    });
+  }
+
   pub fn now_playing_changed(&self, state: Option<PlayerState>) {
     let now_playing = state.map(project);
     self.held.lock().unwrap().now_playing = now_playing.clone();
@@ -493,5 +500,23 @@ mod tests {
       seen[1].listed,
       "the listing is the only event that carries what the device actually holds"
     );
+  }
+
+  #[test]
+  fn launcher_gesture_change_reaches_subscribers_with_device_and_gesture() {
+    let recorded = Arc::new(Recorded::default());
+    let observer = SessionObserver::new(recorded.clone(), Arc::new(DeviceLogRing::new(8, Arc::new(SystemClock))));
+
+    observer.launcher_gesture_changed("dev-9", libbridgething::LauncherGesture::LongPress);
+
+    let events = recorded.0.lock().unwrap();
+    assert_eq!(events.len(), 1, "one wire event becomes one subscriber event");
+    match &events[0] {
+      SessionEvent::LauncherGestureChanged { device_id, gesture } => {
+        assert_eq!(device_id, "dev-9");
+        assert_eq!(*gesture, crate::api::LauncherGesture::LongPress);
+      }
+      other => panic!("expected LauncherGestureChanged, got {other:?}"),
+    }
   }
 }
