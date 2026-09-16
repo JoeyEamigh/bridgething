@@ -185,6 +185,10 @@ impl AppState {
     self.meta_store.active_webapp(&self.webapps).await
   }
 
+  pub async fn overlay_app_id(&self) -> StateResult<Option<Uuid>> {
+    self.meta_store.overlay_slot(&self.webapps).await
+  }
+
   pub async fn active_webapp_has_permission(&self, permission: &str) -> bool {
     let Ok(Some(active_id)) = self.active_webapp().await else {
       return false;
@@ -262,13 +266,16 @@ impl AppState {
       Some(id) => self.webapps.manifest(id).await.map(|m| m.overlays).unwrap_or_default(),
       None => libbridgething::OverlayProfile::default(),
     };
-    let custom = match self.meta_store.overlay_slot(&self.webapps).await {
-      Ok(Some(id)) => self.webapps.read_overlay(id).await,
-      Ok(None) => None,
+    let overlay_id = match self.meta_store.overlay_slot(&self.webapps).await {
+      Ok(id) => id,
       Err(e) => {
         tracing::warn!("overlay slot read failed; using builtin overlay: {e:?}");
         None
       }
+    };
+    let custom = match overlay_id {
+      Some(id) => self.webapps.read_overlay(id).await,
+      None => None,
     };
     let custom = custom.and_then(|bytes| match String::from_utf8(bytes) {
       Ok(text) => Some(text),
@@ -277,8 +284,30 @@ impl AppState {
         None
       }
     });
+    let overlay_app = match overlay_id {
+      Some(id) => {
+        let entries = match self.kv.config_list(id).await {
+          Ok(entries) => entries,
+          Err(e) => {
+            tracing::warn!("overlay app config read failed; injecting empty config: {e:?}");
+            Vec::new()
+          }
+        };
+        Some(crate::overlay::OverlayAppConfig {
+          id,
+          config: entries.into_iter().collect(),
+        })
+      }
+      None => None,
+    };
     let geo_permitted = self.active_webapp_has_permission(GEO_PERMISSION).await;
-    crate::overlay::injected_script(&profile, self.modern_port, custom.as_deref(), geo_permitted)
+    crate::overlay::injected_script(
+      &profile,
+      self.modern_port,
+      custom.as_deref(),
+      geo_permitted,
+      overlay_app.as_ref(),
+    )
   }
 
   pub async fn sync_overlay(&self, run_immediately: bool) {
