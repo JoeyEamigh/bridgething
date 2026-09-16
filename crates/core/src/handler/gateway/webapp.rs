@@ -557,6 +557,20 @@ impl WebappHandler {
     if let Err(errs) = self.handle.state.bus.broadcast_event(event).await {
       tracing::debug!("config-change broadcast: {} non-fatal errors", errs.len());
     }
+    // When the changed app is the designated overlay app, push the fresh
+    // config into the live kiosk page. sync_overlay(true) re-runs the
+    // injected script, so overlay scripts must tolerate re-execution:
+    // window.__bridgethingOverlay is re-assigned with the new config before
+    // the bundle body runs again.
+    match self.handle.state.overlay_app_id().await {
+      Ok(Some(overlay_id)) if overlay_id == id => {
+        self.handle.state.sync_overlay(true).await;
+      }
+      Ok(_) => {}
+      Err(e) => {
+        tracing::warn!("overlay config refresh skipped; overlay slot unreadable: {e:?}");
+      }
+    }
   }
 
   async fn broadcast_doc_change_to_client(&self, id: Uuid, key: &str, value: Option<String>) {
