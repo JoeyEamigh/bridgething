@@ -454,6 +454,14 @@ export type WebappInfo = {
   extension: ExtensionInfo | null;
 };
 
+export type WebappInstallRequest = {
+  url: string;
+  expected: ArtifactDigest | null;
+  provenance: string | null;
+  webappId: string | null;
+  webappName: string | null;
+};
+
 export type WebappResourceFile = { path: string; mime: string | null };
 
 export type WebappResourceKind = 'icon' | 'settings' | 'overlay';

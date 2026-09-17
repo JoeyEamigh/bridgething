@@ -3160,12 +3160,8 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
-        `url`: RustBuffer.ByValue,
-        `expected`: RustBuffer.ByValue,
-        `provenance`: RustBuffer.ByValue,
+        `request`: RustBuffer.ByValue,
         `sink`: RustBuffer.ByValue,
-        `webappId`: RustBuffer.ByValue,
-        `webappName`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_list_webapp_config(
@@ -5478,7 +5474,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 18104) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -11143,12 +11139,8 @@ public interface CompanionSessionInterface {
 
     suspend fun `installWebappFromUrl`(
         `deviceId`: kotlin.String,
-        `url`: kotlin.String,
-        `expected`: ArtifactDigest?,
-        `provenance`: kotlin.String?,
+        `request`: WebappInstallRequest,
         `sink`: WebappBundleSink? = null,
-        `webappId`: kotlin.String? = null,
-        `webappName`: kotlin.String? = null,
     ): WebappInfo
 
     suspend fun `listWebappConfig`(
@@ -11822,24 +11814,16 @@ open class CompanionSession :
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `installWebappFromUrl`(
         `deviceId`: kotlin.String,
-        `url`: kotlin.String,
-        `expected`: ArtifactDigest?,
-        `provenance`: kotlin.String?,
+        `request`: WebappInstallRequest,
         `sink`: WebappBundleSink?,
-        `webappId`: kotlin.String?,
-        `webappName`: kotlin.String?,
     ): WebappInfo =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
                     uniffiHandle,
                     FfiConverterString.lower(`deviceId`),
-                    FfiConverterString.lower(`url`),
-                    FfiConverterOptionalTypeArtifactDigest.lower(`expected`),
-                    FfiConverterOptionalString.lower(`provenance`),
+                    FfiConverterTypeWebappInstallRequest.lower(`request`),
                     FfiConverterOptionalTypeWebappBundleSink.lower(`sink`),
-                    FfiConverterOptionalString.lower(`webappId`),
-                    FfiConverterOptionalString.lower(`webappName`),
                 )
             },
             {
@@ -30715,6 +30699,50 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
         FfiConverterSequenceTypeConfigField.write(value.`config`, buf)
         FfiConverterSequenceString.write(value.`permissions`, buf)
         FfiConverterOptionalTypeExtensionInfo.write(value.`extension`, buf)
+    }
+}
+
+data class WebappInstallRequest(
+    var `url`: kotlin.String,
+    var `expected`: ArtifactDigest?,
+    var `provenance`: kotlin.String?,
+    var `webappId`: kotlin.String?,
+    var `webappName`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeWebappInstallRequest : FfiConverterRustBuffer<WebappInstallRequest> {
+    override fun read(buf: ByteBuffer): WebappInstallRequest =
+        WebappInstallRequest(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypeArtifactDigest.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: WebappInstallRequest) =
+        (
+            FfiConverterString.allocationSize(value.`url`) +
+                FfiConverterOptionalTypeArtifactDigest.allocationSize(value.`expected`) +
+                FfiConverterOptionalString.allocationSize(value.`provenance`) +
+                FfiConverterOptionalString.allocationSize(value.`webappId`) +
+                FfiConverterOptionalString.allocationSize(value.`webappName`)
+        )
+
+    override fun write(
+        value: WebappInstallRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`url`, buf)
+        FfiConverterOptionalTypeArtifactDigest.write(value.`expected`, buf)
+        FfiConverterOptionalString.write(value.`provenance`, buf)
+        FfiConverterOptionalString.write(value.`webappId`, buf)
+        FfiConverterOptionalString.write(value.`webappName`, buf)
     }
 }
 

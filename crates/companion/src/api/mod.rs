@@ -209,6 +209,17 @@ pub trait WebappBundleSink: Send + Sync {
   fn installed(&self, bundle: String);
 }
 
+#[derive(Debug, Clone, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct WebappInstallRequest {
+  pub url: String,
+  pub expected: Option<ArtifactDigest>,
+  pub provenance: Option<String>,
+  pub webapp_id: Option<String>,
+  pub webapp_name: Option<String>,
+}
+
 #[derive(uniffi::Object)]
 pub struct CompanionSession {
   session: Arc<Session>,
@@ -409,17 +420,20 @@ impl CompanionSession {
     }
   }
 
-  #[uniffi::method(default(sink = None, webapp_id = None, webapp_name = None))]
+  #[uniffi::method(default(sink = None))]
   pub async fn install_webapp_from_url(
     &self,
     device_id: String,
-    url: String,
-    expected: Option<ArtifactDigest>,
-    provenance: Option<String>,
+    request: WebappInstallRequest,
     sink: Option<Arc<dyn WebappBundleSink>>,
-    webapp_id: Option<String>,
-    webapp_name: Option<String>,
   ) -> Result<WebappInfo, CompanionError> {
+    let WebappInstallRequest {
+      url,
+      expected,
+      provenance,
+      webapp_id,
+      webapp_name,
+    } = request;
     self.gateway_checked(&device_id)?;
     let path = self
       .session

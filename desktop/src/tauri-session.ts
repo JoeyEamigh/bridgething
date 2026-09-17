@@ -114,12 +114,14 @@ export class TauriSession implements CompanionSession {
     webapp?: { id: string; name: string },
   ) =>
     invoke<api.WebappInfo>('install_webapp_from_url', {
-      url,
-      expected: expected ?? null,
-      provenance: provenance ?? null,
+      request: {
+        url,
+        expected: expected ?? null,
+        provenance: provenance ?? null,
+        webappId: webapp?.id ?? null,
+        webappName: webapp?.name ?? null,
+      },
       confirmed: confirmed ?? null,
-      webappId: webapp?.id ?? null,
-      webappName: webapp?.name ?? null,
     });
   webappResource = (id: string, kind: api.WebappResourceKind, origin?: ResourceOrigin | null) =>
     invoke<WebappResource>('webapp_resource', { id, kind, origin: origin ?? null });

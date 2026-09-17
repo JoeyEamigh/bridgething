@@ -64,6 +64,7 @@ import uniffi.bridgething_companion.LinkDevice
 import uniffi.bridgething_companion.LogOrigin
 import uniffi.bridgething_companion.SessionEvent
 import uniffi.bridgething_companion.SpotifyProviderConfig
+import uniffi.bridgething_companion.WebappInstallRequest
 import uniffi.bridgething_companion.WebappResourceKind
 import uniffi.bridgething_companion.WebappResourceOrigin
 
@@ -389,7 +390,11 @@ public class HybridBridgethingSessionImpl(
         val session = requireSession()
         val info = when (URI(sourceUri).scheme?.lowercase()) {
             "file" -> session.installWebapp(deviceId, File(URI(sourceUri)).absolutePath, null)
-            "http", "https" -> session.installWebappFromUrl(deviceId, sourceUri, null, sourceUri)
+            "http", "https" ->
+                session.installWebappFromUrl(
+                    deviceId,
+                    WebappInstallRequest(sourceUri, null, sourceUri, null, null),
+                )
             else -> throw IllegalArgumentException("invalid archive uri")
         }
         return toRnWebappInfo(info)
@@ -406,11 +411,13 @@ public class HybridBridgethingSessionImpl(
     ): BridgethingWebappInfo = toRnWebappInfo(
         requireSession().installWebappFromUrl(
             deviceId,
-            url,
-            ArtifactDigest(size = size.toLong().toULong(), sha256 = sha256.lowercase()),
-            provenance,
-            webappId = webappId,
-            webappName = webappName,
+            WebappInstallRequest(
+                url = url,
+                expected = ArtifactDigest(size = size.toLong().toULong(), sha256 = sha256.lowercase()),
+                provenance = provenance,
+                webappId = webappId,
+                webappName = webappName,
+            ),
         ),
     )
 

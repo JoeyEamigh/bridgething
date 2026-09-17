@@ -4,8 +4,8 @@ use bridgething_companion::{
   api::{
     ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
     OtaPollConfig, ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
-    WebappInfo, WebappSlot, WebappSlots,
-    ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
+    WebappInfo, WebappInstallRequest, WebappSlot, WebappSlots,
+    ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
   },
   provider::ResumeTarget,
 };
@@ -568,19 +568,15 @@ pub async fn ota_install_webapp(
 pub async fn install_webapp_from_url(
   shell: State<'_, Arc<Shell>>,
   extensions: State<'_, Arc<Extensions>>,
-  url: String,
-  expected: Option<ArtifactDigest>,
-  provenance: Option<String>,
+  request: WebappInstallRequest,
   confirmed: Option<Vec<String>>,
-  webapp_id: Option<String>,
-  webapp_name: Option<String>,
 ) -> Answer<WebappInfo> {
   let device_id = peer(&shell)?;
   let sink = extensions.inner().sink(&device_id, consented(confirmed)?);
   Ok(
     shell
       .session()
-      .install_webapp_from_url(device_id, url, expected, provenance, Some(sink), webapp_id, webapp_name)
+      .install_webapp_from_url(device_id, request, Some(sink))
       .await?,
   )
 }
