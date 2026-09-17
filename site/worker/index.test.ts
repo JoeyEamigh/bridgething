@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import { listInstalls, toInstallCounts } from './installs.ts';
 import { ENTRY_SNAPSHOT_KEY } from './jam.ts';
@@ -12,6 +12,8 @@ const CLIENT = '203.0.113.7';
 const ADMIN_TOKEN = 'admin-secret';
 const CATALOG_URL = 'https://third.example/catalog.json';
 const ICON_URL = 'https://third.example/icon.png';
+
+const DURING_THE_JAM = new Date('2026-09-05T00:00:00.000Z');
 
 const dropped: string[] = [];
 
@@ -60,6 +62,7 @@ function serialOf(n: number): string {
 beforeEach(() => {
   kv = fakeKv();
   dropped.length = 0;
+  setSystemTime(DURING_THE_JAM);
 });
 
 describe('POST /api/installed', () => {
