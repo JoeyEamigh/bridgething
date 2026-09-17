@@ -67,3 +67,65 @@ async fn a_gesture_change_reaches_every_connected_client() {
   };
   assert_eq!(changed.gesture, LauncherGesture::LongPress);
 }
+
+#[tokio::test]
+async fn the_companion_reads_and_sets_the_gesture_over_the_gateway() {
+  let harness = Harness::start().await.expect("harness start");
+  let companion = harness.connect_android().await.expect("connect companion");
+  let webapp = harness.connect_command_client().await.expect("command client");
+  let mut client_events = Box::pin(webapp.system().events());
+
+  let initial = companion
+    .system()
+    .launcher_gesture_get()
+    .await
+    .expect("companion gesture get");
+  assert_eq!(initial.gesture, LauncherGesture::FivePress);
+
+  companion
+    .system()
+    .launcher_gesture_set(libbridgething::gateway::LauncherGestureSet {
+      gesture: LauncherGesture::LongPress,
+    })
+    .await
+    .expect("companion gesture set");
+
+  let changed = loop {
+    let event = tokio::time::timeout(EVENT_WAIT, client_events.next())
+      .await
+      .expect("client hears the phone's change")
+      .expect("stream open");
+    if let BridgeToClientSystemMsgEvent::LauncherGestureChanged(reply) = event {
+      break reply;
+    }
+  };
+  assert_eq!(changed.gesture, LauncherGesture::LongPress);
+  assert_eq!(harness.state().meta.launcher_gesture(), LauncherGesture::LongPress);
+}
+
+#[tokio::test]
+async fn a_change_made_on_the_device_reaches_the_companion() {
+  let harness = Harness::start().await.expect("harness start");
+  let companion = harness.connect_android().await.expect("connect companion");
+  let webapp = harness.connect_command_client().await.expect("command client");
+  let mut gateway_events = Box::pin(companion.system().events());
+
+  webapp
+    .system()
+    .launcher_gesture_set(LauncherGestureSet {
+      gesture: LauncherGesture::LongPress,
+    })
+    .await
+    .expect("gesture set");
+
+  let changed = loop {
+    let event = tokio::time::timeout(EVENT_WAIT, gateway_events.next())
+      .await
+      .expect("the phone hears a change made on the device")
+      .expect("stream open");
+    if let libbridgething::gateway::BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(reply) = event {
+      break reply;
+    }
+  };
+  assert_eq!(changed.gesture, LauncherGesture::LongPress);
+}

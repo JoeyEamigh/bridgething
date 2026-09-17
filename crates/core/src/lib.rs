@@ -348,7 +348,11 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     state.bus.clone(),
     serial_number.clone(),
   );
-  spawn_launcher_gesture_observer(state.meta.subscribe_launcher_gesture(), state.bus.clone());
+  spawn_launcher_gesture_observer(
+    state.meta.subscribe_launcher_gesture(),
+    bluetooth.clone(),
+    state.bus.clone(),
+  );
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
@@ -575,6 +579,7 @@ fn spawn_ota_event_forwarder(
         BridgeToGatewaySystemMsgEvent::OtaError(e) => Some(BridgeToClientSystemMsgEvent::OtaError(e.clone())),
         BridgeToGatewaySystemMsgEvent::OtaFinished(f) => Some(BridgeToClientSystemMsgEvent::OtaFinished(f.clone())),
         BridgeToGatewaySystemMsgEvent::DeviceNicknameChanged(_) => None,
+        BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LogEntry(_) => None,
       };
       match event {
@@ -654,17 +659,29 @@ fn spawn_nickname_observer(
 
 fn spawn_launcher_gesture_observer(
   mut rx: tokio::sync::watch::Receiver<libbridgething::LauncherGesture>,
+  bluetooth: bluetooth::BluetoothMan,
   bus: net::WireEventBus,
 ) {
-  use libbridgething::client::{BridgeToClientSystemMsgEvent, LauncherGestureReply};
+  use libbridgething::{
+    client::{BridgeToClientSystemMsgEvent, LauncherGestureReply as ClientGestureReply},
+    gateway::{BridgeToGatewaySystemMsgEvent, LauncherGestureReply as GatewayGestureReply},
+  };
   tokio::spawn(async move {
     loop {
       if rx.changed().await.is_err() {
         break;
       }
       let gesture = *rx.borrow_and_update();
-      let event = BridgeToClientSystemMsgEvent::LauncherGestureChanged(LauncherGestureReply { gesture });
-      if let Err(errs) = bus.broadcast_event(event).await {
+
+      bluetooth
+        .gateway_man
+        .broadcast(BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(
+          GatewayGestureReply { gesture },
+        ))
+        .await;
+
+      let client_event = BridgeToClientSystemMsgEvent::LauncherGestureChanged(ClientGestureReply { gesture });
+      if let Err(errs) = bus.broadcast_event(client_event).await {
         tracing::debug!(count = errs.len(), "launcher-gesture client broadcast non-fatal errors");
       }
     }

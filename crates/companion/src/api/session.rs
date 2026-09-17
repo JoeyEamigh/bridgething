@@ -183,17 +183,21 @@ pub enum LauncherGesture {
   FivePress,
 }
 
-pub(crate) fn launcher_gesture_from_wire(gesture: libbridgething::LauncherGesture) -> LauncherGesture {
-  match gesture {
-    libbridgething::LauncherGesture::LongPress => LauncherGesture::LongPress,
-    libbridgething::LauncherGesture::FivePress => LauncherGesture::FivePress,
+impl From<libbridgething::LauncherGesture> for LauncherGesture {
+  fn from(gesture: libbridgething::LauncherGesture) -> Self {
+    match gesture {
+      libbridgething::LauncherGesture::LongPress => LauncherGesture::LongPress,
+      libbridgething::LauncherGesture::FivePress => LauncherGesture::FivePress,
+    }
   }
 }
 
-pub(crate) fn launcher_gesture_into_wire(gesture: LauncherGesture) -> libbridgething::LauncherGesture {
-  match gesture {
-    LauncherGesture::LongPress => libbridgething::LauncherGesture::LongPress,
-    LauncherGesture::FivePress => libbridgething::LauncherGesture::FivePress,
+impl From<LauncherGesture> for libbridgething::LauncherGesture {
+  fn from(gesture: LauncherGesture) -> Self {
+    match gesture {
+      LauncherGesture::LongPress => libbridgething::LauncherGesture::LongPress,
+      LauncherGesture::FivePress => libbridgething::LauncherGesture::FivePress,
+    }
   }
 }
 
@@ -519,32 +523,17 @@ mod tests {
   use super::*;
 
   #[test]
-  fn launcher_gesture_mappers_cover_every_variant() {
-    assert_eq!(
-      launcher_gesture_from_wire(libbridgething::LauncherGesture::LongPress),
-      LauncherGesture::LongPress
-    );
-    assert_eq!(
-      launcher_gesture_from_wire(libbridgething::LauncherGesture::FivePress),
-      LauncherGesture::FivePress
-    );
-    assert_eq!(
-      launcher_gesture_into_wire(LauncherGesture::LongPress),
-      libbridgething::LauncherGesture::LongPress
-    );
-    assert_eq!(
-      launcher_gesture_into_wire(LauncherGesture::FivePress),
-      libbridgething::LauncherGesture::FivePress
-    );
-  }
-
-  #[test]
-  fn launcher_gesture_mappers_round_trip() {
+  fn launcher_gesture_round_trips_through_the_wire_enum() {
     for wire in [
       libbridgething::LauncherGesture::LongPress,
       libbridgething::LauncherGesture::FivePress,
     ] {
-      assert_eq!(launcher_gesture_into_wire(launcher_gesture_from_wire(wire)), wire);
+      let exposed: LauncherGesture = wire.into();
+      assert_eq!(libbridgething::LauncherGesture::from(exposed), wire);
     }
+    assert_eq!(
+      LauncherGesture::from(libbridgething::LauncherGesture::LongPress),
+      LauncherGesture::LongPress
+    );
   }
 }

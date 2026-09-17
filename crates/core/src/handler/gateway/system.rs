@@ -3,8 +3,9 @@ use std::{future::Future, pin::Pin};
 use libbridgething::{
   gateway::{
     BridgeToGatewayMsg, BridgeToGatewaySystemMsg, DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply,
-    DeviceSetNickname, GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch, LogsSubscribe,
-    LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
+    DeviceSetNickname, GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch,
+    LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail,
+    LogsTailReply, LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
   },
   wire::MsgMeta,
 };
@@ -48,6 +49,11 @@ impl GatewayToBridgeSystemMsgCommandDispatch for SystemHandler {
       params.expected.len()
     );
     self.ota.activate(params.expected).await;
+    Ok(())
+  }
+
+  async fn launcher_gesture_set(&self, params: LauncherGestureSet) -> HandlerResult {
+    self.handle.state.meta.set_launcher_gesture(params.gesture).await?;
     Ok(())
   }
 
@@ -128,6 +134,15 @@ impl GatewayToBridgeSystemMsgRequestDispatch for SystemHandler {
     self
       .handle
       .respond_to::<DeviceSetNickname>(DeviceNicknameReply { nickname: next })
+      .await;
+    Ok(())
+  }
+
+  async fn launcher_gesture_get(&self) -> HandlerResult {
+    let gesture = self.handle.state.meta.launcher_gesture();
+    self
+      .handle
+      .respond_to::<LauncherGestureGet>(LauncherGestureReply { gesture })
       .await;
     Ok(())
   }

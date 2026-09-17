@@ -376,16 +376,16 @@ impl CompanionSession {
 
   pub async fn get_launcher_gesture(&self, device_id: String) -> Result<LauncherGesture, CompanionError> {
     let gateway = self.gateway_checked(&device_id)?;
-    let reply = gateway.input().get_gesture().await.map_err(device_error)?;
-    Ok(session::launcher_gesture_from_wire(reply.gesture))
+    let reply = gateway.system().launcher_gesture_get().await.map_err(device_error)?;
+    Ok(reply.gesture.into())
   }
 
   pub async fn set_launcher_gesture(&self, device_id: String, gesture: LauncherGesture) -> Result<(), CompanionError> {
     let gateway = self.gateway_checked(&device_id)?;
     gateway
-      .input()
-      .set_gesture(libbridgething::gateway::InputSetGesture {
-        gesture: session::launcher_gesture_into_wire(gesture),
+      .system()
+      .launcher_gesture_set(libbridgething::gateway::LauncherGestureSet {
+        gesture: gesture.into(),
       })
       .await
       .map_err(|failure| CompanionError::Device(format!("{failure:?}")))

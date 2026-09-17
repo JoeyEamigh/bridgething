@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use bridgething_companion::dispatch::asset::AssetDispatcher;
 use bridgething_gateway::{
-  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, InputHandler, LibraryHandler,
-  LyricsHandler, NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler,
-  TunnelHandler, VoiceHandler, WebappHandler,
+  AssetHandler, AudioHandler, EnvelopeHandler, ForwardHandler, GeoHandler, HandlerError, LibraryHandler, LyricsHandler,
+  NetHandler, NotificationsHandler, PhoneHandler, PlayerHandler, Reply, SystemHandler, TransferHandler, TunnelHandler,
+  VoiceHandler, WebappHandler,
 };
 use libbridgething::{gateway::*, wire::WireError, *};
 use uuid::Uuid;
@@ -63,12 +63,6 @@ impl GeoHandler for Routed {
     Err(WireError::Unsupported)
   }
   async fn unwatch(&self) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
-}
-
-impl InputHandler for Routed {
-  async fn gesture_changed(&self, _payload: InputGestureChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
 }
@@ -254,6 +248,9 @@ impl PlayerHandler for Routed {
 }
 
 impl SystemHandler for Routed {
+  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,
