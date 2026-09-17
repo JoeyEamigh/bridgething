@@ -109,14 +109,6 @@ export type BridgeToGatewayGeoMsg =
   | { event: 'unwatch' }
   | { event: 'getOnce'; data: GeoGetOnce };
 
-/**
- * Reports the M-button launcher gesture. `getGesture` reads the current
- * choice and `gestureChanged` fires on every change.
- */
-export type BridgeToGatewayInputMsg =
-  | { event: 'gestureChanged'; data: InputGestureChanged }
-  | { event: 'getGestureReply'; data: InputGestureReply };
-
 export type BridgeToGatewayLibraryMsg =
   | { event: 'browse'; data: LibraryBrowseRequest }
   | { event: 'resolveContext'; data: LibraryResolveContextRequest }
@@ -140,7 +132,6 @@ export type BridgeToGatewayMsgData =
   | { type: 'asset'; data: BridgeToGatewayAssetMsg }
   | { type: 'audio'; data: BridgeToGatewayAudioMsg }
   | { type: 'geo'; data: BridgeToGatewayGeoMsg }
-  | { type: 'input'; data: BridgeToGatewayInputMsg }
   | { type: 'library'; data: BridgeToGatewayLibraryMsg }
   | { type: 'lyrics'; data: BridgeToGatewayLyricsMsg }
   | { type: 'net'; data: BridgeToGatewayNetMsg }
@@ -212,6 +203,8 @@ export type BridgeToGatewaySystemMsg =
   | { event: 'deviceNickname'; data: DeviceNicknameReply }
   | { event: 'deviceNicknameRejected'; data: DeviceNicknameRejected }
   | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply }
+  | { event: 'launcherGestureReply'; data: LauncherGestureReply }
+  | { event: 'launcherGestureChanged'; data: LauncherGestureReply }
   | { event: 'logsTailReply'; data: LogsTailReply }
   | { event: 'logsSubscribeReply'; data: LogsSubscribeReply }
   | { event: 'logEntry'; data: LogEntry }
@@ -316,12 +309,6 @@ export type GatewayToBridgeGeoMsg =
   | { event: 'getOnceReply'; data: GeoGetOnceReply }
   | { event: 'errorReply'; data: GeoErrorReply };
 
-/**
- * Which M-button gesture jumps to the launcher. `setGesture` persists the
- * choice on the daemon; `getGesture` reads it back.
- */
-export type GatewayToBridgeInputMsg = { event: 'setGesture'; data: InputSetGesture } | { event: 'getGesture' };
-
 export type GatewayToBridgeLibraryMsg =
   | { event: 'browseReply'; data: BrowseReply }
   | { event: 'contextResolveReply'; data: ContextResolveReply }
@@ -351,7 +338,6 @@ export type GatewayToBridgeMsgData =
   | { type: 'chrome'; data: GatewayToBridgeChromeMsg }
   | { type: 'forward'; data: GatewayToBridgeForwardMsg }
   | { type: 'geo'; data: GatewayToBridgeGeoMsg }
-  | { type: 'input'; data: GatewayToBridgeInputMsg }
   | { type: 'library'; data: GatewayToBridgeLibraryMsg }
   | { type: 'lyrics'; data: GatewayToBridgeLyricsMsg }
   | { type: 'net'; data: GatewayToBridgeNetMsg }
@@ -412,6 +398,8 @@ export type GatewayToBridgeSystemMsg =
   | { event: 'otaAssetRangeRejected'; data: OtaAssetRangeRejected }
   | { event: 'deviceGetNickname' }
   | { event: 'deviceSetNickname'; data: DeviceSetNickname }
+  | { event: 'launcherGestureGet' }
+  | { event: 'launcherGestureSet'; data: LauncherGestureSet }
   | { event: 'logsTail'; data: LogsTail }
   | { event: 'logsSubscribe'; data: LogsSubscribe }
   | { event: 'logsUnsubscribe'; data: LogsUnsubscribe }
@@ -461,15 +449,13 @@ export type GeoGetOnceReply = { position: Position };
 
 export type GeoWatch = { accuracy: GeoAccuracy; minIntervalMs: number };
 
-export type InputGestureChanged = { gesture: LauncherGesture };
-
-export type InputGestureReply = { gesture: LauncherGesture };
-
-export type InputSetGesture = { gesture: LauncherGesture };
-
 export type KeepaliveAck = { seq: number };
 
 export type KeepalivePing = { seq: number };
+
+export type LauncherGestureReply = { gesture: LauncherGesture };
+
+export type LauncherGestureSet = { gesture: LauncherGesture };
 
 export type LibraryBrowseRequest = {
   nodeId: string | null;

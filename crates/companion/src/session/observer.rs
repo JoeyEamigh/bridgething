@@ -158,7 +158,7 @@ impl SessionObserver {
   pub fn launcher_gesture_changed(&self, device_id: &str, gesture: libbridgething::LauncherGesture) {
     self.emit(SessionEvent::LauncherGestureChanged {
       device_id: device_id.to_owned(),
-      gesture: crate::api::session::launcher_gesture_from_wire(gesture),
+      gesture: gesture.into(),
     });
   }
 

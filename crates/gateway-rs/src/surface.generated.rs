@@ -3,13 +3,13 @@
 
 use std::{future::Future, sync::Arc};
 
-use crate::{Gateway, GatewayProtocol, HandlerError};
 use bridgething_sdk_runtime::{Connection, Reply, RequestFailure, SdkError, rt};
 use futures::{Stream, StreamExt, future::ready};
-use libbridgething::wire::WireError;
-use libbridgething::{gateway::*, *};
+use libbridgething::{gateway::*, wire::WireError, *};
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
+
+use crate::{Gateway, GatewayProtocol, HandlerError};
 
 impl Gateway {
   /// The `Audio` surface.
@@ -19,10 +19,6 @@ impl Gateway {
   /// The `Geo` surface.
   pub fn geo(&self) -> GeoSurface<'_> {
     GeoSurface(self)
-  }
-  /// The `Input` surface.
-  pub fn input(&self) -> InputSurface<'_> {
-    InputSurface(self)
   }
   /// The `Library` surface.
   pub fn library(&self) -> LibrarySurface<'_> {
@@ -117,33 +113,6 @@ impl<'a> GeoSurface<'a> {
   }
   pub async fn error_event(&self, payload: GeoErrorReply) -> Result<(), SdkError> {
     self.0.event(GatewayToBridgeGeoMsgEvent::ErrorEvent(payload)).await
-  }
-}
-
-/// Methods scoped to the `Input` wire surface.
-pub struct InputSurface<'a>(&'a Gateway);
-
-impl<'a> InputSurface<'a> {
-  pub async fn set_gesture(&self, payload: InputSetGesture) -> Result<(), SdkError> {
-    self
-      .0
-      .command(GatewayToBridgeInputMsgCommand::SetGesture(payload))
-      .await
-  }
-  pub async fn get_gesture(&self) -> Result<InputGestureReply, RequestFailure<::core::convert::Infallible>> {
-    self.0.request(InputGetGesture).await
-  }
-  /// Stream of `Input` events.
-  pub fn events(&self) -> impl Stream<Item = BridgeToGatewayInputMsgEvent> + 'static {
-    BroadcastStream::new(self.0.events()).filter_map(|msg| {
-      ready(match msg {
-        Ok(msg) => match msg.data {
-          BridgeToGatewayMsgData::Input(inner) => inner.into_event(),
-          _ => None,
-        },
-        Err(_) => None,
-      })
-    })
   }
 }
 
@@ -313,6 +282,12 @@ impl<'a> SystemSurface<'a> {
   pub async fn cancel_update(&self) -> Result<(), SdkError> {
     self.0.command(GatewayToBridgeSystemMsgCommand::CancelUpdate).await
   }
+  pub async fn launcher_gesture_set(&self, payload: LauncherGestureSet) -> Result<(), SdkError> {
+    self
+      .0
+      .command(GatewayToBridgeSystemMsgCommand::LauncherGestureSet(payload))
+      .await
+  }
   pub async fn logs_unsubscribe(&self, payload: LogsUnsubscribe) -> Result<(), SdkError> {
     self
       .0
@@ -330,6 +305,11 @@ impl<'a> SystemSurface<'a> {
     request: DeviceSetNickname,
   ) -> Result<DeviceNicknameReply, RequestFailure<DeviceNicknameRejected>> {
     self.0.request(request).await
+  }
+  pub async fn launcher_gesture_get(
+    &self,
+  ) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(LauncherGestureGet).await
   }
   pub async fn logs_tail(
     &self,
@@ -604,10 +584,6 @@ pub trait GeoHandler {
   fn unwatch(&self) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
-pub trait InputHandler {
-  fn gesture_changed(&self, payload: InputGestureChanged) -> impl Future<Output = Result<(), WireError>> + Send;
-}
-
 pub trait LibraryHandler {
   fn browse(
     &self,
@@ -723,6 +699,10 @@ pub trait SystemHandler {
   ) -> impl Future<Output = Result<(), WireError>> + Send;
   fn device_nickname_changed(&self, payload: DeviceNicknameReply)
   -> impl Future<Output = Result<(), WireError>> + Send;
+  fn launcher_gesture_changed(
+    &self,
+    payload: LauncherGestureReply,
+  ) -> impl Future<Output = Result<(), WireError>> + Send;
   fn log_entry(&self, payload: LogEntry) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
@@ -772,7 +752,6 @@ pub trait GatewayHandlers:
   AssetHandler
   + AudioHandler
   + GeoHandler
-  + InputHandler
   + LibraryHandler
   + LyricsHandler
   + NetHandler
@@ -795,7 +774,6 @@ impl<T> GatewayHandlers for T where
   T: AssetHandler
     + AudioHandler
     + GeoHandler
-    + InputHandler
     + LibraryHandler
     + LyricsHandler
     + NetHandler
@@ -951,25 +929,6 @@ where
       if let Err(error) = <H as GeoHandler>::unwatch(handlers).await {
         tracing::warn!(surface = "geo", variant = "unwatch", ?error, "inbound not handled");
       }
-      Ok(())
-    }
-    BridgeToGatewayMsgData::Input(BridgeToGatewayInputMsg::GestureChanged(payload)) => {
-      if let Err(error) = <H as InputHandler>::gesture_changed(handlers, payload).await {
-        tracing::warn!(
-          surface = "input",
-          variant = "gestureChanged",
-          ?error,
-          "inbound not handled"
-        );
-      }
-      Ok(())
-    }
-    BridgeToGatewayMsgData::Input(BridgeToGatewayInputMsg::GetGestureReply(_)) => {
-      tracing::debug!(
-        surface = "input",
-        variant = "getGestureReply",
-        "response with no pending request"
-      );
       Ok(())
     }
     BridgeToGatewayMsgData::Library(BridgeToGatewayLibraryMsg::Browse(request)) => {
@@ -1580,6 +1539,25 @@ where
         tracing::warn!(
           surface = "system",
           variant = "deviceNicknameChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::LauncherGestureReply(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "launcherGestureReply",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::LauncherGestureChanged(payload)) => {
+      if let Err(error) = <H as SystemHandler>::launcher_gesture_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "system",
+          variant = "launcherGestureChanged",
           ?error,
           "inbound not handled"
         );

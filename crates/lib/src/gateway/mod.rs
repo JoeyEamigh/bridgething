@@ -45,8 +45,6 @@ pub enum GatewayToBridgeMsgData {
   #[from]
   Geo(GatewayToBridgeGeoMsg),
   #[from]
-  Input(GatewayToBridgeInputMsg),
-  #[from]
   Library(GatewayToBridgeLibraryMsg),
   #[from]
   Lyrics(GatewayToBridgeLyricsMsg),
@@ -97,8 +95,6 @@ pub enum BridgeToGatewayMsgData {
   Audio(BridgeToGatewayAudioMsg),
   #[from]
   Geo(BridgeToGatewayGeoMsg),
-  #[from]
-  Input(BridgeToGatewayInputMsg),
   #[from]
   Library(BridgeToGatewayLibraryMsg),
   #[from]
