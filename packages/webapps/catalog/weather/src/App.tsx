@@ -12,9 +12,30 @@ type Forecast = {
 
 type Phase = { kind: 'loading' } | { kind: 'ready'; data: Forecast } | { kind: 'error'; message: string };
 
+// burn-in protection: drift the whole content a few pixels every minute
+// (mirrors the Glassy Overlay ambient dashboard)
+const BURNIN_STEPS = [
+  { x: 0, y: 0 },
+  { x: 5, y: 3 },
+  { x: -4, y: 5 },
+  { x: -5, y: -3 },
+  { x: 4, y: -5 },
+];
+const BURNIN_SHIFT_MS = 60_000;
+
 export default function App() {
   const client = useMemo(() => new BridgethingClient({ url: daemonUrl() }), []);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [shift, setShift] = useState(BURNIN_STEPS[0]);
+
+  useEffect(() => {
+    let i = 0;
+    const t = window.setInterval(() => {
+      i = (i + 1) % BURNIN_STEPS.length;
+      setShift(BURNIN_STEPS[i]);
+    }, BURNIN_SHIFT_MS);
+    return () => window.clearInterval(t);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,9 +79,17 @@ export default function App() {
 
   return (
     <div className="flex h-full w-full flex-col bg-bg px-10 py-8 text-off-white">
-      {phase.kind === 'loading' && <Centered>loading weather...</Centered>}
-      {phase.kind === 'error' && <Centered tone="muted">{phase.message}</Centered>}
-      {phase.kind === 'ready' && <ForecastView data={phase.data} />}
+      <div
+        className="flex h-full w-full flex-col"
+        style={{
+          transform: `translate(${shift.x}px, ${shift.y}px)`,
+          transition: 'transform 2.5s ease-in-out',
+        }}
+      >
+        {phase.kind === 'loading' && <Centered>loading weather...</Centered>}
+        {phase.kind === 'error' && <Centered tone="muted">{phase.message}</Centered>}
+        {phase.kind === 'ready' && <ForecastView data={phase.data} />}
+      </div>
     </div>
   );
 }
