@@ -48,11 +48,7 @@ impl PlayerTransport for StreamProvider {
   async fn play(&self, uri: PlayUri) -> Result<(), ProviderError> {
     let context = uri
       .context
-      .filter(|c| !c.context_uri.is_empty())
-      .map(|c| PlaybackContext {
-        uri: c.context_uri,
-        name: None,
-      });
+      .and_then(|context| PlaybackContext::new(context.context_uri, None));
     self.playback.play(vec![QueueEntry::bare(&uri.uri)], 0, context).await;
     Ok(())
   }
