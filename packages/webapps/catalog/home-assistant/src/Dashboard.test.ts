@@ -4,7 +4,7 @@ import { sameTile } from './Dashboard';
 import { applyEntitiesEvent, type HaEntities } from './ha';
 
 function tile(id: string, entities: HaEntities, pendingTemp: number | null = null): Tile {
-  return { entityId: id, state: entities[id] ?? null, pendingTemp };
+  return { entityId: id, state: entities[id] ?? null, pendingTemp, pendingBrightness: null };
 }
 
 function seed(): HaEntities {
@@ -49,6 +49,7 @@ describe('sameTile', () => {
       entityId: 'light.kitchen',
       state: { ...entities['light.kitchen'], state: 'on' },
       pendingTemp: null,
+      pendingBrightness: null,
     });
 
     expect(sameTile(overlay(), overlay())).toBe(true);
@@ -64,5 +65,13 @@ describe('sameTile', () => {
     const missing = tile('light.hall', {});
     expect(sameTile(missing, tile('light.hall', {}))).toBe(true);
     expect(sameTile(missing, tile('light.kitchen', seed()))).toBe(false);
+  });
+
+  test('a pending brightness change is not equal', () => {
+    const entities = seed();
+    const a: Tile = { ...tile('light.kitchen', entities), pendingBrightness: 70 };
+    const b: Tile = { ...tile('light.kitchen', entities), pendingBrightness: 80 };
+    expect(sameTile(a, b)).toBe(false);
+    expect(sameTile(a, { ...a })).toBe(true);
   });
 });
