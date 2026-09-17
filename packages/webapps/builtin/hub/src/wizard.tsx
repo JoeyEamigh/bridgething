@@ -181,17 +181,16 @@ function GestureChoiceStep({
             <span className="block font-mono text-row text-off-white">hold m</span>
             <span className="block pt-1 text-body text-soft">press and hold the m button for a moment.</span>
           </span>
-          <span className="shrink-0 border border-accent px-2 py-1 font-mono text-hint text-accent uppercase">
-            recommended
-          </span>
         </button>
         <button
           type="button"
           disabled={saving}
           onClick={() => choose('fivePress')}
-          className="border border-rule-strong bg-screen px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
-          <span className="block font-mono text-row text-off-white">press m 5 times</span>
-          <span className="block pt-1 text-body text-soft">tap the m button five times, quickly.</span>
+          className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
+          <span>
+            <span className="block font-mono text-row text-off-white">press m 5 times</span>
+            <span className="block pt-1 text-body text-soft">tap the m button five times, quickly.</span>
+          </span>
         </button>
       </div>
     </div>
