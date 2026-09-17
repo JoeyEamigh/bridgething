@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 type Coords = { lat: number; lon: number; label: string };
 
 type Forecast = {
-  current: { temp: number; code: number; wind: number; humidity: number };
+  current: { temp: number; code: number; wind: number; humidity: number; isDay: boolean };
   unit: string;
   days: { date: string; code: number; hi: number; lo: number }[];
 };
@@ -67,7 +67,7 @@ export default function App() {
 
 function ForecastView({ data }: { data: Forecast }) {
   const { current, days, unit } = data;
-  const c = wmo(current.code);
+  const c = wmo(current.code, !current.isDay);
   return (
     <>
       <div className="flex flex-1 items-center gap-10">
@@ -131,7 +131,7 @@ async function fetchForecast(client: BridgethingClient, coords: Coords, units: s
   const params = new URLSearchParams({
     latitude: String(coords.lat),
     longitude: String(coords.lon),
-    current: 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m',
+    current: 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,is_day',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min',
     timezone: 'auto',
     temperature_unit: imperial ? 'fahrenheit' : 'celsius',
@@ -157,6 +157,7 @@ async function fetchForecast(client: BridgethingClient, coords: Coords, units: s
       code: json.current.weather_code,
       wind: json.current.wind_speed_10m,
       humidity: json.current.relative_humidity_2m,
+      isDay: json.current.is_day !== 0,
     },
     days: (json.daily.time as string[]).map((date, i) => ({
       date,
@@ -177,8 +178,8 @@ function weekday(isoDate: string): string {
   return d.toLocaleDateString(undefined, { weekday: 'short' });
 }
 
-function wmo(code: number): { label: string; icon: string } {
-  if (code === 0) return { label: 'clear', icon: '☀️' };
+function wmo(code: number, night = false): { label: string; icon: string } {
+  if (code === 0) return { label: 'clear', icon: night ? '🌙' : '☀️' };
   if (code <= 2) return { label: 'partly cloudy', icon: '⛅' };
   if (code === 3) return { label: 'overcast', icon: '☁️' };
   if (code <= 48) return { label: 'fog', icon: '🌫️' };
