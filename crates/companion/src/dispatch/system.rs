@@ -69,8 +69,9 @@ impl SystemHandler for SystemDispatcher {
     Ok(())
   }
 
-  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    self.ota.launcher_gesture_changed(payload.gesture);
+    Ok(())
   }
 
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {

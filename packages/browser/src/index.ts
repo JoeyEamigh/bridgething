@@ -144,10 +144,6 @@ export class Device {
     return this.session.setNickname(nickname) as Promise<DeviceNicknameReply>;
   }
 
-  launcherGesture(): Promise<LauncherGesture> {
-    return this.session.launcherGesture() as Promise<LauncherGesture>;
-  }
-
   setLauncherGesture(gesture: LauncherGesture): Promise<void> {
     return this.session.setLauncherGesture(gesture);
   }

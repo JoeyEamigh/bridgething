@@ -271,9 +271,6 @@ impl PlayerHandler for DeliveryHandlers {
 }
 
 impl SystemHandler for DeliveryHandlers {
-  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
-  }
   async fn ota_asset_range(
     &self,
     id: Uuid,
@@ -305,6 +302,10 @@ impl SystemHandler for DeliveryHandlers {
   }
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
     self.ota.nickname_changed(&self.device_id, payload.nickname);
+    Ok(())
+  }
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    self.ota.launcher_gesture_changed(&self.device_id, payload.gesture);
     Ok(())
   }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {

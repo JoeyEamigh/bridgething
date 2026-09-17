@@ -143,10 +143,6 @@ pub enum SessionEvent {
     device_id: String,
     status: AncsAuthStatus,
   },
-  LauncherGestureChanged {
-    device_id: String,
-    gesture: LauncherGesture,
-  },
   Log {
     origin: LogOrigin,
     level: LogLevel,
@@ -372,12 +368,6 @@ impl CompanionSession {
       .await
       .map(|_| ())
       .map_err(device_error)
-  }
-
-  pub async fn get_launcher_gesture(&self, device_id: String) -> Result<LauncherGesture, CompanionError> {
-    let gateway = self.gateway_checked(&device_id)?;
-    let reply = gateway.system().launcher_gesture_get().await.map_err(device_error)?;
-    Ok(reply.gesture.into())
   }
 
   pub async fn set_launcher_gesture(&self, device_id: String, gesture: LauncherGesture) -> Result<(), CompanionError> {

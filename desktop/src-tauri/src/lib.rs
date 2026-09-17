@@ -95,7 +95,6 @@ macro_rules! desktop_commands {
       $crate::commands::set_device_resume_target,
       $crate::commands::set_device_log_streaming,
       $crate::commands::set_device_nickname,
-      $crate::commands::launcher_gesture,
       $crate::commands::set_launcher_gesture,
       $crate::commands::switch_webapp,
       $crate::commands::uninstall_webapp,

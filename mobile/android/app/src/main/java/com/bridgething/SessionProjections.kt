@@ -14,6 +14,7 @@ import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMetaEntry
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingHostInfo
+import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
 import com.margelo.nitro.bridgething.session.BridgethingNowPlayingPlayback
 import com.margelo.nitro.bridgething.session.BridgethingNowPlayingTrack
@@ -60,6 +61,7 @@ import uniffi.bridgething_companion.ConfigField
 import uniffi.bridgething_companion.ConfigKind
 import uniffi.bridgething_companion.DeviceMeta
 import uniffi.bridgething_companion.DeviceWebappsEntry
+import uniffi.bridgething_companion.LauncherGesture
 import uniffi.bridgething_companion.LogLevel
 import uniffi.bridgething_companion.LogOrigin
 import uniffi.bridgething_companion.LogStoreLevel
@@ -210,7 +212,18 @@ internal fun toRnDeviceMeta(meta: DeviceMeta): BridgethingDeviceMeta = Bridgethi
     modelName = meta.modelName,
     serialNumber = meta.serialNumber,
     nickname = meta.nickname,
+    launcherGesture = toRnLauncherGesture(meta.launcherGesture),
 )
+
+internal fun toRnLauncherGesture(gesture: LauncherGesture): BridgethingLauncherGesture = when (gesture) {
+    LauncherGesture.LONG_PRESS -> BridgethingLauncherGesture.LONGPRESS
+    LauncherGesture.FIVE_PRESS -> BridgethingLauncherGesture.FIVEPRESS
+}
+
+internal fun toLauncherGesture(gesture: BridgethingLauncherGesture): LauncherGesture = when (gesture) {
+    BridgethingLauncherGesture.LONGPRESS -> LauncherGesture.LONG_PRESS
+    BridgethingLauncherGesture.FIVEPRESS -> LauncherGesture.FIVE_PRESS
+}
 
 internal fun toRnCapabilityFlags(flags: CapabilityFlags): BridgethingCapabilityFlags = BridgethingCapabilityFlags(
     geo = flags.geo,

@@ -38,11 +38,11 @@ import {
   debugLogging,
   deviceMeta,
   hostInfo,
-  launcherGesture,
   libraryProvider,
   providerPriority,
   providers,
   resumeTarget,
+  selectedMeta,
   snapshot,
   voiceModel,
 } from '../stores/session.ts';
@@ -533,7 +533,7 @@ function ResumeTargetRow(): VNode {
 
 function LauncherGestureRow(): VNode {
   const session = useDesktop();
-  const gesture = launcherGesture.data.value;
+  const gesture = selectedMeta.value?.launcherGesture ?? 'fivePress';
 
   return (
     <ListRow

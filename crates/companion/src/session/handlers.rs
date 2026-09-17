@@ -290,10 +290,6 @@ impl PlayerHandler for Peer {
 }
 
 impl SystemHandler for Peer {
-  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
-    self.observer.launcher_gesture_changed(&self.device_id, payload.gesture);
-    Ok(())
-  }
   async fn ota_asset_range(
     &self,
     id: Uuid,
@@ -321,6 +317,12 @@ impl SystemHandler for Peer {
   }
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
     if let Some(meta) = self.ota.nickname_changed(payload.nickname) {
+      self.observer.device_meta(&self.device_id, meta);
+    }
+    Ok(())
+  }
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    if let Some(meta) = self.ota.launcher_gesture_changed(payload.gesture) {
       self.observer.device_meta(&self.device_id, meta);
     }
     Ok(())

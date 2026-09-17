@@ -10,6 +10,7 @@ import type {
   BridgethingDeviceMeta,
   BridgethingDeviceWebappsEntry,
   BridgethingDocEntry,
+  BridgethingLauncherGesture,
   BridgethingLogArchive,
   BridgethingNowPlaying,
   BridgethingOtaAvailable,
@@ -52,6 +53,7 @@ export type {
   BridgethingDeviceMetaEntry,
   BridgethingDocEntry,
   BridgethingHostInfo,
+  BridgethingLauncherGesture,
   BridgethingLogArchive,
   BridgethingNowPlaying,
   BridgethingNowPlayingPlayback,
@@ -360,6 +362,10 @@ export class BridgethingSession {
 
   async deviceSetNickname(deviceId: string, nickname: string): Promise<void> {
     await this.native.deviceSetNickname(deviceId, nickname);
+  }
+
+  async setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void> {
+    await this.native.setLauncherGesture(deviceId, gesture);
   }
 
   async presentPairPicker(): Promise<BridgethingBtDevice | null> {

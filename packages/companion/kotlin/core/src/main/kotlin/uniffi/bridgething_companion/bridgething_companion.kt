@@ -2556,8 +2556,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest(): Int
 
-    external fun uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture(): Int
-
     external fun uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_install_webapp(): Int
@@ -3143,11 +3141,6 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_fetch_ota_manifest(
         `ptr`: Long,
         `rootUrl`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
-        `ptr`: Long,
-        `deviceId`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_get_webapp_doc(
@@ -5481,9 +5474,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture() != 45277) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
@@ -11162,8 +11152,6 @@ public interface CompanionSessionInterface {
 
     suspend fun `fetchOtaManifest`(`rootUrl`: kotlin.String): OtaDiscoverManifest
 
-    suspend fun `getLauncherGesture`(`deviceId`: kotlin.String): LauncherGesture
-
     suspend fun `getWebappDoc`(
         `deviceId`: kotlin.String,
         `id`: kotlin.String,
@@ -11786,31 +11774,6 @@ open class CompanionSession :
             { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterTypeOtaDiscoverManifest.lift(it) },
-            // Error FFI converter
-            CompanionException.ErrorHandler,
-        )
-
-    @Throws(CompanionException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getLauncherGesture`(`deviceId`: kotlin.String): LauncherGesture =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
-                    uniffiHandle,
-                    FfiConverterString.lower(`deviceId`),
-                )
-            },
-            {
-                future,
-                callback,
-                continuation,
-                ->
-                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
-            },
-            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeLauncherGesture.lift(it) },
             // Error FFI converter
             CompanionException.ErrorHandler,
         )
@@ -27985,6 +27948,7 @@ data class DeviceMeta(
     var `modelName`: kotlin.String,
     var `serialNumber`: kotlin.String,
     var `nickname`: kotlin.String?,
+    var `launcherGesture`: LauncherGesture,
 ) {
     companion object
 }
@@ -28005,6 +27969,7 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterTypeLauncherGesture.read(buf),
         )
 
     override fun allocationSize(value: DeviceMeta) =
@@ -28018,7 +27983,8 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
                 FfiConverterString.allocationSize(value.`channel`) +
                 FfiConverterString.allocationSize(value.`modelName`) +
                 FfiConverterString.allocationSize(value.`serialNumber`) +
-                FfiConverterOptionalString.allocationSize(value.`nickname`)
+                FfiConverterOptionalString.allocationSize(value.`nickname`) +
+                FfiConverterTypeLauncherGesture.allocationSize(value.`launcherGesture`)
         )
 
     override fun write(
@@ -28035,6 +28001,7 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
         FfiConverterString.write(value.`modelName`, buf)
         FfiConverterString.write(value.`serialNumber`, buf)
         FfiConverterOptionalString.write(value.`nickname`, buf)
+        FfiConverterTypeLauncherGesture.write(value.`launcherGesture`, buf)
     }
 }
 
@@ -34813,13 +34780,6 @@ sealed class SessionEvent {
         companion object
     }
 
-    data class LauncherGestureChanged(
-        val `deviceId`: kotlin.String,
-        val `gesture`: uniffi.bridgething_companion.LauncherGesture,
-    ) : SessionEvent() {
-        companion object
-    }
-
     data class Log(
         val `origin`: uniffi.bridgething_companion.LogOrigin,
         val `level`: uniffi.bridgething_companion.LogLevel,
@@ -34937,13 +34897,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
             }
 
             7 -> {
-                SessionEvent.LauncherGestureChanged(
-                    FfiConverterString.read(buf),
-                    FfiConverterTypeLauncherGesture.read(buf),
-                )
-            }
-
-            8 -> {
                 SessionEvent.Log(
                     FfiConverterTypeLogOrigin.read(buf),
                     FfiConverterTypeLogLevel.read(buf),
@@ -34952,13 +34905,13 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 )
             }
 
-            9 -> {
+            8 -> {
                 SessionEvent.WebappsChanged(
                     FfiConverterTypeDeviceWebappsEntry.read(buf),
                 )
             }
 
-            10 -> {
+            9 -> {
                 SessionEvent.WebappDocChanged(
                     FfiConverterString.read(buf),
                     FfiConverterString.read(buf),
@@ -34967,51 +34920,51 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 )
             }
 
-            11 -> {
+            10 -> {
                 SessionEvent.DeviceMetaChanged(
                     FfiConverterString.read(buf),
                     FfiConverterTypeDeviceMeta.read(buf),
                 )
             }
 
-            12 -> {
+            11 -> {
                 SessionEvent.VoiceModelStateChanged(
                     FfiConverterTypeVoiceModelState.read(buf),
                 )
             }
 
-            13 -> {
+            12 -> {
                 SessionEvent.VoiceTurnChanged(
                     FfiConverterTypeVoiceTurn.read(buf),
                 )
             }
 
-            14 -> {
+            13 -> {
                 SessionEvent.OtaRunChanged(
                     FfiConverterTypeOtaRun.read(buf),
                 )
             }
 
-            15 -> {
+            14 -> {
                 SessionEvent.OtaAvailableChanged(
                     FfiConverterTypeOtaAvailable.read(buf),
                 )
             }
 
-            16 -> {
+            15 -> {
                 SessionEvent.OtaPollChanged(
                     FfiConverterTypeOtaPollStatus.read(buf),
                 )
             }
 
-            17 -> {
+            16 -> {
                 SessionEvent.CompanionUpdateProgress(
                     FfiConverterULong.read(buf),
                     FfiConverterULong.read(buf),
                 )
             }
 
-            18 -> {
+            17 -> {
                 SessionEvent.Resumed
             }
 
@@ -35068,15 +35021,6 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                     4UL +
                         FfiConverterString.allocationSize(value.`deviceId`) +
                         FfiConverterTypeAncsAuthStatus.allocationSize(value.`status`)
-                )
-            }
-
-            is SessionEvent.LauncherGestureChanged -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`deviceId`) +
-                        FfiConverterTypeLauncherGesture.allocationSize(value.`gesture`)
                 )
             }
 
@@ -35218,15 +35162,8 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 Unit
             }
 
-            is SessionEvent.LauncherGestureChanged -> {
-                buf.putInt(7)
-                FfiConverterString.write(value.`deviceId`, buf)
-                FfiConverterTypeLauncherGesture.write(value.`gesture`, buf)
-                Unit
-            }
-
             is SessionEvent.Log -> {
-                buf.putInt(8)
+                buf.putInt(7)
                 FfiConverterTypeLogOrigin.write(value.`origin`, buf)
                 FfiConverterTypeLogLevel.write(value.`level`, buf)
                 FfiConverterString.write(value.`target`, buf)
@@ -35235,13 +35172,13 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
             }
 
             is SessionEvent.WebappsChanged -> {
-                buf.putInt(9)
+                buf.putInt(8)
                 FfiConverterTypeDeviceWebappsEntry.write(value.`entry`, buf)
                 Unit
             }
 
             is SessionEvent.WebappDocChanged -> {
-                buf.putInt(10)
+                buf.putInt(9)
                 FfiConverterString.write(value.`deviceId`, buf)
                 FfiConverterString.write(value.`webappId`, buf)
                 FfiConverterString.write(value.`key`, buf)
@@ -35250,51 +35187,51 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
             }
 
             is SessionEvent.DeviceMetaChanged -> {
-                buf.putInt(11)
+                buf.putInt(10)
                 FfiConverterString.write(value.`deviceId`, buf)
                 FfiConverterTypeDeviceMeta.write(value.`meta`, buf)
                 Unit
             }
 
             is SessionEvent.VoiceModelStateChanged -> {
-                buf.putInt(12)
+                buf.putInt(11)
                 FfiConverterTypeVoiceModelState.write(value.`state`, buf)
                 Unit
             }
 
             is SessionEvent.VoiceTurnChanged -> {
-                buf.putInt(13)
+                buf.putInt(12)
                 FfiConverterTypeVoiceTurn.write(value.`turn`, buf)
                 Unit
             }
 
             is SessionEvent.OtaRunChanged -> {
-                buf.putInt(14)
+                buf.putInt(13)
                 FfiConverterTypeOtaRun.write(value.`run`, buf)
                 Unit
             }
 
             is SessionEvent.OtaAvailableChanged -> {
-                buf.putInt(15)
+                buf.putInt(14)
                 FfiConverterTypeOtaAvailable.write(value.`available`, buf)
                 Unit
             }
 
             is SessionEvent.OtaPollChanged -> {
-                buf.putInt(16)
+                buf.putInt(15)
                 FfiConverterTypeOtaPollStatus.write(value.`status`, buf)
                 Unit
             }
 
             is SessionEvent.CompanionUpdateProgress -> {
-                buf.putInt(17)
+                buf.putInt(16)
                 FfiConverterULong.write(value.`received`, buf)
                 FfiConverterULong.write(value.`total`, buf)
                 Unit
             }
 
             is SessionEvent.Resumed -> {
-                buf.putInt(18)
+                buf.putInt(17)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

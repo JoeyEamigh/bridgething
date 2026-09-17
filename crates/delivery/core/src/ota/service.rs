@@ -532,6 +532,14 @@ impl OtaService {
     self.record_nickname(device_id, nickname)
   }
 
+  pub fn launcher_gesture_changed(
+    &self,
+    device_id: &str,
+    gesture: libbridgething::LauncherGesture,
+  ) -> Option<BridgeThingMeta> {
+    self.record_launcher_gesture(device_id, gesture)
+  }
+
   pub fn progress(&self, device_id: &str, tick: OtaProgress) {
     self.signal(device_id, OtaSignal::Progress(tick));
   }
@@ -919,6 +927,17 @@ impl OtaService {
     let mut links = self.links.lock().unwrap();
     let meta = links.get_mut(device_id).and_then(|link| link.meta.as_mut())?;
     meta.nickname = nickname;
+    Some(meta.clone())
+  }
+
+  fn record_launcher_gesture(
+    &self,
+    device_id: &str,
+    gesture: libbridgething::LauncherGesture,
+  ) -> Option<BridgeThingMeta> {
+    let mut links = self.links.lock().unwrap();
+    let meta = links.get_mut(device_id).and_then(|link| link.meta.as_mut())?;
+    meta.launcher_gesture = gesture;
     Some(meta.clone())
   }
 

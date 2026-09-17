@@ -340,6 +340,11 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         require().deviceSetNickname(deviceId, nickname)
     }
 
+    override fun setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture): Promise<Unit> =
+        Promise.async {
+            require().setLauncherGesture(deviceId, gesture)
+        }
+
     override fun presentPairPicker(): Promise<Variant_NullType_BridgethingBtDevice> = Promise.async {
         val device = require().presentPairPicker()
         if (device != null) Variant_NullType_BridgethingBtDevice.Second(device)

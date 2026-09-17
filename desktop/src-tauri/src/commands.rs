@@ -418,14 +418,6 @@ pub async fn set_device_nickname(shell: State<'_, Arc<Shell>>, nickname: String)
 }
 
 #[tauri::command]
-pub async fn launcher_gesture(shell: State<'_, Arc<Shell>>) -> Answer<LauncherGesture> {
-  let Some(device_id) = shell.peer() else {
-    return Ok(LauncherGesture::FivePress);
-  };
-  Ok(shell.session().get_launcher_gesture(device_id).await?)
-}
-
-#[tauri::command]
 pub async fn set_launcher_gesture(shell: State<'_, Arc<Shell>>, gesture: LauncherGesture) -> Answer<()> {
   Ok(shell.session().set_launcher_gesture(peer(&shell)?, gesture).await?)
 }

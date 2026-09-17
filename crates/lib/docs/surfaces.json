@@ -1,5 +1,5 @@
 {
-  "version": "0.12.10",
+  "version": "0.13.1",
   "surfaces": [
     {
       "name": "asset",
@@ -1373,6 +1373,11 @@
           "name": "nickname",
           "type": "string",
           "optional": true
+        },
+        {
+          "name": "launcherGesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
         },
         {
           "name": "appVersion",

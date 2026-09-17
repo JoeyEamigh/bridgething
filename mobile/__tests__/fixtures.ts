@@ -43,6 +43,7 @@ export function meta(
     channel: 'stable',
     modelName: 'Superbird',
     serialNumber: SERIAL,
+    launcherGesture: 'fivePress',
     ...over,
   };
 }

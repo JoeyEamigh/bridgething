@@ -421,6 +421,7 @@ pub fn meta_with_variant(
     libbridgething_version: app_version.into(),
     app_name: "bridgething".into(),
     nickname: None,
+    launcher_gesture: libbridgething::LauncherGesture::default(),
     app_version: app_version.into(),
     daemon_sha256: daemon_sha256.map(str::to_owned),
     wakeword_model_version: None,

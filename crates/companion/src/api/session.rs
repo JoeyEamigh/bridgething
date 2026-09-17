@@ -363,6 +363,7 @@ pub struct DeviceMeta {
   pub model_name: String,
   pub serial_number: String,
   pub nickname: Option<String>,
+  pub launcher_gesture: LauncherGesture,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]

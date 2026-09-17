@@ -22,6 +22,7 @@ import com.margelo.nitro.bridgething.session.BridgethingDeviceLogLine
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingDocEntry
+import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingLogArchive
 import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
 import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
@@ -557,6 +558,10 @@ public class HybridBridgethingSessionImpl(
 
     override suspend fun deviceSetNickname(deviceId: String, nickname: String) {
         requireSession().deviceSetNickname(deviceId, nickname)
+    }
+
+    override suspend fun setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture) {
+        requireSession().setLauncherGesture(deviceId, toLauncherGesture(gesture))
     }
 
     override suspend fun exportLogs(archiveId: String?): String = withContext(Dispatchers.IO) {

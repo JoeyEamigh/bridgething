@@ -42,6 +42,37 @@ async fn the_launcher_gesture_defaults_to_five_press_and_survives_a_change() {
 }
 
 #[tokio::test]
+async fn the_device_meta_announces_the_gesture_so_hosts_never_have_to_ask() {
+  let harness = Harness::start().await.expect("harness start");
+  let client = harness.connect_command_client().await.expect("command client");
+
+  let announced = client.system().version_request().await.expect("version");
+  assert_eq!(
+    announced.launcher_gesture,
+    LauncherGesture::FivePress,
+    "the meta every host already reads carries the gesture"
+  );
+
+  client
+    .system()
+    .launcher_gesture_set(LauncherGestureSet {
+      gesture: LauncherGesture::LongPress,
+    })
+    .await
+    .expect("gesture set");
+
+  let reader = harness.connect_command_client().await.expect("second client");
+  let stored = loop {
+    let announced = reader.system().version_request().await.expect("version");
+    if announced.launcher_gesture == LauncherGesture::LongPress {
+      break announced.launcher_gesture;
+    }
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  };
+  assert_eq!(stored, LauncherGesture::LongPress);
+}
+
+#[tokio::test]
 async fn a_gesture_change_reaches_every_connected_client() {
   let harness = Harness::start().await.expect("harness start");
   let setter = harness.connect_command_client().await.expect("command client");

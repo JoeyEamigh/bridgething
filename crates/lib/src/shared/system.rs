@@ -15,6 +15,7 @@ pub struct BridgeThingMeta {
   pub libbridgething_version: String,
   pub app_name: String,
   pub nickname: Option<String>,
+  pub launcher_gesture: LauncherGesture,
   pub app_version: String,
   pub daemon_sha256: Option<String>,
   /// Null when no wake word model is loaded, or the loaded model carries no version.

@@ -57,6 +57,7 @@ export type BridgeThingMeta = {
   libbridgethingVersion: string;
   appName: string;
   nickname: string | null;
+  launcherGesture: LauncherGesture;
   appVersion: string;
   daemonSha256: string | null;
   /**

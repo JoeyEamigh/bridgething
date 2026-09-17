@@ -92,9 +92,8 @@ function Header({ peer, meta }: { peer: SessionPeer; meta: DeviceMeta | null }):
   );
 }
 
-function LauncherGestureRow(): VNode {
+function LauncherGestureRow({ meta }: { meta: DeviceMeta | null }): VNode {
   const session = useBrowser();
-  const gesture = useBrowserQuery(['device-meta'], backend => backend.launcherGesture());
 
   return (
     <ListRow
@@ -108,7 +107,7 @@ function LauncherGestureRow(): VNode {
             { value: 'longPress', label: 'hold m' },
             { value: 'fivePress', label: 'press m 5x' },
           ]}
-          value={gesture.data ?? 'fivePress'}
+          value={meta?.launcherGesture ?? 'fivePress'}
           onChange={next => {
             void session.setLauncherGesture(next);
           }}
@@ -162,7 +161,7 @@ function DeviceInfo({ meta }: { meta: DeviceMeta | null }): VNode {
         {rows.map(([label, value]) => (
           <ListRow key={label} title={label} value={value} />
         ))}
-        <LauncherGestureRow />
+        <LauncherGestureRow meta={meta} />
       </ListGroup>
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
     </Section>

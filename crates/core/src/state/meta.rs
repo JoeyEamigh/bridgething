@@ -204,6 +204,7 @@ impl DeviceMeta {
     build_meta(
       &self.inner.static_meta,
       self.nickname(),
+      self.launcher_gesture(),
       self.daemon_sha256(),
       self.wakeword_model_version(),
     )
@@ -227,6 +228,7 @@ fn hash_file(path: &Path) -> io::Result<String> {
 fn build_meta(
   meta: &SuperbirdMeta,
   nickname: Option<String>,
+  launcher_gesture: LauncherGesture,
   daemon_sha256: Option<String>,
   wakeword_model_version: Option<String>,
 ) -> BridgeThingMeta {
@@ -235,6 +237,7 @@ fn build_meta(
     libbridgething_version: BridgeThingMeta::libbridgething_version(),
     app_name: BRIDGETHING_APP_NAME.to_string(),
     nickname,
+    launcher_gesture,
     app_version: BRIDGETHING_VERSION.to_string(),
     daemon_sha256,
     wakeword_model_version,

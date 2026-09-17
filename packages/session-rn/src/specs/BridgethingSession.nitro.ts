@@ -290,6 +290,8 @@ export type BridgethingBtDevice = {
   isCarThing: boolean;
 };
 
+export type BridgethingLauncherGesture = 'longPress' | 'fivePress';
+
 export type BridgethingDeviceMeta = {
   daemonVersion: string;
   libbridgethingVersion: string;
@@ -301,6 +303,7 @@ export type BridgethingDeviceMeta = {
   modelName: string;
   serialNumber: string;
   nickname?: string;
+  launcherGesture: BridgethingLauncherGesture;
 };
 
 export type BridgethingHostInfo = {
@@ -466,6 +469,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   reconnectPeer(deviceId: string): Promise<void>;
 
   deviceSetNickname(deviceId: string, nickname: string): Promise<void>;
+
+  setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void>;
 
   presentPairPicker(): Promise<BridgethingBtDevice | null>;
 

@@ -92,6 +92,7 @@ export type DeviceMeta = {
   modelName: string;
   serialNumber: string;
   nickname: string | null;
+  launcherGesture: LauncherGesture;
 };
 
 export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };
@@ -361,7 +362,6 @@ export type SessionEvent =
   | { peerLinkFailed: { peer: SessionPeer } }
   | { nowPlayingChanged: { nowPlaying: NowPlaying | null } }
   | { ancsAuthStatusChanged: { deviceId: string; status: AncsAuthStatus } }
-  | { launcherGestureChanged: { deviceId: string; gesture: LauncherGesture } }
   | { log: { origin: LogOrigin; level: LogLevel; target: string; message: string } }
   | { webappsChanged: { entry: DeviceWebappsEntry } }
   | { webappDocChanged: { deviceId: string; webappId: string; key: string; value: string | null } }

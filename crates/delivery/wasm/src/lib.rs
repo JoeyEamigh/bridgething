@@ -420,18 +420,6 @@ impl WasmSession {
     to_js(&slots)
   }
 
-  #[wasm_bindgen(js_name = launcherGesture)]
-  pub async fn launcher_gesture(&self) -> Result<JsValue, JsValue> {
-    let reply = self
-      .session
-      .gateway
-      .system()
-      .launcher_gesture_get()
-      .await
-      .map_err(failure)?;
-    to_js(&reply.gesture)
-  }
-
   #[wasm_bindgen(js_name = setLauncherGesture)]
   pub async fn set_launcher_gesture(
     &self,

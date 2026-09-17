@@ -3354,8 +3354,6 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func fetchOtaManifest(rootUrl: String) async throws  -> OtaDiscoverManifest
     
-    func getLauncherGesture(deviceId: String) async throws  -> LauncherGesture
-    
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
     
     func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?) async throws  -> WebappInfo
@@ -3781,22 +3779,6 @@ open func fetchOtaManifest(rootUrl: String)async throws  -> OtaDiscoverManifest 
             completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
             freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeOtaDiscoverManifest_lift,
-            errorHandler: FfiConverterTypeCompanionError_lift
-        )
-}
-    
-open func getLauncherGesture(deviceId: String)async throws  -> LauncherGesture  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId)
-                )
-            },
-            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
-            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
-            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeLauncherGesture_lift,
             errorHandler: FfiConverterTypeCompanionError_lift
         )
 }
@@ -15000,10 +14982,11 @@ public struct DeviceMeta: Equatable, Hashable {
     public var modelName: String
     public var serialNumber: String
     public var nickname: String?
+    public var launcherGesture: LauncherGesture
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, modelName: String, serialNumber: String, nickname: String?) {
+    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, modelName: String, serialNumber: String, nickname: String?, launcherGesture: LauncherGesture) {
         self.daemonVersion = daemonVersion
         self.libbridgethingVersion = libbridgethingVersion
         self.imageVersion = imageVersion
@@ -15014,6 +14997,7 @@ public struct DeviceMeta: Equatable, Hashable {
         self.modelName = modelName
         self.serialNumber = serialNumber
         self.nickname = nickname
+        self.launcherGesture = launcherGesture
     }
 
     
@@ -15041,7 +15025,8 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
                 channel: FfiConverterString.read(from: &buf), 
                 modelName: FfiConverterString.read(from: &buf), 
                 serialNumber: FfiConverterString.read(from: &buf), 
-                nickname: FfiConverterOptionString.read(from: &buf)
+                nickname: FfiConverterOptionString.read(from: &buf), 
+                launcherGesture: FfiConverterTypeLauncherGesture.read(from: &buf)
         )
     }
 
@@ -15056,6 +15041,7 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
         FfiConverterString.write(value.modelName, into: &buf)
         FfiConverterString.write(value.serialNumber, into: &buf)
         FfiConverterOptionString.write(value.nickname, into: &buf)
+        FfiConverterTypeLauncherGesture.write(value.launcherGesture, into: &buf)
     }
 }
 
@@ -24737,8 +24723,6 @@ public enum SessionEvent: Equatable, Hashable {
     )
     case ancsAuthStatusChanged(deviceId: String, status: AncsAuthStatus
     )
-    case launcherGestureChanged(deviceId: String, gesture: LauncherGesture
-    )
     case log(origin: LogOrigin, level: LogLevel, target: String, message: String
     )
     case webappsChanged(entry: DeviceWebappsEntry
@@ -24799,40 +24783,37 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
         case 6: return .ancsAuthStatusChanged(deviceId: try FfiConverterString.read(from: &buf), status: try FfiConverterTypeAncsAuthStatus.read(from: &buf)
         )
         
-        case 7: return .launcherGestureChanged(deviceId: try FfiConverterString.read(from: &buf), gesture: try FfiConverterTypeLauncherGesture.read(from: &buf)
+        case 7: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 8: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 8: return .webappsChanged(entry: try FfiConverterTypeDeviceWebappsEntry.read(from: &buf)
         )
         
-        case 9: return .webappsChanged(entry: try FfiConverterTypeDeviceWebappsEntry.read(from: &buf)
+        case 9: return .webappDocChanged(deviceId: try FfiConverterString.read(from: &buf), webappId: try FfiConverterString.read(from: &buf), key: try FfiConverterString.read(from: &buf), value: try FfiConverterOptionString.read(from: &buf)
         )
         
-        case 10: return .webappDocChanged(deviceId: try FfiConverterString.read(from: &buf), webappId: try FfiConverterString.read(from: &buf), key: try FfiConverterString.read(from: &buf), value: try FfiConverterOptionString.read(from: &buf)
+        case 10: return .deviceMetaChanged(deviceId: try FfiConverterString.read(from: &buf), meta: try FfiConverterTypeDeviceMeta.read(from: &buf)
         )
         
-        case 11: return .deviceMetaChanged(deviceId: try FfiConverterString.read(from: &buf), meta: try FfiConverterTypeDeviceMeta.read(from: &buf)
+        case 11: return .voiceModelStateChanged(state: try FfiConverterTypeVoiceModelState.read(from: &buf)
         )
         
-        case 12: return .voiceModelStateChanged(state: try FfiConverterTypeVoiceModelState.read(from: &buf)
+        case 12: return .voiceTurnChanged(turn: try FfiConverterTypeVoiceTurn.read(from: &buf)
         )
         
-        case 13: return .voiceTurnChanged(turn: try FfiConverterTypeVoiceTurn.read(from: &buf)
+        case 13: return .otaRunChanged(run: try FfiConverterTypeOtaRun.read(from: &buf)
         )
         
-        case 14: return .otaRunChanged(run: try FfiConverterTypeOtaRun.read(from: &buf)
+        case 14: return .otaAvailableChanged(available: try FfiConverterTypeOtaAvailable.read(from: &buf)
         )
         
-        case 15: return .otaAvailableChanged(available: try FfiConverterTypeOtaAvailable.read(from: &buf)
+        case 15: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
         )
         
-        case 16: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
+        case 16: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 17: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 18: return .resumed
+        case 17: return .resumed
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -24873,14 +24854,8 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             FfiConverterTypeAncsAuthStatus.write(status, into: &buf)
             
         
-        case let .launcherGestureChanged(deviceId,gesture):
-            writeInt(&buf, Int32(7))
-            FfiConverterString.write(deviceId, into: &buf)
-            FfiConverterTypeLauncherGesture.write(gesture, into: &buf)
-            
-        
         case let .log(origin,level,target,message):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(7))
             FfiConverterTypeLogOrigin.write(origin, into: &buf)
             FfiConverterTypeLogLevel.write(level, into: &buf)
             FfiConverterString.write(target, into: &buf)
@@ -24888,12 +24863,12 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             
         
         case let .webappsChanged(entry):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(8))
             FfiConverterTypeDeviceWebappsEntry.write(entry, into: &buf)
             
         
         case let .webappDocChanged(deviceId,webappId,key,value):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(deviceId, into: &buf)
             FfiConverterString.write(webappId, into: &buf)
             FfiConverterString.write(key, into: &buf)
@@ -24901,44 +24876,44 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             
         
         case let .deviceMetaChanged(deviceId,meta):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(deviceId, into: &buf)
             FfiConverterTypeDeviceMeta.write(meta, into: &buf)
             
         
         case let .voiceModelStateChanged(state):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(11))
             FfiConverterTypeVoiceModelState.write(state, into: &buf)
             
         
         case let .voiceTurnChanged(turn):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(12))
             FfiConverterTypeVoiceTurn.write(turn, into: &buf)
             
         
         case let .otaRunChanged(run):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(13))
             FfiConverterTypeOtaRun.write(run, into: &buf)
             
         
         case let .otaAvailableChanged(available):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(14))
             FfiConverterTypeOtaAvailable.write(available, into: &buf)
             
         
         case let .otaPollChanged(status):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(15))
             FfiConverterTypeOtaPollStatus.write(status, into: &buf)
             
         
         case let .companionUpdateProgress(received,total):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(16))
             FfiConverterUInt64.write(received, into: &buf)
             FfiConverterUInt64.write(total, into: &buf)
             
         
         case .resumed:
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(17))
         
         }
     }
@@ -28326,9 +28301,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture() != 45277) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
