@@ -48,7 +48,6 @@ export interface DesktopSession extends CompanionSession {
 
   deviceAutoResume(): Promise<boolean>;
   deviceLogStreaming(): Promise<boolean>;
-  launcherGesture(): Promise<api.LauncherGesture>;
 
   deviceResumeTarget(): Promise<api.ResumeTarget>;
 
