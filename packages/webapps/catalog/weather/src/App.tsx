@@ -12,15 +12,52 @@ type Forecast = {
 
 type Phase = { kind: 'loading' } | { kind: 'ready'; data: Forecast } | { kind: 'error'; message: string };
 
+const FORECAST_CACHE_KEY = 'weather.forecast.cache.v1';
+const FORECAST_TTL_MS = 15 * 60 * 1000;
+
+type ForecastCacheEntry = {
+  savedAt: number;
+  coordsKey: string;
+  units: string;
+  data: Forecast;
+};
+
+function coordsKey(c: Coords): string {
+  return `${c.lat.toFixed(3)},${c.lon.toFixed(3)}`;
+}
+
+function readForecastCache(key: string, units: string): Forecast | null {
+  try {
+    const raw = localStorage.getItem(FORECAST_CACHE_KEY);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as ForecastCacheEntry;
+    if (entry.coordsKey !== key || entry.units !== units) return null;
+    if (Date.now() - entry.savedAt > FORECAST_TTL_MS) return null;
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
+
+function writeForecastCache(key: string, units: string, data: Forecast): void {
+  try {
+    const entry: ForecastCacheEntry = { savedAt: Date.now(), coordsKey: key, units, data };
+    localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // storage unavailable or full; the app works fine without the cache
+  }
+}
+
+
 export default function App() {
   const client = useMemo(() => new BridgethingClient({ url: daemonUrl() }), []);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight: Promise<void> | null = null;
 
-    const load = async () => {
-      if (!cancelled) setPhase({ kind: 'loading' });
+    const runLoad = async () => {
       try {
         const [unitsCfg, locCfg] = await Promise.all([
           client.config.get({ key: 'units' }),
@@ -39,16 +76,39 @@ export default function App() {
           return;
         }
 
+        const key = coordsKey(coords);
+        const cached = readForecastCache(key, units);
+        if (cached) {
+          if (!cancelled) setPhase({ kind: 'ready', data: cached });
+          return;
+        }
+
+        // background refresh: keep showing stale data instead of flashing "loading"
+        if (!cancelled) setPhase(prev => (prev.kind === 'ready' ? prev : { kind: 'loading' }));
         const data = await fetchForecast(client, coords, units);
+        writeForecastCache(key, units, data);
         if (!cancelled) setPhase({ kind: 'ready', data });
       } catch (err) {
-        if (!cancelled) setPhase({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        if (!cancelled)
+          setPhase(prev =>
+            prev.kind === 'ready'
+              ? prev // keep stale data on a failed background refresh; the next tick retries
+              : { kind: 'error', message: err instanceof Error ? err.message : String(err) },
+          );
       }
     };
 
+    // dedupe: a config change racing the initial load shares one fetch
+    const load = () => {
+      if (!inFlight) inFlight = runLoad().finally(() => (inFlight = null));
+      return inFlight;
+    };
+
     load();
-    const intervalId = window.setInterval(load, 15 * 60 * 1000);
-    const offChanged = client.config.onChanged(() => load());
+    const intervalId = window.setInterval(load, FORECAST_TTL_MS);
+    const offChanged = client.config.onChanged(msg => {
+      if (msg.key === 'units' || msg.key === 'location') load();
+    });
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
