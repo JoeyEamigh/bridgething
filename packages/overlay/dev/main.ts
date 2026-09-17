@@ -51,6 +51,7 @@ const fakeClient = {
 
 const cfg: OverlayConfig = {
   origin: location.origin,
+  url: `ws://${location.host}/?scope=overlay`,
   surfaces: { notifications: true, call: true, pairing: true, connection: true, volume: true, voice: true },
 };
 

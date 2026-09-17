@@ -379,7 +379,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     tracing::warn!("failed to tell the chrome worker we are serving: {err:?}");
   }
 
-  state.sync_overlay(true).await;
+  state.sync_injections(true).await;
   state.refresh_forward_availability().await;
 
   if let Some(examples_dir) = config.examples_dir.clone() {
@@ -438,8 +438,8 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     loop {
       tokio::select! {
         client_conn = server.listen() => {
-          if let Ok((stream, address, mode)) = client_conn
-            && let Err(err) = client_man.handle_connection(address, stream, mode, &state).await {
+          if let Ok((stream, address, mode, scope)) = client_conn
+            && let Err(err) = client_man.handle_connection(address, stream, mode, scope, &state).await {
               tracing::error!("failed to accept tcp stream: {:?}", err);
             }
         },
