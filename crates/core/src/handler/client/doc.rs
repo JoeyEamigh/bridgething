@@ -21,10 +21,6 @@ impl DocHandler {
     Self { handle }
   }
 
-  async fn active_app_id(&self) -> Result<Uuid, crate::handler::HandlerError> {
-    Ok(self.handle.state.active_webapp().await?.unwrap_or(Uuid::nil()))
-  }
-
   async fn broadcast_doc_change_to_gateway(&self, id: Uuid, key: &str, value: Option<String>) {
     let event = BridgeToGatewayWebappMsgEvent::DocChanged(WebappDocChanged {
       id,
@@ -39,14 +35,14 @@ impl ClientToBridgeDocMsgRequestDispatch for DocHandler {
   type Output = HandlerResult;
 
   async fn get(&self, params: DocGet) -> HandlerResult {
-    let app_id = self.active_app_id().await?;
+    let app_id = self.handle.scoped_app_id().await?;
     let DocGet { key } = params;
     let value = self.handle.state.kv.doc_get(app_id, &key).await?;
     Ok(self.handle.respond_to::<DocGet>(DocGetReply { key, value }).await?)
   }
 
   async fn list(&self) -> HandlerResult {
-    let app_id = self.active_app_id().await?;
+    let app_id = self.handle.scoped_app_id().await?;
     let entries = self
       .handle
       .state
@@ -60,7 +56,7 @@ impl ClientToBridgeDocMsgRequestDispatch for DocHandler {
   }
 
   async fn set(&self, params: DocSet) -> HandlerResult {
-    let app_id = self.active_app_id().await?;
+    let app_id = self.handle.scoped_app_id().await?;
     let DocSet { key, value } = params;
     if value.len() > DOC_VALUE_MAX_BYTES {
       return Ok(
@@ -89,7 +85,7 @@ impl ClientToBridgeDocMsgRequestDispatch for DocHandler {
   }
 
   async fn delete(&self, params: DocDelete) -> HandlerResult {
-    let app_id = self.active_app_id().await?;
+    let app_id = self.handle.scoped_app_id().await?;
     let DocDelete { key } = params;
     self.handle.state.kv.doc_delete(app_id, &key).await?;
     self.broadcast_doc_change_to_gateway(app_id, &key, None).await;

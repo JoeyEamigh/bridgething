@@ -126,7 +126,7 @@ async fn t2_overlay_injection_follows_the_active_manifest() {
     "overlay host never mounted for a default-manifest webapp"
   );
 
-  harness.state().sync_overlay(true).await;
+  harness.state().sync_injections(true).await;
   tokio::time::sleep(Duration::from_secs(1)).await;
   let count: i64 = page
     .evaluate(HOST_COUNT)

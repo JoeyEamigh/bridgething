@@ -184,6 +184,10 @@ impl Harness {
     Ok(CommandClient::connect(&format!("ws://{}/", self.server_addrs.modern)).await?)
   }
 
+  pub async fn connect_overlay_command_client(&self) -> Result<CommandClient> {
+    Ok(CommandClient::connect(&format!("ws://{}/?scope=overlay", self.server_addrs.modern)).await?)
+  }
+
   pub fn observe_iap2_outbound(&self) -> Iap2OutboundObserver {
     Iap2OutboundObserver {
       rx: self.inject.iap2_outbound.subscribe(),

@@ -2,10 +2,13 @@ use std::time::Duration;
 
 use bridgething_gateway::RequestFailure;
 use bridgething_test_harness::Harness;
+use futures::StreamExt;
 use libbridgething::{
   WebappError,
-  client::WebappActivate,
-  gateway::{WebappResource, WebappResourceKind, WebappSetSlot, WebappSlot, WebappSwitchTo, WebappUninstall},
+  client::{BridgeToClientConfigMsgEvent, ConfigGet, WebappActivate},
+  gateway::{
+    WebappConfigSet, WebappResource, WebappResourceKind, WebappSetSlot, WebappSlot, WebappSwitchTo, WebappUninstall,
+  },
 };
 use uuid::Uuid;
 
@@ -28,7 +31,9 @@ async fn plant_bundle(harness: &Harness, role: Option<&str>, overlay: bool, app_
     std::fs::write(dir.join("index.html"), b"<h1>planted</h1>").expect("index");
   }
 
-  let mut fields = format!(r#""id":"{id}","name":"planted","version":"0.1.0""#);
+  let mut fields = format!(
+    r#""id":"{id}","name":"planted","version":"0.1.0","config":[{{"type":"string","data":{{"key":"units","label":"Units"}}}}]"#
+  );
   if let Some(role) = role {
     fields.push_str(&format!(r#","role":"{role}""#));
   }
@@ -175,7 +180,7 @@ async fn the_designated_overlay_replaces_the_builtin_script_body() {
   let planted = plant(&harness, None, true).await;
   let companion = harness.connect_android().await.expect("connect companion");
 
-  let builtin = harness.state().resolve_injected_script().await.expect("builtin script");
+  let builtin = harness.state().resolve_overlay_script().await.expect("builtin script");
   assert!(
     !builtin.contains(CUSTOM_OVERLAY_BODY),
     "builtin overlay must not carry the planted body"
@@ -190,7 +195,7 @@ async fn the_designated_overlay_replaces_the_builtin_script_body() {
     .await
     .expect("set overlay slot");
 
-  let custom = harness.state().resolve_injected_script().await.expect("custom script");
+  let custom = harness.state().resolve_overlay_script().await.expect("custom script");
   assert!(
     custom.ends_with(CUSTOM_OVERLAY_BODY),
     "planted overlay body is injected"
@@ -228,7 +233,7 @@ async fn clearing_the_overlay_slot_restores_the_builtin_script() {
     .await
     .expect("clear overlay slot");
 
-  let script = harness.state().resolve_injected_script().await.expect("script");
+  let script = harness.state().resolve_overlay_script().await.expect("script");
   assert!(
     !script.contains(CUSTOM_OVERLAY_BODY),
     "clearing the slot is the recovery path back to the builtin overlay"
@@ -267,7 +272,7 @@ async fn uninstalling_a_slot_holder_releases_both_slots() {
     builtin_home,
     "home screen falls back to the builtin hub"
   );
-  let script = harness.state().resolve_injected_script().await.expect("script");
+  let script = harness.state().resolve_overlay_script().await.expect("script");
   assert!(
     !script.contains(CUSTOM_OVERLAY_BODY),
     "overlay falls back to the builtin script"
@@ -460,5 +465,116 @@ async fn the_on_device_launcher_cannot_activate_an_overlay_only_bundle() {
   assert!(
     matches!(&err, RequestFailure::Domain(WebappError::MissingIndexHtml)),
     "expected MissingIndexHtml, got {err:?}"
+  );
+}
+
+#[tokio::test]
+async fn an_overlay_scoped_client_reads_its_own_config_not_the_foreground_app_s() {
+  let harness = Harness::start().await.expect("harness start");
+  let foreground = plant(&harness, None, false).await;
+  let overlay = plant(&harness, None, true).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+
+  companion
+    .webapp()
+    .set_slot(WebappSetSlot {
+      slot: WebappSlot::Overlay,
+      id: Some(overlay.id),
+    })
+    .await
+    .expect("set overlay slot");
+  harness
+    .state()
+    .set_active_webapp(foreground.id)
+    .await
+    .expect("activate");
+
+  for (id, value) in [(foreground.id, "imperial"), (overlay.id, "metric")] {
+    companion
+      .webapp()
+      .config_set(WebappConfigSet {
+        id,
+        key: "units".into(),
+        value: value.into(),
+      })
+      .await
+      .expect("config set");
+  }
+
+  let overlay_client = harness
+    .connect_overlay_command_client()
+    .await
+    .expect("overlay scoped client");
+  let read = overlay_client
+    .config()
+    .get(ConfigGet { key: "units".into() })
+    .await
+    .expect("overlay config get");
+  assert_eq!(
+    read.value.as_deref(),
+    Some("metric"),
+    "an overlay reads the settings of the app holding the overlay slot"
+  );
+
+  let foreground_client = harness.connect_command_client().await.expect("command client");
+  let read = foreground_client
+    .config()
+    .get(ConfigGet { key: "units".into() })
+    .await
+    .expect("foreground config get");
+  assert_eq!(read.value.as_deref(), Some("imperial"));
+}
+
+#[tokio::test]
+async fn a_config_change_reaches_the_scope_that_owns_it_and_no_other() {
+  let harness = Harness::start().await.expect("harness start");
+  let foreground = plant(&harness, None, false).await;
+  let overlay = plant(&harness, None, true).await;
+  let companion = harness.connect_android().await.expect("connect companion");
+
+  companion
+    .webapp()
+    .set_slot(WebappSetSlot {
+      slot: WebappSlot::Overlay,
+      id: Some(overlay.id),
+    })
+    .await
+    .expect("set overlay slot");
+  harness
+    .state()
+    .set_active_webapp(foreground.id)
+    .await
+    .expect("activate");
+
+  let overlay_client = harness
+    .connect_overlay_command_client()
+    .await
+    .expect("overlay scoped client");
+  let foreground_client = harness.connect_command_client().await.expect("command client");
+  let mut overlay_events = Box::pin(overlay_client.config().events());
+  let mut foreground_events = Box::pin(foreground_client.config().events());
+
+  companion
+    .webapp()
+    .config_set(WebappConfigSet {
+      id: overlay.id,
+      key: "units".into(),
+      value: "metric".into(),
+    })
+    .await
+    .expect("config set");
+
+  let BridgeToClientConfigMsgEvent::Changed(changed) = tokio::time::timeout(SETTLE, overlay_events.next())
+    .await
+    .expect("overlay hears its own config change")
+    .expect("stream open");
+  assert_eq!(changed.key, "units");
+  assert_eq!(changed.value.as_deref(), Some("metric"));
+
+  assert!(
+    tokio::time::timeout(Duration::from_millis(250), foreground_events.next())
+      .await
+      .is_err(),
+    "the foreground webapp is not told about the overlay app's settings"
   );
 }
