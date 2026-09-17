@@ -2,7 +2,7 @@ use bridgething_macros::BridgeEnum;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{BridgeThingMeta, Diagnostics, LogEntry, OtaError, OtaFinished, OtaProgress};
+use crate::{BridgeThingMeta, Diagnostics, LauncherGesture, LogEntry, OtaError, OtaFinished, OtaProgress};
 
 /// `nickname` is `null` until someone sets one.
 #[serde_with::skip_serializing_none]
@@ -11,6 +11,13 @@ use crate::{BridgeThingMeta, Diagnostics, LogEntry, OtaError, OtaFinished, OtaPr
 #[ts(export, export_to = "client.ts")]
 pub struct DeviceNicknameReply {
   pub nickname: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct LauncherGestureReply {
+  pub gesture: LauncherGesture,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
@@ -65,4 +72,8 @@ pub enum BridgeToClientSystemMsg {
   DeviceNickname(DeviceNicknameReply),
   #[bridge_event]
   DeviceNicknameChanged(DeviceNicknameReply),
+  #[bridge_response]
+  LauncherGestureReply(LauncherGestureReply),
+  #[bridge_event]
+  LauncherGestureChanged(LauncherGestureReply),
 }

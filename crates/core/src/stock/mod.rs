@@ -173,7 +173,6 @@ pub fn server_event_to_stock(
     | BridgeToClientMsgData::Doc(_)
     | BridgeToClientMsgData::Geo(_)
     | BridgeToClientMsgData::Hardware(_)
-    | BridgeToClientMsgData::Input(_)
     | BridgeToClientMsgData::Library(_)
     | BridgeToClientMsgData::Lyrics(_)
     | BridgeToClientMsgData::Net(_)
@@ -318,7 +317,9 @@ impl From<BridgeToClientSystemMsg> for StockSendMsg {
       | BridgeToClientSystemMsg::OtaError(_)
       | BridgeToClientSystemMsg::OtaFinished(_)
       | BridgeToClientSystemMsg::DeviceNickname(_)
-      | BridgeToClientSystemMsg::DeviceNicknameChanged(_) => StockSendMsg::Unsupported,
+      | BridgeToClientSystemMsg::DeviceNicknameChanged(_)
+      | BridgeToClientSystemMsg::LauncherGestureReply(_)
+      | BridgeToClientSystemMsg::LauncherGestureChanged(_) => StockSendMsg::Unsupported,
     }
   }
 }

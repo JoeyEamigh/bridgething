@@ -156,17 +156,12 @@ function GestureChoiceStep({
 }) {
   const [saving, setSaving] = useState(false);
 
-  const choose = (gesture: LauncherGesture) => {
+  const choose = async (gesture: LauncherGesture) => {
     if (saving) return;
     setSaving(true);
-    // Practice the gesture the daemon actually persisted, not just the one
-    // that was picked: on a daemon that does not know setGesture the read
-    // fails and we fall back to five-press, the daemon default.
-    client.input
-      .setGesture({ gesture })
-      .catch(() => {})
-      .then(() => client.input.getGesture({ timeoutMs: 2000 }).catch(() => null))
-      .then(r => onNext(r && r.ok ? r.response.gesture : 'fivePress'));
+    await client.system.launcherGestureSet({ gesture }).catch(() => {});
+    const stored = await client.system.launcherGestureGet({ timeoutMs: 2000 }).catch(() => null);
+    onNext(stored?.ok ? stored.response.gesture : 'fivePress');
   };
 
   return (

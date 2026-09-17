@@ -44,6 +44,16 @@ impl BridgeThingMeta {
   }
 }
 
+/// Which M-button gesture jumps to the launcher.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "shared.ts")]
+pub enum LauncherGesture {
+  LongPress,
+  #[default]
+  FivePress,
+}
+
 /// What an update installs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]

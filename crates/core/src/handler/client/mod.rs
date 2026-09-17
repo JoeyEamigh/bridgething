@@ -6,7 +6,6 @@ mod config;
 mod doc;
 mod geo;
 mod hardware;
-mod input;
 mod library;
 mod lyrics;
 mod net;
@@ -28,7 +27,6 @@ use config::*;
 use doc::*;
 use geo::*;
 use hardware::*;
-use input::*;
 use libbridgething::{ForwardMessage, ForwardRouted, gateway::BridgeToGatewayForwardMsgEvent, wire::WireError};
 use library::*;
 use lyrics::*;
@@ -113,12 +111,6 @@ impl ClientHandler {
         dispatch(
           handle,
           move |h| async move { msg.dispatch(&HardwareHandler::new(h)).await },
-        );
-      }
-      RecvMsgData::Input(msg) => {
-        dispatch(
-          handle,
-          move |h| async move { msg.dispatch(&InputHandler::new(h)).await },
         );
       }
       RecvMsgData::Library(msg) => {

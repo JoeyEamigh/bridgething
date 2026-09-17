@@ -1,10 +1,8 @@
 #[cfg(feature = "input")]
 mod evdev_listener;
-mod settings;
 
 use std::time::Duration;
 
-pub use settings::InputSettings;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 

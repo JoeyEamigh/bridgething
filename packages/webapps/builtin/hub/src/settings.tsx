@@ -309,8 +309,8 @@ function GesturePanel({ client }: { client: BridgethingClient }) {
 
   useEffect(() => {
     let cancelled = false;
-    client.input
-      .getGesture()
+    client.system
+      .launcherGestureGet()
       .then(r => {
         if (cancelled || !r.ok) return;
         setGestureState(r.response.gesture);
@@ -322,16 +322,16 @@ function GesturePanel({ client }: { client: BridgethingClient }) {
   }, [client]);
 
   useEffect(() => {
-    return client.input.onGestureChanged(c => setGestureState(c.gesture));
+    return client.system.onLauncherGestureChanged(c => setGestureState(c.gesture));
   }, [client]);
 
   const choose = async (next: LauncherGesture) => {
     setGestureState(next);
     try {
-      await client.input.setGesture({ gesture: next });
+      await client.system.launcherGestureSet({ gesture: next });
     } catch {
-      client.input
-        .getGesture()
+      client.system
+        .launcherGestureGet()
         .then(r => {
           if (r.ok) setGestureState(r.response.gesture);
         })

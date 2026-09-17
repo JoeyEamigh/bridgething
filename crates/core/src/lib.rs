@@ -242,8 +242,6 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   let (mic, mic_handle) = MicManager::init(bus.clone(), bluetooth.clone(), MicConfig::default())
     .await
     .spawn();
-  let input = input::InputSettings::load();
-
   let transfer_sinks = transfer::sinks::TransferSinks::default();
 
   let range_proxy_handle = RangeProxy::spawn(
@@ -325,7 +323,6 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     time,
     audio,
     als,
-    input,
     mic,
     devices,
     kv,
@@ -351,6 +348,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     state.bus.clone(),
     serial_number.clone(),
   );
+  spawn_launcher_gesture_observer(state.meta.subscribe_launcher_gesture(), state.bus.clone());
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
@@ -649,6 +647,25 @@ fn spawn_nickname_observer(
 
       if rx.changed().await.is_err() {
         break;
+      }
+    }
+  });
+}
+
+fn spawn_launcher_gesture_observer(
+  mut rx: tokio::sync::watch::Receiver<libbridgething::LauncherGesture>,
+  bus: net::WireEventBus,
+) {
+  use libbridgething::client::{BridgeToClientSystemMsgEvent, LauncherGestureReply};
+  tokio::spawn(async move {
+    loop {
+      if rx.changed().await.is_err() {
+        break;
+      }
+      let gesture = *rx.borrow_and_update();
+      let event = BridgeToClientSystemMsgEvent::LauncherGestureChanged(LauncherGestureReply { gesture });
+      if let Err(errs) = bus.broadcast_event(event).await {
+        tracing::debug!(count = errs.len(), "launcher-gesture client broadcast non-fatal errors");
       }
     }
   });
