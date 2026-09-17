@@ -2,7 +2,7 @@ import { BridgethingClient } from '@bridgething/client';
 import { daemonUrl } from '@bridgething/webapp-shared/daemon';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Dashboard from './Dashboard';
-import { controlKind, momentaryCall, optimisticToggle, toggleCall } from './domains';
+import { controlKind, brightnessPct, momentaryCall, optimisticToggle, toggleCall } from './domains';
 import { HaConnection, type HaEntities, type HaState, type HaStatus } from './ha';
 import Picker from './Picker';
 
@@ -26,6 +26,7 @@ export default function App() {
   const [entities, setEntities] = useState<HaEntities>({});
   const [overlay, setOverlay] = useState<Record<string, string>>({});
   const [pendingTemp, setPendingTemp] = useState<Record<string, number>>({});
+  const [pendingBrightness, setPendingBrightness] = useState<Record<string, number>>({});
   const [toast, setToast] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -52,6 +53,20 @@ export default function App() {
       const out = { ...prev };
       for (const [id, target] of Object.entries(prev)) {
         if (numAttr(next[id]?.attributes['temperature']) === target) {
+          delete out[id];
+          changed = true;
+        }
+      }
+      return changed ? out : prev;
+    });
+    setPendingBrightness(prev => {
+      let changed = false;
+      const out = { ...prev };
+      for (const [id, target] of Object.entries(prev)) {
+        const live = next[id];
+        const livePct = live ? brightnessPct(live) : null;
+        const settledOff = (!live || live.state !== 'on') && target === 0;
+        if (settledOff || (livePct != null && Math.abs(livePct - target) <= 1)) {
           delete out[id];
           changed = true;
         }
@@ -214,6 +229,25 @@ export default function App() {
     [flash],
   );
 
+  const handleSetBrightness = useCallback(
+    (entityId: string, pct: number) => {
+      const conn = connRef.current;
+      if (!conn) return;
+      setPendingBrightness(prev => ({ ...prev, [entityId]: pct }));
+      setOverlay(prev => ({ ...prev, [entityId]: pct > 0 ? 'on' : 'off' }));
+      const call =
+        pct <= 0
+          ? conn.callService('light', 'turn_off', {}, { entity_id: entityId })
+          : conn.callService('light', 'turn_on', { brightness_pct: pct }, { entity_id: entityId });
+      call.catch(e => {
+        setPendingBrightness(prev => dropKey(prev, entityId));
+        setOverlay(prev => dropKey(prev, entityId));
+        flash(errText(e));
+      });
+    },
+    [flash],
+  );
+
   if (mode.kind === 'loading')
     return (
       <Center muted={status.kind === 'error'}>
@@ -231,7 +265,7 @@ export default function App() {
       />
     );
 
-  const tiles = selection.map(id => mergeState(id, entities[id], overlay[id], pendingTemp[id]));
+  const tiles = selection.map(id => mergeState(id, entities[id], overlay[id], pendingTemp[id], pendingBrightness[id]));
   return (
     <Dashboard
       tiles={tiles}
@@ -239,22 +273,29 @@ export default function App() {
       toast={toast}
       onActivate={handleActivate}
       onSetTemp={handleSetTemp}
+      onSetBrightness={handleSetBrightness}
       onOpenPicker={openPicker}
     />
   );
 }
 
-export type Tile = { entityId: string; state: HaState | null; pendingTemp: number | null };
+export type Tile = {
+  entityId: string;
+  state: HaState | null;
+  pendingTemp: number | null;
+  pendingBrightness: number | null;
+};
 
 function mergeState(
   id: string,
   live: HaState | undefined,
   overlayState: string | undefined,
   pending: number | undefined,
+  pendingLight: number | undefined,
 ): Tile {
-  if (!live) return { entityId: id, state: null, pendingTemp: pending ?? null };
+  if (!live) return { entityId: id, state: null, pendingTemp: pending ?? null, pendingBrightness: pendingLight ?? null };
   const state = overlayState ? { ...live, state: overlayState } : live;
-  return { entityId: id, state, pendingTemp: pending ?? null };
+  return { entityId: id, state, pendingTemp: pending ?? null, pendingBrightness: pendingLight ?? null };
 }
 
 function Center({ children, muted }: { children: React.ReactNode; muted?: boolean }) {

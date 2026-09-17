@@ -65,6 +65,13 @@ export function friendlyName(s: HaState): string {
   return rest.replace(/_/g, ' ');
 }
 
+export function brightnessPct(s: HaState): number | null {
+  if (s.state !== 'on') return null;
+  const b = num(s.attributes['brightness']);
+  if (b == null) return null;
+  return Math.round((b / 255) * 100);
+}
+
 export function num(attr: unknown): number | null {
   return typeof attr === 'number' && Number.isFinite(attr) ? attr : null;
 }
