@@ -93,19 +93,18 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
   let mut window: VecDeque<Instant> = VecDeque::with_capacity(gesture_threshold());
   let span = gesture_window();
   let threshold = gesture_threshold();
-  let mut m_held = false;
-  let mut m_hold_deadline = Box::pin(sleep(Duration::ZERO));
-  let mut last_gesture = state.input.gesture().await;
+  let mut held = false;
+  let mut hold_deadline = Box::pin(sleep(Duration::ZERO));
 
   loop {
     tokio::select! {
       _ = cancel.cancelled() => return Ok(()),
-      _ = &mut m_hold_deadline, if m_held => {
-        m_held = false;
-        if state.input.gesture().await != LauncherGesture::LongPress {
+      _ = &mut hold_deadline, if held => {
+        held = false;
+        if state.meta.launcher_gesture() != LauncherGesture::LongPress {
           continue;
         }
-        tracing::debug!("hub gesture: KEY_M long-press");
+        tracing::debug!("hub gesture: KEY_M held");
         trigger_hub_switch(state).await;
       }
       ev = events.next_event() => {
@@ -118,23 +117,17 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
         }
 
         let key = KeyCode::new(ev.code());
-        let pressed = ev.value() == 1;
-        let released = ev.value() == 0;
 
         if key == KeyCode::KEY_M {
-          if pressed {
-            let gesture = state.input.gesture().await;
-            if gesture != last_gesture {
-              last_gesture = gesture;
-              window.clear();
-              m_held = false;
-            }
-            if gesture == LauncherGesture::LongPress {
-              m_held = true;
-              m_hold_deadline
+          match (state.meta.launcher_gesture(), ev.value()) {
+            (LauncherGesture::LongPress, 1) => {
+              held = true;
+              hold_deadline
                 .as_mut()
                 .reset(tokio::time::Instant::now() + LONG_PRESS_THRESHOLD);
-            } else {
+            }
+            (LauncherGesture::LongPress, 0) => held = false,
+            (LauncherGesture::FivePress, 1) => {
               let now = Instant::now();
               while let Some(front) = window.front() {
                 if now.duration_since(*front) > span {
@@ -150,13 +143,12 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
                 trigger_hub_switch(state).await;
               }
             }
-          } else if released {
-            m_held = false;
+            _ => {}
           }
           continue;
         }
 
-        if !pressed {
+        if ev.value() != 1 {
           continue;
         }
 

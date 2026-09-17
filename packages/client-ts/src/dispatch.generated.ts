@@ -68,7 +68,6 @@ import type {
   KVDelete,
   KVGet,
   KVPut,
-  LauncherGestureChanged,
   LauncherGestureReply,
   LauncherGestureSet,
   LibraryBrowse,
@@ -222,11 +221,6 @@ export type HardwareInboundHandlers = {
   stateReply: (msg: HardwareStateReply) => void;
 };
 
-export type InputInboundHandlers = {
-  gestureChanged: (msg: LauncherGestureChanged) => void;
-  getGestureReply: (msg: LauncherGestureReply) => void;
-};
-
 export type LibraryInboundHandlers = {
   browseReply: (msg: LibraryBrowseReply) => void;
   searchReply: (msg: LibrarySearchReply) => void;
@@ -293,6 +287,8 @@ export type SystemInboundHandlers = {
   otaFinished: (msg: OtaFinished) => void;
   deviceNickname: (msg: DeviceNicknameReply) => void;
   deviceNicknameChanged: (msg: DeviceNicknameReply) => void;
+  launcherGestureReply: (msg: LauncherGestureReply) => void;
+  launcherGestureChanged: (msg: LauncherGestureReply) => void;
 };
 
 export type TimeInboundHandlers = {
@@ -1408,90 +1404,6 @@ export class HardwareSurface {
     if (d.type === 'hardware') {
       const inner = d.data;
       if (inner.event === 'stateReply') return { ok: true, response: inner.data };
-    }
-    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
-    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
-  }
-}
-
-export class InputSurface {
-  constructor(private readonly _client: BridgethingClient) {}
-
-  /** Subscribe to `Input::GestureChanged` from the daemon. */
-  onGestureChanged(handler: (msg: LauncherGestureChanged) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'input') return;
-      const inner = data.data;
-      if (inner.event !== 'gestureChanged') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Subscribe to `Input::GetGestureReply` from the daemon. */
-  onGetGestureReply(handler: (msg: LauncherGestureReply) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'input') return;
-      const inner = data.data;
-      if (inner.event !== 'getGestureReply') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Exhaustive subscribe over all inbound `Input` variants. */
-  subscribe(handlers: InputInboundHandlers): () => void {
-    return this._subscribe(handlers, false);
-  }
-
-  /** Same as `subscribe` but every handler is optional. */
-  subscribePartial(handlers: Partial<InputInboundHandlers>): () => void {
-    return this._subscribe(handlers, true);
-  }
-
-  private _subscribe(handlers: Partial<InputInboundHandlers>, partial: boolean): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'input') return;
-      const inner = data.data;
-      switch (inner.event) {
-        case 'gestureChanged': {
-          handlers.gestureChanged?.(inner.data);
-          return;
-        }
-        case 'getGestureReply': {
-          handlers.getGestureReply?.(inner.data);
-          return;
-        }
-        default: {
-          if (!partial) this._client.logger.warn('Input: no handler for inner', inner);
-          return;
-        }
-      }
-    });
-  }
-
-  /** Send `Input::SetGesture` to the daemon. */
-  async setGesture(payload: LauncherGestureSet): Promise<void> {
-    const msg: ClientToBridgeMsg = {
-      id: newUuid(),
-      meta: { kind: 'command' },
-      data: { type: 'input', data: { event: 'setGesture', data: payload } },
-    };
-    await this._client.send(msg);
-  }
-
-  /** Typed request to the daemon: webapp sends, daemon responds. */
-  async getGesture(options?: { timeoutMs?: number }): Promise<TypedRequestResult<LauncherGestureReply, never>> {
-    const wireData: ClientToBridgeMsg['data'] = { type: 'input', data: { event: 'getGesture' } };
-    const response = await this._client.request(wireData, options?.timeoutMs);
-    const d = response.data;
-    if (d.type === 'input') {
-      const inner = d.data;
-      if (inner.event === 'getGestureReply') return { ok: true, response: inner.data };
     }
     if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
     return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
@@ -2950,6 +2862,30 @@ export class SystemSurface {
     });
   }
 
+  /** Subscribe to `System::LauncherGestureReply` from the daemon. */
+  onLauncherGestureReply(handler: (msg: LauncherGestureReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'launcherGestureReply') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `System::LauncherGestureChanged` from the daemon. */
+  onLauncherGestureChanged(handler: (msg: LauncherGestureReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'launcherGestureChanged') return;
+      handler(inner.data);
+    });
+  }
+
   /** Exhaustive subscribe over all inbound `System` variants. */
   subscribe(handlers: SystemInboundHandlers): () => void {
     return this._subscribe(handlers, false);
@@ -3007,6 +2943,14 @@ export class SystemSurface {
           handlers.deviceNicknameChanged?.(inner.data);
           return;
         }
+        case 'launcherGestureReply': {
+          handlers.launcherGestureReply?.(inner.data);
+          return;
+        }
+        case 'launcherGestureChanged': {
+          handlers.launcherGestureChanged?.(inner.data);
+          return;
+        }
         default: {
           if (!partial) this._client.logger.warn('System: no handler for inner', inner);
           return;
@@ -3051,6 +2995,16 @@ export class SystemSurface {
       id: newUuid(),
       meta: { kind: 'command' },
       data: { type: 'system', data: { event: 'factoryReset' } },
+    };
+    await this._client.send(msg);
+  }
+
+  /** Send `System::LauncherGestureSet` to the daemon. */
+  async launcherGestureSet(payload: LauncherGestureSet): Promise<void> {
+    const msg: ClientToBridgeMsg = {
+      id: newUuid(),
+      meta: { kind: 'command' },
+      data: { type: 'system', data: { event: 'launcherGestureSet', data: payload } },
     };
     await this._client.send(msg);
   }
@@ -3118,6 +3072,19 @@ export class SystemSurface {
     if (d.type === 'system') {
       const inner = d.data;
       if (inner.event === 'deviceNickname') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async launcherGestureGet(options?: { timeoutMs?: number }): Promise<TypedRequestResult<LauncherGestureReply, never>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'system', data: { event: 'launcherGestureGet' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'system') {
+      const inner = d.data;
+      if (inner.event === 'launcherGestureReply') return { ok: true, response: inner.data };
     }
     if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
     return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
@@ -3748,7 +3715,6 @@ export type ClientMessageHandlers = {
   doc: DocInboundHandlers;
   geo: GeoInboundHandlers;
   hardware: HardwareInboundHandlers;
-  input: InputInboundHandlers;
   library: LibraryInboundHandlers;
   net: NetInboundHandlers;
   notifications: NotificationsInboundHandlers;
@@ -3771,7 +3737,6 @@ export type PartialClientMessageHandlers = {
   doc?: Partial<DocInboundHandlers>;
   geo?: Partial<GeoInboundHandlers>;
   hardware?: Partial<HardwareInboundHandlers>;
-  input?: Partial<InputInboundHandlers>;
   library?: Partial<LibraryInboundHandlers>;
   net?: Partial<NetInboundHandlers>;
   notifications?: Partial<NotificationsInboundHandlers>;
@@ -3802,8 +3767,6 @@ export interface ClientSurfaces {
   readonly geo: GeoSurface;
   /** Methods scoped to the `Hardware` wire surface. */
   readonly hardware: HardwareSurface;
-  /** Methods scoped to the `Input` wire surface. */
-  readonly input: InputSurface;
   /** Methods scoped to the `Library` wire surface. */
   readonly library: LibrarySurface;
   /** Methods scoped to the `Net` wire surface. */
@@ -3844,7 +3807,6 @@ type ClientSurfaceCache = {
   doc?: DocSurface;
   geo?: GeoSurface;
   hardware?: HardwareSurface;
-  input?: InputSurface;
   library?: LibrarySurface;
   net?: NetSurface;
   notifications?: NotificationsSurface;
@@ -3933,14 +3895,6 @@ export function applyDispatch(): void {
     get(this: BridgethingClient): HardwareSurface {
       const bucket = bucketFor(this);
       return (bucket.hardware ??= new HardwareSurface(this));
-    },
-  });
-  Object.defineProperty(BridgethingClient.prototype, 'input', {
-    configurable: true,
-    enumerable: true,
-    get(this: BridgethingClient): InputSurface {
-      const bucket = bucketFor(this);
-      return (bucket.input ??= new InputSurface(this));
     },
   });
   Object.defineProperty(BridgethingClient.prototype, 'library', {
@@ -4301,28 +4255,6 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
         }
       }
-      case 'input': {
-        const innerHandlers = handlers.input;
-        if (!innerHandlers) {
-          if (!partial) c.logger.warn('subscribe: no handler for input');
-          return;
-        }
-        const inner = data.data;
-        switch (inner.event) {
-          case 'gestureChanged': {
-            innerHandlers.gestureChanged?.(inner.data);
-            return;
-          }
-          case 'getGestureReply': {
-            innerHandlers.getGestureReply?.(inner.data);
-            return;
-          }
-          default: {
-            if (!partial) c.logger.warn('Input: no handler for inner', inner);
-            return;
-          }
-        }
-      }
       case 'library': {
         const innerHandlers = handlers.library;
         if (!innerHandlers) {
@@ -4608,6 +4540,14 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           case 'deviceNicknameChanged': {
             innerHandlers.deviceNicknameChanged?.(inner.data);
+            return;
+          }
+          case 'launcherGestureReply': {
+            innerHandlers.launcherGestureReply?.(inner.data);
+            return;
+          }
+          case 'launcherGestureChanged': {
+            innerHandlers.launcherGestureChanged?.(inner.data);
             return;
           }
           default: {
