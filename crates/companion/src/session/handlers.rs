@@ -290,6 +290,10 @@ impl PlayerHandler for Peer {
 }
 
 impl SystemHandler for Peer {
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    self.observer.launcher_gesture_changed(&self.device_id, payload.gesture);
+    Ok(())
+  }
   async fn ota_asset_range(
     &self,
     id: Uuid,

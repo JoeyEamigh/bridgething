@@ -443,7 +443,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             info = try await session.installWebapp(deviceId: deviceId, archivePath: url.path, provenance: nil)
         } else if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
             info = try await session.installWebappFromUrl(
-                deviceId: deviceId, url: sourceUri, expected: nil, provenance: sourceUri
+                deviceId: deviceId,
+                request: WebappInstallRequest(
+                    url: sourceUri, expected: nil, provenance: sourceUri, webappId: nil, webappName: nil
+                )
             )
         } else {
             throw SessionError.invalidArchive
@@ -462,11 +465,13 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     ) async throws -> BridgethingWebappInfo {
         let info = try await requireSession().installWebappFromUrl(
             deviceId: deviceId,
-            url: url,
-            expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
-            provenance: provenance,
-            webappId: webappId,
-            webappName: webappName
+            request: WebappInstallRequest(
+                url: url,
+                expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
+                provenance: provenance,
+                webappId: webappId,
+                webappName: webappName
+            )
         )
         return toRNWebappInfo(info)
     }

@@ -143,6 +143,10 @@ pub enum SessionEvent {
     device_id: String,
     status: AncsAuthStatus,
   },
+  LauncherGestureChanged {
+    device_id: String,
+    gesture: LauncherGesture,
+  },
   Log {
     origin: LogOrigin,
     level: LogLevel,
@@ -207,6 +211,17 @@ pub trait SessionEventSink: Send + Sync {
 #[uniffi::export(with_foreign)]
 pub trait WebappBundleSink: Send + Sync {
   fn installed(&self, bundle: String);
+}
+
+#[derive(Debug, Clone, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct WebappInstallRequest {
+  pub url: String,
+  pub expected: Option<ArtifactDigest>,
+  pub provenance: Option<String>,
+  pub webapp_id: Option<String>,
+  pub webapp_name: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -359,6 +374,23 @@ impl CompanionSession {
       .map_err(device_error)
   }
 
+  pub async fn get_launcher_gesture(&self, device_id: String) -> Result<LauncherGesture, CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    let reply = gateway.system().launcher_gesture_get().await.map_err(device_error)?;
+    Ok(reply.gesture.into())
+  }
+
+  pub async fn set_launcher_gesture(&self, device_id: String, gesture: LauncherGesture) -> Result<(), CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    gateway
+      .system()
+      .launcher_gesture_set(libbridgething::gateway::LauncherGestureSet {
+        gesture: gesture.into(),
+      })
+      .await
+      .map_err(|failure| CompanionError::Device(format!("{failure:?}")))
+  }
+
   pub async fn list_webapps(&self, device_id: String) -> Result<Vec<WebappInfo>, CompanionError> {
     let gateway = self.gateway_checked(&device_id)?;
     let list = gateway.webapp().list().await.map_err(device_error)?;
@@ -409,17 +441,20 @@ impl CompanionSession {
     }
   }
 
-  #[uniffi::method(default(sink = None, webapp_id = None, webapp_name = None))]
+  #[uniffi::method(default(sink = None))]
   pub async fn install_webapp_from_url(
     &self,
     device_id: String,
-    url: String,
-    expected: Option<ArtifactDigest>,
-    provenance: Option<String>,
+    request: WebappInstallRequest,
     sink: Option<Arc<dyn WebappBundleSink>>,
-    webapp_id: Option<String>,
-    webapp_name: Option<String>,
   ) -> Result<WebappInfo, CompanionError> {
+    let WebappInstallRequest {
+      url,
+      expected,
+      provenance,
+      webapp_id,
+      webapp_name,
+    } = request;
     self.gateway_checked(&device_id)?;
     let path = self
       .session

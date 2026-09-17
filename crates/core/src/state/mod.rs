@@ -185,6 +185,10 @@ impl AppState {
     self.meta_store.active_webapp(&self.webapps).await
   }
 
+  pub async fn overlay_webapp(&self) -> StateResult<Option<Uuid>> {
+    self.meta_store.overlay_slot(&self.webapps).await
+  }
+
   pub async fn active_webapp_has_permission(&self, permission: &str) -> bool {
     let Ok(Some(active_id)) = self.active_webapp().await else {
       return false;
@@ -236,7 +240,7 @@ impl AppState {
     if prev != Some(id) {
       self.tunnel_routes.kill_all();
     }
-    self.sync_overlay(false).await;
+    self.sync_injections(false).await;
     self.refresh_forward_availability().await;
     Ok(())
   }
@@ -257,18 +261,21 @@ impl AppState {
     }
   }
 
-  pub async fn resolve_injected_script(&self) -> Option<std::sync::Arc<String>> {
+  pub async fn resolve_overlay_script(&self) -> Option<std::sync::Arc<String>> {
     let profile = match self.active_webapp().await.ok().flatten() {
       Some(id) => self.webapps.manifest(id).await.map(|m| m.overlays).unwrap_or_default(),
       None => libbridgething::OverlayProfile::default(),
     };
-    let custom = match self.meta_store.overlay_slot(&self.webapps).await {
-      Ok(Some(id)) => self.webapps.read_overlay(id).await,
-      Ok(None) => None,
+    let overlay_id = match self.overlay_webapp().await {
+      Ok(id) => id,
       Err(e) => {
         tracing::warn!("overlay slot read failed; using builtin overlay: {e:?}");
         None
       }
+    };
+    let custom = match overlay_id {
+      Some(id) => self.webapps.read_overlay(id).await,
+      None => None,
     };
     let custom = custom.and_then(|bytes| match String::from_utf8(bytes) {
       Ok(text) => Some(text),
@@ -277,21 +284,37 @@ impl AppState {
         None
       }
     });
-    let geo_permitted = self.active_webapp_has_permission(GEO_PERMISSION).await;
-    crate::overlay::injected_script(&profile, self.modern_port, custom.as_deref(), geo_permitted)
+    crate::overlay::overlay_script(&profile, self.modern_port, custom.as_deref())
   }
 
-  pub async fn sync_overlay(&self, run_immediately: bool) {
-    let script = self.resolve_injected_script().await.map(chrome::OverlayScript);
+  async fn resolve_injections(&self) -> Vec<chrome::InjectedScript> {
+    let mut scripts = Vec::new();
+    if let Some(source) = self.resolve_overlay_script().await {
+      scripts.push(chrome::InjectedScript {
+        source,
+        world: Some(crate::overlay::OVERLAY_WORLD),
+      });
+    }
+    if self.active_webapp_has_permission(GEO_PERMISSION).await {
+      scripts.push(chrome::InjectedScript {
+        source: crate::overlay::geo_script(self.modern_port),
+        world: None,
+      });
+    }
+    scripts
+  }
+
+  pub async fn sync_injections(&self, run_immediately: bool) {
+    let scripts = self.resolve_injections().await;
     if let Err(e) = self
       .chrome
-      .send(chrome::ChromeCommand::SetOverlay {
-        script,
+      .send(chrome::ChromeCommand::SetInjections {
+        scripts,
         run_immediately,
       })
       .await
     {
-      tracing::warn!("failed to sync overlay injection: {e:?}");
+      tracing::warn!("failed to sync page injections: {e:?}");
     }
   }
 

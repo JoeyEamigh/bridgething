@@ -820,6 +820,11 @@
           "method": "onDeviceNicknameChanged",
           "payload": "DeviceNicknameReply",
           "payload_ref": "DeviceNicknameReply"
+        },
+        {
+          "method": "onLauncherGestureChanged",
+          "payload": "LauncherGestureReply",
+          "payload_ref": "LauncherGestureReply"
         }
       ],
       "requests": [
@@ -853,6 +858,12 @@
           "method": "deviceGetNickname",
           "response": "DeviceNicknameReply",
           "response_event": "onDeviceNickname"
+        },
+        {
+          "method": "launcherGestureGet",
+          "description": "Returns the M-button gesture that jumps to the launcher.",
+          "response": "LauncherGestureReply",
+          "response_event": "onLauncherGestureReply"
         }
       ],
       "commands": [
@@ -869,6 +880,11 @@
         },
         {
           "method": "factoryReset"
+        },
+        {
+          "method": "launcherGestureSet",
+          "payload": "LauncherGestureSet",
+          "payload_ref": "LauncherGestureSet"
         }
       ],
       "handlers": []
@@ -2524,6 +2540,38 @@
         {
           "name": "value",
           "type": "string"
+        }
+      ]
+    },
+    "LauncherGesture": {
+      "kind": "enum",
+      "description": "Which M-button gesture jumps to the launcher.",
+      "variants": [
+        {
+          "name": "LongPress"
+        },
+        {
+          "name": "FivePress"
+        }
+      ]
+    },
+    "LauncherGestureReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
+        }
+      ]
+    },
+    "LauncherGestureSet": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
         }
       ]
     },

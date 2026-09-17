@@ -29,6 +29,7 @@ export const webappSlots = resource<api.WebappSlots>({ launcher: null, overlay: 
 export const autoResume = resource(true, () => bound().deviceAutoResume());
 export const logStreaming = resource(false, () => bound().deviceLogStreaming());
 export const resumeTarget = resource<api.ResumeTarget>('anySpeaker', () => bound().deviceResumeTarget());
+export const launcherGesture = resource<api.LauncherGesture>('fivePress', () => bound().launcherGesture());
 
 export const hostInfo: ReadonlySignal<api.SessionHostInfo | null> = computed(
   () => snapshot.data.value?.hostInfo ?? null,
@@ -94,13 +95,14 @@ const ROUTED: Record<Topic, Refreshable[]> = {
     webappSlots,
     autoResume,
     resumeTarget,
+    launcherGesture,
     logStreaming,
     knownDevices,
     selectedDevice,
   ],
   'now-playing': [snapshot],
   ancs: [snapshot],
-  'device-meta': [snapshot, autoResume, resumeTarget],
+  'device-meta': [snapshot, autoResume, resumeTarget, launcherGesture],
   webapps: [webapps, webappActive, webappSlots, { refresh: configs.refreshAll }],
   'webapp-doc': [{ refresh: docs.refreshAll }],
   'known-devices': [knownDevices],
@@ -133,6 +135,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     webappSlots.refresh(),
     autoResume.refresh(),
     resumeTarget.refresh(),
+    launcherGesture.refresh(),
     logStreaming.refresh(),
     debugLogging.refresh(),
   ]);

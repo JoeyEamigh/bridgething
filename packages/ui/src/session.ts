@@ -6,6 +6,7 @@ import type {
   DeviceLogLine,
   DeviceMetaEntry,
   DocEntry,
+  LauncherGesture,
   NowPlaying,
   OtaAvailable,
   OtaDiscoverManifest,
@@ -74,6 +75,8 @@ export interface DeviceSession {
   setCapabilityFlags(flags: CapabilityFlags): Promise<void>;
   setDeviceNickname(nickname: string): Promise<void>;
   setDeviceAutoResume(enabled: boolean): Promise<void>;
+  launcherGesture(): Promise<LauncherGesture>;
+  setLauncherGesture(gesture: LauncherGesture): Promise<void>;
 
   webapps(): Promise<WebappInfo[]>;
   webappActive(): Promise<ActiveWebapp | null>;

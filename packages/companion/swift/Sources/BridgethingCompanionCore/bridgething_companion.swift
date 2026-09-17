@@ -3354,11 +3354,13 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func fetchOtaManifest(rootUrl: String) async throws  -> OtaDiscoverManifest
     
+    func getLauncherGesture(deviceId: String) async throws  -> LauncherGesture
+    
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
     
     func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?) async throws  -> WebappInfo
     
-    func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink?, webappId: String?, webappName: String?) async throws  -> WebappInfo
+    func installWebappFromUrl(deviceId: String, request: WebappInstallRequest, sink: WebappBundleSink?) async throws  -> WebappInfo
     
     func listWebappConfig(deviceId: String, id: String) async throws  -> [ConfigEntry]
     
@@ -3379,6 +3381,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     func setDeviceLogStreaming(enabled: Bool) async 
     
     func setDeviceResumeTarget(deviceId: String, target: ResumeTarget) async 
+    
+    func setLauncherGesture(deviceId: String, gesture: LauncherGesture) async throws 
     
     func setOtaPollConfig(config: OtaPollConfig?) async 
     
@@ -3781,6 +3785,22 @@ open func fetchOtaManifest(rootUrl: String)async throws  -> OtaDiscoverManifest 
         )
 }
     
+open func getLauncherGesture(deviceId: String)async throws  -> LauncherGesture  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_get_launcher_gesture(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
+            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLauncherGesture_lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
+}
+    
 open func getWebappDoc(deviceId: String, id: String, key: String)async throws  -> String?  {
     return
         try  await uniffiRustCallAsync(
@@ -3813,12 +3833,12 @@ open func installWebapp(deviceId: String, archivePath: String, provenance: Strin
         )
 }
     
-open func installWebappFromUrl(deviceId: String, url: String, expected: ArtifactDigest?, provenance: String?, sink: WebappBundleSink? = nil, webappId: String? = nil, webappName: String? = nil)async throws  -> WebappInfo  {
+open func installWebappFromUrl(deviceId: String, request: WebappInstallRequest, sink: WebappBundleSink? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(url),FfiConverterOptionTypeArtifactDigest.lower(expected),FfiConverterOptionString.lower(provenance),FfiConverterOptionTypeWebappBundleSink.lower(sink),FfiConverterOptionString.lower(webappId),FfiConverterOptionString.lower(webappName)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterTypeWebappInstallRequest_lower(request),FfiConverterOptionTypeWebappBundleSink.lower(sink)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -3979,6 +3999,22 @@ open func setDeviceResumeTarget(deviceId: String, target: ResumeTarget)async   {
             liftFunc: { $0 },
             errorHandler: nil
             
+        )
+}
+    
+open func setLauncherGesture(deviceId: String, gesture: LauncherGesture)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_set_launcher_gesture(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterTypeLauncherGesture_lower(gesture)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeCompanionError_lift
         )
 }
     
@@ -19295,6 +19331,72 @@ public func FfiConverterTypeWebappInfo_lower(_ value: WebappInfo) -> RustBuffer 
 }
 
 
+public struct WebappInstallRequest: Equatable, Hashable {
+    public var url: String
+    public var expected: ArtifactDigest?
+    public var provenance: String?
+    public var webappId: String?
+    public var webappName: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(url: String, expected: ArtifactDigest?, provenance: String?, webappId: String?, webappName: String?) {
+        self.url = url
+        self.expected = expected
+        self.provenance = provenance
+        self.webappId = webappId
+        self.webappName = webappName
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WebappInstallRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWebappInstallRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WebappInstallRequest {
+        return
+            try WebappInstallRequest(
+                url: FfiConverterString.read(from: &buf), 
+                expected: FfiConverterOptionTypeArtifactDigest.read(from: &buf), 
+                provenance: FfiConverterOptionString.read(from: &buf), 
+                webappId: FfiConverterOptionString.read(from: &buf), 
+                webappName: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WebappInstallRequest, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.url, into: &buf)
+        FfiConverterOptionTypeArtifactDigest.write(value.expected, into: &buf)
+        FfiConverterOptionString.write(value.provenance, into: &buf)
+        FfiConverterOptionString.write(value.webappId, into: &buf)
+        FfiConverterOptionString.write(value.webappName, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappInstallRequest_lift(_ buf: RustBuffer) throws -> WebappInstallRequest {
+    return try FfiConverterTypeWebappInstallRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappInstallRequest_lower(_ value: WebappInstallRequest) -> RustBuffer {
+    return FfiConverterTypeWebappInstallRequest.lower(value)
+}
+
+
 public struct WebappResourceFile: Equatable, Hashable {
     public var path: String
     public var mime: String?
@@ -21253,6 +21355,72 @@ public func FfiConverterTypeInitiateCallType_lift(_ buf: RustBuffer) throws -> I
 #endif
 public func FfiConverterTypeInitiateCallType_lower(_ value: InitiateCallType) -> RustBuffer {
     return FfiConverterTypeInitiateCallType.lower(value)
+}
+
+
+
+
+public enum LauncherGesture: Equatable, Hashable {
+    
+    case longPress
+    case fivePress
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension LauncherGesture: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLauncherGesture: FfiConverterRustBuffer {
+    typealias SwiftType = LauncherGesture
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LauncherGesture {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .longPress
+        
+        case 2: return .fivePress
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LauncherGesture, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .longPress:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .fivePress:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLauncherGesture_lift(_ buf: RustBuffer) throws -> LauncherGesture {
+    return try FfiConverterTypeLauncherGesture.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLauncherGesture_lower(_ value: LauncherGesture) -> RustBuffer {
+    return FfiConverterTypeLauncherGesture.lower(value)
 }
 
 
@@ -24569,6 +24737,8 @@ public enum SessionEvent: Equatable, Hashable {
     )
     case ancsAuthStatusChanged(deviceId: String, status: AncsAuthStatus
     )
+    case launcherGestureChanged(deviceId: String, gesture: LauncherGesture
+    )
     case log(origin: LogOrigin, level: LogLevel, target: String, message: String
     )
     case webappsChanged(entry: DeviceWebappsEntry
@@ -24629,37 +24799,40 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
         case 6: return .ancsAuthStatusChanged(deviceId: try FfiConverterString.read(from: &buf), status: try FfiConverterTypeAncsAuthStatus.read(from: &buf)
         )
         
-        case 7: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 7: return .launcherGestureChanged(deviceId: try FfiConverterString.read(from: &buf), gesture: try FfiConverterTypeLauncherGesture.read(from: &buf)
         )
         
-        case 8: return .webappsChanged(entry: try FfiConverterTypeDeviceWebappsEntry.read(from: &buf)
+        case 8: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 9: return .webappDocChanged(deviceId: try FfiConverterString.read(from: &buf), webappId: try FfiConverterString.read(from: &buf), key: try FfiConverterString.read(from: &buf), value: try FfiConverterOptionString.read(from: &buf)
+        case 9: return .webappsChanged(entry: try FfiConverterTypeDeviceWebappsEntry.read(from: &buf)
         )
         
-        case 10: return .deviceMetaChanged(deviceId: try FfiConverterString.read(from: &buf), meta: try FfiConverterTypeDeviceMeta.read(from: &buf)
+        case 10: return .webappDocChanged(deviceId: try FfiConverterString.read(from: &buf), webappId: try FfiConverterString.read(from: &buf), key: try FfiConverterString.read(from: &buf), value: try FfiConverterOptionString.read(from: &buf)
         )
         
-        case 11: return .voiceModelStateChanged(state: try FfiConverterTypeVoiceModelState.read(from: &buf)
+        case 11: return .deviceMetaChanged(deviceId: try FfiConverterString.read(from: &buf), meta: try FfiConverterTypeDeviceMeta.read(from: &buf)
         )
         
-        case 12: return .voiceTurnChanged(turn: try FfiConverterTypeVoiceTurn.read(from: &buf)
+        case 12: return .voiceModelStateChanged(state: try FfiConverterTypeVoiceModelState.read(from: &buf)
         )
         
-        case 13: return .otaRunChanged(run: try FfiConverterTypeOtaRun.read(from: &buf)
+        case 13: return .voiceTurnChanged(turn: try FfiConverterTypeVoiceTurn.read(from: &buf)
         )
         
-        case 14: return .otaAvailableChanged(available: try FfiConverterTypeOtaAvailable.read(from: &buf)
+        case 14: return .otaRunChanged(run: try FfiConverterTypeOtaRun.read(from: &buf)
         )
         
-        case 15: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
+        case 15: return .otaAvailableChanged(available: try FfiConverterTypeOtaAvailable.read(from: &buf)
         )
         
-        case 16: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
+        case 16: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
         )
         
-        case 17: return .resumed
+        case 17: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 18: return .resumed
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -24700,8 +24873,14 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             FfiConverterTypeAncsAuthStatus.write(status, into: &buf)
             
         
-        case let .log(origin,level,target,message):
+        case let .launcherGestureChanged(deviceId,gesture):
             writeInt(&buf, Int32(7))
+            FfiConverterString.write(deviceId, into: &buf)
+            FfiConverterTypeLauncherGesture.write(gesture, into: &buf)
+            
+        
+        case let .log(origin,level,target,message):
+            writeInt(&buf, Int32(8))
             FfiConverterTypeLogOrigin.write(origin, into: &buf)
             FfiConverterTypeLogLevel.write(level, into: &buf)
             FfiConverterString.write(target, into: &buf)
@@ -24709,12 +24888,12 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             
         
         case let .webappsChanged(entry):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(9))
             FfiConverterTypeDeviceWebappsEntry.write(entry, into: &buf)
             
         
         case let .webappDocChanged(deviceId,webappId,key,value):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(deviceId, into: &buf)
             FfiConverterString.write(webappId, into: &buf)
             FfiConverterString.write(key, into: &buf)
@@ -24722,44 +24901,44 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             
         
         case let .deviceMetaChanged(deviceId,meta):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(deviceId, into: &buf)
             FfiConverterTypeDeviceMeta.write(meta, into: &buf)
             
         
         case let .voiceModelStateChanged(state):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(12))
             FfiConverterTypeVoiceModelState.write(state, into: &buf)
             
         
         case let .voiceTurnChanged(turn):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(13))
             FfiConverterTypeVoiceTurn.write(turn, into: &buf)
             
         
         case let .otaRunChanged(run):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(14))
             FfiConverterTypeOtaRun.write(run, into: &buf)
             
         
         case let .otaAvailableChanged(available):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(15))
             FfiConverterTypeOtaAvailable.write(available, into: &buf)
             
         
         case let .otaPollChanged(status):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(16))
             FfiConverterTypeOtaPollStatus.write(status, into: &buf)
             
         
         case let .companionUpdateProgress(received,total):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(17))
             FfiConverterUInt64.write(received, into: &buf)
             FfiConverterUInt64.write(total, into: &buf)
             
         
         case .resumed:
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(18))
         
         }
     }
@@ -28149,13 +28328,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_get_launcher_gesture() != 45277) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 18104) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -28186,6 +28368,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_launcher_gesture() != 33595) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_ota_poll_config() != 63985) {

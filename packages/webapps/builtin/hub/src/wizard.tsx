@@ -1,4 +1,9 @@
-import { type BluetoothPairingResult, type BridgethingClient, type ConnectedDevice } from '@bridgething/client';
+import {
+  type BluetoothPairingResult,
+  type BridgethingClient,
+  type ConnectedDevice,
+  type LauncherGesture,
+} from '@bridgething/client';
 import { useEffect, useRef, useState } from 'react';
 
 import frame from './carthing-frame.png';
@@ -7,11 +12,13 @@ const PHASE_KEY = 'onboarding_phase';
 
 const GESTURE_PRESSES = 5;
 const GESTURE_WINDOW_MS = 1500;
+const GESTURE_HOLD_MS = 800;
 
-type Step = 'pair' | 'gesture';
+type Step = 'pair' | 'gesture-choice' | 'gesture';
 
 export function Wizard({ client, onDone }: { client: BridgethingClient; onDone: () => void }) {
   const [step, setStep] = useState<Step | null>(null);
+  const [gesture, setGesture] = useState<LauncherGesture>('longPress');
 
   useEffect(() => {
     let cancelled = false;
@@ -19,7 +26,7 @@ export function Wizard({ client, onDone }: { client: BridgethingClient; onDone: 
       .list()
       .then(r => {
         if (cancelled) return;
-        setStep(r.ok && Object.keys(r.response).length > 0 ? 'gesture' : 'pair');
+        setStep(r.ok && Object.keys(r.response).length > 0 ? 'gesture-choice' : 'pair');
       })
       .catch(() => {
         if (!cancelled) setStep('pair');
@@ -42,16 +49,26 @@ export function Wizard({ client, onDone }: { client: BridgethingClient; onDone: 
     <div className="flex h-full w-full flex-col bg-bg">
       <StepIndicator step={step} />
       <div className="flex-1 overflow-hidden">
-        {step === 'pair' && <PairStep client={client} onNext={() => setStep('gesture')} />}
-        {step === 'gesture' && <GestureStep onNext={finish} />}
+        {step === 'pair' && <PairStep client={client} onNext={() => setStep('gesture-choice')} />}
+        {step === 'gesture-choice' && (
+          <GestureChoiceStep
+            client={client}
+            onNext={g => {
+              setGesture(g);
+              setStep('gesture');
+            }}
+          />
+        )}
+        {step === 'gesture' && <GestureStep gesture={gesture} onNext={finish} />}
       </div>
     </div>
   );
 }
 
 function StepIndicator({ step }: { step: Step }) {
-  const order: Step[] = ['pair', 'gesture'];
-  const idx = order.indexOf(step);
+  const order = ['pair', 'gesture'] as const;
+  const mapped = step === 'gesture-choice' ? 'gesture' : step;
+  const idx = order.indexOf(mapped);
   return (
     <div className="flex items-center justify-center gap-2 pt-4">
       {order.map((s, i) => (
@@ -130,7 +147,64 @@ function PairStep({ client, onNext }: { client: BridgethingClient; onNext: () =>
   );
 }
 
-function GestureStep({ onNext }: { onNext: () => void }) {
+function GestureChoiceStep({
+  client,
+  onNext,
+}: {
+  client: BridgethingClient;
+  onNext: (gesture: LauncherGesture) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const choose = async (gesture: LauncherGesture) => {
+    if (saving) return;
+    setSaving(true);
+    await client.system.launcherGestureSet({ gesture }).catch(() => {});
+    const stored = await client.system.launcherGestureGet({ timeoutMs: 2000 }).catch(() => null);
+    onNext(stored?.ok ? stored.response.gesture : 'fivePress');
+  };
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 px-8 pt-4 pb-8">
+      <div className="font-display text-hero font-medium tracking-display text-off-white">jump back to apps</div>
+      <div className="max-w-104 text-center text-body text-soft">
+        pick how you get back here from any app. you can change this later in settings.
+      </div>
+
+      <div className="flex w-full max-w-104 flex-col gap-3">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => choose('longPress')}
+          className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
+          <span>
+            <span className="block font-mono text-row text-off-white">hold m</span>
+            <span className="block pt-1 text-body text-soft">press and hold the m button for a moment.</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => choose('fivePress')}
+          className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
+          <span>
+            <span className="block font-mono text-row text-off-white">press m 5 times</span>
+            <span className="block pt-1 text-body text-soft">tap the m button five times, quickly.</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GestureStep({ gesture, onNext }: { gesture: LauncherGesture; onNext: () => void }) {
+  if (gesture === 'longPress') {
+    return <LongPressPracticeStep onNext={onNext} />;
+  }
+  return <FivePressPracticeStep onNext={onNext} />;
+}
+
+function FivePressPracticeStep({ onNext }: { onNext: () => void }) {
   const [presses, setPresses] = useState(0);
   const finish = useRef(onNext);
   finish.current = onNext;
@@ -182,6 +256,61 @@ function GestureStep({ onNext }: { onNext: () => void }) {
             className={`size-2.5 border transition ${i < presses ? 'border-accent bg-accent' : 'border-rule-strong'}`}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function LongPressPracticeStep({ onNext }: { onNext: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const finish = useRef(onNext);
+  finish.current = onNext;
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let fired = false;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (fired || e.repeat || e.code !== 'KeyM') return;
+      setHolding(true);
+      timer = setTimeout(() => {
+        fired = true;
+        finish.current();
+      }, GESTURE_HOLD_MS);
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyM') return;
+      clearTimeout(timer);
+      setHolding(false);
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+      clearTimeout(timer);
+    };
+  }, []);
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 px-8 pt-4 pb-8">
+      <div className="font-display text-hero font-medium tracking-display text-off-white">jump back to apps</div>
+      <div className="max-w-104 text-center text-body text-soft">
+        hold the m button down until the bar fills. give it a go.
+      </div>
+
+      <GestureHint />
+
+      <div className="h-2.5 w-64 border border-rule-strong">
+        <div
+          className="h-full bg-accent"
+          style={{
+            width: holding ? '100%' : '0%',
+            transition: holding ? `width ${GESTURE_HOLD_MS}ms linear` : 'none',
+          }}
+        />
       </div>
     </div>
   );

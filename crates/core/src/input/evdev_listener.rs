@@ -5,6 +5,7 @@ use std::{
 };
 
 use evdev::{Device, EventType, KeyCode};
+use libbridgething::LauncherGesture;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -12,6 +13,7 @@ use super::{gesture_threshold, gesture_window, trigger_hub_switch};
 use crate::{chrome::ChromeCommand, handler::gateway::webapp::navigate_url_for_active, state::State};
 
 const RETRY_BACKOFF: Duration = Duration::from_secs(5);
+const LONG_PRESS_THRESHOLD: Duration = Duration::from_millis(800);
 
 pub async fn listen_for_hub_gesture(state: State, cancel: CancellationToken) {
   loop {
@@ -91,10 +93,20 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
   let mut window: VecDeque<Instant> = VecDeque::with_capacity(gesture_threshold());
   let span = gesture_window();
   let threshold = gesture_threshold();
+  let mut held = false;
+  let mut hold_deadline = Box::pin(sleep(Duration::ZERO));
 
   loop {
     tokio::select! {
       _ = cancel.cancelled() => return Ok(()),
+      _ = &mut hold_deadline, if held => {
+        held = false;
+        if state.meta.launcher_gesture() != LauncherGesture::LongPress {
+          continue;
+        }
+        tracing::debug!("hub gesture: KEY_M held");
+        trigger_hub_switch(state).await;
+      }
       ev = events.next_event() => {
         let ev = match ev {
           Ok(ev) => ev,
@@ -103,27 +115,44 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
         if ev.event_type() != EventType::KEY {
           continue;
         }
+
+        let key = KeyCode::new(ev.code());
+
+        if key == KeyCode::KEY_M {
+          match (state.meta.launcher_gesture(), ev.value()) {
+            (LauncherGesture::LongPress, 1) => {
+              held = true;
+              hold_deadline
+                .as_mut()
+                .reset(tokio::time::Instant::now() + LONG_PRESS_THRESHOLD);
+            }
+            (LauncherGesture::LongPress, 0) => held = false,
+            (LauncherGesture::FivePress, 1) => {
+              let now = Instant::now();
+              while let Some(front) = window.front() {
+                if now.duration_since(*front) > span {
+                  window.pop_front();
+                } else {
+                  break;
+                }
+              }
+              window.push_back(now);
+              tracing::trace!(count = window.len(), "hub gesture: KEY_M press");
+              if window.len() >= threshold {
+                window.clear();
+                trigger_hub_switch(state).await;
+              }
+            }
+            _ => {}
+          }
+          continue;
+        }
+
         if ev.value() != 1 {
           continue;
         }
 
-        let key = KeyCode::new(ev.code());
-        if key == KeyCode::KEY_M {
-          let now = Instant::now();
-          while let Some(front) = window.front() {
-            if now.duration_since(*front) > span {
-              window.pop_front();
-            } else {
-              break;
-            }
-          }
-          window.push_back(now);
-          tracing::trace!(count = window.len(), "hub gesture: KEY_M press");
-          if window.len() >= threshold {
-            window.clear();
-            trigger_hub_switch(state).await;
-          }
-        } else if key == KeyCode::KEY_ESC || key == KeyCode::KEY_1 || key == KeyCode::KEY_4 {
+        if key == KeyCode::KEY_ESC || key == KeyCode::KEY_1 || key == KeyCode::KEY_4 {
           handle_browser_nav(state, key).await;
         }
       }

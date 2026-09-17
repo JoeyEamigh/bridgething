@@ -26,7 +26,7 @@ use convert::{Phase, UpdateEvent, install_result, lagged, to_js};
 use futures::{StreamExt, channel::mpsc};
 use libbridgething::{
   OtaKind,
-  gateway::{DeviceSetNickname, WebappSetSlot, WebappSwitchTo, WebappUninstall},
+  gateway::{DeviceSetNickname, LauncherGestureSet, WebappSetSlot, WebappSwitchTo, WebappUninstall},
 };
 use tokio::sync::{Mutex, broadcast};
 use uuid::Uuid;
@@ -418,6 +418,35 @@ impl WasmSession {
       .await
       .map_err(failure)?;
     to_js(&slots)
+  }
+
+  #[wasm_bindgen(js_name = launcherGesture)]
+  pub async fn launcher_gesture(&self) -> Result<JsValue, JsValue> {
+    let reply = self
+      .session
+      .gateway
+      .system()
+      .launcher_gesture_get()
+      .await
+      .map_err(failure)?;
+    to_js(&reply.gesture)
+  }
+
+  #[wasm_bindgen(js_name = setLauncherGesture)]
+  pub async fn set_launcher_gesture(
+    &self,
+    #[wasm_bindgen(unchecked_param_type = "\"longPress\" | \"fivePress\"")] gesture: String,
+  ) -> Result<(), JsValue> {
+    let gesture = serde_json::from_value(serde_json::Value::String(gesture.clone()))
+      .map_err(|_| JsValue::from_str(&format!("unknown launcher gesture {gesture}")))?;
+    self
+      .session
+      .gateway
+      .system()
+      .launcher_gesture_set(LauncherGestureSet { gesture })
+      .await
+      .map_err(|error| JsValue::from_str(&format!("{error:?}")))?;
+    Ok(())
   }
 
   #[wasm_bindgen(js_name = setNickname)]

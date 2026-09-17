@@ -97,6 +97,8 @@ export class TauriSession implements CompanionSession {
   setDeviceNickname = (nickname: string) => invoke<void>('set_device_nickname', { nickname });
   deviceAutoResume = () => invoke<boolean>('device_auto_resume');
   setDeviceAutoResume = (enabled: boolean) => invoke<void>('set_device_auto_resume', { enabled });
+  launcherGesture = () => invoke<api.LauncherGesture>('launcher_gesture');
+  setLauncherGesture = (gesture: api.LauncherGesture) => invoke<void>('set_launcher_gesture', { gesture });
   deviceResumeTarget = () => invoke<api.ResumeTarget>('device_resume_target');
   setDeviceResumeTarget = (target: api.ResumeTarget) => invoke<void>('set_device_resume_target', { target });
 
@@ -114,12 +116,14 @@ export class TauriSession implements CompanionSession {
     webapp?: { id: string; name: string },
   ) =>
     invoke<api.WebappInfo>('install_webapp_from_url', {
-      url,
-      expected: expected ?? null,
-      provenance: provenance ?? null,
+      request: {
+        url,
+        expected: expected ?? null,
+        provenance: provenance ?? null,
+        webappId: webapp?.id ?? null,
+        webappName: webapp?.name ?? null,
+      },
       confirmed: confirmed ?? null,
-      webappId: webapp?.id ?? null,
-      webappName: webapp?.name ?? null,
     });
   webappResource = (id: string, kind: api.WebappResourceKind, origin?: ResourceOrigin | null) =>
     invoke<WebappResource>('webapp_resource', { id, kind, origin: origin ?? null });

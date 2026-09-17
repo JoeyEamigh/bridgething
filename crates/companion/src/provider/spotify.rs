@@ -580,10 +580,7 @@ impl Core {
       queue_list_avail: None,
       apple_music_radio_ad: None,
     };
-    let context = (!state.context_uri.is_empty()).then(|| PlaybackContext {
-      uri: state.context_uri.clone(),
-      name: none_if_empty(&state.context_name),
-    });
+    let context = PlaybackContext::new(state.context_uri.clone(), none_if_empty(&state.context_name));
     PlayerState {
       track,
       playback,

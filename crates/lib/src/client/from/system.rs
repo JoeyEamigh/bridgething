@@ -2,7 +2,7 @@ use bridgething_macros::{BridgeDispatch, BridgeEnum, WireRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{LogLevel, LogSource};
+use crate::{LauncherGesture, LogLevel, LogSource};
 
 /// Returns the daemon's version and identity as `BridgeThingMeta`.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
@@ -84,6 +84,24 @@ pub struct LogsUnsubscribe {
 )]
 pub struct DeviceGetNickname;
 
+/// Returns the M-button gesture that jumps to the launcher.
+#[derive(Debug, Clone, Copy, Default, WireRequest)]
+#[wire_request(
+  direction = ClientToBridge,
+  surface = System,
+  request_variant = LauncherGestureGet,
+  response = crate::client::LauncherGestureReply,
+  response_variant = LauncherGestureReply,
+)]
+pub struct LauncherGestureGet;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct LauncherGestureSet {
+  pub gesture: LauncherGesture,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum, BridgeDispatch)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
@@ -108,4 +126,8 @@ pub enum ClientToBridgeSystemMsg {
   FactoryReset,
   #[bridge_request]
   DeviceGetNickname,
+  #[bridge_request]
+  LauncherGestureGet,
+  #[bridge_command]
+  LauncherGestureSet(LauncherGestureSet),
 }

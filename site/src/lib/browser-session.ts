@@ -133,6 +133,15 @@ export class BrowserSession implements BrowserBackend {
     return beyondTheLink('auto-resume');
   }
 
+  launcherGesture(): Promise<api.LauncherGesture> {
+    return this.device.launcherGesture();
+  }
+
+  async setLauncherGesture(gesture: api.LauncherGesture): Promise<void> {
+    await this.device.setLauncherGesture(gesture);
+    this.fan('device-meta');
+  }
+
   async webapps(): Promise<api.WebappInfo[]> {
     const listed = await this.device.webapps();
     return listed.map(toWebappInfo);

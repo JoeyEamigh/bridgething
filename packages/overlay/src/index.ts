@@ -20,7 +20,7 @@ export type OverlaySurfaces = {
   voice: boolean;
 };
 
-export type OverlayConfig = { origin: string; surfaces: OverlaySurfaces };
+export type OverlayConfig = { origin: string; url: string; surfaces: OverlaySurfaces };
 
 declare global {
   interface Window {
@@ -54,10 +54,9 @@ const CALL_LABEL: Partial<Record<PhoneCallStatus, string>> = {
 
 function boot() {
   const cfg = window.__bridgethingOverlay;
-  if (!cfg || !location.origin.startsWith(cfg.origin)) return;
-  if (window.__bridgethingOverlayMounted) return;
+  if (!cfg || window.__bridgethingOverlayMounted) return;
   window.__bridgethingOverlayMounted = true;
-  const mount = () => new Overlay(cfg, mountRoot(), new BridgethingClient({ url: `ws://${location.host}/` }));
+  const mount = () => new Overlay(cfg, mountRoot(), new BridgethingClient({ url: cfg.url }));
   if (document.body) mount();
   else document.addEventListener('DOMContentLoaded', mount, { once: true });
 }

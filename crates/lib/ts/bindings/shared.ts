@@ -308,6 +308,11 @@ export type ItemRef = {
   persistentId: string | null;
 };
 
+/**
+ * Which M-button gesture jumps to the launcher.
+ */
+export type LauncherGesture = 'longPress' | 'fivePress';
+
 export type LibraryError =
   | { type: 'notFound'; data: { uri: string } }
   | { type: 'notSupported'; data: { reason: string } }

@@ -242,7 +242,6 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   let (mic, mic_handle) = MicManager::init(bus.clone(), bluetooth.clone(), MicConfig::default())
     .await
     .spawn();
-
   let transfer_sinks = transfer::sinks::TransferSinks::default();
 
   let range_proxy_handle = RangeProxy::spawn(
@@ -349,6 +348,11 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     state.bus.clone(),
     serial_number.clone(),
   );
+  spawn_launcher_gesture_observer(
+    state.meta.subscribe_launcher_gesture(),
+    bluetooth.clone(),
+    state.bus.clone(),
+  );
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
@@ -379,7 +383,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     tracing::warn!("failed to tell the chrome worker we are serving: {err:?}");
   }
 
-  state.sync_overlay(true).await;
+  state.sync_injections(true).await;
   state.refresh_forward_availability().await;
 
   if let Some(examples_dir) = config.examples_dir.clone() {
@@ -438,8 +442,8 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     loop {
       tokio::select! {
         client_conn = server.listen() => {
-          if let Ok((stream, address, mode)) = client_conn
-            && let Err(err) = client_man.handle_connection(address, stream, mode, &state).await {
+          if let Ok((stream, address, mode, scope)) = client_conn
+            && let Err(err) = client_man.handle_connection(address, stream, mode, scope, &state).await {
               tracing::error!("failed to accept tcp stream: {:?}", err);
             }
         },
@@ -575,6 +579,7 @@ fn spawn_ota_event_forwarder(
         BridgeToGatewaySystemMsgEvent::OtaError(e) => Some(BridgeToClientSystemMsgEvent::OtaError(e.clone())),
         BridgeToGatewaySystemMsgEvent::OtaFinished(f) => Some(BridgeToClientSystemMsgEvent::OtaFinished(f.clone())),
         BridgeToGatewaySystemMsgEvent::DeviceNicknameChanged(_) => None,
+        BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LogEntry(_) => None,
       };
       match event {
@@ -647,6 +652,37 @@ fn spawn_nickname_observer(
 
       if rx.changed().await.is_err() {
         break;
+      }
+    }
+  });
+}
+
+fn spawn_launcher_gesture_observer(
+  mut rx: tokio::sync::watch::Receiver<libbridgething::LauncherGesture>,
+  bluetooth: bluetooth::BluetoothMan,
+  bus: net::WireEventBus,
+) {
+  use libbridgething::{
+    client::{BridgeToClientSystemMsgEvent, LauncherGestureReply as ClientGestureReply},
+    gateway::{BridgeToGatewaySystemMsgEvent, LauncherGestureReply as GatewayGestureReply},
+  };
+  tokio::spawn(async move {
+    loop {
+      if rx.changed().await.is_err() {
+        break;
+      }
+      let gesture = *rx.borrow_and_update();
+
+      bluetooth
+        .gateway_man
+        .broadcast(BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(
+          GatewayGestureReply { gesture },
+        ))
+        .await;
+
+      let client_event = BridgeToClientSystemMsgEvent::LauncherGestureChanged(ClientGestureReply { gesture });
+      if let Err(errs) = bus.broadcast_event(client_event).await {
+        tracing::debug!(count = errs.len(), "launcher-gesture client broadcast non-fatal errors");
       }
     }
   });

@@ -2,10 +2,10 @@ use std::{path::PathBuf, sync::Arc};
 
 use bridgething_companion::{
   api::{
-    ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry, NowPlaying,
-    OtaPollConfig, ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState,
-    WebappInfo, WebappSlot, WebappSlots,
-    ota::{ArtifactDigest, OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
+    ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry,
+    LauncherGesture, NowPlaying, OtaPollConfig, ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer,
+    SessionSnapshot, VoiceModelState, WebappInfo, WebappInstallRequest, WebappSlot, WebappSlots,
+    ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
   },
   provider::ResumeTarget,
 };
@@ -418,6 +418,19 @@ pub async fn set_device_nickname(shell: State<'_, Arc<Shell>>, nickname: String)
 }
 
 #[tauri::command]
+pub async fn launcher_gesture(shell: State<'_, Arc<Shell>>) -> Answer<LauncherGesture> {
+  let Some(device_id) = shell.peer() else {
+    return Ok(LauncherGesture::FivePress);
+  };
+  Ok(shell.session().get_launcher_gesture(device_id).await?)
+}
+
+#[tauri::command]
+pub async fn set_launcher_gesture(shell: State<'_, Arc<Shell>>, gesture: LauncherGesture) -> Answer<()> {
+  Ok(shell.session().set_launcher_gesture(peer(&shell)?, gesture).await?)
+}
+
+#[tauri::command]
 pub async fn switch_webapp(shell: State<'_, Arc<Shell>>, id: String) -> Answer<()> {
   Ok(shell.session().switch_webapp(peer(&shell)?, id).await?)
 }
@@ -568,19 +581,15 @@ pub async fn ota_install_webapp(
 pub async fn install_webapp_from_url(
   shell: State<'_, Arc<Shell>>,
   extensions: State<'_, Arc<Extensions>>,
-  url: String,
-  expected: Option<ArtifactDigest>,
-  provenance: Option<String>,
+  request: WebappInstallRequest,
   confirmed: Option<Vec<String>>,
-  webapp_id: Option<String>,
-  webapp_name: Option<String>,
 ) -> Answer<WebappInfo> {
   let device_id = peer(&shell)?;
   let sink = extensions.inner().sink(&device_id, consented(confirmed)?);
   Ok(
     shell
       .session()
-      .install_webapp_from_url(device_id, url, expected, provenance, Some(sink), webapp_id, webapp_name)
+      .install_webapp_from_url(device_id, request, Some(sink))
       .await?,
   )
 }

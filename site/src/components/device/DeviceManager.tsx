@@ -1,5 +1,14 @@
-import type { DeviceMeta, SessionPeer } from '@bridgething/companion-types';
-import { Button, Field, ListGroup, ListRow, ScreenHeader, SectionHeader, SessionProvider } from '@bridgething/ui';
+import type { DeviceMeta, LauncherGesture, SessionPeer } from '@bridgething/companion-types';
+import {
+  Button,
+  Field,
+  ListGroup,
+  ListRow,
+  ScreenHeader,
+  SectionHeader,
+  Segmented,
+  SessionProvider,
+} from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 
@@ -83,6 +92,32 @@ function Header({ peer, meta }: { peer: SessionPeer; meta: DeviceMeta | null }):
   );
 }
 
+function LauncherGestureRow(): VNode {
+  const session = useBrowser();
+  const gesture = useBrowserQuery(['device-meta'], backend => backend.launcherGesture());
+
+  return (
+    <ListRow
+      title="jump back to apps"
+      subtitle="the m button gesture that opens the launcher from any app"
+      trailing={
+        <Segmented<LauncherGesture>
+          size="sm"
+          label="jump back to apps"
+          options={[
+            { value: 'longPress', label: 'hold m' },
+            { value: 'fivePress', label: 'press m 5x' },
+          ]}
+          value={gesture.data ?? 'fivePress'}
+          onChange={next => {
+            void session.setLauncherGesture(next);
+          }}
+        />
+      }
+    />
+  );
+}
+
 function DeviceInfo({ meta }: { meta: DeviceMeta | null }): VNode {
   const session = useBrowser();
   const [draft, setDraft] = useState<string | null>(null);
@@ -127,6 +162,7 @@ function DeviceInfo({ meta }: { meta: DeviceMeta | null }): VNode {
         {rows.map(([label, value]) => (
           <ListRow key={label} title={label} value={value} />
         ))}
+        <LauncherGestureRow />
       </ListGroup>
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
     </Section>

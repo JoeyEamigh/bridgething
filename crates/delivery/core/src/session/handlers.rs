@@ -271,6 +271,9 @@ impl PlayerHandler for DeliveryHandlers {
 }
 
 impl SystemHandler for DeliveryHandlers {
+  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     id: Uuid,

@@ -26,6 +26,7 @@ import type {
   InitiateCallType,
   ItemKind,
   ItemRef,
+  LauncherGesture,
   LibraryError,
   LogEntry,
   LogLevel,
@@ -345,7 +346,9 @@ export type BridgeToClientSystemMsg =
   | { event: 'otaError'; data: OtaError }
   | { event: 'otaFinished'; data: OtaFinished }
   | { event: 'deviceNickname'; data: DeviceNicknameReply }
-  | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply };
+  | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply }
+  | { event: 'launcherGestureReply'; data: LauncherGestureReply }
+  | { event: 'launcherGestureChanged'; data: LauncherGestureReply };
 
 /**
  * Wall clock, locale, and timezone for a webapp. The connected phone supplies all three. `get`
@@ -561,7 +564,9 @@ export type ClientToBridgeSystemMsg =
   | { event: 'reboot' }
   | { event: 'powerOff' }
   | { event: 'factoryReset' }
-  | { event: 'deviceGetNickname' };
+  | { event: 'deviceGetNickname' }
+  | { event: 'launcherGestureGet' }
+  | { event: 'launcherGestureSet'; data: LauncherGestureSet };
 
 export type ClientToBridgeTimeMsg = { event: 'get' };
 
@@ -717,6 +722,10 @@ export type KVDelete = { key: string };
 export type KVGet = { key: string };
 
 export type KVPut = { key: string; value: string };
+
+export type LauncherGestureReply = { gesture: LauncherGesture };
+
+export type LauncherGestureSet = { gesture: LauncherGesture };
 
 /**
  * Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.

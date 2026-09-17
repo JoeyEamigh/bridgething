@@ -201,6 +201,7 @@ pub fn hint_for(event: SessionEvent) -> Option<Hint> {
     } => Hint::about(WEBAPP_DOC, format!("{device_id}/{webapp_id}")),
     SessionEvent::VoiceModelStateChanged { .. } => Hint::bare(VOICE_MODEL),
     SessionEvent::VoiceTurnChanged { .. } | SessionEvent::CompanionUpdateProgress { .. } => return None,
+    SessionEvent::LauncherGestureChanged { device_id, .. } => Hint::about(DEVICE_META, device_id),
     SessionEvent::OtaRunChanged { run } => Hint::about(OTA_RUNS, run.device_id),
     SessionEvent::OtaAvailableChanged { available } => Hint::about(OTA_AVAILABLE, available.device_id),
     SessionEvent::OtaPollChanged { .. } => Hint::bare(OTA_POLL),

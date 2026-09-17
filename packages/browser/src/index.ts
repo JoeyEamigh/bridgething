@@ -1,4 +1,4 @@
-import type { BridgeThingMeta, WebappInfo } from '@bridgething/lib';
+import type { BridgeThingMeta, LauncherGesture, WebappInfo } from '@bridgething/lib';
 import { BRIDGETHING_DEFAULT_HOST, BRIDGETHING_NETWORK_GATEWAY_PORT } from '@bridgething/lib';
 import type { DeviceNicknameReply, WebappActive, WebappSlot, WebappSlots } from '@bridgething/lib/gateway';
 
@@ -142,6 +142,14 @@ export class Device {
 
   setNickname(nickname: string): Promise<DeviceNicknameReply> {
     return this.session.setNickname(nickname) as Promise<DeviceNicknameReply>;
+  }
+
+  launcherGesture(): Promise<LauncherGesture> {
+    return this.session.launcherGesture() as Promise<LauncherGesture>;
+  }
+
+  setLauncherGesture(gesture: LauncherGesture): Promise<void> {
+    return this.session.setLauncherGesture(gesture);
   }
 
   installWebapp(bundle: Uint8Array, provenance?: string): Promise<InstalledWebapp> {

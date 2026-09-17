@@ -262,6 +262,9 @@ impl PlayerHandler for Unsupported {
 }
 
 impl SystemHandler for Unsupported {
+  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,

@@ -8,7 +8,11 @@ use uuid::Uuid;
 
 use super::ClientHandler;
 use crate::{
-  bluetooth::BluetoothMan, net::WSResult, state::State, stock::StockSendMsg, transport::TransportController,
+  bluetooth::BluetoothMan,
+  net::{ClientScope, WSResult},
+  state::State,
+  stock::StockSendMsg,
+  transport::TransportController,
 };
 
 #[derive(Debug, Clone)]
@@ -35,6 +39,14 @@ impl MsgHandle {
       from,
       stock_msg_id,
     }
+  }
+
+  pub async fn scoped_app_id(&self) -> Result<Uuid, crate::handler::HandlerError> {
+    let id = match self.state.client_man.scope_of(&self.from) {
+      ClientScope::Overlay => self.state.overlay_webapp().await?,
+      ClientScope::ActiveWebapp => self.state.active_webapp().await?,
+    };
+    Ok(id.unwrap_or(Uuid::nil()))
   }
 
   #[allow(unused)]
