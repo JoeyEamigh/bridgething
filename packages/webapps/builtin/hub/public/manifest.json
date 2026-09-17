@@ -1,7 +1,7 @@
 {
   "id": "019693c0-5c6a-71f0-a89d-7e2a4d9c0a01",
   "name": "Apps",
-  "version": "0.12.8",
+  "version": "0.13.0",
   "description": "Built-in launcher",
   "icon": "icon.svg",
   "role": "launcher",
