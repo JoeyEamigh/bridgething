@@ -381,6 +381,12 @@
             drainOutput()
         }
 
+        /// iOS's External Accessory stack degrades sharply (and can drop the link)
+        /// when a single OutputStream.write exceeds ~2KB. Cap each write and let
+        /// the drain loop split larger batches across multiple writes; the
+        /// protocol framing above is untouched.
+        private static let maxWriteBytes = 2048
+
         private func drainOutput() {
             guard let out = session.outputStream else { return }
             while out.hasSpaceAvailable {
@@ -390,7 +396,7 @@
                 }
                 let written = currentWrite.withUnsafeBytes { raw -> Int in
                     guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-                    return out.write(base, maxLength: currentWrite.count)
+                    return out.write(base, maxLength: min(currentWrite.count, Self.maxWriteBytes))
                 }
                 if written < 0 {
                     eaLog.warning("ea write error for \(self.deviceId, privacy: .public): \(String(describing: out.streamError), privacy: .public); dropping link")
