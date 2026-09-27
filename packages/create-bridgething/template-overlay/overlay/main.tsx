@@ -155,7 +155,7 @@ function PairingModal({ client, onDismissible }: { client: BridgethingClient; on
   return (
     <div class="pointer-events-auto absolute inset-0 grid place-items-center bg-scrim text-center text-white">
       <div>
-        <div class="text-[13px] opacity-70">enter this pin on your phone</div>
+        <div class="text-[13px] opacity-70">enter this PIN on the device you are pairing</div>
         <div class="my-3 text-5xl font-bold tracking-[0.1em]">{pin.pin}</div>
         <div class="text-xs opacity-60">{pin.name || pin.mac}</div>
       </div>
