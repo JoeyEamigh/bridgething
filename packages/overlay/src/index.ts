@@ -189,7 +189,7 @@ export class Overlay {
       scrim = el('div', 'scrim');
       const modal = el('div', 'modal');
       modal.append(
-        el('div', 'head', 'enter this pin on your phone'),
+        el('div', 'head', 'enter this PIN on the device you are pairing'),
         el('div', 'pin', pin.pin),
         el('div', 'name', pin.name || pin.mac),
       );
