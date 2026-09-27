@@ -55,13 +55,17 @@ private final class Relay: NSObject, IOBluetoothRFCOMMChannelDelegate {
             self?.queue.async { self?.accept(connection) }
         }
         listener.stateUpdateHandler = { state in
-            if case .failed(let error) = state {
+            switch state {
+            case .ready:
+                print("BRIDGETHING_BLUETOOTH_RELAY_READY")
+            case .failed(let error):
                 fputs("WebSocket listener failed: \(error)\n", stderr)
                 exit(1)
+            default:
+                break
             }
         }
         listener.start(queue: queue)
-        print("Relay ready. In BridgeThing Desktop, connect to ws://127.0.0.1:\(port)/")
     }
 
     private func openBluetooth(for connection: NWConnection) {
@@ -91,7 +95,7 @@ private final class Relay: NSObject, IOBluetoothRFCOMMChannelDelegate {
             return
         }
         channel = opened
-        print("Car Thing Bluetooth connected")
+        fputs("Car Thing Bluetooth connected\n", stderr)
         receive(on: connection)
     }
 
@@ -206,9 +210,7 @@ if let parentFlag = CommandLine.arguments.firstIndex(of: "--parent-pid"),
 }
 let address = carThings.count == 1 ? carThings.first : nil
 guard let address else {
-    print("Pair exactly one Car Thing with this Mac to enable Bluetooth")
-    print("Paired devices:")
-    for device in paired { print("  \(device.addressString ?? "?")  \(device.name ?? "?")") }
+    fputs("Pair exactly one Car Thing with this Mac to enable Bluetooth\n", stderr)
     exit(1)
 }
 do {
