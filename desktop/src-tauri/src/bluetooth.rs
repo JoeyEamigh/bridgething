@@ -47,7 +47,6 @@ impl BluetoothRelay {
     relay
   }
 
-  #[cfg(not(target_os = "macos"))]
   pub fn unavailable() -> Arc<Self> {
     Arc::new(Self {
       active: AtomicBool::new(false),
