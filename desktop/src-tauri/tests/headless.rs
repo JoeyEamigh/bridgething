@@ -204,7 +204,9 @@ async fn an_announcing_gateway_is_offered_to_the_window() {
 
   let deadline = tokio::time::Instant::now() + SETTLE;
   let offered = loop {
-    let found = commands::endpoints(app.state()).await.expect("the browse answers");
+    let found = commands::endpoints(app.state(), app.state())
+      .await
+      .expect("the browse answers");
     if let Some(offered) = found.into_iter().find(|found| found.id.starts_with(&instance)) {
       break offered;
     }
