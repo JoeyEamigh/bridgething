@@ -8,16 +8,16 @@ const refdes = 'text-accent m-0 mb-4 font-mono text-sm font-normal tracking-norm
 <DocsLayout
   title="getting started"
   current="getting-started"
-  description="installing bridgething on a spotify car thing and pairing it to your phone.">
+  description="installing bridgething on a spotify car thing and connecting it to a phone or Mac.">
   <header class="mb-14">
     <h1>getting started</h1>
-    <p class="text-white/60">install it over usb, then run it from your phone.</p>
+    <p class="text-white/60">install it over usb, then connect from your phone or Mac.</p>
   </header>
 
   <section class="mb-14">
     <h2 class={refdes}>d1 - install</h2>
     <p class="text-white/60">
-      you need a usb-c cable, chrome, and an iphone or android phone. plug the car thing into your computer and start
+      you need a usb-c cable and chrome. plug the car thing into your computer and start
       the installer.
     </p>
     <div class="mt-6 flex flex-wrap items-center gap-4">
@@ -30,7 +30,10 @@ const refdes = 'text-accent m-0 mb-4 font-mono text-sm font-normal tracking-norm
     <h2 class={refdes}>d2 - pair</h2>
     <p class="text-white/60">
       the car thing shows its own name when it boots. open the bridgething app on your phone and pick that name.
-      updates, settings, and new apps come through the companion app.
+    </p>
+    <p class="mt-4 text-white/60">
+      for a Mac, open settings on the car thing, make Bluetooth discoverable, and pair it in macOS Bluetooth settings.
+      open BridgeThing Desktop; it connects automatically. The car thing only needs USB power, so a wall adapter works.
     </p>
     <img
       src="/screenshots/companion-home.png"
