@@ -44,8 +44,8 @@ export function ConnectFlow(): VNode {
 
       <Section>
         <SectionHeader
-          title="on your network"
-          hint="_bridgething._tcp"
+          title="nearby"
+          hint="network or paired Bluetooth"
           action="rescan"
           pending={scanning}
           onAction={endpoints.refresh}
@@ -55,7 +55,7 @@ export function ConnectFlow(): VNode {
             <Spinner class="mx-auto" />
           </SectionEmpty>
         ) : found.length === 0 ? (
-          <SectionEmpty>nothing announced itself. plug a Car Thing in, or check that it finished booting.</SectionEmpty>
+          <SectionEmpty>no Car Thing found. check its power, network, or Bluetooth pairing.</SectionEmpty>
         ) : (
           <ListGroup>
             {found.map(endpoint => {
