@@ -170,4 +170,23 @@ final class ShellAudioSessionTests: XCTestCase {
 
         XCTAssertEqual(second.volumes, [0.2])
     }
+
+    func testKeepaliveActivateAppliesMixedWhenIdle() {
+        let (session, applier) = makeSession()
+
+        session.keepaliveActivate()
+
+        XCTAssertEqual(applier.last, .mixed)
+    }
+
+    func testKeepaliveActivateLeavesActiveStreamAlone() {
+        let (session, applier) = makeSession()
+
+        session.streamDidStart()
+        let countBefore = applier.policies.count
+        session.keepaliveActivate()
+
+        XCTAssertEqual(applier.policies.count, countBefore)
+        XCTAssertEqual(applier.last, .exclusive)
+    }
 }

@@ -35,7 +35,7 @@ import Foundation
         }
 
         private func startPlayer() {
-            ShellAudioSession.shared.activateMixedPlayback()
+            ShellAudioSession.shared.keepaliveActivate()
             do {
                 let p = try AVAudioPlayer(data: Self.silence)
                 p.numberOfLoops = -1
@@ -49,7 +49,7 @@ import Foundation
 
         private func reassert() {
             guard active else { return }
-            ShellAudioSession.shared.activateMixedPlayback()
+            ShellAudioSession.shared.keepaliveActivate()
             if let p = player {
                 if !p.isPlaying { p.play() }
             } else {
@@ -69,7 +69,7 @@ import Foundation
             watchdog?.cancel()
             watchdog = Task { [weak self] in
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 10 * 1_000_000_000)
+                    try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
                     await self?.reassert()
                 }
             }

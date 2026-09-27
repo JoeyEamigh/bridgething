@@ -37,6 +37,15 @@ final class ShellAudioSession: @unchecked Sendable {
             })
     }
 
+    func keepaliveActivate() {
+        let next = lock.withLock { () -> ShellAudioSessionPolicy? in
+            mixedRequested = true
+            guard !streamActive else { return nil }
+            return .mixed
+        }
+        if let next { apply(next) }
+    }
+
     func deactivate() {
         apply(
             lock.withLock {
