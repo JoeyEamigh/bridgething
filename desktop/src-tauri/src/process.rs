@@ -2,11 +2,14 @@ use std::{process::Command, sync::Arc};
 
 use tauri::{AppHandle, Manager as _, Runtime};
 
-use crate::extensions::Extensions;
+use crate::{bluetooth::BluetoothRelay, extensions::Extensions};
 
 pub fn leave<R: Runtime>(app: &AppHandle<R>) -> ! {
   if let Some(extensions) = app.try_state::<Arc<Extensions>>() {
     extensions.halt();
+  }
+  if let Some(bluetooth) = app.try_state::<Arc<BluetoothRelay>>() {
+    bluetooth.stop();
   }
   app.cleanup_before_exit();
   unsafe { libc::_exit(0) }

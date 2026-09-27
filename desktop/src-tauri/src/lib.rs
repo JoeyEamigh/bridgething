@@ -1,5 +1,6 @@
 pub mod autoconnect;
 pub mod backends;
+pub mod bluetooth;
 pub mod capabilities;
 pub mod commands;
 pub mod extensions;
@@ -22,6 +23,7 @@ use tauri::Manager;
 use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 use crate::{
+  bluetooth::BluetoothRelay,
   extensions::Deps,
   hints::{ENDPOINTS, Hint, HintSink, Visibility, WindowHints},
   route::Route,
@@ -186,17 +188,36 @@ pub fn run() {
       logs::attach(shell.session().log_inbox());
       tauri::async_runtime::block_on(shell.start());
       let wake = shell.wake();
+      #[cfg(target_os = "macos")]
+      let bluetooth = {
+        use tauri::path::BaseDirectory;
+        let binary = app
+          .path()
+          .resolve("bridgething-bluetooth-relay", BaseDirectory::Resource)
+          .ok()
+          .filter(|path| path.is_file())
+          .unwrap_or_else(|| std::path::PathBuf::from(env!("BRIDGETHING_BLUETOOTH_RELAY")));
+        BluetoothRelay::start(binary, hints.clone(), Arc::clone(&wake))
+      };
+      #[cfg(not(target_os = "macos"))]
+      let bluetooth = BluetoothRelay::unavailable();
       let discovery = Discovery::spawn(move |_| {
         hints.emit(Hint::bare(ENDPOINTS));
         wake.notify_one();
       })?;
       autoconnect::spawn(shell.clone(), {
         let discovery = Arc::clone(&discovery);
-        move || discovery.endpoints()
+        let bluetooth = Arc::clone(&bluetooth);
+        move || {
+          let mut endpoints = discovery.endpoints();
+          endpoints.extend(bluetooth.endpoint());
+          endpoints
+        }
       });
       app.manage(shell);
       app.manage(extensions);
       app.manage(discovery);
+      app.manage(bluetooth);
       app.manage(Sources::open(&paths.config_dir));
       app.manage(Route::open(&paths.config_dir));
       tray::install(app.handle())?;

@@ -22,6 +22,7 @@ use tauri::{AppHandle, Runtime, State};
 use uuid::Uuid;
 
 use crate::{
+  bluetooth::BluetoothRelay,
   extensions::{ExtensionEntry, Extensions},
   hints::{self, Hint},
   known_device::KnownDevice,
@@ -272,8 +273,13 @@ pub async fn webapp_resource(
 }
 
 #[tauri::command]
-pub async fn endpoints(discovery: State<'_, Arc<Discovery>>) -> Answer<Vec<Endpoint>> {
-  Ok(discovery.endpoints())
+pub async fn endpoints(
+  discovery: State<'_, Arc<Discovery>>,
+  bluetooth: State<'_, Arc<BluetoothRelay>>,
+) -> Answer<Vec<Endpoint>> {
+  let mut endpoints = discovery.endpoints();
+  endpoints.extend(bluetooth.endpoint());
+  Ok(endpoints)
 }
 
 #[tauri::command]
