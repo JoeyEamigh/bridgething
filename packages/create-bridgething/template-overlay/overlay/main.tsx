@@ -73,7 +73,7 @@ function ConnectionBanner({ client }: { client: BridgethingClient }) {
   }, [client]);
 
   if (!away) return null;
-  return <div class={`${CHIP} top-3`}>phone disconnected</div>;
+  return <div class={`${CHIP} top-3`}>companion disconnected</div>;
 }
 
 function CallBanner({ client, onDismissible }: { client: BridgethingClient; onDismissible: Dismissible }) {
