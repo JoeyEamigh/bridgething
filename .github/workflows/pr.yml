@@ -157,6 +157,30 @@ jobs:
           BRIDGETHING_REQUIRE_DENO: "1"
         run: just test-desktop
 
+  macos-desktop:
+    needs: scope
+    if: needs.scope.outputs.desktop == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bun install --frozen-lockfile
+      - run: bunx turbo run build --filter='@bridgething/desktop-frontend...'
+      - run: cargo test -p bridgething-desktop --lib --locked
+      - name: bundle and check the macOS Bluetooth helper
+        run: |
+          set -euo pipefail
+          cd desktop
+          bun run tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          helper=../target/debug/bundle/macos/bridgething.app/Contents/Resources/bridgething-bluetooth-relay
+          test -x "$helper"
+          "$helper" --self-test
+          /usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' ../target/debug/bundle/macos/bridgething.app/Contents/Info.plist
+
   windows:
     needs: scope
     if: needs.scope.outputs.windows == 'true'
@@ -381,6 +405,7 @@ jobs:
         rust,
         rust-shipping,
         desktop,
+        macos-desktop,
         windows,
         swift,
         kotlin,
