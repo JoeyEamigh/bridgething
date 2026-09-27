@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "gen/macos/bridgething-bluetooth-relay": "bridgething-bluetooth-relay"
+    }
+  }
+}

@@ -2,9 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>bridgething shares this computer's location with your Car Thing so webapps like maps and weather know where you are.</string>
-	<key>NSLocationUsageDescription</key>
-	<string>bridgething shares this computer's location with your Car Thing so webapps like maps and weather know where you are.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>bridgething shares this computer's location with your Car Thing so webapps like maps and weather know where you are.</string>
+  <key>NSLocationUsageDescription</key>
+  <string>bridgething shares this computer's location with your Car Thing so webapps like maps and weather know where you are.</string>
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>BridgeThing connects to your paired Car Thing over Bluetooth.</string>
 </dict>
 </plist>
