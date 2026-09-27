@@ -122,7 +122,7 @@ pub struct HttpDownloadSink {
 }
 
 impl HttpDownloadSink {
-  pub fn on_response(&self, status: u16, headers: Vec<HttpHeader>, content_length: Option<u64>) {
+  pub fn on_response(&self, status: u16, headers: Vec<HttpHeader>, content_length: Option<u64>) -> bool {
     let mut state = self.state.lock().unwrap();
     state.status = status;
     state.content_length = content_length;
@@ -134,18 +134,23 @@ impl HttpDownloadSink {
     if refused {
       state.body = None;
     }
+    !refused
   }
 
-  pub fn on_chunk(&self, chunk: Vec<u8>) {
+  pub fn on_chunk(&self, chunk: Vec<u8>) -> bool {
     let mut state = self.state.lock().unwrap();
     let Some(body) = state.body.as_mut() else {
-      return;
+      return false;
     };
     match body.write(&chunk) {
-      Ok(()) => state.received += chunk.len() as u64,
+      Ok(()) => {
+        state.received += chunk.len() as u64;
+        true
+      }
       Err(reason) => {
         state.failure = Some(HttpError::Body(reason));
         state.body = None;
+        false
       }
     }
   }

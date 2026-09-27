@@ -104,8 +104,17 @@ pub struct ProviderInfo {
   pub display_name: String,
   pub available: bool,
   pub connected: bool,
+  pub sign_in: SignInMethod,
   pub auth_state: AuthState,
   pub service_health: ServiceHealth,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub enum SignInMethod {
+  Handshake,
+  ServerLogin,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -164,6 +173,32 @@ pub enum AncsAuthStatus {
 pub struct AncsAuthStatusEntry {
   pub device_id: String,
   pub status: AncsAuthStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub enum LauncherGesture {
+  LongPress,
+  FivePress,
+}
+
+impl From<libbridgething::LauncherGesture> for LauncherGesture {
+  fn from(gesture: libbridgething::LauncherGesture) -> Self {
+    match gesture {
+      libbridgething::LauncherGesture::LongPress => LauncherGesture::LongPress,
+      libbridgething::LauncherGesture::FivePress => LauncherGesture::FivePress,
+    }
+  }
+}
+
+impl From<LauncherGesture> for libbridgething::LauncherGesture {
+  fn from(gesture: LauncherGesture) -> Self {
+    match gesture {
+      LauncherGesture::LongPress => libbridgething::LauncherGesture::LongPress,
+      LauncherGesture::FivePress => libbridgething::LauncherGesture::FivePress,
+    }
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -328,6 +363,7 @@ pub struct DeviceMeta {
   pub model_name: String,
   pub serial_number: String,
   pub nickname: Option<String>,
+  pub launcher_gesture: LauncherGesture,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -481,4 +517,24 @@ pub struct SessionSnapshot {
   pub ota_runs: Vec<OtaRun>,
   pub ota_available: Vec<OtaAvailable>,
   pub ota_poll: OtaPollStatus,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn launcher_gesture_round_trips_through_the_wire_enum() {
+    for wire in [
+      libbridgething::LauncherGesture::LongPress,
+      libbridgething::LauncherGesture::FivePress,
+    ] {
+      let exposed: LauncherGesture = wire.into();
+      assert_eq!(libbridgething::LauncherGesture::from(exposed), wire);
+    }
+    assert_eq!(
+      LauncherGesture::from(libbridgething::LauncherGesture::LongPress),
+      LauncherGesture::LongPress
+    );
+  }
 }

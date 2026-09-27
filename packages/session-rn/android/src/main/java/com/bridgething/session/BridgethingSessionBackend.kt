@@ -10,6 +10,7 @@ import com.margelo.nitro.bridgething.session.BridgethingCompanionDebug
 import com.margelo.nitro.bridgething.session.BridgethingConfigEntry
 import com.margelo.nitro.bridgething.session.BridgethingDeviceLogLine
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
+import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingLogArchive
 import com.margelo.nitro.bridgething.session.BridgethingDocEntry
 import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
@@ -20,6 +21,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
+import com.margelo.nitro.bridgething.session.BridgethingProviderCredentials
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
 import com.margelo.nitro.bridgething.session.BridgethingResourceOrigin
 import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
@@ -41,6 +43,7 @@ public interface BridgethingSessionBackend {
     public suspend fun connectProvider(id: String)
     public suspend fun disconnectProvider(id: String)
     public suspend fun cancelAuth(id: String)
+    public suspend fun completeProviderAuth(id: String, credentials: BridgethingProviderCredentials)
     public suspend fun setProviderPriority(ids: Array<String>)
 
     public suspend fun snapshot(): BridgethingSessionSnapshot
@@ -111,6 +114,8 @@ public interface BridgethingSessionBackend {
     public suspend fun reconnectPeer(deviceId: String)
 
     public suspend fun deviceSetNickname(deviceId: String, nickname: String)
+
+    public suspend fun setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture)
 
     public suspend fun presentPairPicker(): BridgethingBtDevice?
 

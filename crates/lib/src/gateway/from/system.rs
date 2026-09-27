@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::transfer::{TransferBody, TransferRef};
-use crate::{LogLevel, LogSource, OtaKind, RangePart};
+use crate::{LauncherGesture, LogLevel, LogSource, OtaKind, RangePart};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -117,6 +117,24 @@ pub struct DeviceSetNickname {
   pub nickname: String,
 }
 
+/// Returns the M-button gesture that jumps to the launcher.
+#[derive(Debug, Clone, Copy, Default, WireRequest)]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = System,
+  request_variant = LauncherGestureGet,
+  response = crate::gateway::LauncherGestureReply,
+  response_variant = LauncherGestureReply,
+)]
+pub struct LauncherGestureGet;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct LauncherGestureSet {
+  pub gesture: LauncherGesture,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
@@ -182,6 +200,10 @@ pub enum GatewayToBridgeSystemMsg {
   DeviceGetNickname,
   #[bridge_request]
   DeviceSetNickname(DeviceSetNickname),
+  #[bridge_request]
+  LauncherGestureGet,
+  #[bridge_command]
+  LauncherGestureSet(LauncherGestureSet),
   #[bridge_request]
   LogsTail(LogsTail),
   #[bridge_request]

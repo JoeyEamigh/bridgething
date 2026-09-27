@@ -10,6 +10,7 @@ import type {
   BridgethingDeviceMeta,
   BridgethingDeviceWebappsEntry,
   BridgethingDocEntry,
+  BridgethingLauncherGesture,
   BridgethingLogArchive,
   BridgethingNowPlaying,
   BridgethingOtaAvailable,
@@ -18,6 +19,7 @@ import type {
   BridgethingOtaPollStatus,
   BridgethingOtaProgress,
   BridgethingOtaRun,
+  BridgethingProviderCredentials,
   BridgethingProviderInfo,
   BridgethingResourceOrigin,
   BridgethingResumeTarget,
@@ -51,6 +53,7 @@ export type {
   BridgethingDeviceMetaEntry,
   BridgethingDocEntry,
   BridgethingHostInfo,
+  BridgethingLauncherGesture,
   BridgethingLogArchive,
   BridgethingNowPlaying,
   BridgethingNowPlayingPlayback,
@@ -69,6 +72,8 @@ export type {
   BridgethingOtaStep,
   BridgethingOtaStepKind,
   BridgethingPeerLinkStatus,
+  BridgethingProviderCredentials,
+  BridgethingProviderCredentialsKind,
   BridgethingProviderInfo,
   BridgethingRepeatMode,
   BridgethingResourceOrigin,
@@ -77,6 +82,7 @@ export type {
   BridgethingServiceHealthKind,
   BridgethingSessionPeer,
   BridgethingSessionSnapshot,
+  BridgethingSignInMethod,
   BridgethingVoiceDebug,
   BridgethingVoiceModelState,
   BridgethingVoiceModelStatus,
@@ -164,6 +170,10 @@ export class BridgethingSession {
 
   async cancelAuth(id: string): Promise<void> {
     await this.native.cancelAuth(id);
+  }
+
+  async completeProviderAuth(id: string, credentials: BridgethingProviderCredentials): Promise<void> {
+    await this.native.completeProviderAuth(id, credentials);
   }
 
   async setProviderPriority(ids: string[]): Promise<void> {
@@ -352,6 +362,10 @@ export class BridgethingSession {
 
   async deviceSetNickname(deviceId: string, nickname: string): Promise<void> {
     await this.native.deviceSetNickname(deviceId, nickname);
+  }
+
+  async setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void> {
+    await this.native.setLauncherGesture(deviceId, gesture);
   }
 
   async presentPairPicker(): Promise<BridgethingBtDevice | null> {

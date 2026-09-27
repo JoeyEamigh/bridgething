@@ -92,6 +92,7 @@ export type DeviceMeta = {
   modelName: string;
   serialNumber: string;
   nickname: string | null;
+  launcherGesture: LauncherGesture;
 };
 
 export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };
@@ -116,6 +117,8 @@ export type HostInfo = {
   osVersion: string;
   hostIdentifier: string;
 };
+
+export type LauncherGesture = 'longPress' | 'fivePress';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
@@ -330,16 +333,19 @@ export type OtaStoreChange =
 
 export type PeerLinkStatus = 'connected' | 'linkFailed';
 
+export type ProviderCredentials =
+  | { kind: 'oauthTokens'; accessToken: string; refreshToken: string }
+  | { kind: 'serverLogin'; serverUrl: string; username: string; password: string };
+
 export type ProviderInfo = {
   id: string;
   displayName: string;
   available: boolean;
   connected: boolean;
+  signIn: SignInMethod;
   authState: AuthState;
   serviceHealth: ServiceHealth;
 };
-
-export type ProviderTokens = { accessToken: string; refreshToken: string };
 
 export type RepeatMode = 'off' | 'one' | 'all';
 
@@ -399,6 +405,8 @@ export type SessionSnapshot = {
   otaPoll: OtaPollStatus;
 };
 
+export type SignInMethod = 'handshake' | 'serverLogin';
+
 export type SpotifyProviderConfig = { workerBase: string; psk: string };
 
 export type VoiceDebug = {
@@ -447,6 +455,14 @@ export type WebappInfo = {
   config: Array<ConfigField>;
   permissions: Array<string>;
   extension: ExtensionInfo | null;
+};
+
+export type WebappInstallRequest = {
+  url: string;
+  expected: ArtifactDigest | null;
+  provenance: string | null;
+  webappId: string | null;
+  webappName: string | null;
 };
 
 export type WebappResourceFile = { path: string; mime: string | null };

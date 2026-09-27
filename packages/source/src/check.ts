@@ -34,7 +34,7 @@ function changedApps(baseRef: string): Set<string> | null {
   const changed = new Set<string>();
   for (const path of diff.split('\n')) {
     const match = /^apps\/([^/]+)\//.exec(path);
-    if (match) changed.add(match[1]!);
+    if (match) changed.add(match[1]);
   }
   return changed;
 }
@@ -45,7 +45,7 @@ function assertOwnBase(source: SourceConfig): void {
   const origin = githubRemote();
   if (!origin) return;
   const [owner, repo] = origin.split('/') as [string, string];
-  if (pages[1]!.toLowerCase() === owner.toLowerCase() && pages[2]!.toLowerCase() === repo.toLowerCase()) return;
+  if (pages[1].toLowerCase() === owner.toLowerCase() && pages[2].toLowerCase() === repo.toLowerCase()) return;
   fail(
     `${SOURCE_FILE} publishes to ${source.base_url}, which is ${pages[1]}/${pages[2]}, but origin is ${origin}.\n` +
       '       If you forked this source, point "base_url" at your own pages site and give every app in apps/ a\n' +

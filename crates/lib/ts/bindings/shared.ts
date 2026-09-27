@@ -57,6 +57,7 @@ export type BridgeThingMeta = {
   libbridgethingVersion: string;
   appName: string;
   nickname: string | null;
+  launcherGesture: LauncherGesture;
   appVersion: string;
   daemonSha256: string | null;
   /**
@@ -308,6 +309,11 @@ export type ItemRef = {
   persistentId: string | null;
 };
 
+/**
+ * Which M-button gesture jumps to the launcher.
+ */
+export type LauncherGesture = 'longPress' | 'fivePress';
+
 export type LibraryError =
   | { type: 'notFound'; data: { uri: string } }
   | { type: 'notSupported'; data: { reason: string } }
@@ -406,7 +412,7 @@ export type MediaItemUpdate = {
  */
 export type MediaType = 'music' | 'podcast' | 'audioBook';
 
-export type MusicProvider = 'none' | 'spotify' | 'appleMusic';
+export type MusicProvider = 'none' | 'spotify' | 'appleMusic' | 'subsonic';
 
 export type NetError =
   | { type: 'requestFailed'; data: { reason: string } }

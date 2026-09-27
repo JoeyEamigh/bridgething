@@ -2,6 +2,7 @@ import {
   type BridgethingAncsAuthStatus,
   type BridgethingDeviceMeta,
   type BridgethingHostInfo,
+  type BridgethingLauncherGesture,
   type BridgethingNowPlaying,
   type BridgethingProviderInfo,
   type BridgethingSessionPeer,
@@ -257,6 +258,13 @@ export async function setDeviceName(
   name: string | null,
 ): Promise<void> {
   await getSession().deviceSetNickname(deviceId, name ?? '');
+}
+
+export async function setLauncherGesture(
+  deviceId: string,
+  gesture: BridgethingLauncherGesture,
+): Promise<void> {
+  await getSession().setLauncherGesture(deviceId, gesture);
 }
 
 export function forgetKnownDevice(deviceId: string): void {

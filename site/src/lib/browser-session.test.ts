@@ -10,6 +10,7 @@ function meta(): BridgeThingMeta {
     libbridgethingVersion: '0.4.0',
     appName: 'bridgething',
     nickname: 'the dashboard',
+    launcherGesture: 'fivePress',
     appVersion: '0.8.1',
     daemonSha256: null,
     wakewordModelVersion: null,
@@ -94,6 +95,7 @@ describe('toDeviceMeta', () => {
       modelName: 'Car Thing',
       serialNumber: 'SB0001',
       nickname: 'the dashboard',
+      launcherGesture: 'fivePress',
     });
   });
 });

@@ -13,7 +13,7 @@ type OverlaySurfaces = {
   volume: boolean;
 };
 
-type OverlayConfig = { origin: string; surfaces: OverlaySurfaces };
+type OverlayConfig = { origin: string; url: string; surfaces: OverlaySurfaces };
 
 declare global {
   interface Window {
@@ -209,8 +209,7 @@ function Overlay({ cfg, client }: { cfg: OverlayConfig; client: BridgethingClien
 
 function boot() {
   const cfg = window.__bridgethingOverlay;
-  if (!cfg || !location.origin.startsWith(cfg.origin)) return;
-  if (window.__bridgethingOverlayMounted) return;
+  if (!cfg || window.__bridgethingOverlayMounted) return;
   window.__bridgethingOverlayMounted = true;
 
   const mount = () => {
@@ -218,7 +217,7 @@ function boot() {
     host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:none';
     const shadow = host.attachShadow({ mode: 'closed' });
     document.body.appendChild(host);
-    render(<Overlay cfg={cfg} client={new BridgethingClient({ url: `ws://${location.host}/` })} />, shadow);
+    render(<Overlay cfg={cfg} client={new BridgethingClient({ url: cfg.url })} />, shadow);
   };
 
   if (document.body) mount();

@@ -1,5 +1,6 @@
 use std::{
   collections::HashMap,
+  hash::{DefaultHasher, Hash, Hasher},
   sync::{Arc, Mutex},
 };
 
@@ -68,6 +69,20 @@ impl ArtCache {
     }
   }
 
+  pub fn adopt(&self, bytes: Vec<u8>) -> String {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let key = format!("embedded:{:016x}", hasher.finish());
+    self.store.lock().unwrap().put(
+      ArtKey {
+        url: key.clone(),
+        max_edge: None,
+      },
+      bytes,
+    );
+    key
+  }
+
   pub async fn master(&self, url: &str) -> Option<Vec<u8>> {
     let key = ArtKey {
       url: url.to_owned(),
@@ -109,9 +124,25 @@ impl ArtCache {
   }
 }
 
+pub trait ArtResolver: Send + Sync {
+  fn asset_id(&self, source: &str, max_edge: u32) -> Option<String>;
+  fn url(&self, source: &str) -> String;
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ImageAssetCodec {
   pub namespace: &'static str,
   pub short_form: Option<(char, &'static str)>,
+}
+
+impl ArtResolver for ImageAssetCodec {
+  fn asset_id(&self, source: &str, max_edge: u32) -> Option<String> {
+    ImageAssetCodec::asset_id(self, source, max_edge)
+  }
+
+  fn url(&self, source: &str) -> String {
+    source.to_owned()
+  }
 }
 
 fn percent_encode(raw: &str) -> String {
@@ -282,6 +313,21 @@ mod tests {
 
     assert_eq!(origin.fetches.load(Ordering::SeqCst), 2);
     assert_eq!(scaler.scales.load(Ordering::SeqCst), 0);
+  }
+
+  #[tokio::test]
+  async fn adopted_bytes_scale_without_ever_touching_the_origin() {
+    let origin = Origin::serving();
+    let scaler = Arc::new(Scaler::default());
+    let cache = cache(origin.clone(), scaler.clone());
+
+    let key = cache.adopt(b"embedded".to_vec());
+    assert_eq!(key, cache.adopt(b"embedded".to_vec()), "the same bytes share a key");
+    assert_ne!(key, cache.adopt(b"other".to_vec()));
+    assert_eq!(cache.scaled(&key, 96).await.unwrap(), b"embedded@96");
+
+    assert_eq!(origin.fetches.load(Ordering::SeqCst), 0);
+    assert_eq!(scaler.scales.load(Ordering::SeqCst), 1);
   }
 
   #[test]

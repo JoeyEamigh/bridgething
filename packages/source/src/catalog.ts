@@ -203,7 +203,7 @@ function landingPage(source: SourceConfig, catalog: Catalog, base: string): stri
   const url = `${base}/${CATALOG_FILE}`;
   const rows = catalog.apps
     .map(app => {
-      const newest = app.versions[0]!;
+      const newest = app.versions[0];
       const icon = app.icon ? `<img src="${app.icon}" alt="" width="48" height="48">` : '<div class="noicon"></div>';
       return `<li>${icon}<div><strong>${escape(app.name)}</strong> <span>${escape(newest.version)}</span><p>${escape(app.description)}</p></div></li>`;
     })

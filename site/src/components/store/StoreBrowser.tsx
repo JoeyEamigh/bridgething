@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { aggregate } from '@bridgething/catalog';
+import { aggregate, countLine, failureLine, STORE_COPY } from '@bridgething/catalog';
 import {
   fetchDirectory,
   fetchMergedApps,
+  readStoreData,
   type DirectoryEntry,
   type InstallCount,
   type MergedCatalog,
@@ -12,18 +13,17 @@ import { AppSection } from './AppSection';
 import { SourceDirectory } from './SourceDirectory';
 import { SubmitSource } from './SubmitSource';
 
-function countLine(listings: number, sources: number): string {
-  return `${listings} across ${sources} source${sources === 1 ? '' : 's'}`;
-}
-
 export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
-  const [catalogs, setCatalogs] = useState<MergedCatalog[]>(initial);
-  const [installs, setInstalls] = useState<InstallCount[]>([]);
-  const [failures, setFailures] = useState<{ url: string; reason: string }[]>([]);
-  const [directory, setDirectory] = useState<DirectoryEntry[] | null>(null);
-  const [loading, setLoading] = useState(true);
+  const seeded = useMemo(readStoreData, []);
+
+  const [catalogs, setCatalogs] = useState<MergedCatalog[]>(seeded?.apps.catalogs ?? initial);
+  const [installs, setInstalls] = useState<InstallCount[]>(seeded?.apps.installs ?? []);
+  const [failures, setFailures] = useState<{ url: string; reason: string }[]>(seeded?.apps.failures ?? []);
+  const [directory, setDirectory] = useState<DirectoryEntry[] | null>(seeded?.directory ?? null);
+  const [loading, setLoading] = useState(seeded === null);
 
   useEffect(() => {
+    if (seeded) return;
     const controller = new AbortController();
     fetchMergedApps({ origin: '', signal: controller.signal })
       .then(merged => {
@@ -36,15 +36,16 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [seeded]);
 
   useEffect(() => {
+    if (seeded) return;
     const controller = new AbortController();
     fetchDirectory({ signal: controller.signal })
       .then(setDirectory)
       .catch(() => setDirectory([]));
     return () => controller.abort();
-  }, []);
+  }, [seeded]);
 
   const ordered = useMemo(() => orderedByTrust(catalogs), [catalogs]);
 
@@ -64,23 +65,23 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
   return (
     <>
       <AppSection
-        title="apps"
+        title={STORE_COPY.appsTitle}
         status={
           loading && vouched.length === 0
             ? 'loading…'
             : countLine(vouched.length, new Set(vouched.map(listing => listing.sourceUrl)).size)
         }
-        empty="the catalog exists but has no apps in it."
+        empty={STORE_COPY.appsEmpty}
         listings={vouched}
         sources={sources}
       />
 
       {communitySources.length > 0 ? (
         <AppSection
-          title="community apps"
-          note="these are unreviewed"
+          title={STORE_COPY.communityTitle}
+          note={STORE_COPY.communityNote}
           status={countLine(community.length, communitySources.length)}
-          empty="nothing here"
+          empty={STORE_COPY.communityEmpty}
           listings={community}
           sources={sources}
         />
@@ -88,9 +89,7 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
 
       {failures.length > 0 ? (
         <div class="mb-16 border border-white/15 p-4">
-          <p class="m-0 mb-2 font-mono text-sm text-white/45">
-            {failures.length} source{failures.length === 1 ? '' : 's'} could not be read.
-          </p>
+          <p class="m-0 mb-2 font-mono text-sm text-white/45">{failureLine(failures.length)}</p>
           <ul class="m-0 flex list-none flex-col gap-1 p-0">
             {failures.map(failure => (
               <li key={failure.url} class="text-warn font-mono text-xs break-all">

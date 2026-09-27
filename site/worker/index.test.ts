@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import { listInstalls, toInstallCounts } from './installs.ts';
 import { ENTRY_SNAPSHOT_KEY } from './jam.ts';
@@ -12,6 +12,8 @@ const CLIENT = '203.0.113.7';
 const ADMIN_TOKEN = 'admin-secret';
 const CATALOG_URL = 'https://third.example/catalog.json';
 const ICON_URL = 'https://third.example/icon.png';
+
+const DURING_THE_JAM = new Date('2026-09-05T00:00:00.000Z');
 
 const dropped: string[] = [];
 
@@ -47,42 +49,82 @@ function post(path: string, body: unknown, client = CLIENT): Promise<Response> {
   return worker.fetch(request, env(), context());
 }
 
-function beacon(sourceUrl = OFFICIAL_CATALOG_URL): Record<string, unknown> {
-  return { app_id: CALENDAR_ID, source_url: sourceUrl, version: '1.0.0' };
+const DEVICE = '8558R481Q61R';
+
+function census(sourceUrl = OFFICIAL_CATALOG_URL, device = DEVICE): Record<string, unknown> {
+  return { device_id: device, apps: [{ app_id: CALENDAR_ID, source_url: sourceUrl, version: '1.0.0' }] };
+}
+
+function serialOf(n: number): string {
+  return `8558R${String(n).padStart(3, '0')}Q61R`;
 }
 
 beforeEach(() => {
   kv = fakeKv();
   dropped.length = 0;
+  setSystemTime(DURING_THE_JAM);
 });
 
-describe('POST /api/installs', () => {
-  test('an install is accepted and answered with the tally it produced', async () => {
-    const response = await post('/api/installs', beacon());
+describe('POST /api/installed', () => {
+  test('an inventory is accepted and answered with what it counted', async () => {
+    const response = await post('/api/installed', census());
 
     expect(response.status).toBe(202);
-    expect(await response.json<{ installs: number }>()).toEqual({ installs: 1 });
+    expect(await response.json<{ apps: number }>()).toEqual({ apps: 1 });
   });
 
-  test('a second install of the same app from the same source adds to the tally', async () => {
-    await post('/api/installs', beacon());
-    const response = await post('/api/installs', beacon());
+  test('a second device holding the same app adds to the tally', async () => {
+    await post('/api/installed', census());
+    await post('/api/installed', census(OFFICIAL_CATALOG_URL, serialOf(2)));
 
-    expect(await response.json<{ installs: number }>()).toEqual({ installs: 2 });
     expect(toInstallCounts(await listInstalls(kv))).toEqual([
-      { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, count: 2 },
+      { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, count: 2, versions: { '1.0.0': 2 } },
     ]);
   });
 
-  test('a source outside the directory is refused', async () => {
-    const response = await post('/api/installs', beacon('https://nobody.example/catalog.json'));
+  test('one device reporting the same inventory again never raises the tally', async () => {
+    await post('/api/installed', census());
+    await post('/api/installed', census());
 
-    expect(response.status).toBe(404);
-    expect(await listInstalls(kv)).toHaveLength(0);
+    expect(toInstallCounts(await listInstalls(kv))[0]!.count).toBe(1);
+  });
+
+  test('an app that leaves a device leaves the tally with it', async () => {
+    await post('/api/installed', census());
+    await post('/api/installed', { device_id: DEVICE, apps: [] });
+
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([]);
+  });
+
+  test('an inventory without a device serial is refused', async () => {
+    const response = await post('/api/installed', {
+      apps: [{ app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, version: '1.0.0' }],
+    });
+
+    expect(response.status).toBe(400);
+  });
+
+  test('an inventory with no apps array is refused', async () => {
+    expect((await post('/api/installed', { device_id: DEVICE })).status).toBe(400);
+  });
+
+  test('an app from a source outside the directory is dropped, not counted, and the rest still lands', async () => {
+    const response = await post('/api/installed', {
+      device_id: DEVICE,
+      apps: [
+        { app_id: CALENDAR_ID, source_url: 'https://nobody.example/catalog.json', version: '1.0.0' },
+        { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, version: '1.0.0' },
+      ],
+    });
+
+    expect(response.status).toBe(202);
+    expect(toInstallCounts(await listInstalls(kv))).toEqual([
+      { app_id: CALENDAR_ID, source_url: OFFICIAL_CATALOG_URL, count: 1, versions: { '1.0.0': 1 } },
+    ]);
   });
 
   test('a body that is not json is refused rather than counted', async () => {
-    const request = new Request('https://bridgething.com/api/installs', {
+    const request = new Request('https://bridgething.com/api/installed', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cf-connecting-ip': CLIENT },
       body: 'not json',
@@ -91,22 +133,24 @@ describe('POST /api/installs', () => {
     expect((await worker.fetch(request, env(), context())).status).toBe(400);
   });
 
-  test('one client cannot report installs without limit', async () => {
+  test('one client cannot report without limit', async () => {
     const statuses: number[] = [];
-    for (let i = 0; i < 41; i += 1) statuses.push((await post('/api/installs', beacon())).status);
+    for (let i = 0; i < 41; i += 1) {
+      statuses.push((await post('/api/installed', census(OFFICIAL_CATALOG_URL, serialOf(i)))).status);
+    }
 
     expect(statuses.filter(status => status === 202)).toHaveLength(40);
     expect(statuses.at(-1)).toBe(429);
   });
 
   test('the limit is per client, so one busy installer cannot silence everyone else', async () => {
-    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon());
+    for (let i = 0; i < 40; i += 1) await post('/api/installed', census(OFFICIAL_CATALOG_URL, serialOf(i)));
 
-    expect((await post('/api/installs', beacon(), '198.51.100.4')).status).toBe(202);
+    expect((await post('/api/installed', census(), '198.51.100.4')).status).toBe(202);
   });
 
-  test('reporting installs does not spend the budget for submitting sources', async () => {
-    for (let i = 0; i < 40; i += 1) await post('/api/installs', beacon());
+  test('reporting an inventory does not spend the budget for submitting sources', async () => {
+    for (let i = 0; i < 40; i += 1) await post('/api/installed', census(OFFICIAL_CATALOG_URL, serialOf(i)));
 
     const original = globalThis.fetch;
     globalThis.fetch = (() => Promise.reject(new TypeError('no network in tests'))) as unknown as typeof fetch;
@@ -118,7 +162,7 @@ describe('POST /api/installs', () => {
   });
 
   test('the endpoint only takes posts', async () => {
-    const request = new Request('https://bridgething.com/api/installs', { method: 'GET' });
+    const request = new Request('https://bridgething.com/api/installed', { method: 'GET' });
 
     expect((await worker.fetch(request, env(), context())).status).toBe(404);
   });

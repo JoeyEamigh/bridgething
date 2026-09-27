@@ -12,6 +12,7 @@ import com.bridgething.companion.shell.AndroidImageScaler
 import com.bridgething.companion.shell.AndroidMediaSessionBackend
 import com.bridgething.companion.shell.AndroidNotificationBackend
 import com.bridgething.companion.shell.AndroidPhoneBackend
+import com.bridgething.companion.shell.AndroidStreamBackend
 import com.bridgething.companion.shell.AndroidVolumeBackend
 import com.bridgething.companion.shell.BtLinkTransport
 import com.bridgething.companion.shell.EncryptedPrefsSecretStore
@@ -53,6 +54,8 @@ public class BridgethingCompanion(
     public val mediaSessions: AndroidMediaSessionBackend =
         AndroidMediaSessionBackend(context.applicationContext, notificationListener)
 
+    public val stream: AndroidStreamBackend = AndroidStreamBackend(context.applicationContext)
+
     private val http: KtorHttpTransport = KtorHttpTransport()
     private val ws: KtorWsTransport = KtorWsTransport()
 
@@ -83,6 +86,7 @@ public class BridgethingCompanion(
                 notifications = notifications,
                 phone = AndroidPhoneBackend(appContext),
                 mediaSessions = mediaSessions,
+                stream = stream,
                 speech = WhisperSpeechBackend { session.voiceModelPaths().asrWeights },
                 nlu = LitertNluRunner { session.voiceModelPaths().nluBundleDir },
                 appleMusic = null,

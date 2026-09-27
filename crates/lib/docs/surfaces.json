@@ -1,5 +1,5 @@
 {
-  "version": "0.12.1",
+  "version": "0.13.1",
   "surfaces": [
     {
       "name": "asset",
@@ -820,6 +820,11 @@
           "method": "onDeviceNicknameChanged",
           "payload": "DeviceNicknameReply",
           "payload_ref": "DeviceNicknameReply"
+        },
+        {
+          "method": "onLauncherGestureChanged",
+          "payload": "LauncherGestureReply",
+          "payload_ref": "LauncherGestureReply"
         }
       ],
       "requests": [
@@ -853,6 +858,12 @@
           "method": "deviceGetNickname",
           "response": "DeviceNicknameReply",
           "response_event": "onDeviceNickname"
+        },
+        {
+          "method": "launcherGestureGet",
+          "description": "Returns the M-button gesture that jumps to the launcher.",
+          "response": "LauncherGestureReply",
+          "response_event": "onLauncherGestureReply"
         }
       ],
       "commands": [
@@ -869,6 +880,11 @@
         },
         {
           "method": "factoryReset"
+        },
+        {
+          "method": "launcherGestureSet",
+          "payload": "LauncherGestureSet",
+          "payload_ref": "LauncherGestureSet"
         }
       ],
       "handlers": []
@@ -1357,6 +1373,11 @@
           "name": "nickname",
           "type": "string",
           "optional": true
+        },
+        {
+          "name": "launcherGesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
         },
         {
           "name": "appVersion",
@@ -2527,6 +2548,38 @@
         }
       ]
     },
+    "LauncherGesture": {
+      "kind": "enum",
+      "description": "Which M-button gesture jumps to the launcher.",
+      "variants": [
+        {
+          "name": "LongPress"
+        },
+        {
+          "name": "FivePress"
+        }
+      ]
+    },
+    "LauncherGestureReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
+        }
+      ]
+    },
+    "LauncherGestureSet": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "gesture",
+          "type": "LauncherGesture",
+          "type_ref": "LauncherGesture"
+        }
+      ]
+    },
     "LibraryBrowse": {
       "kind": "struct",
       "description": "Pages through one folder of the library tree, or the root menu. Root results are held for 5 minutes.",
@@ -3217,6 +3270,9 @@
         },
         {
           "name": "AppleMusic"
+        },
+        {
+          "name": "Subsonic"
         }
       ]
     },
@@ -6016,7 +6072,7 @@
         },
         {
           "name": "MissingIndexHtml",
-          "description": "Put an `index.html` at the root of the bundle."
+          "description": "The bundle has no `index.html` to show. Only a bundle that ships a usable overlay may omit it."
         },
         {
           "name": "InvalidManifest",
@@ -6189,6 +6245,10 @@
     "WebappUninstalled": {
       "kind": "struct",
       "fields": [
+        {
+          "name": "id",
+          "type": "string"
+        },
         {
           "name": "name",
           "type": "string"

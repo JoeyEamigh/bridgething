@@ -71,6 +71,7 @@ function installedEntry(version: string) {
       },
     ],
     active: undefined,
+    listed: true,
   };
 }
 

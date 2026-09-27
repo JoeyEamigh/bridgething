@@ -1,4 +1,5 @@
 mod actor;
+pub mod art;
 pub mod builtin;
 pub mod storage;
 pub mod wait;

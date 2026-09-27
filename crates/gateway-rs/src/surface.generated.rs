@@ -282,6 +282,12 @@ impl<'a> SystemSurface<'a> {
   pub async fn cancel_update(&self) -> Result<(), SdkError> {
     self.0.command(GatewayToBridgeSystemMsgCommand::CancelUpdate).await
   }
+  pub async fn launcher_gesture_set(&self, payload: LauncherGestureSet) -> Result<(), SdkError> {
+    self
+      .0
+      .command(GatewayToBridgeSystemMsgCommand::LauncherGestureSet(payload))
+      .await
+  }
   pub async fn logs_unsubscribe(&self, payload: LogsUnsubscribe) -> Result<(), SdkError> {
     self
       .0
@@ -299,6 +305,11 @@ impl<'a> SystemSurface<'a> {
     request: DeviceSetNickname,
   ) -> Result<DeviceNicknameReply, RequestFailure<DeviceNicknameRejected>> {
     self.0.request(request).await
+  }
+  pub async fn launcher_gesture_get(
+    &self,
+  ) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(LauncherGestureGet).await
   }
   pub async fn logs_tail(
     &self,
@@ -688,6 +699,10 @@ pub trait SystemHandler {
   ) -> impl Future<Output = Result<(), WireError>> + Send;
   fn device_nickname_changed(&self, payload: DeviceNicknameReply)
   -> impl Future<Output = Result<(), WireError>> + Send;
+  fn launcher_gesture_changed(
+    &self,
+    payload: LauncherGestureReply,
+  ) -> impl Future<Output = Result<(), WireError>> + Send;
   fn log_entry(&self, payload: LogEntry) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
@@ -1524,6 +1539,25 @@ where
         tracing::warn!(
           surface = "system",
           variant = "deviceNicknameChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::LauncherGestureReply(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "launcherGestureReply",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::LauncherGestureChanged(payload)) => {
+      if let Err(error) = <H as SystemHandler>::launcher_gesture_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "system",
+          variant = "launcherGestureChanged",
           ?error,
           "inbound not handled"
         );

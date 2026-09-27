@@ -158,6 +158,19 @@ impl CapabilitiesRegistry {
     self.elect_addr(&announces)
   }
 
+  pub fn companion_for_scheme(&self, scheme: &str) -> Option<Address> {
+    let announces = self.inner.announces.read().expect("announces lock poisoned");
+    let claims = |addr: &Address| {
+      announces
+        .get(addr)
+        .is_some_and(|a| a.caps.uri_schemes.iter().any(|s| s == scheme))
+    };
+    self
+      .elect_addr(&announces)
+      .filter(claims)
+      .or_else(|| ranked(&announces).into_iter().find(claims))
+  }
+
   fn elect_addr(&self, announces: &HashMap<Address, Announce>) -> Option<Address> {
     self
       .inner
@@ -170,11 +183,18 @@ impl CapabilitiesRegistry {
   fn build_snapshot(&self) -> Capabilities {
     let forward = self.forward_available();
     let announces = self.inner.announces.read().expect("announces lock poisoned");
-    let primary = self
-      .elect_addr(&announces)
-      .and_then(|addr| announces.get(&addr))
-      .map(|a| &a.caps);
+    let elected = self.elect_addr(&announces);
+    let primary = elected.and_then(|addr| announces.get(&addr)).map(|a| &a.caps);
     let authority = self.inner.authority.live_scopes();
+    let mut uri_schemes: Vec<String> = Vec::new();
+    for addr in elected.into_iter().chain(ranked(&announces)) {
+      let Some(announce) = announces.get(&addr) else { continue };
+      for scheme in &announce.caps.uri_schemes {
+        if !uri_schemes.contains(scheme) {
+          uri_schemes.push(scheme.clone());
+        }
+      }
+    }
 
     match primary {
       Some(caps) => Capabilities {
@@ -184,7 +204,7 @@ impl CapabilitiesRegistry {
           ..caps.available
         },
         authority,
-        uri_schemes: caps.uri_schemes.clone(),
+        uri_schemes,
         network: caps.network,
         audio: caps.audio.clone(),
         music_provider: caps.music_provider,
@@ -225,6 +245,12 @@ impl CapabilitiesRegistry {
       }
     }
   }
+}
+
+fn ranked(announces: &HashMap<Address, Announce>) -> Vec<Address> {
+  let mut ordered: Vec<(&Address, &Announce)> = announces.iter().collect();
+  ordered.sort_by_key(|(_, a)| std::cmp::Reverse(a.seq));
+  ordered.into_iter().map(|(addr, _)| *addr).collect()
 }
 
 fn normalize_schemes(schemes: Vec<String>) -> Vec<String> {
@@ -326,6 +352,47 @@ mod tests {
     assert!(snap.gateway.is_some());
     assert_eq!(snap.uri_schemes, vec!["spotify", "apple-music"]);
     assert_eq!(snap.available, claimed);
+  }
+
+  #[tokio::test]
+  async fn every_companion_s_schemes_are_playable_and_each_uri_routes_to_a_claimant() {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let bus = WireEventBus::new(client_man);
+    let auth = AuthorityRegistry::new();
+    let reg = CapabilitiesRegistry::new(bus, auth.clone());
+
+    let phone: Address = "00:11:22:33:44:55".parse().unwrap();
+    let desktop: Address = "66:77:88:99:AA:BB".parse().unwrap();
+    let _ = reg
+      .set_announce(
+        phone,
+        caps_with(vec!["spotify", "https"], SurfaceAvailability::default()),
+      )
+      .await;
+    let _ = reg
+      .set_announce(
+        desktop,
+        caps_with(vec!["http", "https"], SurfaceAvailability::default()),
+      )
+      .await;
+    let _ = reg
+      .claim_authority(phone, CompanionAuthorityScope::NowPlayingPlayback, None)
+      .await;
+
+    assert_eq!(reg.snapshot().uri_schemes, vec!["spotify", "https", "http"]);
+    assert_eq!(reg.companion_for_scheme("spotify"), Some(phone));
+    assert_eq!(reg.companion_for_scheme("http"), Some(desktop));
+    assert_eq!(
+      reg.companion_for_scheme("https"),
+      Some(phone),
+      "the primary wins a scheme it shares"
+    );
+    assert_eq!(reg.companion_for_scheme("tidal"), None);
+
+    let _ = reg.clear_companion(phone).await;
+    assert_eq!(reg.snapshot().uri_schemes, vec!["http", "https"]);
+    assert_eq!(reg.companion_for_scheme("https"), Some(desktop));
+    assert_eq!(reg.companion_for_scheme("spotify"), None);
   }
 
   #[tokio::test]

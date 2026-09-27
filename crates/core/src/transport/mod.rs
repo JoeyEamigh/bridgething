@@ -215,11 +215,19 @@ impl TransportController {
   }
 
   async fn send_player(&self, msg: BridgeToGatewayPlayerMsgCommand) {
-    self.bluetooth.gateway_man.broadcast_command(msg).await;
+    let Some(primary) = self.authority.primary() else {
+      tracing::warn!("transport: the playback companion left before {msg:?} could be sent");
+      return;
+    };
+    self.bluetooth.gateway_man.send_command(primary, msg).await;
   }
 
   async fn send_audio(&self, msg: BridgeToGatewayAudioMsgCommand) {
-    self.bluetooth.gateway_man.broadcast_command(msg).await;
+    let Some(primary) = self.authority.primary() else {
+      tracing::warn!("transport: the volume companion left before {msg:?} could be sent");
+      return;
+    };
+    self.bluetooth.gateway_man.send_command(primary, msg).await;
   }
 
   async fn send_iap2(&self, cmd: HidCommand) {

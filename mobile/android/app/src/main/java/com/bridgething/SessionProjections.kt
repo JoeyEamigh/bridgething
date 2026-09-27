@@ -14,6 +14,7 @@ import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMetaEntry
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingHostInfo
+import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
 import com.margelo.nitro.bridgething.session.BridgethingNowPlayingPlayback
 import com.margelo.nitro.bridgething.session.BridgethingNowPlayingTrack
@@ -38,6 +39,7 @@ import com.margelo.nitro.bridgething.session.BridgethingServiceHealth
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealthKind
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
+import com.margelo.nitro.bridgething.session.BridgethingSignInMethod
 import com.margelo.nitro.bridgething.session.BridgethingVoiceDebug
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelState
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelStatus
@@ -59,6 +61,7 @@ import uniffi.bridgething_companion.ConfigField
 import uniffi.bridgething_companion.ConfigKind
 import uniffi.bridgething_companion.DeviceMeta
 import uniffi.bridgething_companion.DeviceWebappsEntry
+import uniffi.bridgething_companion.LauncherGesture
 import uniffi.bridgething_companion.LogLevel
 import uniffi.bridgething_companion.LogOrigin
 import uniffi.bridgething_companion.LogStoreLevel
@@ -80,6 +83,7 @@ import uniffi.bridgething_companion.ResumeTarget
 import uniffi.bridgething_companion.ServiceHealthKind
 import uniffi.bridgething_companion.SessionPeer
 import uniffi.bridgething_companion.SessionSnapshot
+import uniffi.bridgething_companion.SignInMethod
 import uniffi.bridgething_companion.VoiceModelState
 import uniffi.bridgething_companion.VoiceModelStatus
 import uniffi.bridgething_companion.VoiceTurn
@@ -91,8 +95,6 @@ import uniffi.bridgething_companion.WebappSlot
 import uniffi.bridgething_companion.WebappSlots
 import uniffi.bridgething_companion.WebappSource
 import uniffi.bridgething_companion.parseOtaCompositeVersion
-
-internal fun List<WebappInfo>.visible(): List<WebappInfo> = filter { it.role != WebappRole.LAUNCHER }
 
 internal fun toRnSnapshot(snap: SessionSnapshot): BridgethingSessionSnapshot = BridgethingSessionSnapshot(
     hostInfo = BridgethingHostInfo(
@@ -130,6 +132,10 @@ internal fun toRnProviderInfo(info: ProviderInfo): BridgethingProviderInfo = Bri
     displayName = info.displayName,
     available = info.available,
     connected = info.connected,
+    signIn = when (info.signIn) {
+        SignInMethod.HANDSHAKE -> BridgethingSignInMethod.HANDSHAKE
+        SignInMethod.SERVER_LOGIN -> BridgethingSignInMethod.SERVERLOGIN
+    },
     authState = toRnAuthState(info.authState),
     serviceHealth = BridgethingServiceHealth(
         kind = when (info.serviceHealth.kind) {
@@ -206,7 +212,18 @@ internal fun toRnDeviceMeta(meta: DeviceMeta): BridgethingDeviceMeta = Bridgethi
     modelName = meta.modelName,
     serialNumber = meta.serialNumber,
     nickname = meta.nickname,
+    launcherGesture = toRnLauncherGesture(meta.launcherGesture),
 )
+
+internal fun toRnLauncherGesture(gesture: LauncherGesture): BridgethingLauncherGesture = when (gesture) {
+    LauncherGesture.LONG_PRESS -> BridgethingLauncherGesture.LONGPRESS
+    LauncherGesture.FIVE_PRESS -> BridgethingLauncherGesture.FIVEPRESS
+}
+
+internal fun toLauncherGesture(gesture: BridgethingLauncherGesture): LauncherGesture = when (gesture) {
+    BridgethingLauncherGesture.LONGPRESS -> LauncherGesture.LONG_PRESS
+    BridgethingLauncherGesture.FIVEPRESS -> LauncherGesture.FIVE_PRESS
+}
 
 internal fun toRnCapabilityFlags(flags: CapabilityFlags): BridgethingCapabilityFlags = BridgethingCapabilityFlags(
     geo = flags.geo,
@@ -259,8 +276,9 @@ internal fun toRnVoiceModelState(state: VoiceModelState): BridgethingVoiceModelS
 internal fun toRnWebappsEntry(entry: DeviceWebappsEntry): BridgethingDeviceWebappsEntry =
     BridgethingDeviceWebappsEntry(
         deviceId = entry.deviceId,
-        webapps = entry.webapps.visible().map(::toRnWebappInfo).toTypedArray(),
+        webapps = entry.webapps.map(::toRnWebappInfo).toTypedArray(),
         active = entry.active?.let(::toRnActiveWebapp),
+        listed = entry.listed,
     )
 
 internal fun toRnActiveWebapp(active: ActiveWebapp): BridgethingActiveWebapp =

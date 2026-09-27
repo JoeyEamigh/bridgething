@@ -83,18 +83,21 @@ pub enum ChromeCommand {
   Reload,
   ClearHttpCache,
   NoteServing,
-  SetOverlay {
-    script: Option<OverlayScript>,
+  SetInjections {
+    scripts: Vec<InjectedScript>,
     run_immediately: bool,
   },
 }
 
 #[derive(Clone)]
-pub struct OverlayScript(pub Arc<String>);
+pub struct InjectedScript {
+  pub source: Arc<String>,
+  pub world: Option<&'static str>,
+}
 
-impl std::fmt::Debug for OverlayScript {
+impl std::fmt::Debug for InjectedScript {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    write!(f, "OverlayScript({} bytes)", self.0.len())
+    write!(f, "InjectedScript({} bytes, world {:?})", self.source.len(), self.world)
   }
 }
 
@@ -173,9 +176,9 @@ struct ChromeWorker {
   serving: bool,
   browser: Option<Browser>,
   http: reqwest::Client,
-  overlay_id: Option<String>,
-  overlay: Option<OverlayScript>,
-  overlay_run_immediately: bool,
+  injection_ids: Vec<String>,
+  injections: Vec<InjectedScript>,
+  injections_run_immediately: bool,
   home_url: String,
   settled: bool,
   stranded_streak: u8,
@@ -207,9 +210,9 @@ impl ChromeWorker {
       serving: false,
       browser: None,
       http,
-      overlay_id: None,
-      overlay: None,
-      overlay_run_immediately: false,
+      injection_ids: Vec::new(),
+      injections: Vec::new(),
+      injections_run_immediately: false,
       home_url,
       settled: false,
       stranded_streak: 0,
@@ -253,8 +256,8 @@ impl ChromeWorker {
               self.serving = true;
               self.settled = false;
             }
-            ChromeCommand::SetOverlay { script, run_immediately } => {
-              self.handle_set_overlay(script, run_immediately).await
+            ChromeCommand::SetInjections { scripts, run_immediately } => {
+              self.handle_set_injections(scripts, run_immediately).await
             }
           }
         }
@@ -350,37 +353,34 @@ impl ChromeWorker {
       .await;
   }
 
-  async fn handle_set_overlay(&mut self, script: Option<OverlayScript>, run_immediately: bool) {
-    self.overlay = script.clone();
-    self.overlay_run_immediately = run_immediately;
-    self.apply_overlay(script, run_immediately).await;
+  async fn handle_set_injections(&mut self, scripts: Vec<InjectedScript>, run_immediately: bool) {
+    self.injections = scripts.clone();
+    self.injections_run_immediately = run_immediately;
+    self.apply_injections(scripts, run_immediately).await;
   }
 
-  async fn apply_overlay(&mut self, script: Option<OverlayScript>, run_immediately: bool) {
-    tracing::debug!(
-      installed = script.is_some(),
-      run_immediately,
-      "setting overlay injection"
-    );
-    let prior = self.overlay_id.take();
-    self.overlay_id = self
-      .with_first_tab("set-overlay", move |tab| {
-        if let Some(id) = &prior {
+  async fn apply_injections(&mut self, scripts: Vec<InjectedScript>, run_immediately: bool) {
+    tracing::debug!(installed = scripts.len(), run_immediately, "setting page injections");
+    let prior = std::mem::take(&mut self.injection_ids);
+    self.injection_ids = self
+      .with_first_tab("set-injections", move |tab| {
+        for id in &prior {
           let _ = tab.call_method(RemoveScriptToEvaluateOnNewDocument { identifier: id.clone() });
         }
-        let Some(src) = &script else {
-          return Ok(None);
-        };
-        let installed = tab.call_method(AddScriptToEvaluateOnNewDocument {
-          source: (*src.0).clone(),
-          world_name: None,
-          include_command_line_api: None,
-          run_immediately: run_immediately.then_some(true),
-        })?;
-        Ok(Some(installed.identifier))
+        let mut installed = Vec::with_capacity(scripts.len());
+        for script in &scripts {
+          let added = tab.call_method(AddScriptToEvaluateOnNewDocument {
+            source: (*script.source).clone(),
+            world_name: script.world.map(str::to_string),
+            include_command_line_api: None,
+            run_immediately: run_immediately.then_some(true),
+          })?;
+          installed.push(added.identifier);
+        }
+        Ok(installed)
       })
       .await
-      .flatten();
+      .unwrap_or_default();
   }
 
   async fn handle_clear_http_cache(&mut self) {
@@ -406,9 +406,9 @@ impl ChromeWorker {
 
     let recovered = self.recover_stranded_tab().await;
 
-    if self.overlay.is_some() && self.overlay_id.is_none() {
-      let (script, run_immediately) = (self.overlay.clone(), self.overlay_run_immediately);
-      self.apply_overlay(script, run_immediately).await;
+    if !self.injections.is_empty() && self.injection_ids.is_empty() {
+      let (scripts, run_immediately) = (self.injections.clone(), self.injections_run_immediately);
+      self.apply_injections(scripts, run_immediately).await;
     }
 
     self.settled = !recovered && self.connected.load(std::sync::atomic::Ordering::SeqCst);

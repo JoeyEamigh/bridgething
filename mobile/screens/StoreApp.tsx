@@ -1,5 +1,6 @@
 import {
   compareVersions,
+  fillsSlot,
   sortNewestFirst,
   versionCompatible,
   type AppVersion,
@@ -21,6 +22,7 @@ import { Progress } from '../components/Progress';
 import { Screenshots } from '../components/Screenshots';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
+import { SlotAction } from '../components/SlotAction';
 import { Spinner } from '../components/Spinner';
 import {
   describeVersionInstall,
@@ -38,6 +40,7 @@ import {
 import { TEXT } from '../lib/theme';
 import { formatBytes } from '../lib/utils';
 import { humanizePermission } from '../lib/webapp-permissions';
+import { useWebapps } from '../lib/webapps';
 import type { StoreScreenProps } from '../navigation';
 
 type Props = StoreScreenProps<'StoreApp'>;
@@ -47,12 +50,18 @@ export function StoreAppScreen({ navigation, route }: Props) {
   const listings = useSourceListings(sourceUrl, deviceId);
   const listing = listings.find(l => l.app.id === appId) ?? null;
   const libVersion = useSession(s => deviceLibVersion(s, deviceId));
+  const installed =
+    useWebapps(deviceId).list.find(
+      w => w.id.toLowerCase() === appId.toLowerCase(),
+    ) ?? null;
 
   const progress = useOtaProgress(deviceId);
   const installingThis =
     progress && !progress.run.outcome && progress.run.webappId === appId
       ? progress
       : null;
+  const deviceBusyElsewhere =
+    progress != null && !progress.run.outcome && !installingThis;
 
   const [failed, setFailed] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
@@ -206,11 +215,13 @@ export function StoreAppScreen({ navigation, route }: Props) {
           >
             {incompatible
               ? 'needs a newer firmware'
-              : updateAvailable
-                ? `update to v${newestCompatible?.version}`
-                : installedVersion
-                  ? 'installed'
-                  : `install v${newestCompatible?.version}`}
+              : installing != null && deviceBusyElsewhere
+                ? 'queued'
+                : updateAvailable
+                  ? `update to v${newestCompatible?.version}`
+                  : installedVersion
+                    ? 'installed'
+                    : `install v${newestCompatible?.version}`}
           </Button>
           {deviceId == null ? (
             <Note tone="warn" action="pair" onAction={() => void pair()}>
@@ -224,6 +235,17 @@ export function StoreAppScreen({ navigation, route }: Props) {
       {failed ? (
         <View className="mb-6">
           <Note tone="err">{failed}</Note>
+        </View>
+      ) : null}
+
+      {deviceId && installed ? (
+        <View className="mb-6 gap-2">
+          {fillsSlot(installed, 'launcher') ? (
+            <SlotAction deviceId={deviceId} id={installed.id} slot="launcher" />
+          ) : null}
+          {fillsSlot(installed, 'overlay') ? (
+            <SlotAction deviceId={deviceId} id={installed.id} slot="overlay" />
+          ) : null}
         </View>
       ) : null}
 

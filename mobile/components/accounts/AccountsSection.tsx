@@ -6,6 +6,7 @@ import { Note } from '../Note';
 import { PendingAuth } from '../PendingAuth';
 import { Pill } from '../Pill';
 import { SectionHeader } from '../SectionHeader';
+import { ServerLoginSheet } from './ServerLoginSheet';
 import { SignOutSheet } from './SignOutSheet';
 import { useAccounts } from './useAccounts';
 import { TEXT } from '../../lib/theme';
@@ -91,6 +92,7 @@ export function AccountsSection() {
       ))}
 
       <SignOutSheet accounts={accounts} />
+      <ServerLoginSheet accounts={accounts} />
     </View>
   );
 }

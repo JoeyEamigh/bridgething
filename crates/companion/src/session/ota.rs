@@ -54,6 +54,10 @@ impl OtaInbound for OtaLink {
     self.service.nickname_changed(&self.device_id, nickname)
   }
 
+  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta> {
+    self.service.launcher_gesture_changed(&self.device_id, gesture)
+  }
+
   fn device_meta(&self, meta: BridgeThingMeta) {
     self.service.device_meta(&self.device_id, meta);
   }

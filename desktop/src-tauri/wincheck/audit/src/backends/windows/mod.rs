@@ -6,5 +6,7 @@ pub mod geo;
 pub mod media;
 #[path = "../../../../../src/backends/windows/speech.rs"]
 pub mod speech;
+#[path = "../../../../../src/backends/windows/stream.rs"]
+pub mod stream;
 #[path = "../../../../../src/backends/windows/volume.rs"]
 pub mod volume;

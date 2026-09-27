@@ -1,4 +1,4 @@
-import { DEVICE, meta, peer, snapshot } from './fixtures';
+import { DEVICE, meta, peer, SERIAL, snapshot } from './fixtures';
 import { rig, type Rig } from './harness';
 
 function rendered(r: Rig, id = DEVICE) {
@@ -28,7 +28,7 @@ describe('device identity', () => {
     expect(rendered(r)).toMatchObject({
       peerName: 'Garage',
       knownName: 'Garage',
-      serial: 'SN12345',
+      serial: SERIAL,
     });
   });
 

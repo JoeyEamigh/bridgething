@@ -13,6 +13,13 @@ echo "== kotlin bindings =="
 cargo run -q -p bridgething-companion --no-default-features --bin companion-bindgen -- generate \
   --library "$LIB" --language kotlin --out-dir packages/companion/kotlin/core/src/main/kotlin
 
+KT="packages/companion/kotlin/core/src/main/kotlin/uniffi/bridgething_companion/bridgething_companion.kt"
+if command -v ktlint >/dev/null 2>&1; then
+  ktlint --format --log-level=none "$KT" || true
+else
+  echo "ktlint not installed, this is going to cause a bad diff" >&2
+fi
+
 echo "== swift bindings =="
 GEN="$(mktemp -d)"
 trap 'rm -rf "$GEN"' EXIT

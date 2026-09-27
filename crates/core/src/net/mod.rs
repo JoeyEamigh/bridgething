@@ -14,7 +14,7 @@ use axum::{
 pub use bus::WireEventBus;
 #[cfg(feature = "test-tap")]
 pub use connman::TappedFrame;
-pub use connman::{ClientMan, create_client_manager};
+pub use connman::{ClientMan, ClientScope, create_client_manager};
 use reqwest::StatusCode;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
@@ -26,8 +26,8 @@ use crate::{
   state::State as BridgeThingState,
 };
 
-type ServerTx = tokio::sync::mpsc::Sender<(WebSocket, SocketAddr, ClientMode)>;
-type ServerRx = tokio::sync::mpsc::Receiver<(WebSocket, SocketAddr, ClientMode)>;
+type ServerTx = tokio::sync::mpsc::Sender<(WebSocket, SocketAddr, ClientMode, ClientScope)>;
+type ServerRx = tokio::sync::mpsc::Receiver<(WebSocket, SocketAddr, ClientMode, ClientScope)>;
 
 pub struct Server {
   rx: ServerRx,
@@ -210,7 +210,7 @@ impl Server {
   }
 
   /// cancel-safe
-  pub async fn listen(&mut self) -> WSResult<(WebSocket, SocketAddr, ClientMode)> {
+  pub async fn listen(&mut self) -> WSResult<(WebSocket, SocketAddr, ClientMode, ClientScope)> {
     self.rx.recv().await.ok_or(WSError::ChannelClosed)
   }
 
@@ -238,7 +238,10 @@ async fn stock_ws_handler(
 
   let tx = tx.clone();
   ws.on_upgrade(move |socket| async move {
-    if let Err(err) = tx.send((socket, addr, ClientMode::Stock)).await {
+    if let Err(err) = tx
+      .send((socket, addr, ClientMode::Stock, ClientScope::ActiveWebapp))
+      .await
+    {
       tracing::error!("failed to send new connection to server: {:?}", err);
     }
   })
@@ -250,8 +253,11 @@ async fn modern_handler(
   req: Request<Body>,
 ) -> Response {
   if req.headers().contains_key("upgrade") {
+    let scope = scope_from_query(req.uri().query());
     return match WebSocketUpgrade::from_request(req, &()).await {
-      Ok(ws) => modern_ws_handler(ws, addr, state.tx.clone()).await.into_response(),
+      Ok(ws) => modern_ws_handler(ws, addr, scope, state.tx.clone())
+        .await
+        .into_response(),
       Err(err) => {
         tracing::error!("failed to upgrade request to websocket: {:?}", err);
         (StatusCode::BAD_REQUEST, err.body_text()).into_response()
@@ -261,7 +267,7 @@ async fn modern_handler(
 
   let req = match try_serve_hub(&state.state, req).await {
     Ok(resp) => return resp,
-    Err(req) => req,
+    Err(req) => *req,
   };
 
   let active_path = match resolve_active_webapp(&state.state).await {
@@ -277,18 +283,18 @@ async fn modern_handler(
 
 const HUB_PREFIX: &str = "/_hub/";
 
-async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<Response, Request<Body>> {
+async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<Response, Box<Request<Body>>> {
   if !req.uri().path().starts_with(HUB_PREFIX) {
-    return Err(req);
+    return Err(Box::new(req));
   }
   let Ok(Some(launcher)) = state.launcher_webapp().await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
   let Some(hash) = state.webapps.bundle_hash(launcher).await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
   let Some(bundle_path) = state.webapps.resolve(launcher).await else {
-    return Err(req);
+    return Err(Box::new(req));
   };
 
   let path = req.uri().path().to_owned();
@@ -344,11 +350,23 @@ async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<R
   Ok(resp)
 }
 
-async fn modern_ws_handler(ws: WebSocketUpgrade, addr: SocketAddr, tx: ServerTx) -> impl IntoResponse {
-  tracing::info!("new modern port websocket connection from {}", addr);
+fn scope_from_query(query: Option<&str>) -> ClientScope {
+  match query {
+    Some(query) if query.split('&').any(|pair| pair == "scope=overlay") => ClientScope::Overlay,
+    _ => ClientScope::ActiveWebapp,
+  }
+}
+
+async fn modern_ws_handler(
+  ws: WebSocketUpgrade,
+  addr: SocketAddr,
+  scope: ClientScope,
+  tx: ServerTx,
+) -> impl IntoResponse {
+  tracing::info!(?scope, "new modern port websocket connection from {}", addr);
 
   ws.on_upgrade(move |socket| async move {
-    if let Err(err) = tx.send((socket, addr, ClientMode::Modern)).await {
+    if let Err(err) = tx.send((socket, addr, ClientMode::Modern, scope)).await {
       tracing::error!("failed to send new connection to server: {:?}", err);
     }
   })

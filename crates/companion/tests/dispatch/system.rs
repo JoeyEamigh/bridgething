@@ -27,6 +27,7 @@ impl DeviceLogSink for RecordedLogs {
 struct RecordedOta {
   progress: Mutex<Vec<OtaProgress>>,
   nicknames: Mutex<Vec<Option<String>>>,
+  gestures: Mutex<Vec<libbridgething::LauncherGesture>>,
   ranges: Mutex<Vec<(Uuid, OtaAssetRange)>>,
   abandoned: Mutex<Vec<Uuid>>,
   metas: Mutex<Vec<BridgeThingMeta>>,
@@ -82,6 +83,11 @@ impl OtaInbound for RecordedOta {
     self.nicknames.lock().unwrap().push(nickname);
     None
   }
+
+  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta> {
+    self.gestures.lock().unwrap().push(gesture);
+    None
+  }
 }
 
 fn dispatcher() -> (SystemDispatcher, Arc<RecordedOta>, Arc<RecordedLogs>) {
@@ -131,6 +137,23 @@ async fn a_nickname_change_reaches_the_update_service() {
   assert_eq!(
     ota.nicknames.lock().unwrap().clone(),
     vec![Some("garage thing".to_owned())]
+  );
+}
+
+#[tokio::test]
+async fn a_gesture_change_reaches_the_update_service() {
+  let (dispatch, ota, _logs) = dispatcher();
+
+  dispatch
+    .launcher_gesture_changed(libbridgething::gateway::LauncherGestureReply {
+      gesture: libbridgething::LauncherGesture::LongPress,
+    })
+    .await
+    .expect("an event never refuses");
+
+  assert_eq!(
+    ota.gestures.lock().unwrap().clone(),
+    vec![libbridgething::LauncherGesture::LongPress]
   );
 }
 

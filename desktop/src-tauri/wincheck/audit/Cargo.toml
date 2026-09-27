@@ -23,6 +23,7 @@ windows = { version = "0.62.2", features = [
   "Media_Core",
   "Media_Playback",
   "Media_SpeechSynthesis",
+  "Media_Streaming_Adaptive",
   "Networking_Connectivity",
   "Storage_Streams",
   "Win32_Foundation",

@@ -5,6 +5,7 @@ import { Icon } from '../Icon';
 import { Note } from '../Note';
 import { PendingAuth } from '../PendingAuth';
 import { Press } from '../Press';
+import { ServerLoginSheet } from './ServerLoginSheet';
 import { SignOutSheet } from './SignOutSheet';
 import { useAccounts } from './useAccounts';
 import { BOX, TEXT } from '../../lib/theme';
@@ -41,6 +42,7 @@ export function ProviderTiles() {
               selected={p.connected}
               busy={accounts.busyId === p.id}
               authStatus={p.authState.kind}
+              handshake={p.signIn === 'handshake'}
               disabled={
                 !p.available ||
                 (accounts.busyId !== null && accounts.busyId !== p.id)
@@ -77,6 +79,7 @@ export function ProviderTiles() {
       ))}
 
       <SignOutSheet accounts={accounts} />
+      <ServerLoginSheet accounts={accounts} />
     </View>
   );
 }
@@ -86,6 +89,7 @@ function ProviderTile({
   selected,
   busy,
   authStatus,
+  handshake,
   disabled,
   comingSoon,
   onPress,
@@ -94,6 +98,7 @@ function ProviderTile({
   selected: boolean;
   busy: boolean;
   authStatus: 'idle' | 'pending' | 'authenticated' | 'failed';
+  handshake: boolean;
   disabled: boolean;
   comingSoon: boolean;
   onPress: () => void;
@@ -108,7 +113,9 @@ function ProviderTile({
         : authStatus === 'failed'
           ? 'sign-in failed'
           : authStatus === 'pending'
-            ? 'finish in your browser'
+            ? handshake
+              ? 'finish in your browser'
+              : 'signing in…'
             : 'signed in';
   const showCheck = selected && authStatus === 'authenticated';
 

@@ -45,10 +45,12 @@ private final class RecordingHttpSink: HttpSink, @unchecked Sendable {
 
 private final class RecordingDownloadSink: HttpDownloadSink, @unchecked Sendable {
     private let condition = NSCondition()
+    private let accepts: Bool
     private(set) var events: [String] = []
     private(set) var received = Data()
 
-    init() {
+    init(accepts: Bool = true) {
+        self.accepts = accepts
         super.init(noHandle: .init())
     }
 
@@ -56,14 +58,16 @@ private final class RecordingDownloadSink: HttpDownloadSink, @unchecked Sendable
         fatalError("test sink only")
     }
 
-    override func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) {
+    override func onResponse(status: UInt16, headers: [HttpHeader], contentLength: UInt64?) -> Bool {
         push("response:\(status):\(contentLength.map(String.init) ?? "?")")
+        return accepts
     }
 
-    override func onChunk(chunk: Data) {
+    override func onChunk(chunk: Data) -> Bool {
         condition.lock()
         received.append(chunk)
         condition.unlock()
+        return true
     }
 
     override func onFinished() {
@@ -183,6 +187,22 @@ final class UrlSessionHttpTransportTests: XCTestCase {
         XCTAssertEqual(events.first, "response:200:\(payload.count)")
         XCTAssertEqual(events.last, "finished")
         XCTAssertEqual(sink.received, payload)
+    }
+
+    func testDownloadRefusedAtTheResponseCancelsWithoutABodyAndFinishes() throws {
+        let served = LockedBox<Bool>()
+        let server = try XCTUnwrap(MiniHttpServer { _, _, _ in
+            served.set(true)
+            return (200, [("icy-name", "SomaFM")], Data(repeating: 7, count: 4096))
+        })
+        defer { server.stop() }
+
+        let sink = RecordingDownloadSink(accepts: false)
+        UrlSessionHttpTransport().download(request: request("http://127.0.0.1:\(server.port)/radio"), sink: sink)
+        let events = sink.waitForTerminal()
+        XCTAssertEqual(events, ["response:200:4096", "finished"])
+        XCTAssertEqual(sink.received, Data())
+        XCTAssertEqual(served.get(), true)
     }
 
     func testDownloadConnectFailureLandsAsFailed() throws {

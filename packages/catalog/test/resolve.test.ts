@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   aggregate,
   compareVersions,
+  fillsSlot,
   type InstalledWebapp,
   listedWebapps,
   newestCompatible,
@@ -9,6 +10,7 @@ import {
   satisfies,
   settingsOrigin,
   settingsOriginFor,
+  slotCandidates,
   updates,
   versionCompatible,
 } from '../src/resolve.ts';
@@ -194,6 +196,24 @@ describe('listedWebapps', () => {
     const list = [installed(CALENDAR_ID, '0.1.0', { role: 'launcher' })];
 
     expect(listedWebapps(list)).toHaveLength(1);
+  });
+});
+
+describe('slot candidates', () => {
+  test('only an installed bundle can take a slot', () => {
+    const list = [
+      { ...installed('hub', '0.1.0', { source: 'builtin', role: 'launcher' }), overlayHash: 'abc' },
+      { ...installed(CALENDAR_ID, '0.1.0', { role: 'launcher' }), overlayHash: null },
+      { ...installed(WEATHER_ID, '0.1.0'), overlayHash: 'def' },
+    ];
+
+    expect(slotCandidates(list, 'launcher').map(w => w.id)).toEqual([CALENDAR_ID]);
+    expect(slotCandidates(list, 'overlay').map(w => w.id)).toEqual([WEATHER_ID]);
+  });
+
+  test('a standard app fills no slot', () => {
+    expect(fillsSlot(installed(WEATHER_ID, '0.1.0'), 'launcher')).toBe(false);
+    expect(fillsSlot(installed(WEATHER_ID, '0.1.0'), 'overlay')).toBe(false);
   });
 });
 
@@ -400,6 +420,19 @@ describe('updates', () => {
     ).toHaveLength(0);
   });
 
+  test('an installed launcher is updated like any other app the user chose', () => {
+    const a = catalog([app(CALENDAR_ID, 'Calendar', [ver('0.2.0')])]);
+
+    const found = updates({
+      catalogs: new Map([[SOURCE_A, a]]),
+      installed: [installed(CALENDAR_ID, '0.1.0', { role: 'launcher', provenance: SOURCE_A })],
+      deviceLibVersion: 'v0.4.1',
+      extensions: 'listed',
+    });
+
+    expect(found.map(u => u.target.version)).toEqual(['0.2.0']);
+  });
+
   test('an installed app that ships a native extension is never updated from a host that cannot run one', () => {
     const a = catalog([
       app(CALENDAR_ID, 'Calendar', [{ ...ver('0.2.0'), extension: { desktop: true, permissions: ['all'] } }]),
@@ -457,7 +490,7 @@ describe('updates', () => {
 
 describe('popularity', () => {
   function counts(entries: [string, string, number][]) {
-    return entries.map(([app_id, source_url, count]) => ({ app_id, source_url, count }));
+    return entries.map(([app_id, source_url, count]) => ({ app_id, source_url, count, versions: {} }));
   }
 
   test('the most installed app leads the listing, whatever its name', () => {
@@ -535,8 +568,8 @@ describe('popularity', () => {
       deviceLibVersion: 'v0.4.1',
       extensions: 'listed',
       installs: [
-        { app_id: WEATHER_ID, source_url: SOURCE_B, count: Number.NaN },
-        { app_id: CALENDAR_ID, source_url: SOURCE_A, count: -50 },
+        { app_id: WEATHER_ID, source_url: SOURCE_B, count: Number.NaN, versions: {} },
+        { app_id: CALENDAR_ID, source_url: SOURCE_A, count: -50, versions: {} },
       ],
     });
 

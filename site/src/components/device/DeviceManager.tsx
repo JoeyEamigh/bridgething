@@ -1,5 +1,14 @@
-import type { DeviceMeta, SessionPeer } from '@bridgething/companion-types';
-import { Button, Field, ListGroup, ListRow, ScreenHeader, SectionHeader, SessionProvider } from '@bridgething/ui';
+import type { DeviceMeta, LauncherGesture, SessionPeer } from '@bridgething/companion-types';
+import {
+  Button,
+  Field,
+  ListGroup,
+  ListRow,
+  ScreenHeader,
+  SectionHeader,
+  Segmented,
+  SessionProvider,
+} from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 
@@ -34,6 +43,7 @@ function Console(): VNode {
   const linked = (peers.data ?? [])[0] ?? null;
   const held = meta.data?.[0]?.meta ?? null;
   const lib = held?.libbridgethingVersion ?? null;
+  const serial = held?.serialNumber ?? null;
 
   if (!linked) {
     return (
@@ -48,7 +58,7 @@ function Console(): VNode {
       <Header peer={linked} meta={held} />
       <Update channel={held?.channel ?? null} />
       {pending ? <StagedInstall pending={pending} libVersion={lib} onDone={() => setPending(null)} /> : null}
-      <Webapps />
+      <Webapps serial={serial} />
       <AddApp libVersion={lib} />
       <DeviceInfo meta={held} />
     </Screen>
@@ -77,6 +87,31 @@ function Header({ peer, meta }: { peer: SessionPeer; meta: DeviceMeta | null }):
           }}>
           disconnect
         </Button>
+      }
+    />
+  );
+}
+
+function LauncherGestureRow({ meta }: { meta: DeviceMeta | null }): VNode {
+  const session = useBrowser();
+
+  return (
+    <ListRow
+      title="jump back to apps"
+      subtitle="the m button gesture that opens the launcher from any app"
+      trailing={
+        <Segmented<LauncherGesture>
+          size="sm"
+          label="jump back to apps"
+          options={[
+            { value: 'longPress', label: 'hold m' },
+            { value: 'fivePress', label: 'press m 5x' },
+          ]}
+          value={meta?.launcherGesture ?? 'fivePress'}
+          onChange={next => {
+            void session.setLauncherGesture(next);
+          }}
+        />
       }
     />
   );
@@ -126,6 +161,7 @@ function DeviceInfo({ meta }: { meta: DeviceMeta | null }): VNode {
         {rows.map(([label, value]) => (
           <ListRow key={label} title={label} value={value} />
         ))}
+        <LauncherGestureRow meta={meta} />
       </ListGroup>
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
     </Section>

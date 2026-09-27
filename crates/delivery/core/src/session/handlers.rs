@@ -304,6 +304,10 @@ impl SystemHandler for DeliveryHandlers {
     self.ota.nickname_changed(&self.device_id, payload.nickname);
     Ok(())
   }
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    self.ota.launcher_gesture_changed(&self.device_id, payload.gesture);
+    Ok(())
+  }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {
     tracing::info!(target: "device", level = ?payload.level, "{}", payload.message);
     Ok(())

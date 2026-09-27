@@ -4,8 +4,8 @@ use libbridgething::{
   Diagnostics,
   client::{
     BridgeToClientSystemMsgEvent, ClientToBridgeSystemMsgDispatch, DeviceGetNickname, DeviceNicknameReply,
-    DiagnosticsGet, DiagnosticsReply, LogsSubscribe, LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe,
-    RequestVersion,
+    DiagnosticsGet, DiagnosticsReply, LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe,
+    LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe, RequestVersion,
   },
 };
 use uuid::Uuid;
@@ -37,6 +37,21 @@ impl ClientToBridgeSystemMsgDispatch for SystemHandler {
         .respond_to::<DeviceGetNickname>(DeviceNicknameReply { nickname })
         .await?,
     )
+  }
+
+  async fn launcher_gesture_get(&self) -> HandlerResult {
+    let gesture = self.handle.state.meta.launcher_gesture();
+    Ok(
+      self
+        .handle
+        .respond_to::<LauncherGestureGet>(LauncherGestureReply { gesture })
+        .await?,
+    )
+  }
+
+  async fn launcher_gesture_set(&self, params: LauncherGestureSet) -> HandlerResult {
+    self.handle.state.meta.set_launcher_gesture(params.gesture).await?;
+    Ok(())
   }
 
   async fn version_request(&self) -> HandlerResult {

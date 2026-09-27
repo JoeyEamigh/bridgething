@@ -116,6 +116,7 @@ impl SessionObserver {
       model_name: meta.model_name,
       serial_number: meta.serial_number,
       nickname: meta.nickname,
+      launcher_gesture: meta.launcher_gesture.into(),
     };
     {
       let mut held = self.held.lock().unwrap();

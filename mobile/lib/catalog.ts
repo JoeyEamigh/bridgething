@@ -8,7 +8,7 @@ import {
   OFFICIAL_CATALOG_URL,
   aggregate,
   recommendedSources as resolveRecommended,
-  reportInstall,
+  reportInstalled,
   SETTINGS_PAGE_MIME,
   settingsOriginFor,
   updates as resolveUpdates,
@@ -17,6 +17,7 @@ import {
   type CatalogAppListing,
   type CatalogAppUpdate,
   type InstallCount,
+  type InstalledReport,
   type InstalledWebapp,
   type MergedCatalog,
   type RecommendedSource,
@@ -207,6 +208,14 @@ export function deviceLibVersion(
   return state.ledger[deviceId]?.libVersion ?? null;
 }
 
+export function deviceSerial(
+  state: SessionState,
+  deviceId: string | null,
+): string | null {
+  if (!deviceId) return null;
+  return state.ledger[deviceId]?.serialNumber ?? null;
+}
+
 function useDerivedInputs(deviceId: string | null) {
   const catalogs = useCatalogStore(s => s.catalogs);
   const installed = useWebappsStore(
@@ -337,11 +346,6 @@ export async function installApp(
     listing.app.id,
     listing.app.name,
   );
-  reportInstall({
-    appId: listing.app.id,
-    sourceUrl: listing.sourceUrl,
-    version: version.version,
-  });
   if (!useCatalogStore.getState().sources.includes(listing.sourceUrl)) {
     await addSource(listing.sourceUrl);
   }
@@ -423,6 +427,41 @@ async function sweepAutoUpdates(): Promise<void> {
   } finally {
     autoUpdateRunning = false;
   }
+}
+
+function inventoryOf(deviceId: string): InstalledReport | null {
+  const held = useWebappsStore.getState().byDevice[deviceId];
+  const serial = deviceSerial(useSessionStore.getState(), deviceId);
+  if (!held?.listed || !serial) return null;
+
+  return {
+    deviceId: serial,
+    apps: held.list
+      .filter(info => info.source === 'installed' && info.provenance)
+      .map(info => ({
+        appId: info.id,
+        sourceUrl: info.provenance!,
+        version: info.version,
+      })),
+  };
+}
+
+let censusStarted = false;
+
+export function startInstallCensus(): void {
+  if (censusStarted) return;
+  censusStarted = true;
+
+  const sweep = () => {
+    for (const peer of connectedPeers(useSessionStore.getState().peers)) {
+      const inventory = inventoryOf(peer.id);
+      if (inventory) reportInstalled(inventory);
+    }
+  };
+
+  useWebappsStore.subscribe(sweep);
+  useSessionStore.subscribe(sweep);
+  sweep();
 }
 
 export function startWebappAutoUpdate(): void {

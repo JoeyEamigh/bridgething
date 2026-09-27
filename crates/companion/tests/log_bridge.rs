@@ -39,6 +39,7 @@ async fn a_core_tracing_line_reaches_the_host_log_sink() {
     notifications: None,
     phone: None,
     media_sessions: None,
+    stream: None,
     speech: None,
     nlu: None,
     apple_music: None,

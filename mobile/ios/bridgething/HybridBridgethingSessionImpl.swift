@@ -280,6 +280,21 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         try? await requireSession().cancelAuth(id: id)
     }
 
+    public func completeProviderAuth(id: String, credentials: BridgethingProviderCredentials) async throws {
+        let mapped: ProviderCredentials = switch credentials.kind {
+        case .oauthtokens: .oauthTokens(
+            accessToken: credentials.accessToken ?? "",
+            refreshToken: credentials.refreshToken ?? ""
+        )
+        case .serverlogin: .serverLogin(
+            serverUrl: credentials.serverUrl ?? "",
+            username: credentials.username ?? "",
+            password: credentials.password ?? ""
+        )
+        }
+        try await requireSession().completeProviderAuth(id: id, credentials: mapped)
+    }
+
     public func disconnectProvider(id: String) async {
         try? await requireSession().disconnectProvider(id: id)
     }
@@ -413,9 +428,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     // MARK: - Webapps (per-device)
 
     public func listWebapps(deviceId: String) async throws -> [BridgethingWebappInfo] {
-        try await requireSession().listWebapps(deviceId: deviceId)
-            .filter { $0.role != .launcher }
-            .map(toRNWebappInfo)
+        try await requireSession().listWebapps(deviceId: deviceId).map(toRNWebappInfo)
     }
 
     public func currentWebapp(deviceId: String) async throws -> BridgethingActiveWebapp? {
@@ -430,7 +443,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             info = try await session.installWebapp(deviceId: deviceId, archivePath: url.path, provenance: nil)
         } else if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
             info = try await session.installWebappFromUrl(
-                deviceId: deviceId, url: sourceUri, expected: nil, provenance: sourceUri
+                deviceId: deviceId,
+                request: WebappInstallRequest(
+                    url: sourceUri, expected: nil, provenance: sourceUri, webappId: nil, webappName: nil
+                )
             )
         } else {
             throw SessionError.invalidArchive
@@ -447,12 +463,15 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         webappId: String?,
         webappName: String?
     ) async throws -> BridgethingWebappInfo {
-        _ = (webappId, webappName)
         let info = try await requireSession().installWebappFromUrl(
             deviceId: deviceId,
-            url: url,
-            expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
-            provenance: provenance
+            request: WebappInstallRequest(
+                url: url,
+                expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
+                provenance: provenance,
+                webappId: webappId,
+                webappName: webappName
+            )
         )
         return toRNWebappInfo(info)
     }
@@ -631,6 +650,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     public func deviceSetNickname(deviceId: String, nickname: String) async throws {
         try await requireSession().deviceSetNickname(deviceId: deviceId, nickname: nickname)
+    }
+
+    public func setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture) async throws {
+        try await requireSession().setLauncherGesture(deviceId: deviceId, gesture: toLauncherGesture(gesture))
     }
 
     public func presentPairPicker() async throws -> BridgethingBtDevice? {
@@ -877,10 +900,6 @@ private extension NSLock {
 
 // MARK: - Core -> RN projections
 
-private func visible(_ webapps: [WebappInfo]) -> [WebappInfo] {
-    webapps.filter { $0.role != .launcher }
-}
-
 private func toRNSnapshot(_ snap: SessionSnapshot) -> BridgethingSessionSnapshot {
     BridgethingSessionSnapshot(
         hostInfo: BridgethingHostInfo(
@@ -920,11 +939,16 @@ private func toRNProviderInfo(_ info: ProviderInfo) -> BridgethingProviderInfo {
     case .rateLimited: .ratelimited
     case .unreachable: .unreachable
     }
+    let signIn: BridgethingSignInMethod = switch info.signIn {
+    case .handshake: .handshake
+    case .serverLogin: .serverlogin
+    }
     return BridgethingProviderInfo(
         id: info.id,
         displayName: info.displayName,
         available: info.available,
         connected: info.connected,
+        signIn: signIn,
         authState: toRNAuthState(info.authState),
         serviceHealth: BridgethingServiceHealth(
             kind: healthKind,
@@ -1021,8 +1045,23 @@ private func toRNDeviceMeta(_ meta: DeviceMeta) -> BridgethingDeviceMeta {
         channel: meta.channel,
         modelName: meta.modelName,
         serialNumber: meta.serialNumber,
-        nickname: meta.nickname
+        nickname: meta.nickname,
+        launcherGesture: toRNLauncherGesture(meta.launcherGesture)
     )
+}
+
+private func toRNLauncherGesture(_ gesture: LauncherGesture) -> BridgethingLauncherGesture {
+    switch gesture {
+    case .longPress: .longpress
+    case .fivePress: .fivepress
+    }
+}
+
+private func toLauncherGesture(_ gesture: BridgethingLauncherGesture) -> LauncherGesture {
+    switch gesture {
+    case .longpress: .longPress
+    case .fivepress: .fivePress
+    }
 }
 
 private func toRNCapabilityFlags(_ flags: CapabilityFlags) -> BridgethingCapabilityFlags {
@@ -1112,8 +1151,9 @@ private func toRNVoiceModelState(_ state: VoiceModelState) -> BridgethingVoiceMo
 private func toRNWebappsEntry(_ entry: DeviceWebappsEntry) -> BridgethingDeviceWebappsEntry {
     BridgethingDeviceWebappsEntry(
         deviceId: entry.deviceId,
-        webapps: visible(entry.webapps).map(toRNWebappInfo),
-        active: entry.active.map(toRNActiveWebapp)
+        webapps: entry.webapps.map(toRNWebappInfo),
+        active: entry.active.map(toRNActiveWebapp),
+        listed: entry.listed
     )
 }
 

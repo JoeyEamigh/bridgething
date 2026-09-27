@@ -6,7 +6,7 @@ use libbridgething::{
 };
 use uuid::Uuid;
 
-use super::{ClientMan, WSError, WSResult};
+use super::{ClientMan, ClientScope, WSError, WSResult};
 use crate::stock::StockSendMsg;
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,14 @@ impl WireEventBus {
     event: E,
   ) -> Result<(), Vec<WSError>> {
     self.client_man.broadcast_event(event).await
+  }
+
+  pub async fn broadcast_event_to_scopes<E: WireEvent<BridgeToClientMsgData> + Clone>(
+    &self,
+    scopes: &[ClientScope],
+    event: E,
+  ) -> Result<(), Vec<WSError>> {
+    self.client_man.broadcast_event_to_scopes(scopes, event).await
   }
 
   pub async fn broadcast_command<C: WireCommand<BridgeToClientMsgData> + Clone>(

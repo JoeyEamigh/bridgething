@@ -316,6 +316,7 @@ mod tests {
         model_name: "car thing".to_owned(),
         serial_number: serial.to_owned(),
         nickname: None,
+        launcher_gesture: bridgething_companion::api::LauncherGesture::FivePress,
       },
     }
   }

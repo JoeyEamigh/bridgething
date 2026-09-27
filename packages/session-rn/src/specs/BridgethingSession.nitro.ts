@@ -28,13 +28,27 @@ export type BridgethingServiceHealth = {
   retryAfterSeconds?: number;
 };
 
+export type BridgethingSignInMethod = 'handshake' | 'serverLogin';
+
 export type BridgethingProviderInfo = {
   id: string;
   displayName: string;
   available: boolean;
   connected: boolean;
+  signIn: BridgethingSignInMethod;
   authState: BridgethingAuthState;
   serviceHealth: BridgethingServiceHealth;
+};
+
+export type BridgethingProviderCredentialsKind = 'oauthTokens' | 'serverLogin';
+
+export type BridgethingProviderCredentials = {
+  kind: BridgethingProviderCredentialsKind;
+  accessToken?: string;
+  refreshToken?: string;
+  serverUrl?: string;
+  username?: string;
+  password?: string;
 };
 
 export type BridgethingRepeatMode = 'off' | 'one' | 'all';
@@ -276,6 +290,8 @@ export type BridgethingBtDevice = {
   isCarThing: boolean;
 };
 
+export type BridgethingLauncherGesture = 'longPress' | 'fivePress';
+
 export type BridgethingDeviceMeta = {
   daemonVersion: string;
   libbridgethingVersion: string;
@@ -287,6 +303,7 @@ export type BridgethingDeviceMeta = {
   modelName: string;
   serialNumber: string;
   nickname?: string;
+  launcherGesture: BridgethingLauncherGesture;
 };
 
 export type BridgethingHostInfo = {
@@ -314,6 +331,7 @@ export type BridgethingDeviceWebappsEntry = {
   deviceId: string;
   webapps: BridgethingWebappInfo[];
   active?: BridgethingActiveWebapp;
+  listed: boolean;
 };
 
 export type BridgethingSessionSnapshot = {
@@ -386,6 +404,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   connectProvider(id: string): Promise<void>;
   disconnectProvider(id: string): Promise<void>;
   cancelAuth(id: string): Promise<void>;
+  completeProviderAuth(id: string, credentials: BridgethingProviderCredentials): Promise<void>;
   setProviderPriority(ids: string[]): Promise<void>;
 
   snapshot(): Promise<BridgethingSessionSnapshot>;
@@ -450,6 +469,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   reconnectPeer(deviceId: string): Promise<void>;
 
   deviceSetNickname(deviceId: string, nickname: string): Promise<void>;
+
+  setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void>;
 
   presentPairPicker(): Promise<BridgethingBtDevice | null>;
 

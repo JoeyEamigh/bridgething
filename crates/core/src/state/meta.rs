@@ -4,7 +4,7 @@ use std::{
   sync::Arc,
 };
 
-use libbridgething::BridgeThingMeta;
+use libbridgething::{BridgeThingMeta, LauncherGesture};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
@@ -14,6 +14,22 @@ use super::{KvStore, StateResult};
 const BRIDGETHING_VERSION: &str = env!("CARGO_PKG_VERSION");
 const BRIDGETHING_APP_NAME: &str = env!("CARGO_PKG_NAME");
 const NICKNAME_KV_KEY: &str = "nickname";
+const LAUNCHER_GESTURE_KV_KEY: &str = "launcher_gesture";
+
+fn launcher_gesture_as_storage(gesture: LauncherGesture) -> &'static str {
+  match gesture {
+    LauncherGesture::LongPress => "longPress",
+    LauncherGesture::FivePress => "fivePress",
+  }
+}
+
+fn parse_launcher_gesture(stored: Option<&str>) -> LauncherGesture {
+  match stored {
+    Some("longPress") => LauncherGesture::LongPress,
+    Some("fivePress") => LauncherGesture::FivePress,
+    _ => LauncherGesture::default(),
+  }
+}
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -78,6 +94,7 @@ struct Inner {
   static_meta: SuperbirdMeta,
   kv: KvStore,
   nickname_tx: watch::Sender<Option<String>>,
+  launcher_gesture_tx: watch::Sender<LauncherGesture>,
   daemon_sha_tx: watch::Sender<Option<String>>,
   wakeword_version_tx: watch::Sender<Option<String>>,
 }
@@ -89,6 +106,14 @@ impl DeviceMeta {
       None
     });
     let (nickname_tx, _rx) = watch::channel(initial);
+    let stored_gesture = kv.device_get(LAUNCHER_GESTURE_KV_KEY).await.unwrap_or_else(|err| {
+      tracing::warn!(
+        ?err,
+        "kv device_get launcher gesture at startup failed; starting default"
+      );
+      None
+    });
+    let (launcher_gesture_tx, _gesture_rx) = watch::channel(parse_launcher_gesture(stored_gesture.as_deref()));
     let (daemon_sha_tx, _sha_rx) = watch::channel(None);
     let (wakeword_version_tx, _ww_rx) = watch::channel(crate::ota::wakeword_model_version().await);
     let me = Self {
@@ -96,6 +121,7 @@ impl DeviceMeta {
         static_meta,
         kv,
         nickname_tx,
+        launcher_gesture_tx,
         daemon_sha_tx,
         wakeword_version_tx,
       }),
@@ -147,6 +173,24 @@ impl DeviceMeta {
     self.inner.nickname_tx.subscribe()
   }
 
+  pub fn launcher_gesture(&self) -> LauncherGesture {
+    *self.inner.launcher_gesture_tx.borrow()
+  }
+
+  pub fn subscribe_launcher_gesture(&self) -> watch::Receiver<LauncherGesture> {
+    self.inner.launcher_gesture_tx.subscribe()
+  }
+
+  pub async fn set_launcher_gesture(&self, next: LauncherGesture) -> StateResult<()> {
+    self
+      .inner
+      .kv
+      .device_set(LAUNCHER_GESTURE_KV_KEY, launcher_gesture_as_storage(next).into())
+      .await?;
+    self.inner.launcher_gesture_tx.send_replace(next);
+    Ok(())
+  }
+
   pub async fn set_nickname(&self, next: Option<String>) -> StateResult<()> {
     match &next {
       Some(value) => self.inner.kv.device_set(NICKNAME_KV_KEY, value.clone()).await?,
@@ -160,6 +204,7 @@ impl DeviceMeta {
     build_meta(
       &self.inner.static_meta,
       self.nickname(),
+      self.launcher_gesture(),
       self.daemon_sha256(),
       self.wakeword_model_version(),
     )
@@ -183,6 +228,7 @@ fn hash_file(path: &Path) -> io::Result<String> {
 fn build_meta(
   meta: &SuperbirdMeta,
   nickname: Option<String>,
+  launcher_gesture: LauncherGesture,
   daemon_sha256: Option<String>,
   wakeword_model_version: Option<String>,
 ) -> BridgeThingMeta {
@@ -191,6 +237,7 @@ fn build_meta(
     libbridgething_version: BridgeThingMeta::libbridgething_version(),
     app_name: BRIDGETHING_APP_NAME.to_string(),
     nickname,
+    launcher_gesture,
     app_version: BRIDGETHING_VERSION.to_string(),
     daemon_sha256,
     wakeword_model_version,

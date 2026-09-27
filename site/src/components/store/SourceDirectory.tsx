@@ -1,5 +1,6 @@
 import type { DirectoryEntry, SourceStatus } from '../../lib/directory-client';
 import { webHref } from '../../lib/href';
+import { hideOnError } from '../../lib/img';
 
 const PILL_FOR: Record<SourceStatus, string> = {
   attested: 'pill pill-stable',
@@ -26,7 +27,7 @@ function Health({ entry }: { entry: DirectoryEntry }) {
   if (entry.downloads_cors_ok === false) {
     return (
       <p class="text-experimental m-0 mt-2 text-xs">
-        this source's downloads are not readable from a browser, so installing needs the phone app.
+        this source's downloads are not readable from a browser. use the phone or desktop app to view.
       </p>
     );
   }
@@ -48,7 +49,7 @@ function SourceRow({ entry }: { entry: DirectoryEntry }) {
               height="32"
               class="size-full"
               loading="lazy"
-              onError={event => (event.currentTarget as HTMLImageElement).remove()}
+              onError={hideOnError}
             />
           ) : null}
         </div>

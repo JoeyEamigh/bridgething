@@ -1,4 +1,7 @@
-import { type BridgethingResumeTarget } from '@bridgething/session-react-native';
+import {
+  type BridgethingLauncherGesture,
+  type BridgethingResumeTarget,
+} from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -25,6 +28,7 @@ import {
   knownDevices,
   patchOtaPollConfig,
   setDeviceName,
+  setLauncherGesture,
   useSession,
 } from '../lib/session';
 import { DEFAULT_OTA_POLL_CONFIG, DEFAULT_OTA_ROOT_URL } from '../lib/storage';
@@ -124,6 +128,10 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
           />
           <AutoResumeRow deviceId={deviceId} />
           <ResumeTargetRow deviceId={deviceId} />
+          <LauncherGestureRow
+            deviceId={deviceId}
+            gesture={meta?.launcherGesture ?? 'fivePress'}
+          />
         </ListGroup>
         {renameError ? (
           <Note className="mt-2" tone="err">
@@ -307,6 +315,57 @@ function ResumeTargetRow({ deviceId }: { deviceId: string }) {
     </View>
   );
 }
+
+function LauncherGestureRow({
+  deviceId,
+  gesture,
+}: {
+  deviceId: string;
+  gesture: BridgethingLauncherGesture;
+}) {
+  const [pending, setPending] = useState<BridgethingLauncherGesture | null>(
+    null,
+  );
+  const [failure, setFailure] = useState<RowNotice | null>(null);
+
+  useEffect(() => setPending(null), [gesture]);
+
+  const pick = (next: BridgethingLauncherGesture) => {
+    setPending(next);
+    setFailure(null);
+    void setLauncherGesture(deviceId, next).catch((err: unknown) => {
+      setPending(null);
+      setFailure({ text: describeError(err) });
+    });
+  };
+
+  return (
+    <View>
+      <ListRow
+        icon="LayoutGrid"
+        title="jump back to apps"
+        subtitle="the m button gesture that opens the launcher from any app"
+        trailing={
+          <Segmented
+            size="sm"
+            options={LAUNCHER_GESTURE_OPTIONS}
+            value={pending ?? gesture}
+            onChange={pick}
+          />
+        }
+      />
+      <RowNote notice={failure} />
+    </View>
+  );
+}
+
+const LAUNCHER_GESTURE_OPTIONS: ReadonlyArray<{
+  value: BridgethingLauncherGesture;
+  label: string;
+}> = [
+  { value: 'longPress', label: 'hold m' },
+  { value: 'fivePress', label: 'press m 5x' },
+];
 
 const RESUME_TARGET_OPTIONS: ReadonlyArray<{
   value: BridgethingResumeTarget;

@@ -9,11 +9,12 @@ import {
   type CatalogAppListing,
 } from '@bridgething/catalog';
 import { appIdFromPath } from '../../lib/app-routes';
-import { fetchMergedApps, type InstallCount, type MergedCatalog } from '../../lib/directory-client';
+import { fetchMergedApps, readStoreData, type InstallCount, type MergedCatalog } from '../../lib/directory-client';
 import { webHref } from '../../lib/href';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import { orderedByTrust, sourceMap, type StoreSource } from '../../lib/store-sources';
 import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
+import { hideOnError } from '../../lib/img';
 
 export type BakedApp = { app: AppEntry; source: StoreSource };
 
@@ -77,14 +78,7 @@ function Detail({ listing, source }: Resolved) {
       <header class="mb-10 flex flex-wrap items-start gap-5">
         <div class="size-16 shrink-0 border border-dashed border-white/25" aria-hidden="true">
           {app.icon ? (
-            <img
-              src={app.icon}
-              alt=""
-              width="64"
-              height="64"
-              class="size-full"
-              onError={event => (event.currentTarget as HTMLImageElement).remove()}
-            />
+            <img src={app.icon} alt="" width="64" height="64" class="size-full" onError={hideOnError} />
           ) : null}
         </div>
         <div class="min-w-0 flex-1">
@@ -113,14 +107,15 @@ function Detail({ listing, source }: Resolved) {
         <section class="mb-12">
           <ul class="m-0 flex list-none gap-4 overflow-x-auto p-0">
             {shots.map(shot => (
-              <li key={shot} class="shrink-0">
+              <li key={shot} class="aspect-5/3 h-48 shrink-0 border border-white/15 sm:h-64">
                 <img
                   src={shot}
                   alt={`${app.name} running on a car thing`}
                   width="800"
                   height="480"
                   loading="lazy"
-                  class="h-48 w-auto border border-white/15 sm:h-64"
+                  class="size-full object-cover"
+                  onError={hideOnError}
                 />
               </li>
             ))}
@@ -228,13 +223,18 @@ function Detail({ listing, source }: Resolved) {
 }
 
 export function AppDetail({ baked }: { baked: BakedApp | null }) {
+  const seeded = useMemo(readStoreData, []);
+
   const [id, setId] = useState<string | null | undefined>(baked?.app.id);
-  const [catalogs, setCatalogs] = useState<MergedCatalog[] | null>(null);
-  const [installs, setInstalls] = useState<InstallCount[]>([]);
+  const [catalogs, setCatalogs] = useState<MergedCatalog[] | null>(
+    seeded ? orderedByTrust(seeded.apps.catalogs) : null,
+  );
+  const [installs, setInstalls] = useState<InstallCount[]>(seeded?.apps.installs ?? []);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setId(appIdFromPath(window.location.pathname) ?? baked?.app.id ?? null);
+    if (seeded) return;
 
     const controller = new AbortController();
     fetchMergedApps({ signal: controller.signal })
@@ -246,7 +246,7 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
         if (!controller.signal.aborted) setFailed(true);
       });
     return () => controller.abort();
-  }, []);
+  }, [seeded, baked]);
 
   const resolved = useMemo<Resolved | null>(() => {
     if (catalogs) {

@@ -1,6 +1,9 @@
 use libbridgething::{
   ConfigEntry, ConfigField, DocEntry, WebappError,
-  client::{BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, ConfigChanged, DocChanged},
+  client::{
+    BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, BridgeToClientWebappMsgEvent, ConfigChanged, DocChanged,
+    WebappUninstalled,
+  },
   gateway::{
     BridgeToGatewayWebappMsgEvent, GatewayToBridgeWebappMsgRequestDispatch, GetActiveWebapp, GetWebappSlots,
     ListWebapps, TransferBody, TransferRef, WebappActive, WebappConfigAck, WebappConfigChanged, WebappConfigDelete,
@@ -14,7 +17,7 @@ use libbridgething::{
 use uuid::Uuid;
 
 use super::{HandlerResult, MsgHandle};
-use crate::{chrome::ChromeCommand, state::sha256_hex};
+use crate::{chrome::ChromeCommand, net::ClientScope, state::sha256_hex};
 
 const KIOSK_HOME_URL: &str = "http://127.0.0.1:8891/";
 const KIOSK_HUB_URL_BASE: &str = "http://127.0.0.1:8891/_hub/";
@@ -65,6 +68,17 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
         .await;
       return Ok(());
     }
+    if !self.handle.state.webapps.has_app_entry(id).await {
+      tracing::warn!(
+        "({:?}) refusing switch to {id}: the bundle has no app entry to show",
+        &self.handle.address
+      );
+      self
+        .handle
+        .respond_err::<WebappSwitchTo>(WebappError::MissingIndexHtml)
+        .await;
+      return Ok(());
+    }
 
     self.handle.state.set_active_webapp(id).await?;
     self.reload_kiosk().await;
@@ -85,9 +99,17 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
       return Ok(());
     }
 
+    let name = self
+      .handle
+      .state
+      .webapps
+      .manifest(id)
+      .await
+      .map(|manifest| manifest.name.clone());
     let removed = self.handle.state.webapps.uninstall(id).await?;
     if removed {
       self.handle.state.kv.webapp_purge(id).await?;
+      self.broadcast_uninstalled(id, name.unwrap_or_default()).await;
     } else {
       tracing::debug!(
         "({:?}) webapp {id} was not installed; nothing to do",
@@ -98,7 +120,7 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
     let released = self.handle.state.release_slots_for(id).await?;
     if released.overlay {
       tracing::info!("uninstalled webapp {id} held the overlay slot; reverting to the builtin overlay");
-      self.handle.state.sync_overlay(false).await;
+      self.handle.state.sync_injections(false).await;
     }
     if released.launcher {
       tracing::info!("uninstalled webapp {id} held the launcher slot; reverting to the builtin hub");
@@ -282,7 +304,7 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
       }
       WebappSlot::Overlay => {
         self.handle.state.set_overlay_slot(id).await?;
-        self.handle.state.sync_overlay(false).await;
+        self.handle.state.sync_injections(false).await;
         self.reload_kiosk().await;
       }
     }
@@ -521,43 +543,55 @@ impl WebappHandler {
         value: value.clone(),
       }))
       .await;
-    let active = match self.handle.state.active_webapp().await {
-      Ok(Some(active)) => active,
-      _ => return,
-    };
-    if active != id {
+    let scopes = self.client_scopes_for(id).await;
+    if scopes.is_empty() {
       return;
     }
     let event = BridgeToClientConfigMsgEvent::Changed(ConfigChanged {
       key: key.to_string(),
       value,
     });
-    if let Err(errs) = self.handle.state.bus.broadcast_event(event).await {
+    if let Err(errs) = self.handle.state.bus.broadcast_event_to_scopes(&scopes, event).await {
       tracing::debug!("config-change broadcast: {} non-fatal errors", errs.len());
     }
   }
 
   async fn broadcast_doc_change_to_client(&self, id: Uuid, key: &str, value: Option<String>) {
-    let active = match self.handle.state.active_webapp().await {
-      Ok(Some(active)) => active,
-      _ => return,
-    };
-    if active != id {
+    let scopes = self.client_scopes_for(id).await;
+    if scopes.is_empty() {
       return;
     }
     let event = BridgeToClientDocMsgEvent::Changed(DocChanged {
       key: key.to_string(),
       value,
     });
-    if let Err(errs) = self.handle.state.bus.broadcast_event(event).await {
+    if let Err(errs) = self.handle.state.bus.broadcast_event_to_scopes(&scopes, event).await {
       tracing::debug!("doc-change broadcast: {} non-fatal errors", errs.len());
     }
+  }
+
+  async fn client_scopes_for(&self, id: Uuid) -> Vec<ClientScope> {
+    let mut scopes = Vec::new();
+    if matches!(self.handle.state.active_webapp().await, Ok(Some(active)) if active == id) {
+      scopes.push(ClientScope::ActiveWebapp);
+    }
+    if matches!(self.handle.state.overlay_webapp().await, Ok(Some(overlay)) if overlay == id) {
+      scopes.push(ClientScope::Overlay);
+    }
+    scopes
   }
 
   async fn reload_kiosk(&self) {
     let url = navigate_url_for_active(&self.handle.state).await;
     if let Err(e) = self.handle.state.chrome.send(ChromeCommand::Navigate(url)).await {
       tracing::warn!("failed to reload kiosk after webapp switch: {:?}", e);
+    }
+  }
+
+  async fn broadcast_uninstalled(&self, id: Uuid, name: String) {
+    let event = BridgeToClientWebappMsgEvent::WebappUninstalled(WebappUninstalled { id, name });
+    if let Err(errs) = self.handle.state.bus.broadcast_event(event).await {
+      tracing::debug!("webapp uninstalled client broadcast: {} non-fatal errors", errs.len());
     }
   }
 

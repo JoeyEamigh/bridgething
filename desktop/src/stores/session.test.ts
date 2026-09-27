@@ -15,6 +15,7 @@ function meta(libbridgethingVersion: string): api.DeviceMeta {
     modelName: 'Car Thing',
     serialNumber: 'sn',
     nickname: null,
+    launcherGesture: 'fivePress',
   };
 }
 

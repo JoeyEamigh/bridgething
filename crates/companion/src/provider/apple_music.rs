@@ -25,7 +25,8 @@ use crate::{
   },
   dispatch::tell,
   provider::{
-    AssetBytes, PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderLink, ProviderNowPlaying,
+    AssetBytes, AuthObserver, NowPlayingObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError,
+    ProviderLink, ProviderNowPlaying,
     art::{ArtCache, ImageAssetCodec},
     none_if_empty,
   },
@@ -64,9 +65,6 @@ fn sized_artwork_url(template: &str, edge: u32) -> String {
     .replace("{w}", &edge.to_string())
     .replace("{h}", &edge.to_string())
 }
-
-type NowPlayingObserver = Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>;
-type AuthObserver = Arc<dyn Fn(ProviderAuthState) + Send + Sync>;
 
 #[derive(Default)]
 struct Shared {

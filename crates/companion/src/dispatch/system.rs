@@ -4,8 +4,8 @@ use bridgething_gateway::{HandlerError, Reply, SystemHandler};
 use libbridgething::{
   LogEntry, OtaError, OtaFinished, OtaProgress,
   gateway::{
-    DeviceNicknameReply, KeepaliveAck, KeepalivePing, OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected,
-    OtaAssetRangeReply,
+    DeviceNicknameReply, KeepaliveAck, KeepalivePing, LauncherGestureReply, OtaAssetRange, OtaAssetRangeAbandon,
+    OtaAssetRangeRejected, OtaAssetRangeReply,
   },
   wire::WireError,
 };
@@ -66,6 +66,11 @@ impl SystemHandler for SystemDispatcher {
 
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
     self.ota.nickname_changed(payload.nickname);
+    Ok(())
+  }
+
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    self.ota.launcher_gesture_changed(payload.gesture);
     Ok(())
   }
 

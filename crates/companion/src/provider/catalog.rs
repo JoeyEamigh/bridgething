@@ -3,24 +3,29 @@ use std::sync::Arc;
 use bridgething_io::{HttpTransport as IoHttpTransport, WsTransport as IoWsTransport};
 
 use crate::{
-  api::{ProviderTokens, SpotifyProviderConfig},
+  api::{ProviderCredentials, SignInMethod, SpotifyProviderConfig},
   backend::{
-    AppleMusicBackend, DeviceWaker, ForeignHttp, ForeignWs, HttpTransport, ImageScaler, SecretStore, WsTransport,
+    AppleMusicBackend, DeviceWaker, ForeignHttp, ForeignWs, HttpTransport, ImageScaler, SecretStore, StreamBackend,
+    WsTransport,
   },
   provider::{
     Provider,
     apple_music::{self, AppleMusicProvider},
     spotify::{self, SpotifyConfig, SpotifyProvider},
+    subsonic::{self, SubsonicConfig, SubsonicProvider, normalize_server_url},
   },
 };
 
 pub trait CatalogEntry: Send + Sync {
   fn id(&self) -> &str;
   fn display_name(&self) -> &str;
+  fn sign_in(&self) -> SignInMethod {
+    SignInMethod::Handshake
+  }
   fn build(&self) -> Arc<dyn Provider>;
   fn has_credentials(&self) -> bool;
   fn clear_credentials(&self);
-  fn adopt_tokens(&self, tokens: ProviderTokens);
+  fn adopt_credentials(&self, credentials: ProviderCredentials) -> Result<(), String>;
   fn mark_connected(&self);
 }
 
@@ -91,7 +96,9 @@ impl CatalogEntry for AppleMusicEntry {
     self.secrets.remove(apple_music::KEY_CONNECTED.into());
   }
 
-  fn adopt_tokens(&self, _tokens: ProviderTokens) {}
+  fn adopt_credentials(&self, _credentials: ProviderCredentials) -> Result<(), String> {
+    Err("apple music signs in through the phone, not with credentials".into())
+  }
 
   fn mark_connected(&self) {
     self.secrets.set(apple_music::KEY_CONNECTED.into(), "1".into());
@@ -169,10 +176,107 @@ impl CatalogEntry for SpotifyEntry {
     self.secrets.remove(spotify::KEY_USERNAME.into());
   }
 
-  fn adopt_tokens(&self, tokens: ProviderTokens) {
-    self
-      .secrets
-      .set(spotify::KEY_REFRESH_TOKEN.into(), tokens.refresh_token);
+  fn adopt_credentials(&self, credentials: ProviderCredentials) -> Result<(), String> {
+    match credentials {
+      ProviderCredentials::OauthTokens { refresh_token, .. } => {
+        self.secrets.set(spotify::KEY_REFRESH_TOKEN.into(), refresh_token);
+        Ok(())
+      }
+      ProviderCredentials::ServerLogin { .. } => Err("spotify signs in with oauth tokens, not a server login".into()),
+    }
+  }
+
+  fn mark_connected(&self) {}
+}
+
+pub struct SubsonicEntry {
+  stream: Arc<dyn StreamBackend>,
+  http: Arc<dyn HttpTransport>,
+  secrets: Arc<dyn SecretStore>,
+  image: Option<Arc<dyn ImageScaler>>,
+}
+
+impl SubsonicEntry {
+  pub fn new(
+    stream: Arc<dyn StreamBackend>,
+    http: Arc<dyn HttpTransport>,
+    secrets: Arc<dyn SecretStore>,
+    image: Option<Arc<dyn ImageScaler>>,
+  ) -> Arc<Self> {
+    Arc::new(Self {
+      stream,
+      http,
+      secrets,
+      image,
+    })
+  }
+
+  fn secret(&self, key: &str) -> Option<String> {
+    self.secrets.get(key.into()).filter(|value| !value.is_empty())
+  }
+}
+
+impl CatalogEntry for SubsonicEntry {
+  fn id(&self) -> &str {
+    subsonic::PROVIDER_NAME
+  }
+
+  fn display_name(&self) -> &str {
+    "Subsonic"
+  }
+
+  fn sign_in(&self) -> SignInMethod {
+    SignInMethod::ServerLogin
+  }
+
+  fn build(&self) -> Arc<dyn Provider> {
+    SubsonicProvider::new(
+      SubsonicConfig {
+        server_url: self.secret(subsonic::KEY_SERVER_URL).unwrap_or_default(),
+        username: self.secret(subsonic::KEY_USERNAME).unwrap_or_default(),
+        password: self.secret(subsonic::KEY_PASSWORD).unwrap_or_default(),
+      },
+      self.stream.clone(),
+      Arc::new(ForeignHttp::new(self.http.clone())) as Arc<dyn IoHttpTransport>,
+      self.image.clone(),
+    )
+  }
+
+  fn has_credentials(&self) -> bool {
+    [subsonic::KEY_SERVER_URL, subsonic::KEY_USERNAME, subsonic::KEY_PASSWORD]
+      .iter()
+      .all(|key| self.secret(key).is_some())
+  }
+
+  fn clear_credentials(&self) {
+    for key in [subsonic::KEY_SERVER_URL, subsonic::KEY_USERNAME, subsonic::KEY_PASSWORD] {
+      self.secrets.remove(key.into());
+    }
+  }
+
+  fn adopt_credentials(&self, credentials: ProviderCredentials) -> Result<(), String> {
+    match credentials {
+      ProviderCredentials::ServerLogin {
+        server_url,
+        username,
+        password,
+      } => {
+        let server_url = normalize_server_url(&server_url)?;
+        if username.trim().is_empty() {
+          return Err("enter the username".into());
+        }
+        if password.is_empty() {
+          return Err("enter the password".into());
+        }
+        self.secrets.set(subsonic::KEY_SERVER_URL.into(), server_url);
+        self
+          .secrets
+          .set(subsonic::KEY_USERNAME.into(), username.trim().to_owned());
+        self.secrets.set(subsonic::KEY_PASSWORD.into(), password);
+        Ok(())
+      }
+      ProviderCredentials::OauthTokens { .. } => Err("subsonic signs in with a server login, not oauth tokens".into()),
+    }
   }
 
   fn mark_connected(&self) {}

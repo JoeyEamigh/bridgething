@@ -159,6 +159,7 @@ fn bridge_meta() -> BridgeThingMeta {
     libbridgething_version: "v0.1.0".into(),
     app_name: "bridgething".into(),
     nickname: Some("Joey's kitchen".into()),
+    launcher_gesture: LauncherGesture::FivePress,
     app_version: "0.1.0".into(),
     daemon_sha256: Some("2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae".into()),
     wakeword_model_version: Some("1.0.0".into()),

@@ -647,6 +647,12 @@ impl<'a> SystemSurface<'a> {
   pub async fn factory_reset(&self) -> Result<(), SdkError> {
     self.0.command(ClientToBridgeSystemMsgCommand::FactoryReset).await
   }
+  pub async fn launcher_gesture_set(&self, payload: LauncherGestureSet) -> Result<(), SdkError> {
+    self
+      .0
+      .command(ClientToBridgeSystemMsgCommand::LauncherGestureSet(payload))
+      .await
+  }
   pub async fn version_request(&self) -> Result<BridgeThingMeta, RequestFailure<::core::convert::Infallible>> {
     self.0.request(RequestVersion).await
   }
@@ -667,6 +673,11 @@ impl<'a> SystemSurface<'a> {
   }
   pub async fn device_get_nickname(&self) -> Result<DeviceNicknameReply, RequestFailure<::core::convert::Infallible>> {
     self.0.request(DeviceGetNickname).await
+  }
+  pub async fn launcher_gesture_get(
+    &self,
+  ) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(LauncherGestureGet).await
   }
   /// Stream of `System` events.
   pub fn events(&self) -> impl Stream<Item = BridgeToClientSystemMsgEvent> + 'static {

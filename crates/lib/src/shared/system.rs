@@ -15,6 +15,7 @@ pub struct BridgeThingMeta {
   pub libbridgething_version: String,
   pub app_name: String,
   pub nickname: Option<String>,
+  pub launcher_gesture: LauncherGesture,
   pub app_version: String,
   pub daemon_sha256: Option<String>,
   /// Null when no wake word model is loaded, or the loaded model carries no version.
@@ -42,6 +43,16 @@ impl BridgeThingMeta {
   pub fn libbridgething_version() -> String {
     format!("v{}", LIBBRIDGETHING_VERSION)
   }
+}
+
+/// Which M-button gesture jumps to the launcher.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "shared.ts")]
+pub enum LauncherGesture {
+  LongPress,
+  #[default]
+  FivePress,
 }
 
 /// What an update installs.

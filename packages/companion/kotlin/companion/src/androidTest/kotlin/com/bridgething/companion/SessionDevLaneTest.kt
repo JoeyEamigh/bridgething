@@ -22,6 +22,7 @@ import uniffi.bridgething_companion.HostInfo
 import uniffi.bridgething_companion.LinkDevice
 import uniffi.bridgething_companion.PeerLinkStatus
 import uniffi.bridgething_companion.SessionEvent
+import uniffi.bridgething_companion.WebappInstallRequest
 import uniffi.bridgething_companion.WebappRole
 import uniffi.bridgething_companion.WebappSlot
 
@@ -119,7 +120,9 @@ class SessionDevLaneTest {
         assumeTrue("pass -e bridgethingWebappUrl <url> to run the install tier", url != null)
         val before = runBlocking { companion.session.listWebapps(DEVICE_ID) }.map { it.id }.toSet()
 
-        val installed = runBlocking { companion.session.installWebappFromUrl(DEVICE_ID, url!!, null, url) }
+        val installed = runBlocking {
+            companion.session.installWebappFromUrl(DEVICE_ID, WebappInstallRequest(url!!, null, url, null, null))
+        }
         assertEquals(url, installed.provenance)
         awaitEvent<SessionEvent.WebappsChanged> { it.entry.webapps.any { app -> app.id == installed.id } }
 

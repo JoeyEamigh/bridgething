@@ -36,14 +36,15 @@ use uuid::Uuid;
 use crate::{
   api::{
     AuthKind, AuthState, CapabilityFlags, CompanionBackends, CompanionConfig, CompanionDebug, CompanionError,
-    DeviceAutoResume, DeviceResumeTarget, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderInfo, ProviderTokens,
-    ServiceHealth, ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer, SessionSnapshot,
-    VoiceDebug, VoiceModelPaths, VoiceModelState, VoiceModelStatus,
+    DeviceAutoResume, DeviceResumeTarget, ModelPlatform, OtaPollConfig, PeerLinkStatus, ProviderCredentials,
+    ProviderInfo, ServiceHealth, ServiceHealthKind, SessionEvent, SessionEventSink, SessionHostInfo, SessionPeer,
+    SessionSnapshot, SignInMethod, VoiceDebug, VoiceModelPaths, VoiceModelState, VoiceModelStatus,
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
+  dayparting::Dayparting,
   dispatch::{
     asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
     library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
@@ -52,7 +53,8 @@ use crate::{
   hub::Hub,
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
-    catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry},
+    catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry, SubsonicEntry},
+    stream::StreamProvider,
     system_media::SystemMediaProvider,
   },
   session::{handlers::Peer, link::LinkConnector, models::VoiceModels, observer::SessionObserver, ota::OtaLink},
@@ -231,6 +233,14 @@ impl Session {
             backends.image.clone(),
           ) as Arc<dyn crate::provider::catalog::CatalogEntry>
         }))
+        .chain(backends.stream.clone().map(|stream| {
+          SubsonicEntry::new(
+            stream,
+            backends.http.clone(),
+            backends.secrets.clone(),
+            backends.image.clone(),
+          ) as Arc<dyn crate::provider::catalog::CatalogEntry>
+        }))
         .collect(),
     );
     let broadcast = Arc::new(Broadcast::default());
@@ -404,13 +414,13 @@ impl Session {
   pub async fn complete_provider_auth(
     self: &Arc<Self>,
     id: &str,
-    tokens: ProviderTokens,
+    credentials: ProviderCredentials,
   ) -> Result<(), CompanionError> {
     let entry = self
       .catalog
       .get(id)
       .ok_or_else(|| CompanionError::Device(format!("unknown provider {id}")))?;
-    entry.adopt_tokens(tokens);
+    entry.adopt_credentials(credentials).map_err(CompanionError::Device)?;
     self.connect_provider(id).await
   }
 
@@ -563,6 +573,7 @@ impl Session {
   pub fn start(self: &Arc<Self>) {
     self.hub.start();
     self.mirror_system_media();
+    self.attach_stream();
     if let Some(extensions) = &self.extensions {
       extensions.start();
     }
@@ -623,6 +634,21 @@ impl Session {
       previous.abort();
     }
     tokio::task::spawn_blocking(move || transport.start(inbox));
+  }
+
+  fn attach_stream(self: &Arc<Self>) {
+    let Some(backend) = self.backends.stream.clone() else {
+      return;
+    };
+    let hub = self.hub.clone();
+    let http = self.backends.http.clone();
+    let scaler = self.backends.image.clone();
+    tokio::spawn(async move {
+      let provider = StreamProvider::new(backend, Arc::new(ForeignHttp::new(http)), scaler);
+      if let Err(error) = hub.attach(provider).await {
+        tracing::warn!(%error, "the stream provider did not attach");
+      }
+    });
   }
 
   fn mirror_system_media(self: &Arc<Self>) {
@@ -1074,8 +1100,14 @@ impl Session {
   fn watch_arbitration(&self) -> JoinHandle<()> {
     let mut arbitrated = self.hub.now_playing().arbitrated();
     let observer = self.observer.clone();
+    let dayparting = Dayparting::new(
+      self.hub.clone(),
+      self.backends.host.clone(),
+      self.backends.secrets.clone(),
+    );
     tokio::spawn(async move {
       while let Ok(state) = arbitrated.recv().await {
+        dayparting.observe(state.as_ref());
         observer.now_playing_changed(state);
       }
     })
@@ -1229,9 +1261,10 @@ impl Session {
     let auth = self.auth.lock().unwrap().clone();
     let connected = self.connected.lock().unwrap().clone();
     let registered = self.providers.lock().unwrap().clone();
-    let info = |id: String, display_name: String, live: bool| ProviderInfo {
+    let info = |id: String, display_name: String, sign_in: SignInMethod, live: bool| ProviderInfo {
       available: true,
       connected: live && (connected.contains(&id) || attached.contains(&id)),
+      sign_in,
       auth_state: if live {
         auth.get(&id).map_or_else(idle_auth, project_auth)
       } else {
@@ -1250,7 +1283,12 @@ impl Session {
       .iter()
       .map(|entry| {
         let live = registered.iter().any(|provider| provider.name() == entry.id());
-        info(entry.id().to_owned(), entry.display_name().to_owned(), live)
+        info(
+          entry.id().to_owned(),
+          entry.display_name().to_owned(),
+          entry.sign_in(),
+          live,
+        )
       })
       .collect();
     for provider in &registered {
@@ -1258,6 +1296,7 @@ impl Session {
         infos.push(info(
           provider.name().to_owned(),
           provider.display_name().to_owned(),
+          SignInMethod::Handshake,
           true,
         ));
       }

@@ -95,6 +95,7 @@
                     notifications: nil,
                     phone: nil,
                     mediaSessions: nil,
+                    stream: StreamPlayer(),
                     speech: SpeechTranscriberBackend(),
                     nlu: CoreMlNluRunner { sessionRef.current?.voiceModelPaths().nluBundleDir },
                     appleMusic: MusicKitBackend(),

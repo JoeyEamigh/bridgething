@@ -29,6 +29,7 @@ export {
   SETTINGS_PAGE_MIME,
   aggregate,
   compareVersions,
+  fillsSlot,
   isListedWebapp,
   listedWebapps,
   newestCompatible,
@@ -38,15 +39,19 @@ export {
   satisfies,
   settingsOrigin,
   settingsOriginFor,
+  slotCandidates,
   updates,
   versionCompatible,
   type CatalogAppListing,
   type CatalogAppUpdate,
   type ExtensionOffering,
   type InstalledWebapp,
+  type WebappSlotName,
 } from './resolve.ts';
 
 export { blendStoreListings, type StoreListings } from './blend.ts';
+
+export { STORE_COPY, alsoAvailableLabel, countLine, failureLine, installsLabel, listingTraits } from './copy.ts';
 
 export {
   CATALOG_FETCH_TIMEOUT_MS,
@@ -57,11 +62,13 @@ export {
   fetchCatalog,
   fetchMergedApps,
   fetchSources,
+  installedBody,
   normalizeSourceUrl,
   parseSourceUrl,
-  reportInstall,
+  reportInstalled,
   type CatalogSnapshot,
-  type InstallReport,
+  type InstalledApp,
+  type InstalledReport,
   type MergedApps,
   type MergedCatalog,
   type SourceFailure,

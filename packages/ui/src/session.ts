@@ -6,14 +6,15 @@ import type {
   DeviceLogLine,
   DeviceMetaEntry,
   DocEntry,
+  LauncherGesture,
   NowPlaying,
   OtaAvailable,
   OtaDiscoverManifest,
   OtaPollConfig,
   OtaPollStatus,
   OtaRun,
+  ProviderCredentials,
   ProviderInfo,
-  ProviderTokens,
   SessionHostInfo,
   SessionPeer,
   SessionSnapshot,
@@ -74,6 +75,7 @@ export interface DeviceSession {
   setCapabilityFlags(flags: CapabilityFlags): Promise<void>;
   setDeviceNickname(nickname: string): Promise<void>;
   setDeviceAutoResume(enabled: boolean): Promise<void>;
+  setLauncherGesture(gesture: LauncherGesture): Promise<void>;
 
   webapps(): Promise<WebappInfo[]>;
   webappActive(): Promise<ActiveWebapp | null>;
@@ -117,7 +119,7 @@ export interface CompanionSession extends DeviceSession {
   libraryProvider(): Promise<string | null>;
   connectProvider(id: string): Promise<void>;
   disconnectProvider(id: string): Promise<void>;
-  completeProviderAuth(id: string, tokens: ProviderTokens): Promise<void>;
+  completeProviderAuth(id: string, credentials: ProviderCredentials): Promise<void>;
   cancelProviderAuth(id: string): Promise<void>;
 }
 

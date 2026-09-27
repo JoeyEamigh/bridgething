@@ -108,6 +108,7 @@ pub trait OtaInbound: Send + Sync {
   fn error(&self, payload: OtaError);
   fn finished(&self, payload: OtaFinished);
   fn nickname_changed(&self, nickname: Option<String>) -> Option<BridgeThingMeta>;
+  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta>;
   fn device_meta(&self, meta: BridgeThingMeta);
   fn transfer_ack(&self, ack: TransferAck);
   fn webapp_installed(&self, info: WebappInfo);

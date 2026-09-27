@@ -21,7 +21,7 @@ use std::{
 };
 
 use bridgething_companion::{
-  api::{PeerLinkStatus, SessionEvent},
+  api::{PeerLinkStatus, SessionEvent, WebappInstallRequest},
   backend::{ExtensionHost, ExtensionMessage, VolumeBackend, VolumeInbox, VolumeLevel},
   provider::Provider,
 };
@@ -89,7 +89,7 @@ impl VolumeBackend for FakeVolume {
 const ARTIFACT_BYTES: usize = 512 * 1024;
 
 const DRIVE_DEADLINE: Duration = Duration::from_secs(60);
-const SETTLE: Duration = Duration::from_secs(5);
+const SETTLE: Duration = Duration::from_secs(20);
 
 fn playing(title: &str) -> PlayerState {
   PlayerState {
@@ -832,9 +832,13 @@ async fn the_bundle_sink_is_handed_the_artifact_while_it_is_still_on_disk() {
     .companion
     .install_webapp_from_url(
       rig.device_id().to_owned(),
-      URL.to_owned(),
-      None,
-      None,
+      WebappInstallRequest {
+        url: URL.to_owned(),
+        expected: None,
+        provenance: None,
+        webapp_id: None,
+        webapp_name: None,
+      },
       Some(sink.clone()),
     )
     .await
@@ -879,9 +883,13 @@ async fn the_bundle_sink_runs_off_the_worker_that_is_driving_the_link() {
     .companion
     .install_webapp_from_url(
       rig.device_id().to_owned(),
-      URL.to_owned(),
-      None,
-      None,
+      WebappInstallRequest {
+        url: URL.to_owned(),
+        expected: None,
+        provenance: None,
+        webapp_id: None,
+        webapp_name: None,
+      },
       Some(sink.clone()),
     )
     .await
@@ -907,9 +915,13 @@ async fn a_device_install_that_fails_never_reaches_the_bundle_sink() {
     .companion
     .install_webapp_from_url(
       rig.device_id().to_owned(),
-      URL.to_owned(),
-      None,
-      None,
+      WebappInstallRequest {
+        url: URL.to_owned(),
+        expected: None,
+        provenance: None,
+        webapp_id: None,
+        webapp_name: None,
+      },
       Some(sink.clone()),
     )
     .await;

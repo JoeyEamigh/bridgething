@@ -189,7 +189,7 @@ async fn serve(
     Ok(reply) => reply,
     Err(resp) => {
       state.proxy.end_range(request_id).await;
-      return resp;
+      return *resp;
     }
   };
   if reply.parts.is_empty() {
@@ -239,7 +239,7 @@ async fn request_companion(
   begin: &super::RangeBegin,
   asset: &str,
   ranges: Vec<RangeSpec>,
-) -> Result<OtaAssetRangeReply, Response<Body>> {
+) -> Result<OtaAssetRangeReply, Box<Response<Body>>> {
   let req = OtaAssetRange {
     update_id: begin.update_id.clone(),
     asset: asset.to_string(),
@@ -254,14 +254,14 @@ async fn request_companion(
     Ok(reply) => Ok(reply),
     Err(RequestError::Domain(rejected)) => {
       tracing::warn!(update_id = %begin.update_id, reason = %rejected.reason, "companion rejected OtaAssetRange");
-      Err(error_response(
+      Err(Box::new(error_response(
         StatusCode::BAD_GATEWAY,
         format!("companion rejected: {}", rejected.reason),
-      ))
+      )))
     }
     Err(err) => {
       tracing::warn!(update_id = %begin.update_id, ?err, "OtaAssetRange wire request failed");
-      Err(error_response(StatusCode::BAD_GATEWAY, "wire request failed"))
+      Err(Box::new(error_response(StatusCode::BAD_GATEWAY, "wire request failed")))
     }
   }
 }

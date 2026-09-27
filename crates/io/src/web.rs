@@ -56,11 +56,15 @@ async fn streamed(request: HttpRequest, sink: &Arc<HttpDownloadSink>) -> Result<
     .iter()
     .find(|header| header.name.eq_ignore_ascii_case("content-length"))
     .and_then(|header| header.value.parse::<u64>().ok());
-  sink.on_response(response.status(), headers, content_length);
+  let wanted = sink.on_response(response.status(), headers, content_length);
 
   let Some(body) = response.body() else {
     return Ok(());
   };
+  if !wanted {
+    let _ = body.cancel();
+    return Ok(());
+  }
   let reader: ReadableStreamDefaultReader = body.get_reader().dyn_into().map_err(|e| js_reason("body reader", &e))?;
 
   loop {
@@ -78,7 +82,10 @@ async fn streamed(request: HttpRequest, sink: &Arc<HttpDownloadSink>) -> Result<
     let bytes = value
       .dyn_into::<Uint8Array>()
       .map_err(|e| js_reason("body chunk", &e))?;
-    sink.on_chunk(bytes.to_vec());
+    if !sink.on_chunk(bytes.to_vec()) {
+      let _ = reader.cancel();
+      return Ok(());
+    }
   }
 }
 

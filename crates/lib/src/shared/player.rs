@@ -276,6 +276,13 @@ pub struct PlaybackContext {
   pub name: Option<String>,
 }
 
+impl PlaybackContext {
+  pub fn new(uri: impl Into<String>, name: Option<String>) -> Option<Self> {
+    let uri = uri.into();
+    (!uri.is_empty()).then_some(Self { uri, name })
+  }
+}
+
 /// An endpoint the source does not classify reports `unknown`.
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]

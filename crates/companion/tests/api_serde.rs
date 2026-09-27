@@ -4,7 +4,7 @@ use bridgething_companion::{
   api::{
     AncsAuthStatus, AuthKind, AuthState, CapabilityFlags, DeviceLogLine, LogOrigin, NowPlaying, NowPlayingPlayback,
     NowPlayingTrack, OtaPollConfig, PeerLinkStatus, ProviderInfo, RepeatMode, ServiceHealth, ServiceHealthKind,
-    SessionEvent, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, VoiceModelStatus,
+    SessionEvent, SessionHostInfo, SessionPeer, SessionSnapshot, SignInMethod, VoiceModelState, VoiceModelStatus,
     ota::{
       OtaApplyPhase, OtaAvailable, OtaKind, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaPollStatus, OtaRun,
       OtaRunPhase, OtaStepKind, OtaStoreChange,
@@ -64,6 +64,7 @@ fn snapshot() -> SessionSnapshot {
       display_name: "Spotify".into(),
       available: true,
       connected: false,
+      sign_in: SignInMethod::Handshake,
       auth_state: AuthState {
         kind: AuthKind::Pending,
         user_code: Some("ABCD".into()),

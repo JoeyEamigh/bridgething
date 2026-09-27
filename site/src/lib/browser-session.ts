@@ -133,6 +133,12 @@ export class BrowserSession implements BrowserBackend {
     return beyondTheLink('auto-resume');
   }
 
+  async setLauncherGesture(gesture: api.LauncherGesture): Promise<void> {
+    await this.device.setLauncherGesture(gesture);
+    if (this.info) this.info = { ...this.info, launcherGesture: gesture };
+    this.fan('device-meta');
+  }
+
   async webapps(): Promise<api.WebappInfo[]> {
     const listed = await this.device.webapps();
     return listed.map(toWebappInfo);
@@ -422,6 +428,7 @@ export function toDeviceMeta(meta: BridgeThingMeta): api.DeviceMeta {
     modelName: meta.modelName,
     serialNumber: meta.serialNumber,
     nickname: meta.nickname,
+    launcherGesture: meta.launcherGesture,
   };
 }
 

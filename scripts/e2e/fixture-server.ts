@@ -259,6 +259,11 @@ Bun.serve({
       if (mode) return otaRoute(mode, rest);
     }
 
+    if (pathname === '/control/store/settings-hits/reset') {
+      hostedSettingsHits = 0;
+      return Response.json({ hits: hostedSettingsHits }, { headers: { 'access-control-allow-origin': '*' } });
+    }
+
     if (pathname === '/control/daemon/bounce') {
       const downMs = Number(searchParams.get('downMs') ?? '10000');
       const next = searchParams.get('mode') as Mode | null;

@@ -79,6 +79,12 @@ pub struct OtaResume {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebappLabel {
+  pub id: String,
+  pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OtaAvailable {
   pub device_id: String,
   pub release_version: Option<String>,

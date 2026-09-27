@@ -17,6 +17,7 @@ pub mod notifications;
 pub mod phone;
 pub mod secrets;
 pub mod speech;
+pub mod stream;
 pub mod wake;
 
 pub use apple_music::{
@@ -58,4 +59,7 @@ pub use phone::{
 };
 pub use secrets::SecretStore;
 pub use speech::{PrepareEvent, PrepareSink, SpeechRecognizer, SpeechSegment, Transcription, TranscriptionSink};
+pub use stream::{
+  StreamBackend, StreamEvent, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
+};
 pub use wake::{DeviceWaker, WakeReason};

@@ -10,6 +10,8 @@
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
   <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
   <!--
       Telephony surface. The host app must request the default-dialer role
       (RoleManager.ROLE_DIALER) before the OS binds the InCallService; the
@@ -46,6 +48,15 @@
         <action android:name="android.intent.action.PHONE_STATE" />
       </intent-filter>
     </receiver>
+
+    <service
+      android:name="com.bridgething.companion.BridgethingStreamService"
+      android:exported="false"
+      android:foregroundServiceType="mediaPlayback">
+      <intent-filter>
+        <action android:name="androidx.media3.session.MediaSessionService" />
+      </intent-filter>
+    </service>
 
     <service
       android:name="com.bridgething.companion.BridgethingInCallService"

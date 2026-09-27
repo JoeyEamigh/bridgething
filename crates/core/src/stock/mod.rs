@@ -317,7 +317,9 @@ impl From<BridgeToClientSystemMsg> for StockSendMsg {
       | BridgeToClientSystemMsg::OtaError(_)
       | BridgeToClientSystemMsg::OtaFinished(_)
       | BridgeToClientSystemMsg::DeviceNickname(_)
-      | BridgeToClientSystemMsg::DeviceNicknameChanged(_) => StockSendMsg::Unsupported,
+      | BridgeToClientSystemMsg::DeviceNicknameChanged(_)
+      | BridgeToClientSystemMsg::LauncherGestureReply(_)
+      | BridgeToClientSystemMsg::LauncherGestureChanged(_) => StockSendMsg::Unsupported,
     }
   }
 }

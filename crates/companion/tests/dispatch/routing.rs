@@ -248,6 +248,9 @@ impl PlayerHandler for Routed {
 }
 
 impl SystemHandler for Routed {
+  async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,

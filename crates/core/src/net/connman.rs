@@ -44,10 +44,17 @@ impl TappedFrame {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientScope {
+  ActiveWebapp,
+  Overlay,
+}
+
 #[derive(Debug)]
 struct ClientData {
   tx: SendTx,
   mode: ClientMode,
+  scope: ClientScope,
   stock_call: StockCallSlot,
 
   _handle: JoinHandle<()>,
@@ -155,6 +162,14 @@ impl ClientManager {
     }
   }
 
+  pub fn scope_of(&self, from: &SocketAddr) -> ClientScope {
+    self
+      .connections
+      .get(from)
+      .map(|client| client.scope)
+      .unwrap_or(ClientScope::ActiveWebapp)
+  }
+
   pub async fn send(
     &self,
     id: Uuid,
@@ -180,8 +195,24 @@ impl ClientManager {
   }
 
   pub async fn broadcast(&self, data: impl Into<BridgeToClientMsgData>, meta: MsgMeta) -> Result<(), Vec<WSError>> {
-    let data = data.into();
+    self.broadcast_filtered(data.into(), meta, None).await
+  }
 
+  pub async fn broadcast_to_scopes(
+    &self,
+    scopes: &[ClientScope],
+    data: impl Into<BridgeToClientMsgData>,
+    meta: MsgMeta,
+  ) -> Result<(), Vec<WSError>> {
+    self.broadcast_filtered(data.into(), meta, Some(scopes)).await
+  }
+
+  async fn broadcast_filtered(
+    &self,
+    data: BridgeToClientMsgData,
+    meta: MsgMeta,
+    scopes: Option<&[ClientScope]>,
+  ) -> Result<(), Vec<WSError>> {
     let msg = BridgeToClientMsg {
       id: uuid::Uuid::now_v7(),
       data,
@@ -192,6 +223,9 @@ impl ClientManager {
     let mut closed: Vec<SocketAddr> = Vec::new();
     let phone = self.stock_phone.get();
     for c in self.connections.iter() {
+      if scopes.is_some_and(|allowed| !allowed.contains(&c.scope)) {
+        continue;
+      }
       let out = PossibleSendMsg::from_send_msg(msg.clone(), &c.mode, None, &c.stock_call, phone);
       if let Err(err) = c.tx.try_send(out) {
         if matches!(err, TrySendError::Closed(_)) {
@@ -211,6 +245,14 @@ impl ClientManager {
 
   pub async fn broadcast_event<E: WireEvent<BridgeToClientMsgData>>(&self, event: E) -> Result<(), Vec<WSError>> {
     self.broadcast(event.into(), MsgMeta::Event).await
+  }
+
+  pub async fn broadcast_event_to_scopes<E: WireEvent<BridgeToClientMsgData>>(
+    &self,
+    scopes: &[ClientScope],
+    event: E,
+  ) -> Result<(), Vec<WSError>> {
+    self.broadcast_to_scopes(scopes, event.into(), MsgMeta::Event).await
   }
 
   pub async fn send_command<C: WireCommand<BridgeToClientMsgData>>(&self, to: SocketAddr, cmd: C) -> WSResult<()> {
@@ -324,6 +366,7 @@ impl ClientManager {
     address: SocketAddr,
     ws: WebSocket,
     mode: ClientMode,
+    scope: ClientScope,
     state: &State,
   ) -> WSResult<()> {
     tracing::debug!("handling accepted websocket connection from {address}");
@@ -334,6 +377,7 @@ impl ClientManager {
     let data = ClientData {
       tx,
       mode,
+      scope,
       stock_call: StockCallSlot::default(),
 
       _handle: Connection::spawn(

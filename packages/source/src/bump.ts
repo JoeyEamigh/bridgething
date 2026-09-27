@@ -35,7 +35,7 @@ async function bumpOne(app: App, target: string, note: string | null): Promise<v
   const body = existsSync(changelogPath) ? await readFile(changelogPath, 'utf8') : `# ${manifest.name}\n`;
   const [heading, ...rest] = body.split(/\n(?=## )/);
   const section = `## ${target}\n\n${note ?? 'description of what changed'}\n`;
-  await writeText(changelogPath, [heading!.trimEnd(), '', section, ...rest].join('\n').replace(/\n{3,}/g, '\n\n'));
+  await writeText(changelogPath, [heading.trimEnd(), '', section, ...rest].join('\n').replace(/\n{3,}/g, '\n\n'));
 
   console.log(`${app.slug}  ${app.manifest.version} -> ${target}`);
 }

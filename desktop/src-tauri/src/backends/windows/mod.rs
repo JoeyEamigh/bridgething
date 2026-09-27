@@ -2,6 +2,7 @@ mod connectivity;
 mod geo;
 mod media;
 mod speech;
+mod stream;
 mod volume;
 
 use std::{path::Path, sync::Arc};
@@ -16,6 +17,7 @@ pub fn platform(_config_dir: &Path) -> Platform {
     geo: Some(Arc::new(Locator::new(geo::run))),
     notifications: None,
     media_sessions: Some(Arc::new(media::GlobalSystemMediaSessions::default())),
+    stream: Some(Arc::new(stream::MediaPlayerStream::default())),
     audio: Some(Arc::new(speech::WinRtAudio::default())),
     volume: Some(Arc::new(volume::EndpointVolume::default())),
     connectivity: Some(Arc::new(connectivity::NetworkInformationConnectivity::default())),

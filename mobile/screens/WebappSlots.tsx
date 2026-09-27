@@ -1,8 +1,5 @@
-import type {
-  BridgethingWebappInfo,
-  BridgethingWebappSlot,
-  BridgethingWebappSlots,
-} from '@bridgething/session-react-native';
+import { slotCandidates, type WebappSlotName } from '@bridgething/catalog';
+import type { BridgethingWebappInfo } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
@@ -18,62 +15,44 @@ import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionHeader } from '../components/SectionHeader';
 import { Spinner } from '../components/Spinner';
 import { WebappIcon } from '../components/WebappIcon';
-import { getSession } from '../lib/session';
 import { TEXT } from '../lib/theme';
-import { useWebapps } from '../lib/webapps';
+import { assignSlot, refreshSlots, useSlots, useWebapps } from '../lib/webapps';
 import type { AppsScreenProps } from '../navigation';
 
 type Props = AppsScreenProps<'WebappSlots'>;
 
-type SlotFailure = { slot: BridgethingWebappSlot; message: string };
+type SlotFailure = { slot: WebappSlotName; message: string };
 
 export function WebappSlotsScreen({ route }: Props) {
-  const session = getSession();
   const deviceId = route.params.deviceId;
   const { list } = useWebapps(deviceId);
+  const { slots, error: loadError } = useSlots(deviceId);
 
-  const [slots, setSlots] = useState<BridgethingWebappSlots | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [failure, setFailure] = useState<SlotFailure | null>(null);
-  const [busy, setBusy] = useState<BridgethingWebappSlot | null>(null);
+  const [busy, setBusy] = useState<WebappSlotName | null>(null);
 
-  const load = useCallback(() => {
-    setLoadError(null);
-    setSlots(null);
-    let cancelled = false;
-    session
-      .getWebappSlots(deviceId)
-      .then(next => !cancelled && setSlots(next))
-      .catch(err => !cancelled && setLoadError(describeError(err)));
-    return () => {
-      cancelled = true;
-    };
-  }, [session, deviceId]);
+  const load = useCallback(() => void refreshSlots(deviceId), [deviceId]);
 
-  useEffect(() => load(), [load]);
+  useEffect(load, [load]);
 
   const assign = useCallback(
-    async (slot: BridgethingWebappSlot, id?: string) => {
+    async (slot: WebappSlotName, id?: string) => {
       if (busy) return;
       setBusy(slot);
       setFailure(null);
       try {
-        setSlots(await session.setWebappSlot(deviceId, slot, id));
+        await assignSlot(deviceId, slot, id);
       } catch (err) {
         setFailure({ slot, message: describeError(err) });
       } finally {
         setBusy(null);
       }
     },
-    [busy, session, deviceId],
+    [busy, deviceId],
   );
 
-  const launchers = list.filter(
-    w => w.role === 'launcher' && w.source === 'installed',
-  );
-  const overlays = list.filter(
-    w => w.overlayHash != null && w.source === 'installed',
-  );
+  const launchers = slotCandidates(list, 'launcher');
+  const overlays = slotCandidates(list, 'overlay');
 
   return (
     <ScrollScreen>

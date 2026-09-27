@@ -6,17 +6,17 @@
 
 @font-face {
   font-family: 'Outfit';
-  src: url('/fonts/Outfit/Outfit.ttf') format('truetype-variations');
+  src: url('/fonts/Outfit/Outfit.woff2') format('woff2-variations');
   font-weight: 100 900;
-  font-display: swap;
+  font-display: optional;
   font-style: normal;
 }
 
 @font-face {
   font-family: 'Inter';
-  src: url('/fonts/Inter/Inter.ttf') format('truetype-variations');
+  src: url('/fonts/Inter/Inter.woff2') format('woff2-variations');
   font-weight: 100 900;
-  font-display: swap;
+  font-display: optional;
   font-style: normal;
 }
 

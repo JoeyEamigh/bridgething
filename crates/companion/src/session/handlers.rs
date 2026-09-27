@@ -321,6 +321,12 @@ impl SystemHandler for Peer {
     }
     Ok(())
   }
+  async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
+    if let Some(meta) = self.ota.launcher_gesture_changed(payload.gesture) {
+      self.observer.device_meta(&self.device_id, meta);
+    }
+    Ok(())
+  }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {
     self.system.log_entry(payload).await
   }

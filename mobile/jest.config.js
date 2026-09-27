@@ -8,6 +8,9 @@ module.exports = {
     '^.+\\.(bmp|gif|jpg|jpeg|mp4|png|psd|svg|webp)$':
       require.resolve('@react-native/jest-preset/jest/assetFileTransformer.js'),
   },
+  moduleNameMapper: {
+    '^@babel/runtime/(.*)$': '<rootDir>/node_modules/@babel/runtime/$1',
+  },
   transformIgnorePatterns: [
     'node_modules/(?!(?:jest-)?react-native|@react-native(-community)?|@bridgething)/',
   ],

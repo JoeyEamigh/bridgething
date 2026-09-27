@@ -229,10 +229,9 @@ async fn retransmit_resends_unacked_packet_after_timeout() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn max_retransmissions_announces_rst_and_restarts_detection() {
+async fn a_peer_that_stops_acking_outright_gives_up_on_the_time_budget() {
   let mut e = establish(PeerProposal {
     retransmission_timeout_ms: 30,
-    max_retransmissions: 2,
     ..PeerProposal::default()
   })
   .await;
@@ -245,11 +244,7 @@ async fn max_retransmissions_announces_rst_and_restarts_detection() {
     .await
     .unwrap();
 
-  let _ = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
-  let _ = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
-  let _ = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
-
-  let event = recv_with_timeout(&mut e.events_rx, Duration::from_secs(2))
+  let event = recv_with_timeout(&mut e.events_rx, Duration::from_secs(3))
     .await
     .unwrap();
   match event {
@@ -257,8 +252,15 @@ async fn max_retransmissions_announces_rst_and_restarts_detection() {
     other => panic!("expected LinkRestarting, got {:?}", other),
   }
 
-  let rst = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
-  assert!(rst.header.control.contains(ControlBits::RST));
+  let mut saw_rst = false;
+  for _ in 0..64 {
+    let pkt = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
+    if pkt.header.control.contains(ControlBits::RST) {
+      saw_rst = true;
+      break;
+    }
+  }
+  assert!(saw_rst, "giving up must announce a RST");
 
   let (peer_buf, peer_codec, _psn) = drive_peer_handshake(&mut e.peer, PeerProposal::default().into_lsp()).await;
   e.peer_buf = peer_buf;
@@ -487,4 +489,120 @@ async fn out_of_order_drains_in_order_when_gap_arrives() {
     Iap2Event::DataReceived { payload, .. } => assert_eq!(payload.as_ref(), b"two"),
     other => panic!("expected DataReceived 'two', got {:?}", other),
   }
+}
+
+async fn read_link_within(e: &mut Established, dur: Duration) -> Option<LinkPacket> {
+  tokio::time::timeout(dur, read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec))
+    .await
+    .ok()
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_slow_but_healthy_peer_costs_a_constant_not_a_retransmit_per_packet() {
+  const RTO_MS: u64 = 200;
+  const ACK_LATENCY_MS: u64 = 300;
+  const PACKETS: u8 = 20;
+  const STARTUP_COST: usize = 1;
+
+  let mut e = establish(PeerProposal {
+    max_outgoing: 127,
+    max_len: 65535,
+    retransmission_timeout_ms: RTO_MS as u16,
+    max_retransmissions: 30,
+    ..PeerProposal::default()
+  })
+  .await;
+  let last_seq = e.our_initial_psn.wrapping_add(PACKETS);
+
+  for i in 0..PACKETS {
+    e.cmd_tx
+      .send(Iap2Command::Send {
+        session_id: SESSION_ID,
+        payload: Bytes::from(vec![i; 64]),
+      })
+      .await
+      .unwrap();
+  }
+
+  let mut wire = Vec::new();
+  let mut highest = e.our_initial_psn;
+  while let Some(pkt) = read_link_within(&mut e, Duration::from_millis(800)).await {
+    wire.push(pkt.header.seq);
+    assert!(wire.len() <= 200, "the link never stopped resending");
+    if pkt.header.seq == highest.wrapping_add(1) {
+      highest = pkt.header.seq;
+    }
+    tokio::time::sleep(Duration::from_millis(ACK_LATENCY_MS)).await;
+    let ack = LinkPacket::header_only(ControlBits::ACK, PEER_INITIAL_PSN, highest);
+    write_link(&mut e.peer, &mut e.peer_codec, ack).await;
+  }
+
+  assert_eq!(highest, last_seq, "every payload must arrive");
+  let mut duplicates = wire.clone();
+  duplicates.sort_unstable();
+  duplicates.dedup();
+  assert!(
+    wire.len() <= PACKETS as usize + STARTUP_COST,
+    "nothing was lost and everything was acked, just later than the {RTO_MS}ms RTO. \
+     {} wire packets carried {PACKETS} payloads ({:.1}x amplification), seqs {:?}",
+    wire.len(),
+    wire.len() as f64 / PACKETS as f64,
+    wire
+  );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn late_acks_cost_bandwidth_but_a_still_advancing_peer_keeps_the_link() {
+  const RTO_MS: u64 = 100;
+  const DRAIN_MS_PER_PACKET: u64 = 40;
+  const PACKETS: u8 = 24;
+
+  let mut e = establish(PeerProposal {
+    max_outgoing: 127,
+    max_len: 65535,
+    retransmission_timeout_ms: RTO_MS as u16,
+    max_retransmissions: 4,
+    ..PeerProposal::default()
+  })
+  .await;
+
+  for i in 0..PACKETS {
+    e.cmd_tx
+      .send(Iap2Command::Send {
+        session_id: SESSION_ID,
+        payload: Bytes::from(vec![i; 64]),
+      })
+      .await
+      .unwrap();
+  }
+
+  let mut wire = 0usize;
+  let mut highest = e.our_initial_psn;
+  while wire < 400 {
+    let Some(pkt) = read_link_within(&mut e, Duration::from_millis(600)).await else {
+      break;
+    };
+    wire += 1;
+    if pkt.header.seq == highest.wrapping_add(1) {
+      highest = pkt.header.seq;
+    }
+    tokio::time::sleep(Duration::from_millis(DRAIN_MS_PER_PACKET)).await;
+    let ack = LinkPacket::header_only(ControlBits::ACK, PEER_INITIAL_PSN, highest);
+    write_link(&mut e.peer, &mut e.peer_codec, ack).await;
+  }
+
+  assert_eq!(
+    highest,
+    e.our_initial_psn.wrapping_add(PACKETS),
+    "every payload must arrive"
+  );
+  assert!(
+    matches!(
+      tokio::time::timeout(Duration::from_millis(50), e.events_rx.recv()).await,
+      Err(_) | Ok(None)
+    ),
+    "a cumulative ack that keeps advancing pops the head before it can exhaust its retries, \
+     so ack LAG only costs bandwidth ({wire} wire packets for {PACKETS} payloads). \
+     killing the link needs the ack stream to STALL, which is a different fault"
+  );
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::{LogEntry, OtaError, OtaFinished, OtaProgress, RangeSpec};
+use crate::{LauncherGesture, LogEntry, OtaError, OtaFinished, OtaProgress, RangeSpec};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -36,6 +36,13 @@ pub struct DeviceNicknameReply {
 #[ts(export, export_to = "gateway.ts")]
 pub struct DeviceNicknameRejected {
   pub reason: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct LauncherGestureReply {
+  pub gesture: LauncherGesture,
 }
 
 #[serde_with::skip_serializing_none]
@@ -123,6 +130,10 @@ pub enum BridgeToGatewaySystemMsg {
   DeviceNicknameRejected(DeviceNicknameRejected),
   #[bridge_event]
   DeviceNicknameChanged(DeviceNicknameReply),
+  #[bridge_response]
+  LauncherGestureReply(LauncherGestureReply),
+  #[bridge_event]
+  LauncherGestureChanged(LauncherGestureReply),
   #[bridge_response]
   LogsTailReply(LogsTailReply),
   #[bridge_response]

@@ -188,3 +188,35 @@ async fn connect_broadcasts_the_queue_to_attached_clients() {
     .any(|j| j.contains("spotify:track:u1"));
   assert!(saw_queue, "no client frame ever carried the upcoming queue");
 }
+
+#[tokio::test]
+async fn the_queue_head_s_hero_art_is_warmed_before_anyone_asks() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = connect_companion(&harness).await;
+  claim(&phone).await;
+  let mut inbound = phone.events();
+  phone.player().snapshot(playing_snapshot()).await.expect("snapshot");
+  let mut upcoming = upcoming_snapshot();
+  upcoming.items[0].artwork_id = Some("spotify/img/96/iupone".into());
+  phone.player().queue_changed(upcoming).await.expect("queue");
+
+  let asked = tokio::time::timeout(CONVERGE, async {
+    loop {
+      let Ok(msg) = inbound.recv().await else { return None };
+      if let libbridgething::gateway::BridgeToGatewayMsgData::Asset(
+        libbridgething::gateway::BridgeToGatewayAssetMsg::Request(req),
+      ) = msg.data
+      {
+        return Some(req.id);
+      }
+    }
+  })
+  .await
+  .ok()
+  .flatten();
+  assert_eq!(
+    asked.as_deref(),
+    Some("spotify/img/248/iupone"),
+    "the daemon warms the id the now-playing view will ask for, not the queue's thumbnail id"
+  );
+}
