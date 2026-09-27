@@ -7,7 +7,14 @@ use std::{
 };
 
 #[cfg(target_os = "macos")]
-use std::{path::PathBuf, thread, time::Duration};
+use std::{
+  io::{BufRead, BufReader},
+  path::{Path, PathBuf},
+  process::{Child, Command, Stdio},
+  sync::mpsc,
+  thread,
+  time::Duration,
+};
 
 use bridgething_delivery::discovery::Endpoint;
 #[cfg(target_os = "macos")]
@@ -17,6 +24,8 @@ use tokio::sync::Notify;
 use crate::hints::{ENDPOINTS, Hint, HintSink};
 
 pub const BLUETOOTH_URL: &str = "ws://127.0.0.1:8893/";
+#[cfg(target_os = "macos")]
+const READY_LINE: &str = "BRIDGETHING_BLUETOOTH_RELAY_READY";
 
 pub struct BluetoothRelay {
   active: AtomicBool,
@@ -67,7 +76,7 @@ impl BluetoothRelay {
 
   #[cfg(target_os = "macos")]
   fn drive(self: Arc<Self>, binary: PathBuf, hints: Arc<dyn HintSink>, wake: Arc<Notify>) {
-    let mut child: Option<std::process::Child> = None;
+    let mut child: Option<Child> = None;
     while !self.stopping.load(Ordering::Acquire) {
       if let Some(running) = child.as_mut() {
         match running.try_wait() {
@@ -80,17 +89,13 @@ impl BluetoothRelay {
         }
       }
       if child.is_none() {
-        match std::process::Command::new(&binary).arg("--probe").status() {
-          Ok(status) if status.success() => match std::process::Command::new(&binary)
-            .arg("--parent-pid")
-            .arg(std::process::id().to_string())
-            .spawn()
-          {
+        match Command::new(&binary).arg("--probe").status() {
+          Ok(status) if status.success() => match spawn_ready(&binary) {
             Ok(started) => {
               child = Some(started);
               self.set_active(true, &hints, &wake);
             }
-            Err(error) => tracing::warn!(%error, "the Bluetooth relay did not start"),
+            Err(error) => tracing::warn!(%error, "the Bluetooth relay did not become ready"),
           },
           Ok(_) => {}
           Err(error) => tracing::warn!(%error, "the paired Car Thing probe did not run"),
@@ -110,6 +115,31 @@ impl BluetoothRelay {
     if self.active.swap(active, Ordering::AcqRel) != active {
       hints.emit(Hint::bare(ENDPOINTS));
       wake.notify_one();
+    }
+  }
+}
+
+#[cfg(target_os = "macos")]
+fn spawn_ready(binary: &Path) -> Result<Child, String> {
+  let mut child = Command::new(binary)
+    .arg("--parent-pid")
+    .arg(std::process::id().to_string())
+    .stdout(Stdio::piped())
+    .spawn()
+    .map_err(|error| error.to_string())?;
+  let stdout = child.stdout.take().ok_or("the relay has no readiness pipe")?;
+  let (sender, receiver) = mpsc::sync_channel(1);
+  thread::spawn(move || {
+    let mut line = String::new();
+    let outcome = BufReader::new(stdout).read_line(&mut line);
+    let _ = sender.send((outcome, line));
+  });
+  match receiver.recv_timeout(Duration::from_secs(5)) {
+    Ok((Ok(length), line)) if length > 0 && line.trim() == READY_LINE => Ok(child),
+    other => {
+      let _ = child.kill();
+      let _ = child.wait();
+      Err(format!("readiness handshake failed: {other:?}"))
     }
   }
 }
