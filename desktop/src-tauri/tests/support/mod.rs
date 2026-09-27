@@ -8,6 +8,7 @@ use std::{
 
 use bridgething_delivery::discovery::Discovery;
 use bridgething_desktop::{
+  bluetooth::BluetoothRelay,
   hints::{Hint, HintSink},
   shell::{DEFAULT_GATEWAY_URL, DesktopPaths, Shell, ShellConfig},
 };
@@ -119,6 +120,7 @@ pub fn mock_app(shell: Arc<Shell>) -> tauri::App<MockRuntime> {
     .manage(Arc::clone(shell.extensions()))
     .manage(shell)
     .manage(Discovery::spawn(|_| ()).expect("the responder starts"))
+    .manage(BluetoothRelay::unavailable())
     .invoke_handler(bridgething_desktop::desktop_commands!())
     .build(mock_context(noop_assets()))
     .expect("the shell's command surface builds without a window")
