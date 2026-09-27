@@ -96,7 +96,7 @@ export class Overlay {
 
   private wireConnection(client: BridgethingClient) {
     const banner = el('div', 'banner connection hidden');
-    banner.append(el('span', 'dot'), el('span', 'title', 'phone disconnected'));
+    banner.append(el('span', 'dot'), el('span', 'title', 'companion disconnected'));
     this.root.top.appendChild(banner);
     let showTimer: ReturnType<typeof setTimeout> | undefined;
     client.peer.onSnapshot((snapshot: PeerSnapshotMap) => {
