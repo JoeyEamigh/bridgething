@@ -127,10 +127,6 @@
         private func pauseNow() {
             guard let player else { return }
             player.pause()
-            // A paused stream must not hold the audio session exclusive:
-            // without this, ShellAudioSession stays .exclusive and the
-            // keepalive reasserts it every 10s, interrupting other apps
-            // (e.g. Finamp) even though we are silent.
             session.streamDidStop()
             reportTimeControl(player.timeControlStatus)
         }
