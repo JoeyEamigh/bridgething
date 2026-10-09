@@ -2,6 +2,7 @@ package com.bridgething
 
 import android.app.Application
 import com.bridgething.companion.CompanionLogs
+import com.bridgething.companion.CrashCapture
 import com.bridgething.companion.LogcatCapture
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -25,6 +26,7 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     CompanionLogs.install(this)
+    CrashCapture.install()
     LogcatCapture.start()
     BridgethingActivityRegistry.installCallbacks(this)
     BridgethingApp.installBridgething(this)

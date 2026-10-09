@@ -60,10 +60,15 @@ let package = Package(
       name: "BridgethingCompanion",
       dependencies: [
         "BridgethingCompanionCore",
+        "BridgethingCrashHooks",
         .product(name: "Logging", package: "swift-log"),
       ],
       path: "packages/companion/swift/Sources/BridgethingCompanion",
       resources: [.process("Resources")]
+    ),
+    .target(
+      name: "BridgethingCrashHooks",
+      path: "packages/companion/swift/Sources/BridgethingCrashHooks"
     ),
     .testTarget(
       name: "BridgethingCompanionCoreTests",

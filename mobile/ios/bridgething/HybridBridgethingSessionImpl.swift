@@ -57,6 +57,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     private var onResumed: (@Sendable (BridgethingSessionSnapshot) -> Void)?
 
     public init() {
+        foreground = MainActor.assumeIsolated { UIApplication.shared.applicationState == .active }
         observeAppLifecycle()
         registerReloadDetach()
     }
