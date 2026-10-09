@@ -21,6 +21,7 @@ final class ShellAudioSession: @unchecked Sendable {
     private let apply: @Sendable (ShellAudioSessionPolicy) -> Void
     private let lock = NSLock()
     private var streamActive = false
+    private var streamYielded = false
     private var mixedRequested = false
     private var speechDepth = 0
     private weak var ducker: (any StreamDucker)?
@@ -37,15 +38,6 @@ final class ShellAudioSession: @unchecked Sendable {
             })
     }
 
-    func keepaliveActivate() {
-        let next = lock.withLock { () -> ShellAudioSessionPolicy? in
-            mixedRequested = true
-            guard !streamActive else { return nil }
-            return .mixed
-        }
-        if let next { apply(next) }
-    }
-
     func deactivate() {
         apply(
             lock.withLock {
@@ -57,16 +49,26 @@ final class ShellAudioSession: @unchecked Sendable {
     func streamDidStart() {
         let (next, held) = lock.withLock { () -> (ShellAudioSessionPolicy, (any StreamDucker)?) in
             streamActive = true
+            streamYielded = false
             return (policy(), speechDepth > 0 ? ducker : nil)
         }
         apply(next)
         held?.duckForSpeech()
     }
 
+    func streamDidYield() {
+        apply(
+            lock.withLock {
+                streamYielded = streamActive
+                return policy()
+            })
+    }
+
     func streamDidStop() {
         apply(
             lock.withLock {
                 streamActive = false
+                streamYielded = false
                 return policy()
             })
     }
@@ -99,7 +101,7 @@ final class ShellAudioSession: @unchecked Sendable {
     }
 
     private func policy() -> ShellAudioSessionPolicy {
-        if streamActive { return .exclusive }
+        if streamActive && !streamYielded { return .exclusive }
         return mixedRequested ? .mixed : .inactive
     }
 

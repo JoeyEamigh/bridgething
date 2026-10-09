@@ -127,7 +127,6 @@
         private func pauseNow() {
             guard let player else { return }
             player.pause()
-            session.streamDidStop()
             reportTimeControl(player.timeControlStatus)
         }
 
@@ -440,7 +439,9 @@
                             .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) } ?? false
                         self.queue.async {
                             switch type {
-                            case .began: self.pauseNow()
+                            case .began:
+                                self.pauseNow()
+                                self.session.streamDidYield()
                             case .ended where resume: self.resumeNow()
                             default: break
                             }
