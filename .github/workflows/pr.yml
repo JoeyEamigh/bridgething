@@ -38,8 +38,7 @@ jobs:
         id: rust
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          crates=$(python3 scripts/ci-affected-crates.py "origin/${{ github.base_ref }}")
+          crates=$(python3 scripts/ci-affected-crates.py "${{ github.event.pull_request.base.sha }}")
           echo "crates=${crates}" >>"$GITHUB_OUTPUT"
           echo "any=$([[ -n "$crates" ]] && echo true || echo false)" >>"$GITHUB_OUTPUT"
           echo "reaches: ${crates:-nothing}"
@@ -235,7 +234,7 @@ jobs:
           save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - run: bun install --frozen-lockfile
       - env:
-          TURBO_SCM_BASE: origin/${{ github.base_ref }}
+          TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
         run: bunx turbo run typecheck test --affected
       - run: bun test ./scripts
 
