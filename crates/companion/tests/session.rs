@@ -964,11 +964,12 @@ async fn an_ancs_seed_lands_on_a_session_with_no_notification_backend() {
     snap.ancs_auth_statuses
   );
   assert!(
-    heard.events().iter().any(|event| matches!(
+    eventually(|| heard.events().iter().any(|event| matches!(
       event,
       SessionEvent::AncsAuthStatusChanged { device_id, status }
         if device_id == DEVICE && *status == AncsAuthStatus::Authorized
-    )),
+    )))
+    .await,
     "the host also gets the live edge, not only the reconcile"
   );
 }
@@ -1035,10 +1036,11 @@ async fn a_batch_the_transport_could_not_send_closes_the_link_rather_than_wedgin
      outbound half waits on a credit that is never coming and every later command dies in the queue"
   );
   assert!(
-    heard.events().iter().any(|event| matches!(
+    eventually(|| heard.events().iter().any(|event| matches!(
       event,
       SessionEvent::PeerDisconnected { device_id } if device_id == DEVICE
-    )),
+    )))
+    .await,
     "and the host is told the peer is gone rather than left showing it linked"
   );
 }
@@ -1218,13 +1220,14 @@ async fn a_daemon_log_entry_lands_in_the_ring_and_the_event_stream() {
     "the forwarded line is retained with a device origin, got {tail:?}"
   );
   assert!(
-    heard.events().iter().any(|event| matches!(
+    eventually(|| heard.events().iter().any(|event| matches!(
       event,
       SessionEvent::Log {
         origin: LogOrigin::Device,
         ..
       }
-    )),
+    )))
+    .await,
     "and the live event said which side produced it"
   );
 }
