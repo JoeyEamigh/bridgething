@@ -170,4 +170,59 @@ final class ShellAudioSessionTests: XCTestCase {
 
         XCTAssertEqual(second.volumes, [0.2])
     }
+
+    func testInterruptedStreamYieldsToTheKeepAlive() {
+        let (session, applier) = makeSession()
+
+        session.activateMixedPlayback()
+        session.streamDidStart()
+        session.streamDidYield()
+
+        XCTAssertEqual(applier.last, .mixed)
+    }
+
+    func testYieldedStreamReleasesWhenNothingElseWantsTheSession() {
+        let (session, applier) = makeSession()
+
+        session.streamDidStart()
+        session.streamDidYield()
+
+        XCTAssertEqual(applier.last, .inactive)
+    }
+
+    func testYieldedStreamRetakesTheSessionOnResume() {
+        let (session, applier) = makeSession()
+
+        session.activateMixedPlayback()
+        session.streamDidStart()
+        session.streamDidYield()
+        session.streamDidStart()
+
+        XCTAssertEqual(applier.last, .exclusive)
+    }
+
+    func testKeepAliveDoesNotRetakeAYieldedStream() {
+        let (session, applier) = makeSession()
+
+        session.activateMixedPlayback()
+        session.streamDidStart()
+        session.streamDidYield()
+        session.activateMixedPlayback()
+
+        XCTAssertEqual(applier.last, .mixed)
+    }
+
+    func testSpeechAcrossAYieldStillRestoresTheStream() {
+        let (session, _) = makeSession()
+        let ducker = RecordingDucker()
+        session.setDucker(ducker)
+        session.streamDidStart()
+
+        session.beginSpeech()
+        session.streamDidYield()
+        session.endSpeech()
+        session.streamDidStart()
+
+        XCTAssertEqual(ducker.volumes, [0.2, 1.0])
+    }
 }
