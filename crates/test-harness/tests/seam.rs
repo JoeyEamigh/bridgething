@@ -793,6 +793,37 @@ where
 
 lift!(a_request_missing_a_required_field_is_nacked_as_malformed, [t1]);
 
+async fn a_malformed_command_is_nacked_as_malformed<T>(tier: &T) -> anyhow::Result<()>
+where
+  T: ModernClientDriver,
+{
+  let mut client = tier.modern_client().await?;
+  let command_id = uuid::Uuid::now_v7();
+  client
+    .send_text(format!(
+      r#"{{"id":"{command_id}","meta":{{"kind":"command"}},"data":{{"type":"bluetooth","data":{{"event":"forget","data":{{"mac":null}}}}}}}}"#
+    ))
+    .await?;
+
+  let reply = tokio::time::timeout(SNAPSHOT_BARRIER, async {
+    while let Some(text) = client.recv().await {
+      if text.contains(&command_id.to_string()) {
+        return Some(text);
+      }
+    }
+    None
+  })
+  .await
+  .ok()
+  .flatten()
+  .ok_or_else(|| anyhow::anyhow!("the malformed command was dropped without a nack"))?;
+
+  anyhow::ensure!(reply.contains("\"malformed\""), "expected a malformed nack: {reply}");
+  Ok(())
+}
+
+lift!(a_malformed_command_is_nacked_as_malformed, [t1]);
+
 async fn a_tolerant_get_once_is_served_from_the_held_fix<T>(tier: &T) -> anyhow::Result<()>
 where
   T: CommandDriver + GatewayDriver + WebappProvision,

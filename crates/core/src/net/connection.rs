@@ -174,7 +174,8 @@ impl Connection {
       "({}) typed decode failed: surface={:?} event={:?} kind={:?} id={:?}: {error}",
       &self.address, probe.data_type, probe.data_event, probe.meta_kind, probe.id,
     );
-    if probe.is_request()
+    // commands get the nack too, matching how `dispatch` reports a failed command handler
+    if (probe.is_request() || probe.is_command())
       && let Some(request_id) = probe.id
     {
       let nack = BridgeToClientMsg {

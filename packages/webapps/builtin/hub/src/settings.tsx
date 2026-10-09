@@ -8,6 +8,7 @@ import {
   type Diagnostics,
   type LauncherGesture,
   type TimeInfo,
+  type WireError,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
 
@@ -72,6 +73,7 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
   const [aliasSaved, setAliasSaved] = useState(false);
   const [discoverable, setDiscoverable] = useState(false);
   const [busyMac, setBusyMac] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +108,22 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
     };
   }, [client]);
 
+  // bluetooth commands are one-way; the daemon reports a failure as an error keyed to the command id
+  useEffect(() => {
+    if (!busyMac) return;
+    return client.on(event => {
+      if (event.type !== 'message') return;
+      const { meta, data } = event.message;
+      if (meta.kind !== 'response' || data.type !== 'error') return;
+      setActionError(wireErrorText(data.data));
+      setBusyMac(null);
+    });
+  }, [client, busyMac]);
+
+  useEffect(() => {
+    if (busyMac && !devices.some(d => d.id === busyMac)) setBusyMac(null);
+  }, [devices, busyMac]);
+
   const saveAlias = async () => {
     const name = alias.trim();
     if (!name) return;
@@ -126,17 +144,22 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
     }
   };
 
-  const reconnect = async (mac: string) => {
+  const runDeviceCommand = async (mac: string, send: () => Promise<void>, settleMs: number) => {
     setBusyMac(mac);
-    await client.bluetooth.connect({ mac });
-    setTimeout(() => setBusyMac(null), 1200);
+    setActionError(null);
+    try {
+      await send();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+      setBusyMac(null);
+      return;
+    }
+    setTimeout(() => setBusyMac(current => (current === mac ? null : current)), settleMs);
   };
 
-  const forget = async (mac: string) => {
-    setBusyMac(mac);
-    await client.bluetooth.forget({ mac });
-    setBusyMac(null);
-  };
+  const reconnect = (mac: string) => runDeviceCommand(mac, () => client.bluetooth.connect({ mac }), 1200);
+
+  const forget = (mac: string) => runDeviceCommand(mac, () => client.bluetooth.forget({ mac }), 8000);
 
   return (
     <div className="flex flex-col gap-5">
@@ -170,6 +193,7 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
       </Card>
 
       <Card title="paired devices">
+        {actionError && <div className="pb-2 font-mono text-hint text-err">{actionError}</div>}
         {devices.length === 0 ? (
           <div className="py-2 font-mono text-hint text-dim">no paired devices.</div>
         ) : (
@@ -581,6 +605,17 @@ function BackIcon() {
       <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function wireErrorText(error: WireError): string {
+  switch (error.type) {
+    case 'malformed':
+      return `rejected by the device: ${error.data.reason}`;
+    case 'handlerFailed':
+      return `failed: ${error.data.reason}`;
+    default:
+      return `failed: ${error.type}`;
+  }
 }
 
 function deviceLabel(d: Device): string {
