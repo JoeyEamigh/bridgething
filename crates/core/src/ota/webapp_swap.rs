@@ -76,26 +76,27 @@ pub async fn stage(staged_bundle: &Path, update_id: String) -> Result<StagedPiec
     }
   };
 
-  let current = webapps_root.join(target_name);
-  let previous = webapps_root.join(format!("{target_name}.previous"));
-  let incoming = webapps_root.join(format!(".incoming.{target_name}"));
-
-  staging::remove_any(&incoming).await;
-  staging::remove_any(&previous).await;
-  fs::rename(&tmp, &incoming)
+  let paths = swap_paths(&webapps_root, target_name);
+  staging::remove_any(&paths.incoming).await;
+  staging::remove_any(&paths.previous).await;
+  fs::rename(&tmp, &paths.incoming)
     .await
     .map_err(io_err("rename tmp -> incoming"))?;
 
-  tracing::info!("builtin webapp '{target_name}' staged at {}", incoming.display());
+  tracing::info!("builtin webapp '{target_name}' staged at {}", paths.incoming.display());
   Ok(StagedPiece {
     kind: OtaKind::BuiltinWebapp,
     update_id,
-    paths: Some(StagePaths {
-      incoming,
-      current,
-      previous,
-    }),
+    paths: Some(paths),
   })
+}
+
+fn swap_paths(webapps_root: &Path, target_name: &str) -> StagePaths {
+  StagePaths {
+    incoming: webapps_root.join(format!(".incoming.{target_name}")),
+    current: webapps_root.join(target_name),
+    previous: webapps_root.join(format!(".previous.{target_name}")),
+  }
 }
 
 async fn run_extract(archive_path: PathBuf, dest: PathBuf) -> Result<(), SwapError> {
@@ -140,5 +141,34 @@ mod tests {
       );
     }
     assert_eq!(builtin_dir_name(Uuid::nil()), None);
+  }
+
+  fn plant_hub(dir: &Path) {
+    std::fs::create_dir_all(dir).unwrap();
+    std::fs::write(dir.join("index.html"), b"<h1>hub</h1>").unwrap();
+    std::fs::write(
+      dir.join("manifest.json"),
+      format!(r#"{{"id":"{HUB_WEBAPP_ID}","name":"hub","version":"0.1.0"}}"#),
+    )
+    .unwrap();
+  }
+
+  #[tokio::test]
+  async fn a_rollback_copy_is_never_registered_as_a_builtin() {
+    let root = std::env::temp_dir().join(format!("bridgething-webapp-swap-{}", Uuid::now_v7().simple()));
+    let builtin = root.join("builtin");
+    let paths = swap_paths(&builtin, "hub");
+    plant_hub(&paths.previous);
+
+    let db = crate::db::open(None).await.unwrap();
+    let registry = crate::state::WebappRegistry::init(
+      root.join("installed"),
+      builtin,
+      crate::state::storage::WebappProvenanceStore::new(db),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(registry.resolve(HUB_WEBAPP_ID).await, None);
   }
 }

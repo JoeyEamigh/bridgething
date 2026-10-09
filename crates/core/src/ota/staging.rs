@@ -70,7 +70,7 @@ pub(crate) async fn sweep_orphans() {
   }
   remove_any(&PathBuf::from(DAEMON_DIR).join(DAEMON_INCOMING)).await;
   sweep_prefixed(&PathBuf::from(DAEMON_DIR), &["bridgething.broken."]).await;
-  sweep_prefixed(&PathBuf::from(WEBAPPS_DIR), &[".incoming.", ".tmp."]).await;
+  sweep_prefixed(&PathBuf::from(WEBAPPS_DIR), &[".incoming.", ".tmp.", ".previous."]).await;
 }
 
 async fn sweep_prefixed(dir: &Path, prefixes: &[&str]) {
