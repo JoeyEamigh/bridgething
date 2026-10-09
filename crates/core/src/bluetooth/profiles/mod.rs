@@ -140,7 +140,6 @@ impl ProfileManager {
       }
       res => res?,
     }
-    // DeviceRemoved defers removal while a link is up, which is for bluez churn, not a user forget
     self.peers.remove(address).await;
     self.devices.remove(address.to_string()).await?;
 

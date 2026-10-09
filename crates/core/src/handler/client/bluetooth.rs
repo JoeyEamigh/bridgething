@@ -58,7 +58,7 @@ impl ClientToBridgeBluetoothMsgDispatch for BluetoothHandler {
     let devices = self.handle.state.devices.list(LinkKind::Bluetooth).await?;
     self
       .handle
-      .respond_to::<ListBluetoothDevices>(PairedDevicesMap(devices.into_iter().collect()))
+      .respond_to::<ForgetBluetooth>(PairedDevicesMap(devices.into_iter().collect()))
       .await?;
 
     Ok(())

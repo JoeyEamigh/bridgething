@@ -184,7 +184,7 @@ if (res.ok) render(res.response.state);`,
   },
   {
     label: 'commands',
-    body: 'resolves once the daemon has the message.',
+    body: 'resolves once the daemon has the message. a failure comes back later as an error response on client.on, not on the promise.',
     code: `await client.player.skipNext();`,
   },
 ];

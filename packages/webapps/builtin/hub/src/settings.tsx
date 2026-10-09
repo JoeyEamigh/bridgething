@@ -108,22 +108,6 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
     };
   }, [client]);
 
-  // bluetooth commands are one-way; the daemon reports a failure as an error keyed to the command id
-  useEffect(() => {
-    if (!busyMac) return;
-    return client.on(event => {
-      if (event.type !== 'message') return;
-      const { meta, data } = event.message;
-      if (meta.kind !== 'response' || data.type !== 'error') return;
-      setActionError(wireErrorText(data.data));
-      setBusyMac(null);
-    });
-  }, [client, busyMac]);
-
-  useEffect(() => {
-    if (busyMac && !devices.some(d => d.id === busyMac)) setBusyMac(null);
-  }, [devices, busyMac]);
-
   const saveAlias = async () => {
     const name = alias.trim();
     if (!name) return;
@@ -144,22 +128,29 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
     }
   };
 
-  const runDeviceCommand = async (mac: string, send: () => Promise<void>, settleMs: number) => {
+  const reconnect = async (mac: string) => {
     setBusyMac(mac);
     setActionError(null);
     try {
-      await send();
+      await client.bluetooth.connect({ mac });
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : String(err));
-      setBusyMac(null);
-      return;
+      setActionError(failureText(err));
     }
-    setTimeout(() => setBusyMac(current => (current === mac ? null : current)), settleMs);
+    setTimeout(() => setBusyMac(current => (current === mac ? null : current)), 1200);
   };
 
-  const reconnect = (mac: string) => runDeviceCommand(mac, () => client.bluetooth.connect({ mac }), 1200);
-
-  const forget = (mac: string) => runDeviceCommand(mac, () => client.bluetooth.forget({ mac }), 8000);
+  const forget = async (mac: string) => {
+    setBusyMac(mac);
+    setActionError(null);
+    try {
+      const result = await client.bluetooth.forget({ mac });
+      if (result.ok) setDevices(Object.values(result.response));
+      else setActionError(wireErrorText(result.error));
+    } catch (err) {
+      setActionError(failureText(err));
+    }
+    setBusyMac(null);
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -605,6 +596,10 @@ function BackIcon() {
       <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function failureText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function wireErrorText(error: WireError): string {
