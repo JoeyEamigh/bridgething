@@ -54,12 +54,11 @@ impl ClientToBridgeBluetoothMsgDispatch for BluetoothHandler {
     tracing::debug!("({}) forgetting device with MAC: {}", &self.handle.from, mac);
 
     self.handle.bluetooth.profile_man.forget(&mac).await?;
-    self.handle.state.devices.remove(mac).await?;
 
     let devices = self.handle.state.devices.list(LinkKind::Bluetooth).await?;
     self
       .handle
-      .respond_to::<ListBluetoothDevices>(PairedDevicesMap(devices.into_iter().collect()))
+      .respond_to::<ForgetBluetooth>(PairedDevicesMap(devices.into_iter().collect()))
       .await?;
 
     Ok(())

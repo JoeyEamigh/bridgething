@@ -8,6 +8,7 @@ import {
   type Diagnostics,
   type LauncherGesture,
   type TimeInfo,
+  type WireError,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
 
@@ -72,6 +73,7 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
   const [aliasSaved, setAliasSaved] = useState(false);
   const [discoverable, setDiscoverable] = useState(false);
   const [busyMac, setBusyMac] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,13 +130,25 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
 
   const reconnect = async (mac: string) => {
     setBusyMac(mac);
-    await client.bluetooth.connect({ mac });
-    setTimeout(() => setBusyMac(null), 1200);
+    setActionError(null);
+    try {
+      await client.bluetooth.connect({ mac });
+    } catch (err) {
+      setActionError(failureText(err));
+    }
+    setTimeout(() => setBusyMac(current => (current === mac ? null : current)), 1200);
   };
 
   const forget = async (mac: string) => {
     setBusyMac(mac);
-    await client.bluetooth.forget({ mac });
+    setActionError(null);
+    try {
+      const result = await client.bluetooth.forget({ mac });
+      if (result.ok) setDevices(Object.values(result.response));
+      else setActionError(wireErrorText(result.error));
+    } catch (err) {
+      setActionError(failureText(err));
+    }
     setBusyMac(null);
   };
 
@@ -170,6 +184,7 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
       </Card>
 
       <Card title="paired devices">
+        {actionError && <div className="pb-2 font-mono text-hint text-err">{actionError}</div>}
         {devices.length === 0 ? (
           <div className="py-2 font-mono text-hint text-dim">no paired devices.</div>
         ) : (
@@ -581,6 +596,21 @@ function BackIcon() {
       <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
+}
+
+function failureText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function wireErrorText(error: WireError): string {
+  switch (error.type) {
+    case 'malformed':
+      return `rejected by the device: ${error.data.reason}`;
+    case 'handlerFailed':
+      return `failed: ${error.data.reason}`;
+    default:
+      return `failed: ${error.type}`;
+  }
 }
 
 function deviceLabel(d: Device): string {

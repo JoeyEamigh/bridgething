@@ -20,9 +20,17 @@ pub struct ConnectBluetooth {
   pub mac: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+/// Forgets a paired device and returns the paired devices left, keyed by MAC address.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
+#[wire_request(
+  direction = ClientToBridge,
+  surface = Bluetooth,
+  request_variant = Forget,
+  response = crate::client::PairedDevicesMap,
+  response_variant = PairedDevices,
+)]
 pub struct ForgetBluetooth {
   pub mac: String,
 }
@@ -49,7 +57,7 @@ pub enum ClientToBridgeBluetoothMsg {
   EnableDiscoverable,
   #[bridge_command]
   DisableDiscoverable,
-  #[bridge_command]
+  #[bridge_request]
   Forget(ForgetBluetooth),
   #[bridge_command]
   SetAlias(SetBluetoothAlias),

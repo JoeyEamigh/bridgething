@@ -31,6 +31,10 @@ impl EnvelopeProbe {
   pub fn is_request(&self) -> bool {
     matches!(self.meta_kind.as_deref(), Some("request"))
   }
+
+  pub fn is_command(&self) -> bool {
+    matches!(self.meta_kind.as_deref(), Some("command"))
+  }
 }
 
 /// Walk an msgpack body without typed defs and pull out the envelope

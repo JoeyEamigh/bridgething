@@ -774,16 +774,6 @@ export class BluetoothSurface {
     await this._client.send(msg);
   }
 
-  /** Send `Bluetooth::Forget` to the daemon. */
-  async forget(payload: ForgetBluetooth): Promise<void> {
-    const msg: ClientToBridgeMsg = {
-      id: newUuid(),
-      meta: { kind: 'command' },
-      data: { type: 'bluetooth', data: { event: 'forget', data: payload } },
-    };
-    await this._client.send(msg);
-  }
-
   /** Send `Bluetooth::SetAlias` to the daemon. */
   async setAlias(payload: SetBluetoothAlias): Promise<void> {
     const msg: ClientToBridgeMsg = {
@@ -797,6 +787,22 @@ export class BluetoothSurface {
   /** Typed request to the daemon: webapp sends, daemon responds. */
   async list(options?: { timeoutMs?: number }): Promise<TypedRequestResult<PairedDevicesMap, never>> {
     const wireData: ClientToBridgeMsg['data'] = { type: 'bluetooth', data: { event: 'list' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'bluetooth') {
+      const inner = d.data;
+      if (inner.event === 'pairedDevices') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async forget(
+    req: ForgetBluetooth,
+    options?: { timeoutMs?: number },
+  ): Promise<TypedRequestResult<PairedDevicesMap, never>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'bluetooth', data: { event: 'forget', data: req } };
     const response = await this._client.request(wireData, options?.timeoutMs);
     const d = response.data;
     if (d.type === 'bluetooth') {

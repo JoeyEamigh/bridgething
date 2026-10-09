@@ -686,6 +686,9 @@ export type FavoritesSetMany = { entries: Array<FavoritesSet> };
 
 export type FavoritesToggle = { item: ItemRef };
 
+/**
+ * Forgets a paired device and returns the paired devices left, keyed by MAC address.
+ */
 export type ForgetBluetooth = { mac: string };
 
 export type GeoErrorReply = { error: GeoError };

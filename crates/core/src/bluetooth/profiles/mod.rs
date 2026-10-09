@@ -134,7 +134,14 @@ impl ProfileManager {
     tracing::debug!("attempting to forget device with mac address {:?}", &mac);
 
     let address: Address = mac.parse()?;
-    self.adapter.remove_device(address.into()).await?;
+    match self.adapter.remove_device(address.into()).await {
+      Err(err) if err.kind == bluer::ErrorKind::DoesNotExist => {
+        tracing::debug!(%address, "bluez has no record of the device; dropping our state only");
+      }
+      res => res?,
+    }
+    self.peers.remove(address).await;
+    self.devices.remove(address.to_string()).await?;
 
     Ok(())
   }

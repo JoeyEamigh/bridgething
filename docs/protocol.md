@@ -130,6 +130,11 @@ Answer every request. The caller times out otherwise.
 When a gateway sends a request variant the daemon cannot decode, the daemon replies with an
 `unsupported` `WireError` keyed to the request id, and the pending request resolves immediately.
 
+When a webapp sends a request or a command the daemon cannot decode, the daemon replies with a
+`malformed` `WireError` keyed to its id. A command whose handler fails gets a `handlerFailed` `WireError`
+the same way. A command that succeeds gets no reply, and the SDK command methods do not wait for one, so
+a command failure reaches a webapp as an unmatched `response` message.
+
 ## Errors
 
 `WireError` arrives as its own surface: `data.type` is `error` and `data.data` is the `WireError`.

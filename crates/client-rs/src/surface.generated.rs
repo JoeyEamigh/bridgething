@@ -182,9 +182,6 @@ impl<'a> BluetoothSurface<'a> {
       .command(ClientToBridgeBluetoothMsgCommand::DisableDiscoverable)
       .await
   }
-  pub async fn forget(&self, payload: ForgetBluetooth) -> Result<(), SdkError> {
-    self.0.command(ClientToBridgeBluetoothMsgCommand::Forget(payload)).await
-  }
   pub async fn set_alias(&self, payload: SetBluetoothAlias) -> Result<(), SdkError> {
     self
       .0
@@ -193,6 +190,12 @@ impl<'a> BluetoothSurface<'a> {
   }
   pub async fn list(&self) -> Result<PairedDevicesMap, RequestFailure<::core::convert::Infallible>> {
     self.0.request(ListBluetoothDevices).await
+  }
+  pub async fn forget(
+    &self,
+    request: ForgetBluetooth,
+  ) -> Result<PairedDevicesMap, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(request).await
   }
   /// Stream of `Bluetooth` events.
   pub fn events(&self) -> impl Stream<Item = BridgeToClientBluetoothMsgEvent> + 'static {
