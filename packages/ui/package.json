@@ -16,12 +16,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "preact": "^10.29.7",
+    "preact": "^11.0.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
-    "preact": "^10.29.7",
+    "preact": "^11.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"
   },

@@ -343,7 +343,7 @@ internal fun toRnPickedMedia(media: PickedMedia): BridgethingPickedMedia = Bridg
 internal fun toRnWebappBlob(blob: WebappBlob): BridgethingWebappBlob =
     BridgethingWebappBlob(key = blob.key, sha256 = blob.sha256, mime = blob.mime, size = blob.size.toDouble())
 
-private class PlainFailure(message: String) : Exception(message) {
+private class PlainFailure(message: String) : Exception(message, null, false, false) {
     override fun toString(): String = message.orEmpty()
 }
 

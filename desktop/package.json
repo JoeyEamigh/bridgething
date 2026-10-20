@@ -14,13 +14,13 @@
     "@bridgething/client": "workspace:*",
     "@bridgething/companion-types": "workspace:*",
     "@bridgething/ui": "workspace:*",
-    "@preact/signals": "^2.10.0",
+    "@preact/signals": "^2.11.3",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-updater": "^2.10.1",
-    "preact": "^10.29.7",
+    "preact": "^11.0.1",
     "preact-iso": "^2.12.1"
   },
   "devDependencies": {

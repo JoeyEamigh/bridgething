@@ -15,13 +15,13 @@
   "dependencies": {
     "@bridgething/client": "workspace:*",
     "@bridgething/webapp-shared": "workspace:*",
-    "preact": "^10.29.7",
+    "preact": "^11.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@msgpack/msgpack": "^3.1.3",
-    "@preact/preset-vite": "^2.10.5",
+    "@preact/preset-vite": "^2.10.6",
     "@tailwindcss/vite": "^4.3.3",
     "@types/bun": "^1.3.14",
     "@types/react": "^19.2.10",

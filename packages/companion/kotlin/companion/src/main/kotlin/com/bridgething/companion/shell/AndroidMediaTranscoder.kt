@@ -2,10 +2,13 @@ package com.bridgething.companion.shell
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
 import android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import androidx.media3.common.MediaItem
@@ -53,7 +56,8 @@ public class AndroidMediaTranscoder internal constructor(
 
     override fun poster(source: String): ByteArray? = runCatching {
         retrieve(source) { retriever ->
-            val frame = checkNotNull(retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
+            val decoded = checkNotNull(retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
+            val frame = if (retriever.dropsHdrHalfTurn()) decoded.halfTurned() else decoded
             ByteArrayOutputStream().use { out ->
                 check(frame.compress(Bitmap.CompressFormat.JPEG, POSTER_QUALITY, out))
                 out.toByteArray()
@@ -191,6 +195,19 @@ private fun <T> retrieve(path: String, read: (MediaMetadataRetriever) -> T): T {
         retriever.release()
     }
 }
+
+private fun MediaMetadataRetriever.dropsHdrHalfTurn(): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU &&
+        extractMetadata(MediaMetadataRetriever.METADATA_KEY_COLOR_STANDARD)?.toIntOrNull() ==
+        MediaFormat.COLOR_STANDARD_BT2020 &&
+        extractMetadata(MediaMetadataRetriever.METADATA_KEY_COLOR_TRANSFER)?.toIntOrNull() in HDR_TRANSFERS &&
+        extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() == 180
+
+private val HDR_TRANSFERS = setOf(MediaFormat.COLOR_TRANSFER_HLG, MediaFormat.COLOR_TRANSFER_ST2084)
+
+private fun Bitmap.halfTurned(): Bitmap =
+    Bitmap.createBitmap(this, 0, 0, width, height, Matrix().apply { postRotate(180f) }, false)
 
 private fun MediaMetadataRetriever.metadata(key: Int): Long =
     checkNotNull(extractMetadata(key)?.toLongOrNull()) { "no metadata for key $key" }

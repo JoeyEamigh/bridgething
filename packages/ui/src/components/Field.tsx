@@ -3,6 +3,14 @@ import { useId } from 'preact/hooks';
 
 import { cx } from '../cx.ts';
 
+const INPUT_TYPES = {
+  text: { type: 'text' },
+  password: { type: 'password' },
+  url: { type: 'url' },
+  search: { type: 'search' },
+  email: { type: 'email' },
+} as const;
+
 export function Field({
   label,
   hint,
@@ -23,7 +31,7 @@ export function Field({
   onInput: (next: string) => void;
   onCommit?: (value: string) => void;
   placeholder?: string;
-  type?: 'text' | 'password' | 'url' | 'search' | 'email';
+  type?: keyof typeof INPUT_TYPES;
   disabled?: boolean;
   clearable?: boolean;
   class?: string;
@@ -45,7 +53,7 @@ export function Field({
         {icon ? <span class="flex shrink-0 items-center text-dim">{icon}</span> : null}
         <input
           id={id}
-          type={type}
+          {...INPUT_TYPES[type]}
           value={value}
           placeholder={placeholder}
           disabled={disabled}

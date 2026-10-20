@@ -4,26 +4,24 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
-import android.media.Image
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
 import android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
 import android.media.MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
-import android.media.MediaMuxer
+import android.os.Build
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Codec
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.VideoEncoderSettings
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import com.bridgething.companion.shell.AndroidImageScaler
 import com.bridgething.companion.shell.AndroidMediaTranscoder
 import com.bridgething.companion.shell.avcBitrateModes
+import com.bridgething.companion.shell.bitrateMode
 import java.io.File
-import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
@@ -59,61 +57,13 @@ private class Scene(val width: Int, val height: Int, val rotation: Int) {
     val displayWidth: Int = if (rotation % 180 == 0) width else height
     val displayHeight: Int = if (rotation % 180 == 0) height else width
 
-    fun colorAt(x: Int, y: Int): Int = when {
-        x in side / 2 until side * 3 / 2 && y in side / 2 until side * 3 / 2 -> Color.WHITE
-        x < width / 2 -> Color.RED
-        else -> Color.BLUE
-    }
-
     fun upright(x: Int, y: Int): Pair<Int, Int> = when (rotation) {
         90 -> (height - 1 - y) to x
         180 -> (width - 1 - x) to (height - 1 - y)
         270 -> y to (width - 1 - x)
         else -> x to y
     }
-
-    fun planes(): List<Plane> = List(3) { plane ->
-        val step = if (plane == 0) 1 else 2
-        val across = width / step
-        val down = height / step
-        Plane(across, down, ByteArray(across * down) { yuv(colorAt(it % across * step, it / across * step))[plane] })
-    }
-
-    private fun yuv(color: Int): ByteArray = when (color) {
-        Color.WHITE -> WHITE_YUV
-        Color.RED -> RED_YUV
-        else -> BLUE_YUV
-    }
-
-    private companion object {
-        val WHITE_YUV = byteArrayOf(235.toByte(), 128.toByte(), 128.toByte())
-        val RED_YUV = byteArrayOf(81, 90, 240.toByte())
-        val BLUE_YUV = byteArrayOf(41, 240.toByte(), 110)
-    }
 }
-
-private class Plane(val width: Int, val height: Int, val samples: ByteArray) {
-    fun copyInto(target: Image.Plane, shift: Int = 0) {
-        val buffer = target.buffer
-        val offset = Math.floorMod(shift, width)
-        for (row in 0 until height) {
-            val start = row * target.rowStride
-            if (target.pixelStride == 1 && offset == 0) {
-                buffer.position(start)
-                buffer.put(samples, row * width, width)
-            } else {
-                for (column in 0 until width) {
-                    val source = row * width + (column + offset) % width
-                    buffer.put(start + column * target.pixelStride, samples[source])
-                }
-            }
-        }
-    }
-}
-
-private class Sample(val data: ByteArray, val info: MediaCodec.BufferInfo)
-
-private class Encoded(val format: MediaFormat, val samples: List<Sample>)
 
 @RunWith(AndroidJUnit4::class)
 class AndroidMediaTranscoderTest {
@@ -126,9 +76,8 @@ class AndroidMediaTranscoderTest {
     @Test
     fun aRotated60FpsClipWithAudioBecomesAnUprightSilent30FpsH264AtThePlannedSize() {
         val scene = Scene(width = 1600, height = 900, rotation = 90)
-        val source = File(context.cacheDir, "transcode-source.mp4")
+        val source = clip(scene, fps = 60, seconds = 2)
         val destination = File(context.cacheDir, "transcode-output.mp4")
-        writeSource(source, scene, fps = 60, seconds = 2)
         assertEquals(2, trackCount(source))
 
         val sink = RecordingTranscodeSink()
@@ -187,9 +136,8 @@ class AndroidMediaTranscoderTest {
     @Test
     fun cancellingAnInFlightTranscodeSettlesItAsAFailureAndLeavesNothing() {
         val scene = Scene(width = 1600, height = 900, rotation = 0)
-        val source = File(context.cacheDir, "transcode-long.mp4")
+        val source = clip(scene, fps = 30, seconds = 8)
         val destination = File(context.cacheDir, "transcode-cancelled.mp4")
-        writeSource(source, scene, fps = 30, seconds = 8)
 
         val sink = RecordingTranscodeSink()
         val job = AndroidMediaTranscoder(context).transcode(
@@ -208,12 +156,14 @@ class AndroidMediaTranscoderTest {
     @androidx.annotation.OptIn(markerClass = [UnstableApi::class])
     private fun askedFor(transcoder: (factory: (Context, VideoEncoderSettings) -> Codec.EncoderFactory) -> AndroidMediaTranscoder): List<VideoEncoderSettings> {
         val scene = Scene(width = 960, height = 540, rotation = 0)
-        val source = File(context.cacheDir, "transcode-drifting.mp4")
-        writeSource(source, scene, fps = 30, seconds = 2, drift = 6)
+        val source = clip(scene, fps = 30, seconds = 2, drift = 6)
         val asked = LinkedBlockingQueue<VideoEncoderSettings>()
         val encoding = transcoder { appContext, settings ->
             asked.add(settings)
-            DefaultEncoderFactory.Builder(appContext).setRequestedVideoEncoderSettings(settings).build()
+            val held = bitrateMode(settings.bitrateMode == BITRATE_MODE_CBR, avcBitrateModes())
+            DefaultEncoderFactory.Builder(appContext)
+                .setRequestedVideoEncoderSettings(settings.buildUpon().setBitrateMode(held).build())
+                .build()
         }
         for (maxBitrate in listOf(null, CEILING)) {
             val destination = File(context.cacheDir, "transcode-drifting-${maxBitrate ?: 0u}.mp4")
@@ -263,8 +213,7 @@ class AndroidMediaTranscoderTest {
         for ((width, height) in listOf(1600 to 900, 720 to 720)) {
             for (rotation in listOf(0, 90, 180, 270)) {
                 val scene = Scene(width, height, rotation)
-                val source = File(context.cacheDir, "poster-source.mp4")
-                writeSource(source, scene, fps = 30, seconds = 1)
+                val source = clip(scene, fps = 30, seconds = 1)
 
                 val poster = checkNotNull(AndroidMediaTranscoder(context).poster(source.path))
                 source.delete()
@@ -283,6 +232,39 @@ class AndroidMediaTranscoderTest {
                 assertUpright(scene, checkNotNull(preview))
             }
         }
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = Build.VERSION_CODES.R)
+    fun anHdrClipTaggedAHalfTurnPostsTheHalfTurnOfItsUntaggedPoster() {
+        val decoded = HDR_CLIPS.count { (clip, transfer) ->
+            val (level, turned) = listOf(0, 180).map { rotation ->
+                val fixture = "$clip-$rotation.mp4"
+                val source = asset(fixture)
+                val format = MediaExtractor().run {
+                    setDataSource(source.path)
+                    getTrackFormat(0).also { release() }
+                }
+                val poster = AndroidMediaTranscoder(context).poster(source.path)
+                source.delete()
+                poster?.let {
+                    assertEquals(
+                        fixture,
+                        listOf(transfer, MediaFormat.COLOR_STANDARD_BT2020, rotation),
+                        listOf(
+                            format.getInteger(MediaFormat.KEY_COLOR_TRANSFER, 0),
+                            format.getInteger(MediaFormat.KEY_COLOR_STANDARD, 0),
+                            format.getInteger(MediaFormat.KEY_ROTATION, 0),
+                        ),
+                    )
+                    BitmapFactory.decodeByteArray(it, 0, it.size)
+                }
+            }
+            assertEquals(clip, level == null, turned == null)
+            if (level != null && turned != null) assertHalfTurn(clip, level, turned)
+            level != null
+        }
+        assertTrue("this phone decodes none of the hdr clips", decoded > 0)
     }
 
     @Test
@@ -319,6 +301,29 @@ class AndroidMediaTranscoderTest {
         assertEquals(label, across.toFloat(), down.toFloat(), MARK_SLACK)
     }
 
+    private fun assertHalfTurn(label: String, level: Bitmap, turned: Bitmap) {
+        assertEquals(label, level.width to level.height, turned.width to turned.height)
+        for (row in 0 until 4) {
+            for (column in 0 until 8) {
+                val x = (column * 2 + 1) * level.width / 16
+                val y = (row * 2 + 1) * level.height / 8
+                val expected = patch(level, level.width - 1 - x, level.height - 1 - y)
+                val actual = patch(turned, x, y)
+                val distance = expected.zip(actual).sumOf { (a, b) -> abs(a - b) }
+                assertTrue("$label at $x,$y: ${expected.toList()} vs ${actual.toList()}", distance <= HALF_TURN_SLACK)
+            }
+        }
+    }
+
+    private fun patch(frame: Bitmap, x: Int, y: Int): IntArray {
+        val pixels = (-2..2).flatMap { dy -> (-2..2).map { dx -> frame.getPixel(x + dx, y + dy) } }
+        return intArrayOf(
+            pixels.sumOf(Color::red) / pixels.size,
+            pixels.sumOf(Color::green) / pixels.size,
+            pixels.sumOf(Color::blue) / pixels.size,
+        )
+    }
+
     private fun nearest(pixel: Int): Int =
         listOf(Color.RED, Color.BLUE, Color.WHITE).minBy { candidate ->
             abs(Color.red(candidate) - Color.red(pixel)) +
@@ -326,95 +331,25 @@ class AndroidMediaTranscoderTest {
                 abs(Color.blue(candidate) - Color.blue(pixel))
         }
 
-    private fun writeSource(file: File, scene: Scene, fps: Int, seconds: Int, drift: Int = 0) {
-        val video = encodeVideo(scene, fps, seconds, drift)
-        val audio = encodeSilence(seconds)
-        val muxer = MediaMuxer(file.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        muxer.setOrientationHint(scene.rotation)
-        val videoTrack = muxer.addTrack(video.format)
-        val audioTrack = muxer.addTrack(audio.format)
-        muxer.start()
-        video.samples.forEach { muxer.writeSampleData(videoTrack, ByteBuffer.wrap(it.data), it.info) }
-        audio.samples.forEach { muxer.writeSampleData(audioTrack, ByteBuffer.wrap(it.data), it.info) }
-        muxer.stop()
-        muxer.release()
+    private fun clip(scene: Scene, fps: Int, seconds: Int, drift: Int = 0): File {
+        val motion = if (drift > 0) "-drift$drift" else ""
+        return asset("sdr-${scene.width}x${scene.height}-r${scene.rotation}-${fps}fps-${seconds}s$motion.mp4")
     }
 
-    private fun encodeVideo(scene: Scene, fps: Int, seconds: Int, drift: Int): Encoded {
-        val planes = scene.planes()
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, scene.width, scene.height).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
-            setInteger(MediaFormat.KEY_BIT_RATE, 4_000_000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+    private fun asset(name: String): File = File(context.cacheDir, name).also { copy ->
+        InstrumentationRegistry.getInstrumentation().context.assets.open(name).use { bytes ->
+            copy.outputStream().use(bytes::copyTo)
         }
-        val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        return drive(codec, fps * seconds, { frame -> frame * 1_000_000L / fps }) { input, frame ->
-            val image = checkNotNull(codec.getInputImage(input))
-            image.planes.forEachIndexed { index, target ->
-                planes[index].copyInto(target, frame * drift / if (index == 0) 1 else 2)
-            }
-            scene.width * scene.height * 3 / 2
-        }
-    }
-
-    private fun encodeSilence(seconds: Int): Encoded {
-        val sampleRate = 44_100
-        val samplesPerBuffer = 1024
-        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, 1).apply {
-            setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, 64_000)
-        }
-        val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        val buffers = seconds * sampleRate / samplesPerBuffer
-        return drive(codec, buffers, { index -> index * samplesPerBuffer * 1_000_000L / sampleRate }) { input, _ ->
-            val buffer = checkNotNull(codec.getInputBuffer(input))
-            buffer.clear()
-            buffer.put(ByteArray(samplesPerBuffer * 2))
-            samplesPerBuffer * 2
-        }
-    }
-
-    private fun drive(codec: MediaCodec, inputs: Int, pts: (Int) -> Long, fill: (Int, Int) -> Int): Encoded {
-        codec.start()
-        val samples = mutableListOf<Sample>()
-        val info = MediaCodec.BufferInfo()
-        var format: MediaFormat? = null
-        var fed = 0
-        var ended = false
-        while (!ended) {
-            if (fed <= inputs) {
-                val input = codec.dequeueInputBuffer(10_000)
-                if (input >= 0) {
-                    if (fed == inputs) {
-                        codec.queueInputBuffer(input, 0, 0, pts(fed), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                    } else {
-                        codec.queueInputBuffer(input, 0, fill(input, fed), pts(fed), 0)
-                    }
-                    fed++
-                }
-            }
-            val output = codec.dequeueOutputBuffer(info, 10_000)
-            if (output == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) format = codec.outputFormat
-            if (output >= 0) {
-                if (info.size > 0 && info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG == 0) {
-                    val buffer = checkNotNull(codec.getOutputBuffer(output))
-                    buffer.position(info.offset)
-                    buffer.limit(info.offset + info.size)
-                    val data = ByteArray(info.size).also { buffer.get(it) }
-                    val flags = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM.inv()
-                    samples += Sample(data, MediaCodec.BufferInfo().apply { set(0, data.size, info.presentationTimeUs, flags) })
-                }
-                ended = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
-                codec.releaseOutputBuffer(output, false)
-            }
-        }
-        codec.stop()
-        codec.release()
-        return Encoded(checkNotNull(format), samples)
     }
 }
 
 private const val MARK_SLACK = 6f
+
+private const val HALF_TURN_SLACK = 48
+
+private val HDR_CLIPS = listOf(
+    "hdr-hlg-hevc" to MediaFormat.COLOR_TRANSFER_HLG,
+    "hdr-hlg-vp9" to MediaFormat.COLOR_TRANSFER_HLG,
+    "hdr-hlg-av1" to MediaFormat.COLOR_TRANSFER_HLG,
+    "hdr-pq-vp9" to MediaFormat.COLOR_TRANSFER_ST2084,
+)

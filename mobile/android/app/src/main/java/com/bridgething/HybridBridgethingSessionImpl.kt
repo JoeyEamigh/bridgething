@@ -732,18 +732,19 @@ public class HybridBridgethingSessionImpl(
         android.os.Process.killProcess(android.os.Process.myPid())
     }
 
-    override suspend fun presentPairPicker(): BridgethingBtDevice? {
-        val picked = CompanionDevicePicker.pick() ?: return null
-        CompanionDevicePicker.startObservingPresence(context)
-        BridgethingConnectionService.start(context)
+    override suspend fun presentPairPicker(): BridgethingBtDevice? = plainly {
+        CompanionDevicePicker.pick()?.let { picked ->
+            CompanionDevicePicker.startObservingPresence(context)
+            BridgethingConnectionService.start(context)
 
-        val bonded = CompanionDevicePicker.awaitBond(context.applicationContext, picked.address)
-        return BridgethingBtDevice(
-            address = picked.address,
-            name = picked.name,
-            bondState = if (bonded) BridgethingBtBondState.BONDED else BridgethingBtBondState.NONE,
-            isCarThing = picked.isCarThing,
-        )
+            val bonded = CompanionDevicePicker.awaitBond(context.applicationContext, picked.address)
+            BridgethingBtDevice(
+                address = picked.address,
+                name = picked.name,
+                bondState = if (bonded) BridgethingBtBondState.BONDED else BridgethingBtBondState.NONE,
+                isCarThing = picked.isCarThing,
+            )
+        }
     }
 
     override fun setOnProvidersChanged(callback: (Array<BridgethingProviderInfo>) -> Unit) {
