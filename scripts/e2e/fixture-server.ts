@@ -5,13 +5,15 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { daemonVersion } from '../publish-packages.ts';
+
 const port = Number(process.env.E2E_FIXTURE_PORT ?? '8899');
 const version = process.env.E2E_COMPANION_VERSION ?? '99.0.0';
 
 const CHANNEL = process.env.E2E_OTA_CHANNEL ?? 'dev';
 const VARIANT = process.env.E2E_OTA_VARIANT ?? 'dev';
 const DEVICE_IMAGE = process.env.E2E_OTA_IMAGE_VERSION ?? '0.1.0';
-const DEVICE_DAEMON = process.env.E2E_OTA_DAEMON_VERSION ?? '0.10.0';
+const DEVICE_DAEMON = process.env.E2E_OTA_DAEMON_VERSION ?? daemonVersion();
 
 const NEXT_IMAGE = '99.9.9';
 const NEXT_DAEMON = '99.0.0';
@@ -262,6 +264,14 @@ Bun.serve({
     if (pathname === '/control/store/settings-hits/reset') {
       hostedSettingsHits = 0;
       return Response.json({ hits: hostedSettingsHits }, { headers: { 'access-control-allow-origin': '*' } });
+    }
+
+    if (pathname === '/control/bounce/mode') {
+      const next = searchParams.get('mode') as Mode | null;
+      if (!next || !MODES.includes(next)) return new Response('unknown mode', { status: 400 });
+      bounceMode = next;
+      console.log(`[e2e-fixtures] bounce root -> ${bounceMode}`);
+      return Response.json({ mode: bounceMode });
     }
 
     if (pathname === '/control/daemon/bounce') {

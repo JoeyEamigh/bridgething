@@ -1,5 +1,7 @@
 #[path = "rig/backends.rs"]
 mod backends;
+#[path = "rig/device_meta.rs"]
+mod device_meta;
 #[path = "rig/fakes.rs"]
 mod fakes;
 #[path = "rig/fakes_probe.rs"]
@@ -48,6 +50,7 @@ use bridgething_companion::{
   },
 };
 use bridgething_gateway::SystemHandler;
+use device_meta::meta;
 use fakes::FakeSource;
 use libbridgething::{
   AncsAuthState, LogEntry, NluSlots, NluTargetType, VoiceCaptureReason,
@@ -678,36 +681,6 @@ async fn host_settings_are_session_state_and_project_into_the_snapshot() {
 }
 
 // ---- more than one peer -------------------------------------------------------
-
-fn meta(serial: &str) -> libbridgething::BridgeThingMeta {
-  libbridgething::BridgeThingMeta {
-    bridgething_version: "0.0.0".into(),
-    libbridgething_version: "0.0.0".into(),
-    app_name: "bridgething".into(),
-    nickname: None,
-    launcher_gesture: libbridgething::LauncherGesture::default(),
-    app_version: "0.0.0".into(),
-    daemon_sha256: None,
-    wakeword_model_version: None,
-    os_name: "linux".into(),
-    os_version: "0".into(),
-    os_description: String::new(),
-    bt_mac: String::new(),
-    serial_number: serial.into(),
-    fcc_id: String::new(),
-    ic_id: String::new(),
-    model_name: "superbird".into(),
-    channel: "dev".into(),
-    image_variant: String::new(),
-    image_version: String::new(),
-    image_build_id: String::new(),
-    image_build_date: String::new(),
-    image_distro: String::new(),
-    image_machine: String::new(),
-    discord: String::new(),
-    credits: String::new(),
-  }
-}
 
 async fn two_peers(link: &Arc<HandLink>, session: &Arc<Session>) {
   link.connect(DEVICE).await;

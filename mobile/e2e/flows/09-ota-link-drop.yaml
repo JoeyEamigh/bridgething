@@ -8,7 +8,7 @@ name: survives the link dropping under a run in flight
 - extendedWaitUntil:
       visible: ".*99.9.9 available.*"
       timeout: 180000
-- tapOn: ".*install 0.10.0\\+image.99.9.9.*"
+- tapOn: ".*install [0-9.]+\\+image.99.9.9.*"
 - runScript:
       file: ../scripts/ota-bounce.js
       env:

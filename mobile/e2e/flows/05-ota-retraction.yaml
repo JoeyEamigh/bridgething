@@ -1,6 +1,11 @@
 appId: com.bridgething.gateway
 name: drops a stale update offer once the device turns out to be current
 ---
+- runScript:
+      file: ../scripts/ota-bounce-root.js
+      env:
+          CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+          MODE: image
 - runFlow:
       file: ../common/point-at-fixture.yaml
       env:
@@ -20,6 +25,6 @@ name: drops a stale update offer once the device turns out to be current
       visible: ".*dev gateway, connected.*"
       timeout: 180000
 - extendedWaitUntil:
-      notVisible: ".*99.9.9 available.*"
+      notVisible: ".*\\+image\\..* available.*"
       timeout: 180000
-- assertNotVisible: ".*install 0.10.0\\+image.99.9.9.*"
+- assertNotVisible: ".*install [0-9.]+\\+image.99.9.9.*"

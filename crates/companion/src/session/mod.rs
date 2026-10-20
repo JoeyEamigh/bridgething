@@ -173,6 +173,7 @@ pub struct Session {
   broadcast: Arc<Broadcast>,
   extensions: Option<Arc<ExtensionDispatcher>>,
   links: Mutex<HashMap<String, Link>>,
+  link_gate: tokio::sync::Mutex<()>,
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
   volume_pump: Mutex<Option<JoinHandle<()>>>,
@@ -304,6 +305,7 @@ impl Session {
       broadcast,
       extensions,
       links: Mutex::new(HashMap::new()),
+      link_gate: tokio::sync::Mutex::new(()),
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
       volume_pump: Mutex::new(None),
@@ -846,15 +848,16 @@ impl Session {
     C: Connector<GatewayProtocol> + Send + 'static,
   {
     tracing::info!(device_id = %device.id, name = %device.name, "a peer link is coming up");
-    self.teardown(&device.id).await;
+    let _gate = self.link_gate.lock().await;
+    self.detach(&device.id).await;
 
     let (gateway, inbound) = Gateway::spawn_subscribed(connector);
     let outbound: Arc<dyn OutboundLink> = Arc::new(gateway.clone());
     let peer = self.assemble(&outbound, &device.id);
     peer.net.start();
-    let routing = spawn_routing(gateway.clone(), peer.clone(), inbound);
     self.ota.adopt(&device.id, gateway.clone()).await;
     self.broadcast.adopt(&device.id, gateway.clone());
+    let routing = spawn_routing(gateway.clone(), peer.clone(), inbound);
 
     let token = Uuid::now_v7();
     self.links.lock().unwrap().insert(
@@ -1155,6 +1158,11 @@ impl Session {
   }
 
   async fn teardown(&self, device_id: &str) -> bool {
+    let _gate = self.link_gate.lock().await;
+    self.detach(device_id).await
+  }
+
+  async fn detach(&self, device_id: &str) -> bool {
     let link = self.links.lock().unwrap().remove(device_id);
     let held = link.is_some();
     self.release(device_id, link).await;
@@ -1162,6 +1170,7 @@ impl Session {
   }
 
   async fn link_died(&self, device_id: &str, token: Uuid) {
+    let _gate = self.link_gate.lock().await;
     let link = {
       let mut held = self.links.lock().unwrap();
       match held.get(device_id) {
