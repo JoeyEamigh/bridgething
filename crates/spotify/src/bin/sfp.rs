@@ -16,11 +16,11 @@ use spotify::{
   http::{ANDROID_CLIENT_ID, SPCLIENT, SpHttp, random_hex},
   httpx,
   model::{AuthState, Device, LibraryScope, PlayerState, Queue, QueuePosition},
-  resolver::{VoicePopularity, VoiceResolveRequest, VoiceResolved, VoiceTargetKind},
   spclient::SpClient,
   store::{FileTokenStore, load_or_make_device_id},
   util::image_hex,
 };
+use voice_resolver::{VoicePopularity, VoiceResolveRequest, VoiceResolved, VoiceTargetKind, resolve};
 
 type Boxed = Box<dyn Error>;
 
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Boxed> {
         Arc::new(PrintObserver::default()),
       );
       client.connect().await?;
-      print_resolved(&client.resolve_voice(req).await?);
+      print_resolved(&resolve(&client, req).await?);
       client.disconnect().await;
     }
     "page" => {

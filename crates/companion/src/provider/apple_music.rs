@@ -21,8 +21,8 @@ use crate::{
   backend::{
     AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmEntry, AmFavoritesSink,
     AmFlagSink, AmInbox, AmItem, AmItemSink, AmItemsSink, AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand,
-    AmPlayerSnapshot, AmRef, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink, AmSignal, AmSnapshotSink,
-    AppleMusicBackend,
+    AmPlayerSnapshot, AmRef, AmRelations, AmRelationsSink, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink,
+    AmSignal, AmSnapshotSink, AppleMusicBackend,
   },
   dispatch::tell,
   provider::{
@@ -31,7 +31,10 @@ use crate::{
     art::{ArtCache, ArtOrigin, ImageAssetCodec},
     none_if_empty,
   },
+  voice::{catalog::CatalogResolver, dispatcher::VoiceCatalogResolver},
 };
+
+mod voice;
 
 pub const PROVIDER_NAME: &str = "apple-music";
 pub(crate) const KEY_CONNECTED: &str = "apple_music.connected";
@@ -48,6 +51,7 @@ const DEFAULT_HERO_EDGE: u32 = 248;
 const DEFAULT_THUMB_EDGE: u32 = 96;
 const DEFAULT_ROOT_PREVIEW: u32 = 8;
 const SEARCH_LIMIT_MAX: u32 = 25;
+const LIBRARY_PAGE: u32 = 100;
 const CHILDREN_CACHE_ENTRIES: usize = 8;
 const BACKEND_DEADLINE: Duration = Duration::from_secs(10);
 const BULK_DEADLINE: Duration = Duration::from_secs(30);
@@ -92,6 +96,7 @@ fn kind_name(kind: AmKind) -> &'static str {
     AmKind::Playlist => "playlist",
     AmKind::Artist => "artist",
     AmKind::Station => "station",
+    AmKind::Songs => "songs",
   }
 }
 
@@ -102,6 +107,7 @@ fn kind_named(name: &str) -> Option<AmKind> {
     "playlist" => Some(AmKind::Playlist),
     "artist" => Some(AmKind::Artist),
     "station" => Some(AmKind::Station),
+    "songs" => Some(AmKind::Songs),
     _ => None,
   }
 }
@@ -187,6 +193,7 @@ struct Catalogue {
   counts: HashMap<AmLibraryScope, watch::Receiver<Option<u32>>>,
   children: VecDeque<(AmRef, Arc<Vec<AmItem>>)>,
   stand_ins: HashMap<AmRef, AmRef>,
+  library: HashMap<AmLibraryScope, Arc<Vec<AmItem>>>,
 }
 
 impl Catalogue {
@@ -510,6 +517,41 @@ impl Core {
     reply(rx).await
   }
 
+  async fn whole_library(&self, scope: AmLibraryScope) -> Result<Arc<Vec<AmItem>>, ProviderError> {
+    let generation = {
+      let catalogue = self.catalogue.lock().unwrap();
+      if let Some(held) = catalogue.library.get(&scope) {
+        return Ok(held.clone());
+      }
+      catalogue.generation
+    };
+    let mut items = Vec::new();
+    loop {
+      let page = self.page(scope, LIBRARY_PAGE, items.len() as u32).await?;
+      let more = page.has_more && !page.items.is_empty();
+      items.extend(page.items);
+      if !more {
+        break;
+      }
+    }
+    let items = Arc::new(items);
+    let mut catalogue = self.catalogue.lock().unwrap();
+    if catalogue.generation == generation {
+      catalogue.library.insert(scope, items.clone());
+    }
+    Ok(items)
+  }
+
+  fn held_library(&self, scope: AmLibraryScope) -> Option<Arc<Vec<AmItem>>> {
+    self.catalogue.lock().unwrap().library.get(&scope).cloned()
+  }
+
+  async fn relations(&self, item: AmRef) -> Result<AmRelations, ProviderError> {
+    let (sink, rx) = AmRelationsSink::channel();
+    tell(&self.backend, move |backend| backend.relations(item, sink)).await;
+    reply(rx).await
+  }
+
   async fn recents(&self, limit: u32, offset: u32) -> Result<AmPage, ProviderError> {
     let (sink, rx) = AmPageSink::channel();
     tell(&self.backend, move |backend| {
@@ -686,7 +728,7 @@ impl Core {
         name: item.title.clone(),
         artwork_id: art,
       }),
-      AmKind::Playlist => LibraryItem::Playlist(Playlist {
+      AmKind::Playlist | AmKind::Songs => LibraryItem::Playlist(Playlist {
         uri,
         name: item.title.clone(),
         owner_name: item.subtitle.clone(),
@@ -1015,6 +1057,11 @@ impl Provider for AppleMusicProvider {
 
   fn app_bundles(&self) -> Vec<String> {
     vec![APPLE_MUSIC_APP_BUNDLE.into()]
+  }
+
+  fn voice_resolver(&self) -> Option<Arc<dyn VoiceCatalogResolver>> {
+    let ready = self.core.link().is_some() && self.core.shared.lock().unwrap().authorized;
+    ready.then(|| CatalogResolver::new(self.core.clone()) as Arc<dyn VoiceCatalogResolver>)
   }
 
   fn set_now_playing_observer(&self, observer: Option<Arc<dyn Fn(Option<ProviderNowPlaying>) + Send + Sync>>) {

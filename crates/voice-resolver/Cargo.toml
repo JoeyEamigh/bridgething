@@ -1,0 +1,17 @@
+[package]
+name = "voice-resolver"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+futures.workspace = true
+rand = "0.10.3"
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

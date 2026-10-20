@@ -35,6 +35,8 @@ hmac = "0.13.0"
 sha1 = "0.11.0"
 bridgething-io = { path = "../io", default-features = false }
 http = "1.5.0"
+voice-resolver = { version = "0.13.1", path = "../voice-resolver" }
+async-trait.workspace = true
 
 [features]
 default = []

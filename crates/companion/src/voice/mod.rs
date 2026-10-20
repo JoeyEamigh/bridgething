@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod controller;
 pub mod dispatcher;
 pub mod fast_path;

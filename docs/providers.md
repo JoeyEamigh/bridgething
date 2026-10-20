@@ -51,6 +51,15 @@ against the service, no native code.
    host's `SecretStore`, and builds the provider. Chain it into `ProviderCatalog::new` in
    `session/mod.rs`, gated on whatever host backends it needs. Subsonic is gated on the stream
    backend, so a host that cannot play audio never offers it.
+5. **Voice** through `voice_resolver::Catalog` (`subsonic/voice.rs`). The shared resolver in
+   `crates/voice-resolver` turns "play the first album by X" into one of your uris; you only answer its
+   questions: search, artist releases and top songs, container tracks, what is playing, the user's
+   library (liked songs, saved albums, followed artists, playlists with ownership), recents, and a
+   station for a seed. `kind_of` reads your uri grammar. The defaults cover what a service lacks:
+   no popularity signal keeps relevance order, no new-release feed falls back to search, no personal
+   mixes skips them. Return the resolver from `voice_resolver()` once signed in:
+   `CatalogResolver::new(core)`. "Liked songs" must be a uri your `play` accepts, even when the
+   service has no such playlist (Subsonic mints `subsonic:starred:songs`).
 
 ## What you do not write
 
@@ -66,7 +75,7 @@ against the service, no native code.
 
 `crates/companion/tests/subsonic.rs` drives the provider against a loopback stub of the service
 (`tests/rig/subsonic.rs`) through a fake stream backend and the real hub, and checks what reaches
-the wire. `tests/subsonic_live.rs` runs the same shape against a real server when
+the wire, including the voice picks through `voice_resolver()`. `tests/subsonic_live.rs` runs the same shape against a real server when
 `BRIDGETHING_SUBSONIC_LIVE_URL`, `BRIDGETHING_SUBSONIC_LIVE_USERNAME`, and
 `BRIDGETHING_SUBSONIC_LIVE_PASSWORD` are set. Write both for a new provider: the stub proves the
 mapping, the live lane proves the API shapes.

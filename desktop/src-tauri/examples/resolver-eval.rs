@@ -2,8 +2,8 @@ use std::{collections::BTreeMap, error::Error, path::PathBuf, sync::Arc, time::D
 
 use bridgething_companion::{
   api::VoiceModelPaths,
-  provider::spotify::{catalog_intent, names_nothing, voice_request},
   voice::{
+    catalog::{catalog_intent, names_nothing, voice_request},
     fast_path,
     inference::{BundleInference, NluInference},
     rejection::{RejectionOutcome, evaluate},
@@ -14,13 +14,13 @@ use libbridgething::NluSlots;
 use serde::Deserialize;
 use spotify::{
   auth::{Auth, DEFAULT_WORKER_BASE},
-  client::{Observer, SpotifyClient},
+  client::{Observer, SpotifyClient, catalog::made_for_you},
   http::random_hex,
   httpx,
   model::{AuthState, Device, LibraryScope, PlayerState, Queue},
-  resolver::{VoiceResolved, VoiceTargetKind, made_for_you, norm},
   store::FileTokenStore,
 };
+use voice_resolver::{VoiceResolved, VoiceTargetKind, norm, resolve};
 
 type Boxed = Box<dyn Error>;
 
@@ -222,7 +222,7 @@ async fn run_slots(client: &SpotifyClient, slots: &NluSlots, expect: &Expect, pa
     return dead(expect, "names nothing".to_string());
   }
   tokio::time::sleep(pace).await;
-  match client.resolve_voice(request).await {
+  match resolve(client, request).await {
     Ok(out) if expect.dead_end == Some(true) => Verdict::Wrong(format!("resolved {} but expected a dead end", out.uri)),
     Ok(out) => match holds(expect, &out) {
       Ok(()) => Verdict::Correct,

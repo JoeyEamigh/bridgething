@@ -44,6 +44,7 @@ pub enum AmKind {
   Playlist,
   Artist,
   Station,
+  Songs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, uniffi::Record)]
@@ -51,6 +52,13 @@ pub struct AmRef {
   pub kind: AmKind,
   pub id: String,
   pub library: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct AmDate {
+  pub year: i32,
+  pub month: u32,
+  pub day: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -63,6 +71,8 @@ pub struct AmItem {
   pub artwork_url: Option<String>,
   pub duration_ms: Option<u32>,
   pub track_count: Option<u32>,
+  pub released: Option<AmDate>,
+  pub single: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -81,10 +91,19 @@ pub struct AmShelf {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AmSearchResults {
+  pub top: Vec<AmItem>,
   pub songs: Vec<AmItem>,
   pub albums: Vec<AmItem>,
   pub artists: Vec<AmItem>,
   pub playlists: Vec<AmItem>,
+  pub stations: Vec<AmItem>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct AmRelations {
+  pub album: Option<AmRef>,
+  pub artist: Option<AmRef>,
+  pub station: Option<AmRef>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, uniffi::Enum)]
@@ -124,6 +143,7 @@ pub trait AppleMusicBackend: Send + Sync {
   fn children(&self, item: AmRef, sink: Arc<AmItemsSink>);
   fn recommendations(&self, sink: Arc<AmShelvesSink>);
   fn resolve(&self, item: AmRef, sink: Arc<AmItemSink>);
+  fn relations(&self, item: AmRef, sink: Arc<AmRelationsSink>);
   fn search(&self, query: String, limit: u32, offset: u32, sink: Arc<AmSearchSink>);
   fn is_favorite(&self, items: Vec<AmRef>, sink: Arc<AmFavoritesSink>);
   fn add_favorite(&self, item: AmRef, sink: Arc<AmActionSink>);
@@ -207,6 +227,7 @@ am_sink!(AmShelvesSink, Vec<AmShelf>);
 am_sink!(AmItemSink, AmItem);
 am_sink!(AmSearchSink, AmSearchResults);
 am_sink!(AmFavoritesSink, Vec<bool>);
+am_sink!(AmRelationsSink, AmRelations);
 
 #[derive(uniffi::Object)]
 pub struct AmActionSink {

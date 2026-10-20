@@ -51,6 +51,7 @@
     extension AmShelvesSink: AmReply {}
     extension AmSearchSink: AmReply {}
     extension AmFavoritesSink: AmReply {}
+    extension AmRelationsSink: AmReply {}
     extension AmArtworkSink: AmReply {}
 
     private func answer<Sink: AmReply>(
@@ -243,6 +244,14 @@
             return station
         }
 
+        static func librarySongs() async throws -> [Song] {
+            var req = MusicLibraryRequest<Song>()
+            #if os(iOS)
+                req.sort(by: \.libraryAddedDate, ascending: false)
+            #endif
+            return try await everything(req.response().items)
+        }
+
         static func everything<T>(_ first: MusicItemCollection<T>?) async throws -> [T] where T: Decodable {
             guard var batch = first else { return [] }
             var all = Array(batch)
@@ -254,13 +263,26 @@
         }
     }
 
+    private let releaseCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        return calendar
+    }()
+
+    func amDate(_ date: Date?) -> AmDate? {
+        guard let date else { return nil }
+        let parts = releaseCalendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = parts.year, let month = parts.month, let day = parts.day else { return nil }
+        return AmDate(year: Int32(year), month: UInt32(month), day: UInt32(day))
+    }
+
     func amItem(_ song: Song, as ref: AmRef) -> AmItem {
         AmItem(
             item: ref, title: song.title, subtitle: nil,
             artistName: song.artistName, albumName: song.albumTitle,
             artworkUrl: artworkTemplate(song.artwork),
             durationMs: song.duration.map { UInt32(($0 * 1000).rounded()) },
-            trackCount: nil
+            trackCount: nil, released: amDate(song.releaseDate), single: nil
         )
     }
 
@@ -269,28 +291,37 @@
             item: ref, title: album.title, subtitle: album.artistName,
             artistName: album.artistName, albumName: nil,
             artworkUrl: artworkTemplate(album.artwork), durationMs: nil,
-            trackCount: UInt32(album.trackCount)
+            trackCount: UInt32(album.trackCount), released: amDate(album.releaseDate), single: album.isSingle
         )
     }
 
     func amItem(_ artist: Artist, as ref: AmRef) -> AmItem {
         AmItem(
             item: ref, title: artist.name, subtitle: nil, artistName: nil, albumName: nil,
-            artworkUrl: artworkTemplate(artist.artwork), durationMs: nil, trackCount: nil
+            artworkUrl: artworkTemplate(artist.artwork), durationMs: nil, trackCount: nil, released: nil, single: nil
         )
     }
 
     func amItem(_ playlist: Playlist, as ref: AmRef) -> AmItem {
         AmItem(
             item: ref, title: playlist.name, subtitle: playlist.curatorName, artistName: nil, albumName: nil,
-            artworkUrl: artworkTemplate(playlist.artwork), durationMs: nil, trackCount: nil
+            artworkUrl: artworkTemplate(playlist.artwork), durationMs: nil, trackCount: nil, released: nil, single: nil
         )
     }
 
     func amItem(_ station: Station, as ref: AmRef) -> AmItem {
         AmItem(
             item: ref, title: station.name, subtitle: nil, artistName: nil, albumName: nil,
-            artworkUrl: artworkTemplate(station.artwork), durationMs: nil, trackCount: nil
+            artworkUrl: artworkTemplate(station.artwork), durationMs: nil, trackCount: nil, released: nil, single: nil
+        )
+    }
+
+    private let librarySongsTitle = "Library Songs"
+
+    func librarySongsItem(_ ref: AmRef) -> AmItem {
+        AmItem(
+            item: ref, title: librarySongsTitle, subtitle: nil, artistName: nil, albumName: nil,
+            artworkUrl: nil, durationMs: nil, trackCount: nil, released: nil, single: nil
         )
     }
 
@@ -310,16 +341,16 @@
         amItem(playlist, as: .held(.playlist, playlist.id, library: library))
     }
 
+    func amItem(_ station: Station, library: Bool) -> AmItem {
+        amItem(station, as: .held(.station, station.id, library: library))
+    }
+
     private func transientItem(_ album: Album) -> AmItem {
         amItem(album, as: .transient(.album, album.id, album.playParameters))
     }
 
     private func transientItem(_ playlist: Playlist) -> AmItem {
         amItem(playlist, as: .transient(.playlist, playlist.id, playlist.playParameters))
-    }
-
-    private func transientItem(_ station: Station) -> AmItem {
-        amItem(station, as: .held(.station, station.id, library: false))
     }
 
     final class MusicKitLibrary: @unchecked Sendable {
@@ -394,7 +425,7 @@
                 switch item {
                 case let .album(album): return transientItem(album)
                 case let .playlist(playlist): return transientItem(playlist)
-                case let .station(station): return transientItem(station)
+                case let .station(station): return amItem(station, library: false)
                 @unknown default: return nil
                 }
             }
@@ -417,8 +448,30 @@
                 let top = (artist.topSongs ?? []).map { amItem($0, library: false) }
                 let albums = try await MusicKitItems.everything(artist.albums).map { amItem($0, library: false) }
                 return top + albums
+            case .songs:
+                return try await MusicKitItems.librarySongs().map { amItem($0, library: true) }
             case .song, .station:
                 throw AmPlayerError.itemNotFound(ref)
+            }
+        }
+
+        func relations(of ref: AmRef) async throws -> AmRelations {
+            switch ref.kind {
+            case .song:
+                let song = try await MusicKitItems.song(ref).with([.albums, .artists, .station])
+                return AmRelations(
+                    album: song.albums?.first.map { .held(.album, $0.id, library: ref.library) },
+                    artist: song.artists?.first.map { .held(.artist, $0.id, library: ref.library) },
+                    station: song.station.map { .held(.station, $0.id, library: false) }
+                )
+            case .artist:
+                let artist = try await MusicKitItems.artist(ref).with([.station])
+                return AmRelations(
+                    album: nil, artist: nil,
+                    station: artist.station.map { .held(.station, $0.id, library: false) }
+                )
+            case .album, .playlist, .station, .songs:
+                return AmRelations(album: nil, artist: nil, station: nil)
             }
         }
 
@@ -436,7 +489,7 @@
                     switch item {
                     case let .album(album): return transientItem(album)
                     case let .playlist(playlist): return transientItem(playlist)
-                    case let .station(station): return transientItem(station)
+                    case let .station(station): return amItem(station, library: false)
                     @unknown default: return nil
                     }
                 }
@@ -451,19 +504,35 @@
             case .playlist: return try await amItem(MusicKitItems.playlist(ref), as: ref)
             case .artist: return try await amItem(MusicKitItems.artist(ref), as: ref)
             case .station: return try await amItem(MusicKitItems.station(ref), as: ref)
+            case .songs: return librarySongsItem(ref)
             }
         }
 
         func search(_ query: String, limit: UInt32, offset: UInt32) async throws -> AmSearchResults {
-            var req = MusicCatalogSearchRequest(term: query, types: [Song.self, Album.self, Artist.self, Playlist.self])
+            var req = MusicCatalogSearchRequest(
+                term: query, types: [Song.self, Album.self, Artist.self, Playlist.self, Station.self]
+            )
             req.limit = Int(limit)
             req.offset = Int(offset)
+            req.includeTopResults = offset == 0
             let res = try await req.response()
+            let top: [AmItem] = res.topResults.compactMap { result in
+                switch result {
+                case let .song(song): return amItem(song, library: false)
+                case let .album(album): return amItem(album, library: false)
+                case let .artist(artist): return amItem(artist, library: false)
+                case let .playlist(playlist): return amItem(playlist, library: false)
+                case let .station(station): return amItem(station, library: false)
+                default: return nil
+                }
+            }
             return AmSearchResults(
+                top: top,
                 songs: res.songs.map { amItem($0, library: false) },
                 albums: res.albums.map { amItem($0, library: false) },
                 artists: res.artists.map { amItem($0, library: false) },
-                playlists: res.playlists.map { amItem($0, library: false) }
+                playlists: res.playlists.map { amItem($0, library: false) },
+                stations: res.stations.map { amItem($0, library: false) }
             )
         }
 
@@ -814,6 +883,11 @@
                     player.queue = SystemMusicPlayer.Queue(for: top, startingAt: start)
                 case .station:
                     player.queue = try await [MusicKitItems.station(context)]
+                case .songs:
+                    let songs = try await MusicKitItems.librarySongs()
+                    guard !songs.isEmpty else { throw AmPlayerError.itemNotFound(context) }
+                    let start = startAt.flatMap { startAt in songs.first { $0.id.rawValue == startAt.id } }
+                    player.queue = SystemMusicPlayer.Queue(for: songs, startingAt: start)
                 }
                 try await player.play()
             }
@@ -841,6 +915,10 @@
 
         public func resolve(item: AmRef, sink: AmItemSink) {
             answer(sink) { [library] in try await library.resolve(item) }
+        }
+
+        public func relations(item: AmRef, sink: AmRelationsSink) {
+            answer(sink) { [library] in try await library.relations(of: item) }
         }
 
         public func search(query: String, limit: UInt32, offset: UInt32, sink: AmSearchSink) {

@@ -35,9 +35,9 @@ use bridgething_companion::{
   backend::{
     AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmFavoritesSink, AmFlagSink,
     AmInbox, AmItemSink, AmItemsSink, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerSnapshot, AmRef,
-    AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend, ConnectivityInbox,
-    ConnectivityMonitor, LinkDevice, LinkInbox, LinkTransport, MediaSessionBackend, PrepareSink, SecretStore,
-    SpeechRecognizer, Transcription, TranscriptionSink,
+    AmRelationsSink, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
+    ConnectivityInbox, ConnectivityMonitor, LinkDevice, LinkInbox, LinkTransport, MediaSessionBackend, PrepareSink,
+    SecretStore, SpeechRecognizer, Transcription, TranscriptionSink,
   },
   provider::{Provider, ProviderAuthState},
   session::Session,
@@ -1578,12 +1578,17 @@ impl AppleMusicBackend for QuietAm {
   fn resolve(&self, _item: AmRef, sink: Arc<AmItemSink>) {
     sink.fail("nothing to resolve in these cases".into());
   }
+  fn relations(&self, _item: AmRef, sink: Arc<AmRelationsSink>) {
+    sink.fail("nothing to relate in these cases".into());
+  }
   fn search(&self, _query: String, _limit: u32, _offset: u32, sink: Arc<AmSearchSink>) {
     sink.complete(AmSearchResults {
+      top: Vec::new(),
       songs: Vec::new(),
       albums: Vec::new(),
       artists: Vec::new(),
       playlists: Vec::new(),
+      stations: Vec::new(),
     });
   }
   fn is_favorite(&self, items: Vec<AmRef>, sink: Arc<AmFavoritesSink>) {

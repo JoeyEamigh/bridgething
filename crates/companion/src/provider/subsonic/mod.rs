@@ -1,4 +1,5 @@
 mod client;
+mod voice;
 
 use std::sync::{Arc, Mutex};
 
@@ -24,6 +25,7 @@ use crate::{
     none_if_empty,
     playback::{Presentation, QueueEntry, StreamPlayback},
   },
+  voice::{catalog::CatalogResolver, dispatcher::VoiceCatalogResolver},
 };
 
 pub const PROVIDER_NAME: &str = "subsonic";
@@ -47,6 +49,9 @@ const ARTISTS_NODE_ID: &str = "artists";
 const RECENTS_NODE_ID: &str = libbridgething::RECENTS_NODE_ID;
 const NEWEST_NODE_ID: &str = "recently-added";
 const RANDOM_NODE_ID: &str = "random";
+const STARRED_ID: &str = "songs";
+const STARRED_TITLE: &str = "Starred Songs";
+const STATION_SONGS: u32 = 50;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubsonicConfig {
@@ -61,6 +66,8 @@ enum Kind {
   Album,
   Artist,
   Playlist,
+  Starred,
+  Station,
 }
 
 impl Kind {
@@ -70,6 +77,8 @@ impl Kind {
       Kind::Album => "album",
       Kind::Artist => "artist",
       Kind::Playlist => "playlist",
+      Kind::Starred => "starred",
+      Kind::Station => "station",
     }
   }
 }
@@ -86,9 +95,25 @@ fn parse_uri(uri: &str) -> Option<(Kind, &str)> {
     "album" => Kind::Album,
     "artist" => Kind::Artist,
     "playlist" => Kind::Playlist,
+    "starred" => Kind::Starred,
+    "station" => Kind::Station,
     _ => return None,
   };
   (!id.is_empty()).then_some((kind, id))
+}
+
+fn station_id(seed: Kind, id: &str) -> Option<String> {
+  matches!(seed, Kind::Artist | Kind::Track).then(|| format!("{}:{id}", seed.tag()))
+}
+
+fn station_seed(id: &str) -> Option<(Kind, &str)> {
+  let (tag, seed_id) = id.split_once(':')?;
+  let seed = match tag {
+    "artist" => Kind::Artist,
+    "track" => Kind::Track,
+    _ => return None,
+  };
+  (!seed_id.is_empty()).then_some((seed, seed_id))
 }
 
 fn cover_source(cover_art: Option<&str>) -> Option<String> {
@@ -289,7 +314,59 @@ impl Core {
         };
         Ok((songs, Some(context)))
       }
+      Kind::Starred => {
+        let starred = self.client.starred().await.map_err(failed)?;
+        let context = PlaybackContext {
+          uri: uri(Kind::Starred, id),
+          name: Some(STARRED_TITLE.into()),
+        };
+        Ok((starred.songs, Some(context)))
+      }
+      Kind::Station => {
+        let (seed, seed_id) =
+          station_seed(id).ok_or_else(|| ProviderError::Failed(format!("{id} seeds no station")))?;
+        let similar = match seed {
+          Kind::Artist => self.client.similar_to_artist(seed_id, STATION_SONGS).await,
+          _ => self.client.similar_to_song(seed_id, STATION_SONGS).await,
+        }
+        .map_err(failed)?;
+        let songs = match similar.is_empty() {
+          true => Box::pin(self.songs_of(seed, seed_id)).await?.0,
+          false => similar,
+        };
+        let context = PlaybackContext {
+          uri: uri(Kind::Station, id),
+          name: None,
+        };
+        Ok((songs, Some(context)))
+      }
     }
+  }
+
+  async fn seed_name(&self, station: &str) -> Result<(String, Option<String>), ProviderError> {
+    let (seed, seed_id) =
+      station_seed(station).ok_or_else(|| ProviderError::Failed(format!("{station} seeds no station")))?;
+    match seed {
+      Kind::Artist => {
+        let artist = self.client.artist(seed_id).await.map_err(failed)?;
+        Ok((artist.artist.name, artist.artist.cover_art))
+      }
+      _ => {
+        let song = self.client.song(seed_id).await.map_err(failed)?;
+        Ok((song.title, song.cover_art))
+      }
+    }
+  }
+
+  async fn matching_playlists(&self, query: &str) -> Result<Vec<Playlist>, ProviderError> {
+    let needle = query.to_lowercase();
+    let all = self.client.playlists().await.map_err(failed)?;
+    Ok(
+      all
+        .into_iter()
+        .filter(|playlist| playlist.name.to_lowercase().contains(&needle))
+        .collect(),
+    )
   }
 
   async fn root_browse(&self, sections: Option<u32>, preview: Option<u32>) -> Result<BrowseResult, ProviderError> {
@@ -402,6 +479,11 @@ impl Core {
               artist.albums.len(),
             )
           }
+          Kind::Starred | Kind::Station => {
+            let (songs, _) = self.songs_of(kind, id).await?;
+            let (shown, _) = page(&songs, limit, offset);
+            (shown.iter().map(|song| self.track_item(song)).collect(), songs.len())
+          }
           Kind::Track => return Err(ProviderError::Failed("a track has no children".into())),
         };
         let has_more = offset as usize + items.len() < total;
@@ -431,7 +513,7 @@ impl Core {
       Kind::Track => StarTarget::Song(id),
       Kind::Album => StarTarget::Album(id),
       Kind::Artist => StarTarget::Artist(id),
-      Kind::Playlist => return Err(ProviderError::NotImplemented),
+      Kind::Playlist | Kind::Starred | Kind::Station => return Err(ProviderError::NotImplemented),
     };
     self.client.set_starred(target, starred).await.map_err(failed)?;
     self.playback.set_liked(&item.uri, starred);
@@ -585,6 +667,11 @@ impl Provider for SubsonicProvider {
     self.core.playback.app_bundles()
   }
 
+  fn voice_resolver(&self) -> Option<Arc<dyn VoiceCatalogResolver>> {
+    let ready = self.core.link.lock().unwrap().is_some() && *self.core.authorized.lock().unwrap();
+    ready.then(|| CatalogResolver::new(self.core.clone()) as Arc<dyn VoiceCatalogResolver>)
+  }
+
   fn set_auth_observer(&self, observer: Option<AuthObserver>) {
     *self.core.auth_observer.lock().unwrap() = observer;
   }
@@ -637,8 +724,8 @@ impl Provider for SubsonicProvider {
     let current = self
       .core
       .playback
-      .current_uri()
-      .and_then(|uri| parse_uri(&uri).map(|(_, id)| id.to_owned()));
+      .current()
+      .and_then(|(playing, _)| parse_uri(&playing.uri).map(|(_, id)| id.to_owned()));
     if let Some(id) = current
       && let Ok(Some(structured)) = self.core.client.lyrics_by_song(&id).await
     {
@@ -706,6 +793,11 @@ impl Provider for SubsonicProvider {
         let song = self.core.client.song(id).await.map_err(failed)?;
         (song.title, song.cover_art, song.artist)
       }
+      Kind::Starred => (STARRED_TITLE.to_owned(), None, None),
+      Kind::Station => {
+        let seed = self.core.seed_name(id).await?;
+        (seed.0, seed.1, None)
+      }
     };
     Ok(ContextResolveReply {
       name: none_if_empty(&name),
@@ -732,13 +824,8 @@ impl Provider for SubsonicProvider {
       .search(&request.query, counts, request.offset)
       .await
       .map_err(failed)?;
-    let needle = request.query.to_lowercase();
     let playlists: Vec<Playlist> = if wants(ItemKind::Playlist) {
-      let all = self.core.client.playlists().await.map_err(failed)?;
-      let matching: Vec<Playlist> = all
-        .into_iter()
-        .filter(|playlist| playlist.name.to_lowercase().contains(&needle))
-        .collect();
+      let matching = self.core.matching_playlists(&request.query).await?;
       page(&matching, request.limit, request.offset).0
     } else {
       Vec::new()
@@ -791,7 +878,7 @@ impl Provider for SubsonicProvider {
         Kind::Artist | Kind::Album | Kind::Playlist => {
           self.core.node(&uri(kind, id), request.limit, request.offset).await?
         }
-        Kind::Track => continue,
+        Kind::Track | Kind::Starred | Kind::Station => continue,
       };
       return Ok(RecommendationsResult {
         items: node

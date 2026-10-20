@@ -2251,6 +2251,134 @@ public func FfiConverterTypeAmPageSink_lower(_ value: AmPageSink) -> UInt64 {
 
 
 
+public protocol AmRelationsSinkProtocol: AnyObject, Sendable {
+    
+    func complete(value: AmRelations) 
+    
+    func fail(reason: String) 
+    
+}
+open class AmRelationsSink: AmRelationsSinkProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_amrelationssink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_amrelationssink(handle, $0) }
+    }
+
+    
+
+    
+open func complete(value: AmRelations)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_amrelationssink_complete(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeAmRelations_lower(value),uniffiCallStatus
+    )
+}
+}
+    
+open func fail(reason: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_amrelationssink_fail(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(reason),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAmRelationsSink: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = AmRelationsSink
+
+    public static func lift(_ handle: UInt64) throws -> AmRelationsSink {
+        return AmRelationsSink(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: AmRelationsSink) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AmRelationsSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: AmRelationsSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmRelationsSink_lift(_ handle: UInt64) throws -> AmRelationsSink {
+    return try FfiConverterTypeAmRelationsSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmRelationsSink_lower(_ value: AmRelationsSink) -> UInt64 {
+    return FfiConverterTypeAmRelationsSink.lower(value)
+}
+
+
+
+
+
+
 public protocol AmSearchSinkProtocol: AnyObject, Sendable {
     
     func complete(value: AmSearchResults) 
@@ -2669,6 +2797,8 @@ public protocol AppleMusicBackend: AnyObject, Sendable {
     
     func resolve(item: AmRef, sink: AmItemSink) 
     
+    func relations(item: AmRef, sink: AmRelationsSink) 
+    
     func search(query: String, limit: UInt32, offset: UInt32, sink: AmSearchSink) 
     
     func isFavorite(items: [AmRef], sink: AmFavoritesSink) 
@@ -2883,6 +3013,16 @@ open func resolve(item: AmRef, sink: AmItemSink)  {try! rustCall() {
             self.uniffiCloneHandle(),
         FfiConverterTypeAmRef_lower(item),
         FfiConverterTypeAmItemSink_lower(sink),uniffiCallStatus
+    )
+}
+}
+    
+open func relations(item: AmRef, sink: AmRelationsSink)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_applemusicbackend_relations(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeAmRef_lower(item),
+        FfiConverterTypeAmRelationsSink_lower(sink),uniffiCallStatus
     )
 }
 }
@@ -3354,6 +3494,32 @@ fileprivate struct UniffiCallbackInterfaceAppleMusicBackend {
                 return uniffiObj.resolve(
                      item: try FfiConverterTypeAmRef_lift(item),
                      sink: try FfiConverterTypeAmItemSink_lift(sink)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        relations: { (
+            uniffiHandle: UInt64,
+            item: RustBuffer,
+            sink: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeAppleMusicBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.relations(
+                     item: try FfiConverterTypeAmRef_lift(item),
+                     sink: try FfiConverterTypeAmRelationsSink_lift(sink)
                 )
             }
 
@@ -15069,6 +15235,64 @@ public func FfiConverterTypeActiveWebapp_lower(_ value: ActiveWebapp) -> RustBuf
 }
 
 
+public struct AmDate: Equatable, Hashable {
+    public var year: Int32
+    public var month: UInt32
+    public var day: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(year: Int32, month: UInt32, day: UInt32) {
+        self.year = year
+        self.month = month
+        self.day = day
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AmDate: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAmDate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AmDate {
+        return
+            try AmDate(
+                year: FfiConverterInt32.read(from: &buf), 
+                month: FfiConverterUInt32.read(from: &buf), 
+                day: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AmDate, into buf: inout [UInt8]) {
+        FfiConverterInt32.write(value.year, into: &buf)
+        FfiConverterUInt32.write(value.month, into: &buf)
+        FfiConverterUInt32.write(value.day, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmDate_lift(_ buf: RustBuffer) throws -> AmDate {
+    return try FfiConverterTypeAmDate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmDate_lower(_ value: AmDate) -> RustBuffer {
+    return FfiConverterTypeAmDate.lower(value)
+}
+
+
 public struct AmEntry: Equatable, Hashable {
     public var item: AmRef?
     public var title: String
@@ -15148,10 +15372,12 @@ public struct AmItem: Equatable, Hashable {
     public var artworkUrl: String?
     public var durationMs: UInt32?
     public var trackCount: UInt32?
+    public var released: AmDate?
+    public var single: Bool?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(item: AmRef, title: String, subtitle: String?, artistName: String?, albumName: String?, artworkUrl: String?, durationMs: UInt32?, trackCount: UInt32?) {
+    public init(item: AmRef, title: String, subtitle: String?, artistName: String?, albumName: String?, artworkUrl: String?, durationMs: UInt32?, trackCount: UInt32?, released: AmDate?, single: Bool?) {
         self.item = item
         self.title = title
         self.subtitle = subtitle
@@ -15160,6 +15386,8 @@ public struct AmItem: Equatable, Hashable {
         self.artworkUrl = artworkUrl
         self.durationMs = durationMs
         self.trackCount = trackCount
+        self.released = released
+        self.single = single
     }
 
     
@@ -15185,7 +15413,9 @@ public struct FfiConverterTypeAmItem: FfiConverterRustBuffer {
                 albumName: FfiConverterOptionString.read(from: &buf), 
                 artworkUrl: FfiConverterOptionString.read(from: &buf), 
                 durationMs: FfiConverterOptionUInt32.read(from: &buf), 
-                trackCount: FfiConverterOptionUInt32.read(from: &buf)
+                trackCount: FfiConverterOptionUInt32.read(from: &buf), 
+                released: FfiConverterOptionTypeAmDate.read(from: &buf), 
+                single: FfiConverterOptionBool.read(from: &buf)
         )
     }
 
@@ -15198,6 +15428,8 @@ public struct FfiConverterTypeAmItem: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.artworkUrl, into: &buf)
         FfiConverterOptionUInt32.write(value.durationMs, into: &buf)
         FfiConverterOptionUInt32.write(value.trackCount, into: &buf)
+        FfiConverterOptionTypeAmDate.write(value.released, into: &buf)
+        FfiConverterOptionBool.write(value.single, into: &buf)
     }
 }
 
@@ -15399,19 +15631,81 @@ public func FfiConverterTypeAmRef_lower(_ value: AmRef) -> RustBuffer {
 }
 
 
+public struct AmRelations: Equatable, Hashable {
+    public var album: AmRef?
+    public var artist: AmRef?
+    public var station: AmRef?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(album: AmRef?, artist: AmRef?, station: AmRef?) {
+        self.album = album
+        self.artist = artist
+        self.station = station
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AmRelations: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAmRelations: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AmRelations {
+        return
+            try AmRelations(
+                album: FfiConverterOptionTypeAmRef.read(from: &buf), 
+                artist: FfiConverterOptionTypeAmRef.read(from: &buf), 
+                station: FfiConverterOptionTypeAmRef.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AmRelations, into buf: inout [UInt8]) {
+        FfiConverterOptionTypeAmRef.write(value.album, into: &buf)
+        FfiConverterOptionTypeAmRef.write(value.artist, into: &buf)
+        FfiConverterOptionTypeAmRef.write(value.station, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmRelations_lift(_ buf: RustBuffer) throws -> AmRelations {
+    return try FfiConverterTypeAmRelations.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAmRelations_lower(_ value: AmRelations) -> RustBuffer {
+    return FfiConverterTypeAmRelations.lower(value)
+}
+
+
 public struct AmSearchResults: Equatable, Hashable {
+    public var top: [AmItem]
     public var songs: [AmItem]
     public var albums: [AmItem]
     public var artists: [AmItem]
     public var playlists: [AmItem]
+    public var stations: [AmItem]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(songs: [AmItem], albums: [AmItem], artists: [AmItem], playlists: [AmItem]) {
+    public init(top: [AmItem], songs: [AmItem], albums: [AmItem], artists: [AmItem], playlists: [AmItem], stations: [AmItem]) {
+        self.top = top
         self.songs = songs
         self.albums = albums
         self.artists = artists
         self.playlists = playlists
+        self.stations = stations
     }
 
     
@@ -15430,18 +15724,22 @@ public struct FfiConverterTypeAmSearchResults: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AmSearchResults {
         return
             try AmSearchResults(
+                top: FfiConverterSequenceTypeAmItem.read(from: &buf), 
                 songs: FfiConverterSequenceTypeAmItem.read(from: &buf), 
                 albums: FfiConverterSequenceTypeAmItem.read(from: &buf), 
                 artists: FfiConverterSequenceTypeAmItem.read(from: &buf), 
-                playlists: FfiConverterSequenceTypeAmItem.read(from: &buf)
+                playlists: FfiConverterSequenceTypeAmItem.read(from: &buf), 
+                stations: FfiConverterSequenceTypeAmItem.read(from: &buf)
         )
     }
 
     public static func write(_ value: AmSearchResults, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeAmItem.write(value.top, into: &buf)
         FfiConverterSequenceTypeAmItem.write(value.songs, into: &buf)
         FfiConverterSequenceTypeAmItem.write(value.albums, into: &buf)
         FfiConverterSequenceTypeAmItem.write(value.artists, into: &buf)
         FfiConverterSequenceTypeAmItem.write(value.playlists, into: &buf)
+        FfiConverterSequenceTypeAmItem.write(value.stations, into: &buf)
     }
 }
 
@@ -21757,6 +22055,7 @@ public enum AmKind: Equatable, Hashable {
     case playlist
     case artist
     case station
+    case songs
 
 
 
@@ -21788,6 +22087,8 @@ public struct FfiConverterTypeAmKind: FfiConverterRustBuffer {
         
         case 5: return .station
         
+        case 6: return .songs
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -21814,6 +22115,10 @@ public struct FfiConverterTypeAmKind: FfiConverterRustBuffer {
         
         case .station:
             writeInt(&buf, Int32(5))
+        
+        
+        case .songs:
+            writeInt(&buf, Int32(6))
         
         }
     }
@@ -28804,6 +29109,30 @@ fileprivate struct FfiConverterOptionTypeActiveWebapp: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeAmDate: FfiConverterRustBuffer {
+    typealias SwiftType = AmDate?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeAmDate.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeAmDate.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeAmEntry: FfiConverterRustBuffer {
     typealias SwiftType = AmEntry?
 
@@ -31062,6 +31391,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_ampagesink_fail() != 39059) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_amrelationssink_complete() != 37752) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_amrelationssink_fail() != 23129) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_amsearchsink_complete() != 34663) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -31128,16 +31463,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_applemusicbackend_resolve() != 56275) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_search() != 44178) {
+    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_relations() != 3424) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favorite() != 3791) {
+    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_search() != 45244) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite() != 45252) {
+    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favorite() != 42019) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_artwork() != 52422) {
+    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite() != 33406) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_applemusicbackend_artwork() != 44475) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_audiobackend_speak() != 61321) {

@@ -67,6 +67,18 @@ pub struct Song {
   pub cover_art: Option<String>,
   #[serde(default)]
   pub starred: Option<String>,
+  #[serde(default)]
+  pub year: Option<i32>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub struct ItemDate {
+  #[serde(default)]
+  pub year: Option<i32>,
+  #[serde(default)]
+  pub month: Option<i32>,
+  #[serde(default)]
+  pub day: Option<i32>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -85,6 +97,12 @@ pub struct Album {
   pub song_count: Option<u32>,
   #[serde(default)]
   pub starred: Option<String>,
+  #[serde(default)]
+  pub year: Option<i32>,
+  #[serde(default)]
+  pub release_date: Option<ItemDate>,
+  #[serde(default)]
+  pub release_types: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -176,6 +194,8 @@ pub enum AlbumList {
   Alphabetical,
   RecentlyPlayed,
   Newest,
+  Frequent,
+  Random,
 }
 
 impl AlbumList {
@@ -184,6 +204,8 @@ impl AlbumList {
       AlbumList::Alphabetical => "alphabeticalByName",
       AlbumList::RecentlyPlayed => "recent",
       AlbumList::Newest => "newest",
+      AlbumList::Frequent => "frequent",
+      AlbumList::Random => "random",
     }
   }
 }
@@ -273,6 +295,10 @@ impl SubsonicClient {
 
   pub fn base(&self) -> &str {
     &self.base
+  }
+
+  pub fn username(&self) -> &str {
+    &self.username
   }
 
   fn token(&self) -> String {
@@ -412,6 +438,34 @@ impl SubsonicClient {
     let size = size.to_string();
     let payload: SongsPayload = self.expect("getRandomSongs", &[("size", &size)], "randomSongs").await?;
     Ok(payload.songs)
+  }
+
+  pub async fn top_songs(&self, artist: &str, count: u32) -> Result<Vec<Song>, SubsonicError> {
+    let count = count.to_string();
+    let payload: Option<SongsPayload> = self
+      .call("getTopSongs", &[("artist", artist), ("count", &count)], "topSongs")
+      .await?;
+    Ok(payload.map(|payload| payload.songs).unwrap_or_default())
+  }
+
+  pub async fn similar_to_artist(&self, artist_id: &str, count: u32) -> Result<Vec<Song>, SubsonicError> {
+    let count = count.to_string();
+    let payload: Option<SongsPayload> = self
+      .call(
+        "getSimilarSongs2",
+        &[("id", artist_id), ("count", &count)],
+        "similarSongs2",
+      )
+      .await?;
+    Ok(payload.map(|payload| payload.songs).unwrap_or_default())
+  }
+
+  pub async fn similar_to_song(&self, song_id: &str, count: u32) -> Result<Vec<Song>, SubsonicError> {
+    let count = count.to_string();
+    let payload: Option<SongsPayload> = self
+      .call("getSimilarSongs", &[("id", song_id), ("count", &count)], "similarSongs")
+      .await?;
+    Ok(payload.map(|payload| payload.songs).unwrap_or_default())
   }
 
   pub async fn search(&self, query: &str, counts: SearchCounts, offset: u32) -> Result<Hits, SubsonicError> {

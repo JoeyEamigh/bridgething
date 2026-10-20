@@ -32,7 +32,8 @@ use bridgething_companion::{
   session::Session,
 };
 use libbridgething::{
-  BrowseEntry, ItemKind, ItemRef, LibraryItem, PlayContext, PlaybackState, PlayerState, QueuePosition,
+  BrowseEntry, ItemKind, ItemRef, LibraryItem, NluPopularityFilter, NluResolvedIntent, NluSlots, NluTargetType,
+  PlayContext, PlaybackState, PlayerState, QueuePosition,
   gateway::{
     GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, LibraryBrowseRequest,
     LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibrarySearchRequest, PlayUri, QueueSnapshot,
@@ -43,7 +44,7 @@ use log_sink::Quiet;
 use poll::eventually;
 use secrets::MemorySecrets;
 use stream_fake::{APP_BUNDLE, FakeStreamBackend, StreamCall};
-use subsonic_stub::{PASSWORD, SubsonicStub, USERNAME};
+use subsonic_stub::{PASSWORD, SubsonicStub, USERNAME, voice_library};
 use support::Peer;
 
 const ALBUM_ONE: &str = "subsonic:album:al1";
@@ -1008,4 +1009,191 @@ async fn a_rejected_login_surfaces_as_a_failed_sign_in() {
     Some("the server rejected the username or password")
   );
   session.stop().await;
+}
+
+async fn voice_boot() -> Rig {
+  let rig = boot_with(SubsonicStub::serve_with(voice_library(), PASSWORD), PASSWORD).await;
+  rig.authenticated().await;
+  rig
+}
+
+fn spoken(target: Option<&str>, kind: Option<NluTargetType>) -> NluSlots {
+  NluSlots {
+    target: target.map(str::to_string),
+    target_type: kind,
+    ..NluSlots::default()
+  }
+}
+
+async fn voice_pick(rig: &Rig, slots: NluSlots) -> (Option<String>, Option<String>) {
+  let resolver = rig
+    .provider
+    .voice_resolver()
+    .expect("a signed-in server resolves voice");
+  let out = resolver
+    .decorate(NluResolvedIntent {
+      intent: "PLAY".into(),
+      slots,
+      transcript: String::new(),
+      alternates: None,
+    })
+    .await
+    .expect("the server answered");
+  (out.slots.uri, out.slots.context_uri)
+}
+
+#[tokio::test]
+async fn voice_waits_for_the_sign_in() {
+  let rig = boot_with(SubsonicStub::serve_with(voice_library(), PASSWORD), "wrong").await;
+  assert!(
+    eventually(|| {
+      rig
+        .auth
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|state| matches!(state, ProviderAuthState::Failed { .. }))
+    })
+    .await
+  );
+  assert!(rig.provider.voice_resolver().is_none());
+}
+
+#[tokio::test]
+async fn voice_names_an_artist_an_album_and_a_track_by_its_artist() {
+  let rig = voice_boot().await;
+  let artist = voice_pick(&rig, spoken(Some("pornophonique"), Some(NluTargetType::Artist))).await;
+  assert_eq!(artist.0.as_deref(), Some("subsonic:artist:ar1"));
+  let album = voice_pick(&rig, spoken(Some("second album"), Some(NluTargetType::Album))).await;
+  assert_eq!(album.0.as_deref(), Some("subsonic:album:al2"));
+  let track = voice_pick(
+    &rig,
+    spoken(Some("sad robot by maya filipic"), Some(NluTargetType::Track)),
+  )
+  .await;
+  assert_eq!(
+    track.0.as_deref(),
+    Some("subsonic:track:s7"),
+    "the by-phrase picks the named artist's song over the same title by another"
+  );
+}
+
+#[tokio::test]
+async fn voice_reads_the_first_album_as_the_earliest_full_studio_release() {
+  let rig = voice_boot().await;
+  let first = voice_pick(
+    &rig,
+    NluSlots {
+      popularity_filter: Some(NluPopularityFilter::First),
+      ..spoken(Some("pornophonique"), Some(NluTargetType::Album))
+    },
+  )
+  .await;
+  assert_eq!(
+    first,
+    (Some(ALBUM_ONE.into()), Some("subsonic:artist:ar1".into())),
+    "the earlier EP and live album are not the debut album"
+  );
+}
+
+#[tokio::test]
+async fn voice_counts_a_position_into_the_named_album() {
+  let rig = voice_boot().await;
+  let second = voice_pick(
+    &rig,
+    NluSlots {
+      position: Some(2),
+      ..spoken(Some("8-bit lagerfeuer"), Some(NluTargetType::Album))
+    },
+  )
+  .await;
+  assert_eq!(second, (Some(TRACK_TWO.into()), Some(ALBUM_ONE.into())));
+}
+
+#[tokio::test]
+async fn liked_songs_are_the_starred_songs_and_play_as_a_collection() {
+  let rig = voice_boot().await;
+  rig
+    .provider
+    .favorites_set(track_ref(TRACK_FOUR), true)
+    .await
+    .expect("starred");
+  for target in ["my liked songs", "liked songs", "my favorites"] {
+    let liked = voice_pick(&rig, spoken(Some(target), None)).await;
+    assert_eq!(
+      liked.0.as_deref(),
+      Some("subsonic:starred:songs"),
+      "{target:?} is the user's stars, never a stranger's playlist titled Liked Songs"
+    );
+  }
+  let first = voice_pick(
+    &rig,
+    NluSlots {
+      position: Some(1),
+      ..spoken(Some("my liked songs"), None)
+    },
+  )
+  .await;
+  assert_eq!(first, (Some(TRACK_FOUR.into()), Some("subsonic:starred:songs".into())));
+
+  rig.play("subsonic:starred:songs", None).await.expect("the stars play");
+  let state = rig.snapshot_for(TRACK_FOUR).await;
+  assert_eq!(
+    state.context.map(|context| context.uri),
+    Some("subsonic:starred:songs".to_owned())
+  );
+}
+
+#[tokio::test]
+async fn the_users_own_playlist_beats_a_strangers_of_the_same_name() {
+  let rig = voice_boot().await;
+  for kind in [None, Some(NluTargetType::Playlist)] {
+    let road = voice_pick(&rig, spoken(Some("road trip"), kind)).await;
+    assert_eq!(road.0.as_deref(), Some("subsonic:playlist:pl1"), "{kind:?}");
+  }
+}
+
+#[tokio::test]
+async fn a_station_request_plays_similar_songs_seeded_by_the_artist() {
+  let rig = voice_boot().await;
+  let station = voice_pick(&rig, spoken(Some("pornophonique"), Some(NluTargetType::Station))).await;
+  assert_eq!(station.0.as_deref(), Some("subsonic:station:artist:ar1"));
+  rig
+    .play("subsonic:station:artist:ar1", None)
+    .await
+    .expect("the station plays");
+  rig.snapshot_for("subsonic:track:s6").await;
+  assert!(rig.stub.endpoints().contains(&"getSimilarSongs2".to_owned()));
+}
+
+#[tokio::test]
+async fn a_popular_request_reads_the_artists_top_songs() {
+  let rig = voice_boot().await;
+  let top = voice_pick(
+    &rig,
+    NluSlots {
+      popularity_filter: Some(NluPopularityFilter::Popular),
+      ..spoken(Some("pornophonique"), None)
+    },
+  )
+  .await;
+  assert_eq!(top, (Some(TRACK_THREE.into()), Some("subsonic:artist:ar1".into())));
+}
+
+#[tokio::test]
+async fn a_bare_album_kind_reads_the_song_that_is_on() {
+  let rig = voice_boot().await;
+  rig.play(TRACK_FIVE, Some(ALBUM_TWO)).await.expect("playing");
+  rig.snapshot_for(TRACK_FIVE).await;
+  let album = voice_pick(&rig, spoken(None, Some(NluTargetType::Album))).await;
+  assert_eq!(album.0.as_deref(), Some(ALBUM_TWO));
+  let first = voice_pick(
+    &rig,
+    NluSlots {
+      position: Some(1),
+      ..NluSlots::default()
+    },
+  )
+  .await;
+  assert_eq!(first, (Some(TRACK_FOUR.into()), Some(ALBUM_TWO.into())));
 }

@@ -7,10 +7,10 @@ use bridgething_gateway::OutboundLinkExt;
 use bridgething_io::{HttpExecutor, HttpTransport as IoHttpTransport, WsTransport as IoWsTransport};
 use libbridgething::{
   Album as WireAlbum, Artist as WireArtist, BrowseEntry, BrowseFolder, BrowseResult, FavoritesPage, ItemKind, ItemRef,
-  LibraryItem, Lyrics, MediaItem, MediaItemUpdate, MusicProvider, NluPopularityFilter, NluResolvedIntent, NluSlots,
-  NluTargetType, NowPlayingUpdate, Playback, PlaybackContext, PlaybackState, PlaybackTarget, PlaybackTargetKind,
-  PlaybackUpdate, PlayerOptions, PlayerState, Playlist, PodcastEpisode, QueueItem, RecommendationsResult, RepeatMode,
-  SearchResult, Show, ShuffleMode, Station, Track as WireTrack,
+  LibraryItem, Lyrics, MediaItem, MediaItemUpdate, MusicProvider, NowPlayingUpdate, Playback, PlaybackContext,
+  PlaybackState, PlaybackTarget, PlaybackTargetKind, PlaybackUpdate, PlayerOptions, PlayerState, Playlist,
+  PodcastEpisode, QueueItem, RecommendationsResult, RepeatMode, SearchResult, Show, ShuffleMode, Station,
+  Track as WireTrack,
   gateway::{
     ContextResolveReply, FavoritesSet, GatewayToBridgeAudioMsgEvent, GatewayToBridgeLibraryMsgEvent,
     GatewayToBridgePlayerMsgCommand, LibraryBrowseRequest, LibraryChanged, LibraryFavoritesContainsRequest,
@@ -26,7 +26,6 @@ use spotify::{
     LibraryScope as SpLibraryScope, PlayerState as SpPlayerState, Queue as SpQueue, QueuePosition as SpQueuePosition,
     RepeatMode as SpRepeat, Shelf as SpShelf, Track as SpTrack,
   },
-  resolver::{VoicePopularity, VoiceResolveRequest, VoiceTargetKind},
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -38,7 +37,7 @@ use crate::{
     art::{ArtCache, ImageAssetCodec},
     none_if_empty,
   },
-  voice::dispatcher::{CatalogError, VoiceCatalogResolver},
+  voice::{catalog::CatalogResolver, dispatcher::VoiceCatalogResolver},
 };
 
 pub const PROVIDER_NAME: &str = "spotify";
@@ -112,7 +111,7 @@ struct Session {
   connect_task: JoinHandle<()>,
   emit_task: JoinHandle<()>,
   emit_tx: mpsc::UnboundedSender<EmitJob>,
-  resolver: Arc<SpotifyVoiceResolver>,
+  resolver: Arc<CatalogResolver>,
   connect_resume: Option<JoinHandle<()>>,
 }
 
@@ -675,92 +674,6 @@ impl DeviceWaker for LocalWaker {
   }
 }
 
-pub struct SpotifyVoiceResolver {
-  client: Arc<SpotifyClient>,
-}
-
-pub fn catalog_intent(intent: &str) -> bool {
-  matches!(
-    intent,
-    "PLAY" | "ADD_TO_QUEUE" | "ADD_TO_PLAYLIST" | "SEARCH" | "THUMBS_UP"
-  )
-}
-
-fn clean(value: &Option<String>) -> Option<String> {
-  value
-    .as_ref()
-    .map(|text| text.trim().to_owned())
-    .filter(|text| !text.is_empty())
-}
-
-fn voice_kind(kind: NluTargetType) -> VoiceTargetKind {
-  match kind {
-    NluTargetType::Artist => VoiceTargetKind::Artist,
-    NluTargetType::Track => VoiceTargetKind::Track,
-    NluTargetType::Album => VoiceTargetKind::Album,
-    NluTargetType::Playlist => VoiceTargetKind::Playlist,
-    NluTargetType::Podcast => VoiceTargetKind::Show,
-    NluTargetType::Episode => VoiceTargetKind::Episode,
-    NluTargetType::Station => VoiceTargetKind::Station,
-  }
-}
-
-pub fn voice_request(slots: &NluSlots) -> VoiceResolveRequest {
-  VoiceResolveRequest {
-    target: clean(&slots.target),
-    target_type: slots.target_type.map(voice_kind),
-    mood: clean(&slots.mood),
-    genre: clean(&slots.genre),
-    era: clean(&slots.era),
-    popularity_filter: slots.popularity_filter.map(voice_popularity),
-    position: slots.position,
-  }
-}
-
-pub fn names_nothing(req: &VoiceResolveRequest) -> bool {
-  req.target.is_none()
-    && req.target_type.is_none()
-    && req.mood.is_none()
-    && req.genre.is_none()
-    && req.era.is_none()
-    && req.position.is_none()
-    && req.popularity_filter.is_none()
-}
-
-fn voice_popularity(filter: NluPopularityFilter) -> VoicePopularity {
-  match filter {
-    NluPopularityFilter::Top5 => VoicePopularity::Top5,
-    NluPopularityFilter::Top10 => VoicePopularity::Top10,
-    NluPopularityFilter::Popular => VoicePopularity::Popular,
-    NluPopularityFilter::Recent => VoicePopularity::Recent,
-    NluPopularityFilter::New => VoicePopularity::New,
-    NluPopularityFilter::First => VoicePopularity::First,
-    NluPopularityFilter::Random => VoicePopularity::Random,
-  }
-}
-
-#[async_trait::async_trait]
-impl VoiceCatalogResolver for SpotifyVoiceResolver {
-  async fn decorate(&self, resolved: NluResolvedIntent) -> Result<NluResolvedIntent, CatalogError> {
-    if !catalog_intent(&resolved.intent) {
-      return Ok(resolved);
-    }
-    let request = voice_request(&resolved.slots);
-    if names_nothing(&request) {
-      return Ok(resolved);
-    }
-    let answer = self
-      .client
-      .resolve_voice(request)
-      .await
-      .map_err(|error| CatalogError::Failed(error.to_string()))?;
-    let mut resolved = resolved;
-    resolved.slots.uri = Some(answer.uri);
-    resolved.slots.context_uri = answer.context_uri;
-    Ok(resolved)
-  }
-}
-
 fn artist_names(track: &SpTrack) -> Option<String> {
   let joined = track
     .artists
@@ -1205,7 +1118,7 @@ impl Provider for SpotifyProvider {
     });
 
     self.core.shared.lock().unwrap().connectivity_available = None;
-    let resolver = Arc::new(SpotifyVoiceResolver { client: client.clone() });
+    let resolver = CatalogResolver::new(client.clone());
     *self.core.session.lock().unwrap() = Some(Session {
       client,
       link,
@@ -1548,40 +1461,6 @@ mod tests {
   use spotify::model::{Album as SpAlbum, Artist as SpArtist};
 
   use super::*;
-
-  #[test]
-  fn a_request_carrying_only_a_popularity_filter_still_reaches_the_catalog() {
-    for filter in [
-      NluPopularityFilter::Top5,
-      NluPopularityFilter::Top10,
-      NluPopularityFilter::Popular,
-      NluPopularityFilter::Recent,
-      NluPopularityFilter::New,
-      NluPopularityFilter::First,
-      NluPopularityFilter::Random,
-    ] {
-      let request = VoiceResolveRequest {
-        popularity_filter: Some(voice_popularity(filter)),
-        ..Default::default()
-      };
-      assert!(
-        !names_nothing(&request),
-        "{filter:?} is the whole request; dropping it here would silently ignore the filter"
-      );
-    }
-  }
-
-  #[test]
-  fn a_request_naming_nothing_at_all_never_reaches_the_catalog() {
-    assert!(names_nothing(&VoiceResolveRequest::default()));
-    assert!(
-      !names_nothing(&VoiceResolveRequest {
-        target_type: Some(VoiceTargetKind::Album),
-        ..Default::default()
-      }),
-      "a bare kind is read against now playing, so the resolver has to see it"
-    );
-  }
 
   fn browse_item(uri: &str, title: &str) -> SpBrowseItem {
     SpBrowseItem {

@@ -20,7 +20,7 @@ use bridgething_companion::{
   },
 };
 use libbridgething::{
-  BrowseEntry, ItemKind, LibraryItem, PlaybackState,
+  BrowseEntry, ItemKind, LibraryItem, NluPopularityFilter, NluResolvedIntent, NluSlots, NluTargetType, PlaybackState,
   gateway::{GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, LibraryBrowseRequest, LibrarySearchRequest, PlayUri},
 };
 use poll::eventually;
@@ -61,12 +61,15 @@ fn live_config() -> Option<SubsonicConfig> {
   })
 }
 
-#[tokio::test]
-async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() {
-  let Some(config) = live_config() else {
-    eprintln!("set {URL_VAR}, {USERNAME_VAR} and {PASSWORD_VAR} to drive a real subsonic server");
-    return;
-  };
+struct Live {
+  _hub: Arc<Hub>,
+  peer: Peer,
+  provider: Arc<SubsonicProvider>,
+  backend: Arc<FakeStreamBackend>,
+  _art: art_store::Art,
+}
+
+async fn signed_in(config: &SubsonicConfig) -> Live {
   let (gateway, peer) = Peer::link();
   let hub = Hub::new(
     Arc::new(gateway),
@@ -112,6 +115,29 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
     "the live sign-in did not authenticate: {:?}",
     auth.lock().unwrap()
   );
+
+  Live {
+    _hub: hub,
+    peer,
+    provider,
+    backend,
+    _art: art,
+  }
+}
+
+#[tokio::test]
+async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() {
+  let Some(config) = live_config() else {
+    eprintln!("set {URL_VAR}, {USERNAME_VAR} and {PASSWORD_VAR} to drive a real subsonic server");
+    return;
+  };
+  let Live {
+    _hub,
+    peer,
+    provider,
+    backend,
+    _art,
+  } = signed_in(&config).await;
 
   let root = provider
     .browse(LibraryBrowseRequest {
@@ -275,4 +301,110 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
   }
 
   provider.detach().await;
+}
+
+fn spoken(target: &str, kind: NluTargetType) -> NluResolvedIntent {
+  NluResolvedIntent {
+    intent: "PLAY".into(),
+    slots: NluSlots {
+      target: Some(target.into()),
+      target_type: Some(kind),
+      ..NluSlots::default()
+    },
+    transcript: String::new(),
+    alternates: None,
+  }
+}
+
+#[tokio::test]
+async fn a_real_server_answers_voice_picks_from_its_own_catalog() {
+  let Some(config) = live_config() else {
+    eprintln!("set {URL_VAR}, {USERNAME_VAR} and {PASSWORD_VAR} to drive a real subsonic server");
+    return;
+  };
+  let live = signed_in(&config).await;
+  let artists = live
+    .provider
+    .browse(LibraryBrowseRequest {
+      node_id: Some("artists".into()),
+      limit: 5,
+      offset: 0,
+      sections: None,
+      preview: None,
+    })
+    .await
+    .expect("the artist list");
+  let artist = artists
+    .entries
+    .iter()
+    .find_map(|entry| match entry {
+      BrowseEntry::Item(LibraryItem::Artist(artist)) => Some(artist.clone()),
+      _ => None,
+    })
+    .expect("at least one artist");
+  let resolver = live
+    .provider
+    .voice_resolver()
+    .expect("a signed-in server resolves voice");
+
+  let named = resolver
+    .decorate(spoken(&artist.name, NluTargetType::Artist))
+    .await
+    .expect("the artist resolves");
+  eprintln!("artist {:?} -> {:?}", artist.name, named.slots.uri);
+  assert_eq!(named.slots.uri.as_deref(), Some(artist.id.as_str()));
+
+  let first = resolver
+    .decorate(NluResolvedIntent {
+      slots: NluSlots {
+        popularity_filter: Some(NluPopularityFilter::First),
+        ..spoken(&artist.name, NluTargetType::Album).slots
+      },
+      ..spoken(&artist.name, NluTargetType::Album)
+    })
+    .await
+    .expect("the first album resolves");
+  eprintln!("first album -> {:?} in {:?}", first.slots.uri, first.slots.context_uri);
+  assert!(first.slots.uri.is_some_and(|uri| uri.starts_with("subsonic:album:")));
+
+  let station = resolver
+    .decorate(spoken(&artist.name, NluTargetType::Station))
+    .await
+    .expect("the station resolves");
+  let station = station.slots.uri.expect("a station uri");
+  eprintln!("station -> {station}");
+  PlayerTransport::play(
+    live.provider.as_ref(),
+    PlayUri {
+      uri: station.clone(),
+      context: None,
+    },
+  )
+  .await
+  .expect("the station plays");
+  let state = live
+    .peer
+    .wait("the station snapshot", |msg| match &msg.data {
+      GatewayToBridgeMsgData::Player(GatewayToBridgePlayerMsg::Snapshot(state))
+        if state.playback.state == PlaybackState::Playing =>
+      {
+        Some(state.as_ref().clone())
+      }
+      _ => None,
+    })
+    .await;
+  eprintln!(
+    "station playing {:?} by {:?}, {:?} queued",
+    state.track.as_ref().and_then(|track| track.title.clone()),
+    state.track.as_ref().and_then(|track| track.artist.clone()),
+    state.playback.queue_count
+  );
+  assert!(live.backend.last_source().is_some());
+
+  let liked = resolver
+    .decorate(spoken("my liked songs", NluTargetType::Playlist))
+    .await
+    .expect("liked songs resolve");
+  assert_eq!(liked.slots.uri.as_deref(), Some("subsonic:starred:songs"));
+  live.provider.detach().await;
 }

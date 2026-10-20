@@ -133,6 +133,39 @@
             XCTAssertTrue(children.contains { $0.title.contains("Discovery") })
         }
 
+        func testCatalogSearchRanksAcrossKindsAndFindsStations() async throws {
+            let library = try requireAuthorized()
+            let found = try await catalog("catalog search") { try await library.search("Daft Punk", limit: 10, offset: 0) }
+            XCTAssertTrue(found.top.contains { $0.item.kind == .artist && $0.title == "Daft Punk" })
+            let paged = try await catalog("catalog search") { try await library.search("Daft Punk", limit: 10, offset: 10) }
+            XCTAssertTrue(paged.top.isEmpty, "top results belong to the first page only")
+            let radio = try await catalog("catalog search") { try await library.search("Pure Pop Radio", limit: 5, offset: 0) }
+            XCTAssertFalse(radio.stations.isEmpty)
+        }
+
+        func testCatalogAlbumsCarryReleaseDatesAndTheSingleFlag() async throws {
+            let library = try requireAuthorized()
+            let found = try await catalog("catalog search") { try await library.search("Daft Punk", limit: 5, offset: 0) }
+            let artist = try XCTUnwrap(found.artists.first { $0.title == "Daft Punk" })
+            let albums = try await catalog("catalog artist") { try await library.children(of: artist.item) }
+                .filter { $0.item.kind == .album }
+            let homework = try XCTUnwrap(albums.first { $0.title.hasPrefix("Homework") })
+            XCTAssertEqual(homework.released?.year, 1997)
+            XCTAssertEqual(homework.single, false)
+        }
+
+        func testArtistAndSongRelationsNameAlbumArtistAndStation() async throws {
+            let library = try requireAuthorized()
+            let found = try await catalog("catalog search") { try await library.search("One More Time Daft Punk", limit: 5, offset: 0) }
+            let song = try XCTUnwrap(found.songs.first { $0.title.hasPrefix("One More Time") })
+            let relations = try await catalog("song relations") { try await library.relations(of: song.item) }
+            XCTAssertEqual(relations.album?.kind, .album)
+            XCTAssertEqual(relations.artist?.kind, .artist)
+            let artist = try XCTUnwrap(relations.artist)
+            let artistRelations = try await catalog("artist relations") { try await library.relations(of: artist) }
+            XCTAssertEqual(artistRelations.station?.kind, .station)
+        }
+
         func testRecommendationsAndRecents() async throws {
             let library = try requireAuthorized()
             let rails = try await catalog("recommendations") { try await library.recommendations() }

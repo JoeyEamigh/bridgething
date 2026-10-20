@@ -14,17 +14,18 @@ use std::{
 use bridgething_companion::{
   api::{CapabilityFlags, HostInfo},
   backend::{
-    AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmEntry, AmFavoritesSink,
-    AmFlagSink, AmInbox, AmItem, AmItemSink, AmItemsSink, AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand,
-    AmPlayerSnapshot, AmRef, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelf, AmShelvesSink, AmSnapshotSink,
-    AppleMusicBackend,
+    AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmDate, AmEntry,
+    AmFavoritesSink, AmFlagSink, AmInbox, AmItem, AmItemSink, AmItemsSink, AmKind, AmLibraryScope, AmPage, AmPageSink,
+    AmPlayerCommand, AmPlayerSnapshot, AmRef, AmRelations, AmRelationsSink, AmRepeatMode, AmSearchResults,
+    AmSearchSink, AmShelf, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
   },
   hub::Hub,
   provider::{Provider, ProviderAuthState, ProviderError, apple_music::AppleMusicProvider},
 };
 use bridgething_io::{HttpDownloadSink, HttpRequest, HttpResponse, HttpSink, HttpTransport};
 use libbridgething::{
-  BrowseEntry, BrowseResult, ItemKind, ItemRef, LibraryItem, PlayContext, PlaybackState, QueuePosition,
+  BrowseEntry, BrowseResult, ItemKind, ItemRef, LibraryItem, NluPopularityFilter, NluResolvedIntent, NluSlots,
+  NluTargetType, PlayContext, PlaybackState, QueuePosition,
   gateway::{
     GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, LibraryBrowseRequest,
     LibraryFavoritesContainsRequest, LibraryRecommendationsRequest, LibrarySearchRequest, PlayUri, QueueUri,
@@ -77,6 +78,7 @@ struct FakeAm {
   children: Mutex<HashMap<AmRef, Vec<AmItem>>>,
   children_asks: Mutex<Vec<AmRef>>,
   resolved: Mutex<HashMap<AmRef, AmItem>>,
+  relations: Mutex<HashMap<AmRef, AmRelations>>,
   resolve_asks: Mutex<Vec<AmRef>>,
   searches: Mutex<Vec<(String, u32, u32)>>,
   search_results: Mutex<Option<AmSearchResults>>,
@@ -179,7 +181,7 @@ impl AppleMusicBackend for FakeAm {
     sink.ok();
   }
 
-  fn library(&self, scope: AmLibraryScope, _limit: u32, _offset: u32, sink: Arc<AmPageSink>) {
+  fn library(&self, scope: AmLibraryScope, limit: u32, offset: u32, sink: Arc<AmPageSink>) {
     let page = self
       .pages
       .lock()
@@ -187,7 +189,12 @@ impl AppleMusicBackend for FakeAm {
       .get(&scope)
       .cloned()
       .unwrap_or_else(empty_page);
-    sink.complete(page);
+    let start = (offset as usize).min(page.items.len());
+    let end = start.saturating_add(limit as usize).min(page.items.len());
+    sink.complete(AmPage {
+      items: page.items[start..end].to_vec(),
+      has_more: end < page.items.len() || page.has_more,
+    });
   }
 
   fn library_count(&self, scope: AmLibraryScope, sink: Arc<AmCountSink>) {
@@ -230,6 +237,10 @@ impl AppleMusicBackend for FakeAm {
     })
   }
 
+  fn relations(&self, item: AmRef, sink: Arc<AmRelationsSink>) {
+    sink.complete(self.relations.lock().unwrap().get(&item).cloned().unwrap_or_default());
+  }
+
   fn search(&self, query: String, limit: u32, offset: u32, sink: Arc<AmSearchSink>) {
     self.searches.lock().unwrap().push((query, limit, offset));
     if *self.search_fails.lock().unwrap() {
@@ -242,10 +253,12 @@ impl AppleMusicBackend for FakeAm {
       .unwrap()
       .clone()
       .unwrap_or_else(|| AmSearchResults {
+        top: Vec::new(),
         songs: vec![song(catalog(AmKind::Song, "1"), "T")],
         albums: vec![am(AmKind::Album, "1", false, "A")],
         artists: Vec::new(),
         playlists: Vec::new(),
+        stations: Vec::new(),
       });
     sink.complete(results);
   }
@@ -301,6 +314,8 @@ fn am(kind: AmKind, id: &str, in_library: bool, title: &str) -> AmItem {
     artwork_url: Some("https://art.test/{w}x{h}.jpg".into()),
     duration_ms: None,
     track_count: None,
+    released: None,
+    single: None,
   }
 }
 
@@ -701,6 +716,7 @@ fn daft_punk(backend: &FakeAm, catalog_albums: &[&str]) -> AmRef {
     .unwrap()
     .insert(artist.clone(), am(AmKind::Artist, "117443263", true, "Daft Punk"));
   *backend.search_results.lock().unwrap() = Some(AmSearchResults {
+    top: Vec::new(),
     songs: Vec::new(),
     albums: Vec::new(),
     artists: vec![
@@ -708,6 +724,7 @@ fn daft_punk(backend: &FakeAm, catalog_albums: &[&str]) -> AmRef {
       am(AmKind::Artist, "5", false, "daft punk"),
     ],
     playlists: Vec::new(),
+    stations: Vec::new(),
   });
   let mut store = vec![
     song(catalog(AmKind::Song, "top1"), "One More Time"),
@@ -964,12 +981,14 @@ async fn favorites_lookups_carry_provenance_and_skip_foreign_uris() {
 async fn search_clamps_to_the_apple_limit_and_passes_the_offset() {
   let backend = FakeAm::new();
   *backend.search_results.lock().unwrap() = Some(AmSearchResults {
+    top: Vec::new(),
     songs: (0..25)
       .map(|n| song(catalog(AmKind::Song, &n.to_string()), "S"))
       .collect(),
     albums: Vec::new(),
     artists: Vec::new(),
     playlists: Vec::new(),
+    stations: Vec::new(),
   });
   let rig = boot(backend.clone()).await;
   await_auth(&rig, |state| matches!(state, ProviderAuthState::Authenticated)).await;
@@ -1277,4 +1296,300 @@ async fn resolve_context_carries_name_art_and_subtitle() {
   assert_eq!(reply.name.as_deref(), Some("Ctx"));
   assert_eq!(reply.subtitle.as_deref(), Some("Curator"));
   assert!(reply.artwork_id.as_deref().unwrap().starts_with("applemusic/img/248/u"));
+}
+
+fn dated(item: AmItem, year: i32, month: u32, day: u32) -> AmItem {
+  AmItem {
+    released: Some(AmDate { year, month, day }),
+    ..item
+  }
+}
+
+fn by(item: AmItem, artist: &str) -> AmItem {
+  AmItem {
+    artist_name: Some(artist.into()),
+    ..item
+  }
+}
+
+fn radiohead_catalog(backend: &FakeAm) {
+  let artist = am(AmKind::Artist, "r1", false, "Radiohead");
+  let okc = by(
+    dated(am(AmKind::Album, "okc", false, "OK Computer"), 1997, 5, 21),
+    "Radiohead",
+  );
+  *backend.search_results.lock().unwrap() = Some(AmSearchResults {
+    top: vec![artist.clone(), okc.clone()],
+    songs: vec![
+      by(song(catalog(AmKind::Song, "stp"), "Creep"), "Stone Temple Pilots"),
+      by(song(catalog(AmKind::Song, "creep"), "Creep"), "Radiohead"),
+    ],
+    albums: vec![okc.clone()],
+    artists: vec![artist],
+    playlists: vec![
+      am(AmKind::Playlist, "pl.stranger", false, "Favorite Songs"),
+      am(AmKind::Playlist, "pl.road", false, "Road Trip"),
+    ],
+    stations: Vec::new(),
+  });
+  backend.children.lock().unwrap().extend([
+    (
+      catalog(AmKind::Artist, "r1"),
+      vec![
+        by(song(catalog(AmKind::Song, "creep"), "Creep"), "Radiohead"),
+        by(song(catalog(AmKind::Song, "karma"), "Karma Police"), "Radiohead"),
+        okc.clone(),
+        dated(am(AmKind::Album, "pablo", false, "Pablo Honey"), 1993, 2, 22),
+        AmItem {
+          single: Some(true),
+          ..dated(am(AmKind::Album, "creep-single", false, "Creep - Single"), 1992, 9, 21)
+        },
+        dated(am(AmKind::Album, "astoria", false, "Live at the Astoria"), 1991, 5, 27),
+      ],
+    ),
+    (
+      catalog(AmKind::Album, "okc"),
+      (1..=12)
+        .map(|n| song(catalog(AmKind::Song, &format!("okc-{n}")), &format!("Track {n}")))
+        .collect(),
+    ),
+  ]);
+  backend.relations.lock().unwrap().extend([
+    (
+      catalog(AmKind::Artist, "r1"),
+      AmRelations {
+        album: None,
+        artist: None,
+        station: Some(catalog(AmKind::Station, "ra.r1")),
+      },
+    ),
+    (
+      catalog(AmKind::Song, "karma"),
+      AmRelations {
+        album: Some(catalog(AmKind::Album, "okc")),
+        artist: Some(catalog(AmKind::Artist, "r1")),
+        station: Some(catalog(AmKind::Station, "ra.karma")),
+      },
+    ),
+  ]);
+}
+
+fn own_library(backend: &FakeAm, favorites: bool) {
+  let mut playlists = vec![
+    am(AmKind::Playlist, "p.road", true, "Road Trip"),
+    AmItem {
+      subtitle: Some("Apple Music".into()),
+      ..am(AmKind::Playlist, "p.road-added", true, "Road Trip")
+    },
+  ];
+  if favorites {
+    playlists.push(am(AmKind::Playlist, "p.favorites", true, "Favorite Songs"));
+  }
+  let mut pages = backend.pages.lock().unwrap();
+  pages.insert(
+    AmLibraryScope::Playlists,
+    AmPage {
+      items: playlists,
+      has_more: false,
+    },
+  );
+  pages.insert(
+    AmLibraryScope::Songs,
+    AmPage {
+      items: (1..=6)
+        .map(|n| song(library(AmKind::Song, &format!("i.{n}")), &format!("Owned {n}")))
+        .collect(),
+      has_more: false,
+    },
+  );
+}
+
+fn spoken(target: Option<&str>, kind: Option<NluTargetType>) -> NluSlots {
+  NluSlots {
+    target: target.map(str::to_string),
+    target_type: kind,
+    ..NluSlots::default()
+  }
+}
+
+async fn voice_pick(rig: &Rig, slots: NluSlots) -> (Option<String>, Option<String>) {
+  let resolver = rig
+    .provider
+    .voice_resolver()
+    .expect("an authorized provider resolves voice");
+  let out = resolver
+    .decorate(NluResolvedIntent {
+      intent: "PLAY".into(),
+      slots,
+      transcript: String::new(),
+      alternates: None,
+    })
+    .await
+    .expect("the catalog answered");
+  (out.slots.uri, out.slots.context_uri)
+}
+
+async fn voice_rig(favorites: bool) -> Rig {
+  let backend = FakeAm::new();
+  radiohead_catalog(&backend);
+  own_library(&backend, favorites);
+  let rig = boot(backend).await;
+  await_auth(&rig, |state| matches!(state, ProviderAuthState::Authenticated)).await;
+  rig
+}
+
+#[tokio::test]
+async fn voice_is_unavailable_until_apple_music_authorizes() {
+  let backend = FakeAm::new();
+  *backend.auth.lock().unwrap() = Some(AmAuthStatus::Denied);
+  let rig = boot(backend).await;
+  await_auth(&rig, |state| matches!(state, ProviderAuthState::Failed { .. })).await;
+  assert!(rig.provider.voice_resolver().is_none());
+}
+
+#[tokio::test]
+async fn voice_names_an_artist_an_album_and_a_track_by_its_artist() {
+  let rig = voice_rig(false).await;
+  let artist = voice_pick(&rig, spoken(Some("radiohead"), Some(NluTargetType::Artist))).await;
+  assert_eq!(artist.0.as_deref(), Some("applemusic:artist:r1"));
+  let album = voice_pick(&rig, spoken(Some("ok computer"), Some(NluTargetType::Album))).await;
+  assert_eq!(album.0.as_deref(), Some("applemusic:album:okc"));
+  let track = voice_pick(&rig, spoken(Some("creep by radiohead"), Some(NluTargetType::Track))).await;
+  assert_eq!(
+    track.0.as_deref(),
+    Some("applemusic:song:creep"),
+    "the by-phrase names the artist, so the cover by someone else loses"
+  );
+}
+
+#[tokio::test]
+async fn voice_reads_the_first_album_as_the_earliest_full_studio_release() {
+  let rig = voice_rig(false).await;
+  let first = voice_pick(
+    &rig,
+    NluSlots {
+      popularity_filter: Some(NluPopularityFilter::First),
+      ..spoken(Some("radiohead"), Some(NluTargetType::Album))
+    },
+  )
+  .await;
+  assert_eq!(
+    first,
+    (
+      Some("applemusic:album:pablo".into()),
+      Some("applemusic:artist:r1".into())
+    ),
+    "the earlier single and live tape are not the debut album"
+  );
+}
+
+#[tokio::test]
+async fn voice_counts_a_position_into_the_named_album() {
+  let rig = voice_rig(false).await;
+  let third = voice_pick(
+    &rig,
+    NluSlots {
+      position: Some(3),
+      ..spoken(Some("ok computer"), Some(NluTargetType::Album))
+    },
+  )
+  .await;
+  assert_eq!(
+    third,
+    (
+      Some("applemusic:song:okc-3".into()),
+      Some("applemusic:album:okc".into())
+    )
+  );
+}
+
+#[tokio::test]
+async fn liked_songs_are_the_favorite_songs_playlist_when_the_library_has_one() {
+  let rig = voice_rig(true).await;
+  let searches_before = rig.backend.searches.lock().unwrap().len();
+  for target in ["my liked songs", "favorite songs", "my favorites", "my library"] {
+    let liked = voice_pick(&rig, spoken(Some(target), None)).await;
+    assert_eq!(
+      liked.0.as_deref(),
+      Some("applemusic:library:playlist:p.favorites"),
+      "{target:?}"
+    );
+  }
+  assert_eq!(
+    rig.backend.searches.lock().unwrap().len(),
+    searches_before,
+    "the catalog is never asked, so a stranger's \"Favorite Songs\" cannot win"
+  );
+}
+
+#[tokio::test]
+async fn liked_songs_fall_back_to_the_library_songs_without_a_favorites_playlist() {
+  use bridgething_companion::provider::PlayerTransport;
+  let rig = voice_rig(false).await;
+  let liked = voice_pick(&rig, spoken(Some("my liked songs"), None)).await;
+  assert_eq!(liked.0.as_deref(), Some("applemusic:library:songs:all"));
+  let second = voice_pick(
+    &rig,
+    NluSlots {
+      position: Some(2),
+      ..spoken(Some("my liked songs"), None)
+    },
+  )
+  .await;
+  assert_eq!(
+    second,
+    (
+      Some("applemusic:library:song:i.2".into()),
+      Some("applemusic:library:songs:all".into())
+    )
+  );
+
+  rig
+    .provider
+    .play(PlayUri {
+      uri: "applemusic:library:songs:all".into(),
+      context: None,
+    })
+    .await
+    .expect("the library songs collection plays");
+  assert_eq!(
+    rig.backend.plays.lock().unwrap().last().cloned(),
+    Some((library(AmKind::Songs, "all"), None))
+  );
+}
+
+#[tokio::test]
+async fn the_users_own_playlist_beats_a_strangers_catalog_playlist_of_the_same_name() {
+  let rig = voice_rig(false).await;
+  for kind in [None, Some(NluTargetType::Playlist)] {
+    let road = voice_pick(&rig, spoken(Some("road trip"), kind)).await;
+    assert_eq!(
+      road.0.as_deref(),
+      Some("applemusic:library:playlist:p.road"),
+      "{kind:?}: the user's own playlist, ahead of one they added and the catalog's"
+    );
+  }
+}
+
+#[tokio::test]
+async fn a_station_request_plays_the_artists_station() {
+  let rig = voice_rig(false).await;
+  let station = voice_pick(&rig, spoken(Some("radiohead"), Some(NluTargetType::Station))).await;
+  assert_eq!(station.0.as_deref(), Some("applemusic:station:ra.r1"));
+}
+
+#[tokio::test]
+async fn a_bare_kind_reads_the_relations_of_the_song_that_is_on() {
+  let rig = voice_rig(false).await;
+  rig.backend.set_now_playing(
+    AmEntry {
+      item: Some(catalog(AmKind::Song, "karma")),
+      ..entry("Karma Police")
+    },
+    true,
+  );
+  let album = voice_pick(&rig, spoken(None, Some(NluTargetType::Album))).await;
+  assert_eq!(album.0.as_deref(), Some("applemusic:album:okc"));
+  let artist = voice_pick(&rig, spoken(None, Some(NluTargetType::Artist))).await;
+  assert_eq!(artist.0.as_deref(), Some("applemusic:artist:r1"));
 }

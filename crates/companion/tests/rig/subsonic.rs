@@ -29,6 +29,8 @@ pub struct Album {
   pub name: &'static str,
   pub cover: &'static str,
   pub songs: Vec<Song>,
+  pub year: Option<i32>,
+  pub release_types: Vec<&'static str>,
 }
 
 #[derive(Clone)]
@@ -36,6 +38,7 @@ pub struct Artist {
   pub id: &'static str,
   pub name: &'static str,
   pub albums: Vec<&'static str>,
+  pub top: Vec<&'static str>,
 }
 
 #[derive(Clone)]
@@ -62,11 +65,13 @@ pub fn library() -> Library {
         id: "ar1",
         name: "Pornophonique",
         albums: vec!["al1", "al2"],
+        top: Vec::new(),
       },
       Artist {
         id: "ar2",
         name: "Maya Filipic",
         albums: vec!["al3"],
+        top: Vec::new(),
       },
     ],
     albums: vec![
@@ -74,6 +79,8 @@ pub fn library() -> Library {
         id: "al1",
         name: "8-bit lagerfeuer",
         cover: "al-1",
+        year: None,
+        release_types: Vec::new(),
         songs: vec![
           Song {
             id: "s1",
@@ -102,6 +109,8 @@ pub fn library() -> Library {
         id: "al2",
         name: "Second Album",
         cover: "al-2",
+        year: None,
+        release_types: Vec::new(),
         songs: vec![
           Song {
             id: "s4",
@@ -123,6 +132,8 @@ pub fn library() -> Library {
         id: "al3",
         name: "Between two worlds",
         cover: "al-3",
+        year: None,
+        release_types: Vec::new(),
         songs: vec![Song {
           id: "s6",
           title: "Stories from Emona I",
@@ -139,6 +150,120 @@ pub fn library() -> Library {
       songs: vec!["s2", "s6"],
     }],
     lyrics,
+  }
+}
+
+fn track(id: &'static str, title: &'static str, album: &'static str, track: u32) -> Song {
+  Song {
+    id,
+    title,
+    album,
+    track,
+    duration: 200,
+  }
+}
+
+fn release(
+  id: &'static str,
+  name: &'static str,
+  year: i32,
+  release_types: Vec<&'static str>,
+  songs: Vec<Song>,
+) -> Album {
+  Album {
+    id,
+    name,
+    cover: id,
+    songs,
+    year: Some(year),
+    release_types,
+  }
+}
+
+pub fn voice_library() -> Library {
+  Library {
+    artists: vec![
+      Artist {
+        id: "ar1",
+        name: "Pornophonique",
+        albums: vec!["al-ep", "al-live", "al1", "al2"],
+        top: vec!["s3", "s1"],
+      },
+      Artist {
+        id: "ar2",
+        name: "Maya Filipic",
+        albums: vec!["al3"],
+        top: Vec::new(),
+      },
+    ],
+    albums: vec![
+      release(
+        "al-ep",
+        "Early Bits",
+        2005,
+        vec!["EP"],
+        vec![track("s-ep", "Chip Tune", "Early Bits", 1)],
+      ),
+      release(
+        "al-live",
+        "Live at the Lagerfeuer",
+        2006,
+        vec!["Album", "Live"],
+        vec![track("s-live", "Sad Robot (Live)", "Live at the Lagerfeuer", 1)],
+      ),
+      release(
+        "al1",
+        "8-bit lagerfeuer",
+        2007,
+        vec!["Album"],
+        vec![
+          track("s1", "Sad Robot", "8-bit lagerfeuer", 1),
+          track("s2", "Space Invaders", "8-bit lagerfeuer", 2),
+          track("s3", "I Want To Be A Machine", "8-bit lagerfeuer", 3),
+        ],
+      ),
+      release(
+        "al2",
+        "Second Album",
+        2010,
+        vec!["Album"],
+        vec![
+          track("s4", "Game Over", "Second Album", 1),
+          track("s5", "Lemmings In Love", "Second Album", 2),
+        ],
+      ),
+      release(
+        "al3",
+        "Between two worlds",
+        2012,
+        vec!["Album"],
+        vec![
+          track("s6", "Stories from Emona I", "Between two worlds", 1),
+          track("s7", "Sad Robot", "Between two worlds", 2),
+        ],
+      ),
+    ],
+    playlists: vec![
+      Playlist {
+        id: "pl-stranger",
+        name: "Road trip",
+        owner: "stranger",
+        songs: vec!["s6"],
+      },
+      Playlist {
+        id: "pl1",
+        name: "Road trip",
+        owner: USERNAME,
+        songs: vec!["s2", "s6"],
+      },
+      Playlist {
+        id: "pl-liked",
+        name: "Liked Songs",
+        owner: "stranger",
+        songs: vec!["s7"],
+      },
+    ],
+    lyrics: HashMap::new(),
   }
 }
 
@@ -290,6 +415,12 @@ fn album_json(album: &Album, artist: &Artist, starred: &BTreeSet<String>) -> Val
     "coverArt": album.cover,
     "songCount": album.songs.len(),
   });
+  if let Some(year) = album.year {
+    value["year"] = json!(year);
+  }
+  if !album.release_types.is_empty() {
+    value["releaseTypes"] = json!(album.release_types);
+  }
   if starred.contains(&format!("album:{}", album.id)) {
     value["starred"] = json!("2026-09-10T00:00:00Z");
   }
@@ -404,6 +535,42 @@ fn route(endpoint: &str, query: &HashMap<String, String>, library: &Library, sta
       Some((album, song)) => ok(json!({ "song": song_json(song, album, artist_of(library, album), starred) })),
       None => failed(70, "Song not found"),
     },
+    "getTopSongs" => {
+      let named = query.get("artist").cloned().unwrap_or_default();
+      let songs: Vec<Value> = library
+        .artists
+        .iter()
+        .filter(|artist| artist.name == named)
+        .flat_map(|artist| artist.top.iter())
+        .filter_map(|song_id| album_of(library, song_id))
+        .map(|(album, song)| song_json(song, album, artist_of(library, album), starred))
+        .collect();
+      ok(json!({ "topSongs": { "song": songs } }))
+    }
+    "getSimilarSongs2" | "getSimilarSongs" => {
+      let seed_artist = library
+        .artists
+        .iter()
+        .find(|artist| artist.id == id)
+        .or_else(|| album_of(library, &id).map(|(album, _)| artist_of(library, album)));
+      let songs: Vec<Value> = library
+        .albums
+        .iter()
+        .filter(|album| seed_artist.is_some_and(|seed| !seed.albums.contains(&album.id)))
+        .flat_map(|album| {
+          album
+            .songs
+            .iter()
+            .map(move |song| song_json(song, album, artist_of(library, album), starred))
+        })
+        .collect();
+      let payload = if endpoint == "getSimilarSongs2" {
+        "similarSongs2"
+      } else {
+        "similarSongs"
+      };
+      ok(json!({ payload: { "song": songs } }))
+    }
     "getRandomSongs" => {
       let songs: Vec<Value> = library
         .albums

@@ -12,6 +12,7 @@ use tokio::{
   sync::{Mutex, Notify},
   task::JoinHandle,
 };
+use voice_resolver::LibraryPlaylist;
 
 use crate::{
   aplogin,
@@ -25,10 +26,11 @@ use crate::{
     self, AuthState, BrowseItem, BrowsePage, Device, LibraryScope, PlayerState, ProductState, Queue, QueuePosition,
     RepeatMode, SearchResults, Shelf, Track,
   },
-  resolver::{self, VoiceResolveRequest, VoiceResolved, VoiceResult},
   spclient::SpClient,
   util::gid_to_base62,
 };
+
+pub mod catalog;
 
 const NODE_RECENTS: &str = "recently-played";
 const NODE_PLAYLISTS: &str = "playlists";
@@ -178,13 +180,6 @@ struct BrowseCache {
   recents: Option<(tokio::time::Instant, Recents)>,
   hydrated: HashMap<String, (u64, BrowseItem)>,
   counter: u64,
-}
-
-#[derive(Clone)]
-pub(crate) struct LibraryPlaylist {
-  pub(crate) uri: String,
-  pub(crate) name: String,
-  pub(crate) owned: bool,
 }
 
 struct SavedSet {
@@ -569,11 +564,7 @@ impl SpotifyClient {
     Ok(self.recents().await?.tracks)
   }
 
-  pub(crate) async fn recent_context_uris(&self) -> Result<Vec<String>> {
-    Ok(self.recents().await?.contexts)
-  }
-
-  pub(crate) async fn library_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
+  pub(crate) async fn rootlist_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
     if let Some(cached) = self.browse_cache.lock().await.rootlist.clone() {
       return Ok(cached);
     }
@@ -600,7 +591,7 @@ impl SpotifyClient {
   }
 
   pub(crate) async fn playlist_uris(&self) -> Result<Vec<String>> {
-    Ok(self.library_playlists().await?.into_iter().map(|p| p.uri).collect())
+    Ok(self.rootlist_playlists().await?.into_iter().map(|p| p.uri).collect())
   }
 
   pub(crate) async fn liked_songs_uri(&self) -> Result<String> {
@@ -846,88 +837,9 @@ impl SpotifyClient {
     some_uri(&guard.as_ref()?.player_state.context_uri)
   }
 
-  pub(crate) async fn playback_anchor(&self) -> Option<PlaybackAnchor> {
-    let guard = self.shared.cluster.lock().await;
-    let state = &guard.as_ref()?.player_state;
-    let track = &state.track;
-    let held = |direct: &str, key: &str| some_uri(direct).or_else(|| track.metadata.get(key).and_then(|u| some_uri(u)));
-    Some(PlaybackAnchor {
-      track_uri: some_uri(&track.uri)?,
-      album_uri: held(&track.album_uri, "album_uri"),
-      artist_uri: held(&track.artist_uri, "artist_uri"),
-      context_uri: some_uri(&state.context_uri),
-    })
-  }
-
-  pub(crate) async fn home_uris(&self) -> Vec<String> {
-    let Ok(home) = self.spc.get_home("en").await else {
-      return Vec::new();
-    };
-    home.body.sections.iter().flat_map(|s| carousel_of(s).1).collect()
-  }
-
   pub(crate) async fn search_flat(&self, query: &str, limit: u32) -> Result<Vec<FlatItem>> {
     let resp = self.spc.search(query, limit.max(20)).await?;
     Ok(flatten_search(&resp))
-  }
-
-  pub(crate) async fn popularity_of(&self, uris: &[String]) -> HashMap<String, i32> {
-    let mut by_kind: HashMap<&str, Vec<String>> = HashMap::new();
-    for u in uris {
-      if let Some(kind) = u.split(':').nth(1) {
-        by_kind.entry(kind).or_default().push(u.clone());
-      }
-    }
-    let empty: Vec<String> = Vec::new();
-    let ids = |k: &str| by_kind.get(k).unwrap_or(&empty).clone();
-    let (track_ids, album_ids, artist_ids) = (ids("track"), ids("album"), ids("artist"));
-    let (tracks, albums, artists) = tokio::join!(
-      self.spc.get_tracks(&track_ids),
-      self.spc.get_albums(&album_ids),
-      self.spc.get_artists(&artist_ids),
-    );
-    let mut out = HashMap::new();
-    for (uri, t) in tracks.unwrap_or_default() {
-      out.insert(uri, t.popularity());
-    }
-    for (uri, a) in albums.unwrap_or_default() {
-      out.insert(uri, a.popularity());
-    }
-    for (uri, a) in artists.unwrap_or_default() {
-      out.insert(uri, a.popularity());
-    }
-    out
-  }
-
-  pub(crate) async fn artist_releases(
-    &self,
-    artist_uri: &str,
-    albums_only: bool,
-    depth: usize,
-  ) -> Result<Vec<Release>> {
-    let owned = artist_uri.to_string();
-    let artists = self.spc.get_artists(std::slice::from_ref(&owned)).await?;
-    let Some(artist) = artists.get(artist_uri) else {
-      return Ok(Vec::new());
-    };
-    let uris = model::artist_release_uris(artist, albums_only, depth);
-    if uris.is_empty() {
-      return Ok(Vec::new());
-    }
-    let albums = self.spc.get_albums(&uris).await?;
-    Ok(
-      uris
-        .iter()
-        .filter_map(|u| {
-          albums.get(u).map(|a| Release {
-            uri: u.clone(),
-            name: a.name().to_string(),
-            released: (a.date.year(), a.date.month(), a.date.day()),
-            popularity: a.popularity(),
-          })
-        })
-        .collect(),
-    )
   }
 
   async fn upcoming_state(&self) -> Option<PbPlayerState> {
@@ -1337,10 +1249,6 @@ impl SpotifyClient {
     Ok(bucket_search(self.search_flat(query, limit).await?, limit))
   }
 
-  pub async fn resolve_voice(&self, req: VoiceResolveRequest) -> VoiceResult<VoiceResolved> {
-    resolver::resolve(self, req).await
-  }
-
   pub async fn product(&self) -> Result<ProductState> {
     let v = self.spc.product_state().await?;
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
@@ -1565,23 +1473,8 @@ pub(crate) struct FlatItem {
   pub(crate) year: Option<i32>,
 }
 
-#[derive(Clone)]
-pub(crate) struct Release {
-  pub(crate) uri: String,
-  pub(crate) name: String,
-  pub(crate) released: (i32, i32, i32),
-  pub(crate) popularity: i32,
-}
-
 fn some_uri(uri: &str) -> Option<String> {
   (!uri.is_empty()).then(|| uri.to_string())
-}
-
-pub(crate) struct PlaybackAnchor {
-  pub(crate) track_uri: String,
-  pub(crate) album_uri: Option<String>,
-  pub(crate) artist_uri: Option<String>,
-  pub(crate) context_uri: Option<String>,
 }
 
 pub(crate) fn flatten_search(resp: &crate::proto::custom::searchview::SearchResponse) -> Vec<FlatItem> {

@@ -739,14 +739,14 @@ impl StreamPlayback {
     self.core.state.lock().unwrap().is_some()
   }
 
-  pub fn current_uri(&self) -> Option<String> {
+  pub fn current(&self) -> Option<(Presentation, Option<PlaybackContext>)> {
     self
       .core
       .state
       .lock()
       .unwrap()
       .as_ref()
-      .map(|playing| playing.entry().presentation.uri.clone())
+      .map(|playing| (playing.entry().presentation.clone(), playing.program.context.clone()))
   }
 
   pub fn set_liked(&self, uri: &str, liked: bool) {

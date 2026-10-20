@@ -39,6 +39,7 @@ serde_json.workspace = true
 tauri = { version = "2.11.5", features = ["test"] }
 tempfile = "3.27.0"
 bridgething-client = { path = "../../crates/client-rs" }
+voice-resolver = { path = "../../crates/voice-resolver" }
 
 [dependencies]
 base64 = "0.23.1"
