@@ -7,12 +7,19 @@ mod volume;
 
 use std::{path::Path, sync::Arc};
 
-use bridgething_companion::api::ModelPlatform;
+use bridgething_companion::{api::ModelPlatform, backend::MediaTranscoder};
 
-use crate::backends::{ModelPaths, Platform, asr, geo::Locator, models, nlu, portable::PortableScaler};
+use crate::backends::{
+  ModelPaths, Platform, asr,
+  ffmpeg::{FfmpegTranscoder, Sidecar},
+  geo::Locator,
+  models, nlu,
+  portable::PortableScaler,
+};
 
 pub fn platform(_config_dir: &Path) -> Platform {
   let paths = ModelPaths::default();
+  let sidecar = Sidecar::bundled();
   Platform {
     geo: Some(Arc::new(Locator::new(geo::run))),
     notifications: None,
@@ -21,7 +28,8 @@ pub fn platform(_config_dir: &Path) -> Platform {
     audio: Some(Arc::new(speech::WinRtAudio::default())),
     volume: Some(Arc::new(volume::EndpointVolume::default())),
     connectivity: Some(Arc::new(connectivity::NetworkInformationConnectivity::default())),
-    image: Some(Arc::new(PortableScaler)),
+    image: Some(Arc::new(PortableScaler::new(sidecar.clone()))),
+    transcoder: sidecar.map(|sidecar| Arc::new(FfmpegTranscoder::new(sidecar)) as Arc<dyn MediaTranscoder>),
     speech: Some(Arc::new(asr::WhisperSpeech::new(paths.clone()))),
     nlu: Some(Arc::new(nlu::OrtNlu::new(paths.clone()))),
     model_validator: Some(Arc::new(models::DesktopArtifactValidator)),

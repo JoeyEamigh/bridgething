@@ -32,6 +32,15 @@ pub struct PeerSnapshot {
   pub peers: HashMap<Address, Peer>,
 }
 
+impl PeerSnapshot {
+  pub fn companion_linked(&self, addr: &Address) -> bool {
+    self
+      .peers
+      .get(addr)
+      .is_some_and(|p| !matches!(p.companion, PeerCompanionStatus::None))
+  }
+}
+
 #[derive(Debug)]
 enum PeerCommand {
   Upsert {

@@ -5,7 +5,6 @@ use std::sync::{
 
 use bridgething_sdk_runtime::rt::Instant;
 use libbridgething::gateway::TransferAck;
-use sha2::{Digest, Sha256};
 
 use super::{AckSink, FragmentSource};
 use crate::seam::Clock;
@@ -115,10 +114,4 @@ impl FragmentSource for EndlessSource {
 
 pub fn ramp(len: usize) -> Vec<u8> {
   (0..len).map(|i| (i % 251) as u8).collect()
-}
-
-pub fn sha256_hex(bytes: &[u8]) -> String {
-  let mut hasher = Sha256::new();
-  hasher.update(bytes);
-  hex::encode(hasher.finalize())
 }

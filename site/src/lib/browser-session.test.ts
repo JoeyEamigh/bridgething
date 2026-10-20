@@ -2,7 +2,7 @@ import type { UpdateEvent } from '@bridgething/browser';
 import type { OtaRun } from '@bridgething/companion-types';
 import type { BridgeThingMeta, WebappInfo } from '@bridgething/lib';
 import { describe, expect, test } from 'bun:test';
-import { advance, toConfigField, toDeviceMeta, toWebappInfo } from './browser-session.ts';
+import { advance, toDeviceMeta, toWebappInfo } from './browser-session.ts';
 
 function meta(): BridgeThingMeta {
   return {
@@ -100,61 +100,6 @@ describe('toDeviceMeta', () => {
   });
 });
 
-describe('toConfigField', () => {
-  test('a string field keeps its bounds and drops the numeric ones', () => {
-    expect(
-      toConfigField({
-        type: 'string',
-        data: { key: 'city', label: 'City', pattern: '^\\w+$', minLength: 2, maxLength: 40, default: 'boston' },
-      }),
-    ).toEqual({
-      kind: 'string',
-      key: 'city',
-      label: 'City',
-      pattern: '^\\w+$',
-      minLength: 2,
-      maxLength: 40,
-      min: null,
-      max: null,
-      step: null,
-      choices: [],
-      defaultValue: 'boston',
-    });
-  });
-
-  test('a secret keeps its own kind rather than collapsing into string', () => {
-    expect(
-      toConfigField({
-        type: 'secret',
-        data: { key: 'token', label: 'Token', pattern: null, minLength: null, maxLength: null, default: null },
-      }).kind,
-    ).toBe('secret');
-  });
-
-  test('non-string defaults are stringified, because the flat surface only carries text', () => {
-    expect(
-      toConfigField({ type: 'number', data: { key: 'n', label: 'N', min: 0, max: 9, step: 1, default: 4 } })
-        .defaultValue,
-    ).toBe('4');
-    expect(toConfigField({ type: 'boolean', data: { key: 'b', label: 'B', default: false } }).defaultValue).toBe(
-      'false',
-    );
-  });
-
-  test('a zero default survives, since it is a value and not an absence', () => {
-    expect(
-      toConfigField({ type: 'number', data: { key: 'n', label: 'N', min: null, max: null, step: null, default: 0 } })
-        .defaultValue,
-    ).toBe('0');
-  });
-
-  test('an enum carries its choices', () => {
-    expect(
-      toConfigField({ type: 'enum', data: { key: 'u', label: 'Units', choices: ['c', 'f'], default: 'c' } }).choices,
-    ).toEqual(['c', 'f']);
-  });
-});
-
 describe('toWebappInfo', () => {
   test('the wire-only fields drop out and everything else survives', () => {
     const projected = toWebappInfo(webapp());
@@ -164,25 +109,9 @@ describe('toWebappInfo', () => {
     expect(projected.permissions).toEqual(['net.fetch']);
   });
 
-  test('declared config fields come across flattened', () => {
-    const projected = toWebappInfo(
-      webapp({ config: [{ type: 'boolean', data: { key: 'metric', label: 'Metric', default: true } }] }),
-    );
-    expect(projected.config).toEqual([
-      {
-        kind: 'boolean',
-        key: 'metric',
-        label: 'Metric',
-        pattern: null,
-        minLength: null,
-        maxLength: null,
-        min: null,
-        max: null,
-        step: null,
-        choices: [],
-        defaultValue: 'true',
-      },
-    ]);
+  test('declared config fields come across in the wire shape', () => {
+    const metric = { type: 'boolean', data: { key: 'metric', label: 'Metric', default: true } } as const;
+    expect(toWebappInfo(webapp({ config: [metric] })).config).toEqual([metric]);
   });
 });
 

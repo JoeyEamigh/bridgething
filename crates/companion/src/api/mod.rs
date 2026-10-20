@@ -14,8 +14,8 @@ use crate::{
   backend::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, ForeignWs,
     GeoProvider, HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
-    MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend, SecretStore,
-    SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
+    MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend,
+    SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
   },
   provider::ResumeTarget,
   session::Session,
@@ -65,6 +65,8 @@ pub struct CompanionBackends {
   pub apple_music: Option<Arc<dyn AppleMusicBackend>>,
   #[uniffi(default = None)]
   pub image: Option<Arc<dyn ImageScaler>>,
+  #[uniffi(default = None)]
+  pub transcoder: Option<Arc<dyn MediaTranscoder>>,
   #[uniffi(default = None)]
   pub model_validator: Option<Arc<dyn ModelArtifactValidator>>,
   #[uniffi(default = None)]
@@ -207,6 +209,11 @@ pub trait SessionEventSink: Send + Sync {
 #[uniffi::export(with_foreign)]
 pub trait WebappBundleSink: Send + Sync {
   fn installed(&self, bundle: String);
+}
+
+#[uniffi::export(with_foreign)]
+pub trait BlobProgressSink: Send + Sync {
+  fn progress(&self, sent: u64, total: u64);
 }
 
 #[derive(Debug, Clone, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -736,6 +743,64 @@ impl CompanionSession {
       .map_err(device_error)
   }
 
+  pub fn media_import_ticket(&self) -> u64 {
+    self.session.media_import_ticket()
+  }
+
+  #[uniffi::method(default(cover = None, mime_hint = None))]
+  pub async fn import_picked_media(
+    &self,
+    ticket: u64,
+    path: String,
+    kind: MediaPickKind,
+    cover: Option<MediaCover>,
+    mime_hint: Option<String>,
+  ) -> Result<PickedMedia, CompanionError> {
+    self
+      .session
+      .import_media(ticket, path.into(), kind, cover, mime_hint)
+      .await
+  }
+
+  pub fn cancel_media_import(&self, ticket: u64) {
+    self.session.cancel_media_import(ticket);
+  }
+
+  pub fn create_blob_handle(&self, mime: String) -> Result<String, CompanionError> {
+    self.session.create_blob_handle(mime)
+  }
+
+  pub async fn append_blob_handle(&self, handle: String, base64: String) -> Result<u64, CompanionError> {
+    self.session.append_blob_handle(handle, base64).await
+  }
+
+  #[uniffi::method(default(progress = None))]
+  pub async fn put_webapp_blob(
+    &self,
+    device_id: String,
+    id: String,
+    key: String,
+    handle: String,
+    progress: Option<Arc<dyn BlobProgressSink>>,
+  ) -> Result<WebappBlob, CompanionError> {
+    let id = webapp_id(&id)?;
+    let progress = progress.map(|sink| {
+      Arc::new(move |sent, total| sink.progress(sent, total)) as bridgething_delivery::webapp::blob::BlobProgress
+    });
+    self
+      .session
+      .put_webapp_blob(&device_id, id, key, &handle, progress)
+      .await
+  }
+
+  pub async fn delete_webapp_blob(&self, device_id: String, id: String, key: String) -> Result<(), CompanionError> {
+    self.session.delete_webapp_blob(&device_id, webapp_id(&id)?, key).await
+  }
+
+  pub async fn list_webapp_blobs(&self, device_id: String, id: String) -> Result<Vec<WebappBlob>, CompanionError> {
+    self.session.list_webapp_blobs(&device_id, webapp_id(&id)?).await
+  }
+
   pub async fn set_ota_poll_config(&self, config: Option<OtaPollConfig>) {
     self.session.set_ota_poll_config(config).await;
   }
@@ -816,7 +881,7 @@ fn webapp_label(id: Option<String>, name: Option<String>) -> Option<bridgething_
 }
 
 fn webapp_id(raw: &str) -> Result<uuid::Uuid, CompanionError> {
-  uuid::Uuid::parse_str(raw).map_err(|_| CompanionError::Device(format!("not a webapp id: {raw}")))
+  uuid::Uuid::parse_str(raw).map_err(|_| CompanionError::Device(format!("invalid: not a webapp id: {raw}")))
 }
 
 fn project_slots(slots: libbridgething::gateway::WebappSlots) -> WebappSlots {

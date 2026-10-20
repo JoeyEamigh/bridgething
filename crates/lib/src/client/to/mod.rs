@@ -1,5 +1,6 @@
 mod asset;
 mod audio;
+mod blob;
 mod bluetooth;
 mod capabilities;
 mod config;
@@ -21,6 +22,7 @@ mod webapp;
 
 pub use asset::*;
 pub use audio::*;
+pub use blob::*;
 pub use bluetooth::*;
 pub use capabilities::*;
 pub use config::*;

@@ -1,6 +1,6 @@
 mod ack;
 #[cfg(test)]
-mod fixture;
+pub(crate) mod fixture;
 mod pacer;
 mod push;
 mod receiver;

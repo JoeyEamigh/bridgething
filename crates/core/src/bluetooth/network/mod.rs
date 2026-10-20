@@ -32,7 +32,7 @@ use tokio_util::{
 
 use super::{
   Address, BluetoothEvent, BluetoothResult, BluetoothTx, GatewaySendTx, GatewayType, InboundGatewayMessage,
-  OutboundGatewayMessage, auto_nack_for_failed_decode, peer_owners::PeerOwners,
+  OutboundDrain, OutboundGatewayMessage, auto_nack_for_failed_decode, peer_owners::PeerOwners,
 };
 use crate::{peer::PeerTracker, state::meta::DeviceMeta};
 
@@ -85,13 +85,13 @@ struct Connection {
 }
 
 impl Connection {
-  fn new(address: Address, ws: WebSocket, tx: ConnectionTx) -> Self {
+  fn new(address: Address, ws: WebSocket, tx: ConnectionTx, drain: &OutboundDrain) -> Self {
     let (writer, reader) = ws.split();
 
     let _reader_handle = tokio::spawn(reader_task(address, reader, tx));
 
     let (lanes, feed) = lanes(NETWORK_LANE_BYTES, NETWORK_BATCH_BYTES);
-    let _writer_handle = tokio::spawn(writer_task(address, writer, feed));
+    let _writer_handle = drain.spawn(writer_task(address, writer, feed));
 
     Self {
       address,
@@ -224,6 +224,7 @@ pub struct NetworkGateway {
   peer_owners: PeerOwners,
 
   accept_rx: mpsc::Receiver<ConnectAccepted>,
+  drain: OutboundDrain,
 
   cancel_token: CancellationToken,
   _server_handle: JoinHandle<()>,
@@ -236,6 +237,7 @@ impl NetworkGateway {
     peers: PeerTracker,
     bluetooth_tx: BluetoothTx,
     peer_owners: PeerOwners,
+    drain: OutboundDrain,
   ) -> BluetoothResult<Self> {
     tracing::debug!("initializing network gateway on {bind}");
 
@@ -282,6 +284,7 @@ impl NetworkGateway {
       peer_owners,
 
       accept_rx,
+      drain,
 
       cancel_token,
       _server_handle,
@@ -293,7 +296,7 @@ impl NetworkGateway {
   }
 
   pub fn spawn(mut self) -> JoinHandle<()> {
-    tokio::spawn(async move { self.recv().await })
+    self.drain.clone().spawn(async move { self.recv().await })
   }
 
   async fn recv(&mut self) {
@@ -306,6 +309,13 @@ impl NetworkGateway {
         }
         Some(data) = self.send_rx.recv() => {
           self.dispatch_outbound(data).await;
+        }
+        _ = self.drain.forwarded() => {
+          while let Ok(data) = self.send_rx.try_recv() {
+            self.dispatch_outbound(data).await;
+          }
+          tracing::debug!("network gateway: outbound drained; exiting");
+          return;
         }
         Some((address, msg)) = self.conn_rx.recv() => {
           match msg {
@@ -367,7 +377,7 @@ impl NetworkGateway {
     let ConnectAccepted { remote, ws } = accepted;
     tracing::info!("network gateway: accepting connection from {remote} as synthetic {address}");
 
-    let connection = Connection::new(address, ws, self.conn_tx.clone());
+    let connection = Connection::new(address, ws, self.conn_tx.clone(), &self.drain);
     let version = BridgeToGatewayMsg {
       id: uuid::Uuid::now_v7(),
       meta: MsgMeta::Event,

@@ -1,183 +1,99 @@
-import { SETTINGS_PAGE_MIME, settingsOriginFor } from '@bridgething/catalog';
-import type { WebappInfo } from '@bridgething/companion-types';
-import { Button, describeError, Spinner } from '@bridgething/ui';
-import { useSignalEffect } from '@preact/signals';
-import { invoke } from '@tauri-apps/api/core';
+import type { Theme } from '@bridgething/client/settings-protocol';
+import { Button, documentTheme, hasSettings, SectionEmpty, SettingsFrame, Spinner, watchTheme } from '@bridgething/ui';
 import type { VNode } from 'preact';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useLocation } from 'preact-iso';
+import { useEffect, useMemo, useRef } from 'preact/hooks';
 
 import { useDesktop } from '../desktop.ts';
-import { toWireConfigField } from '../lib/config-field.ts';
 import { Icon } from '../lib/icons.tsx';
-import { catalogFor } from '../stores/catalog.ts';
-import { peers, webappDocFor } from '../stores/session.ts';
+import { abandonPick } from '../lib/picker.ts';
+import { PATHS } from '../routes.ts';
+import { webapps } from '../stores/session.ts';
+import { desktopSettings, forwardDocChanges, settingsState, settingsTarget } from '../stores/settings-host.ts';
 import { ErrorNote } from './Screen.tsx';
 
-type BridgeRequest = { id: number; verb: string; payload?: Record<string, unknown> };
-type WireBody = { kind: 'text' | 'base64'; data: string };
-type WireHeader = [name: string, value: string];
-type FetchVerbRequest = {
-  url: string;
-  method?: string;
-  headers?: WireHeader[];
-  body?: WireBody;
-  timeoutMs?: number;
-};
-type FetchVerbReply = { status: number; headers: WireHeader[]; body: WireBody };
-
-export function WebappSettingsFrame({ webapp, onClose }: { webapp: WebappInfo; onClose: () => void }): VNode {
+export function WebappSettingsFrame({ open }: { open: string | null }): VNode {
   const session = useDesktop();
-  const frame = useRef<HTMLIFrameElement>(null);
-  const [page, setPage] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { route } = useLocation();
 
-  const docs = webappDocFor(webapp.id);
-  const known = useRef<Map<string, string> | null>(null);
+  const state = settingsState.value;
+  const target = settingsTarget.value;
+  const installed = webapps.data.value;
+  const visible = open !== null;
 
-  const pinned = webapp.provenance ? catalogFor(webapp.provenance) : null;
-  const resolving = pinned?.pending.value ?? false;
-  const source = pinned?.data.value ?? null;
-  const sources = source && webapp.provenance ? [{ url: webapp.provenance, catalog: source }] : [];
-  const hosted = settingsOriginFor(sources, webapp.provenance ?? null, webapp.id, webapp.settingsHash ?? null);
-  const origin = useMemo(() => (hosted ? { ...hosted, mime: SETTINGS_PAGE_MIME } : null), [hosted]);
-
-  const deliver = (payload: unknown): void => {
-    frame.current?.contentWindow?.postMessage(JSON.stringify(payload), '*');
+  const theme = useRef<Theme>(useMemo(documentTheme, []));
+  const close = (): void => {
+    if (open !== null) route(PATHS.app(open));
   };
+  const closer = useRef(close);
+  closer.current = close;
+
+  const settings = useMemo(
+    () => desktopSettings({ session, theme: () => theme.current, done: () => closer.current() }),
+    [session],
+  );
 
   useEffect(() => {
-    if (resolving) return;
+    if (target !== null) settings.select(target);
+  }, [settings, target, installed]);
 
-    let held: string | null = null;
-    let live = true;
-    known.current = null;
-    setPage(null);
-    setFailure(null);
+  useEffect(() => () => abandonPick(session), [session, open]);
 
-    void (async () => {
-      try {
-        const resource = await session.webappResource(webapp.id, 'settings', origin);
-        if (!live) return;
-        held = URL.createObjectURL(new Blob([Uint8Array.from(resource.bytes)], { type: resource.mime ?? 'text/html' }));
-        setPage(held);
-      } catch (reason) {
-        if (live) setFailure(describeError(reason));
-      }
-    })();
-
+  useEffect(() => {
+    if (!visible) return;
+    settings.reveal();
     return () => {
-      live = false;
-      if (held) URL.revokeObjectURL(held);
+      settings.hide();
+      if (document.activeElement instanceof HTMLIFrameElement) document.activeElement.blur();
     };
-  }, [origin, resolving, session, webapp.id, webapp.settingsHash]);
+  }, [settings, visible]);
 
-  useEffect(() => {
-    const deviceId = peers.value.find(peer => peer.status === 'connected')?.id ?? '';
+  useEffect(
+    () =>
+      watchTheme(next => {
+        theme.current = next;
+        settings.themeChanged(next);
+      }),
+    [settings],
+  );
 
-    const answer = async (verb: string, payload: Record<string, unknown>): Promise<unknown> => {
-      const key = typeof payload.key === 'string' ? payload.key : '';
-      const value = typeof payload.value === 'string' ? payload.value : '';
-      switch (verb) {
-        case 'context':
-          return { webappId: webapp.id, name: webapp.name, version: webapp.version, deviceId };
-        case 'config.fields':
-          return webapp.config.map(toWireConfigField);
-        case 'config.list':
-          return session.webappConfig(webapp.id);
-        case 'config.set':
-          await session.setWebappConfigField(webapp.id, key, value);
-          return { key, value };
-        case 'config.delete': {
-          await session.deleteWebappConfigField(webapp.id, key);
-          const fresh = await session.webappConfig(webapp.id);
-          return { key, value: fresh.find(entry => entry.key === key)?.value ?? null };
-        }
-        case 'doc.get':
-          return { key, value: await session.webappDocEntry(webapp.id, key) };
-        case 'doc.list':
-          return session.webappDoc(webapp.id);
-        case 'doc.set':
-          await session.setWebappDoc(webapp.id, key, value);
-          return { key, value };
-        case 'doc.delete':
-          await session.deleteWebappDoc(webapp.id, key);
-          return { key, value: null };
-        case 'fetch':
-          return invoke<FetchVerbReply>('settings_fetch', { request: payload as FetchVerbRequest });
-        case 'auth.authorize':
-          return invoke<{ url: string }>('settings_authorize', {
-            url: typeof payload.url === 'string' ? payload.url : '',
-          });
-        default:
-          throw new Error(`unknown settings bridge verb: ${verb}`);
-      }
-    };
+  useEffect(() => forwardDocChanges(settings), [settings]);
 
-    const onMessage = (event: MessageEvent): void => {
-      if (!frame.current || event.source !== frame.current.contentWindow) return;
-      if (typeof event.data !== 'string') return;
-
-      let request: BridgeRequest;
-      try {
-        request = JSON.parse(event.data) as BridgeRequest;
-      } catch {
-        return;
-      }
-      if (typeof request.id !== 'number' || typeof request.verb !== 'string') return;
-      if (request.verb === 'done') {
-        onClose();
-        return;
-      }
-
-      void (async () => {
-        try {
-          deliver({ id: request.id, ok: true, value: await answer(request.verb, request.payload ?? {}) });
-        } catch (reason) {
-          deliver({ id: request.id, ok: false, error: describeError(reason) });
-        }
-      })();
-    };
-
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [session, webapp, onClose]);
-
-  useSignalEffect(() => {
-    const next = new Map(docs.data.value.map(entry => [entry.key, entry.value]));
-    const previous = known.current;
-    known.current = next;
-    if (!previous) return;
-
-    for (const [key, value] of next) if (previous.get(key) !== value) deliver({ event: 'docChanged', key, value });
-    for (const key of previous.keys()) if (!next.has(key)) deliver({ event: 'docChanged', key, value: null });
-  });
+  const shown = open ? (installed.find(app => app.id === open) ?? null) : null;
+  const ready = open !== null && open === state.selected && settings.ready(state);
 
   return (
-    <div class="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div class={visible ? 'route-enter flex h-full min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}>
       <header class="flex shrink-0 items-center gap-3 border-b border-rule bg-screen px-6 py-3">
-        <Button variant="ghost" size="sm" icon={<Icon name="back" size={14} />} onClick={onClose}>
-          {webapp.name}
+        <Button variant="ghost" size="sm" icon={<Icon name="back" size={14} />} onClick={close}>
+          {shown?.name ?? 'all apps'}
         </Button>
         <span class="truncate font-mono text-eyebrow tracking-[0.18em] text-muted uppercase">settings</span>
       </header>
 
-      {failure ? (
+      {ready ? null : open !== null && !webapps.pending.value && (!shown || !hasSettings(shown)) ? (
         <div class="px-6 py-5">
-          <ErrorNote>{failure}</ErrorNote>
+          <SectionEmpty>{shown ? 'no settings' : 'this app is not installed on the connected Car Thing'}</SectionEmpty>
         </div>
-      ) : !page ? (
+      ) : state.failure && open === state.selected ? (
+        <div class="flex flex-col items-start gap-3 px-6 py-5">
+          <ErrorNote>{state.failure}</ErrorNote>
+          <Button size="sm" onClick={settings.retry}>
+            retry
+          </Button>
+        </div>
+      ) : (
         <div class="flex min-h-0 flex-1 items-center justify-center">
           <Spinner />
         </div>
-      ) : (
-        <iframe
-          ref={frame}
-          src={page}
-          title={`${webapp.name} settings`}
-          sandbox="allow-scripts allow-forms"
-          class="min-h-0 w-full flex-1 border-0 bg-bg"
-        />
       )}
+
+      <SettingsFrame
+        settings={settings}
+        loaded={state.loaded}
+        title={shown ? `${shown.name} settings` : 'settings'}
+        class={ready ? 'min-h-0 w-full flex-1 border-0 bg-bg' : 'hidden'}
+      />
     </div>
   );
 }

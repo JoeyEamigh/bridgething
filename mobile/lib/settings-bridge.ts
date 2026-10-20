@@ -1,3 +1,10 @@
+import type {
+  AuthorizeVerbReply,
+  FetchVerbReply,
+  FetchVerbRequest,
+  WireBody,
+  WireHeader,
+} from '@bridgething/client/settings-protocol';
 import { Base64 } from 'js-base64';
 import { type EmitterSubscription, Linking, Platform } from 'react-native';
 import InAppBrowser, {
@@ -19,25 +26,6 @@ const AUTH_OPTIONS: InAppBrowserOptions = Platform.select({
     forceCloseOnRedirection: true,
   },
 });
-
-export type WireBody = { kind: 'text' | 'base64'; data: string };
-export type WireHeader = [name: string, value: string];
-
-export type FetchVerbRequest = {
-  url: string;
-  method?: string;
-  headers?: WireHeader[];
-  body?: WireBody;
-  timeoutMs?: number;
-};
-
-export type FetchVerbReply = {
-  status: number;
-  headers: WireHeader[];
-  body: WireBody;
-};
-
-export type AuthorizeVerbReply = { url: string };
 
 let authorizing = false;
 

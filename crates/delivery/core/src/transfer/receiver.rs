@@ -7,12 +7,11 @@ use std::{
 use bridgething_sdk_runtime::rt::{self, Instant};
 use bytes::Bytes;
 use libbridgething::gateway::{TransferAbandon, TransferAck, TransferFragment, TransferRef};
-use sha2::{Digest, Sha256};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use super::pacer::ACK_INTERVAL_BYTES;
-use crate::seam::Clock;
+use crate::{bundle::fetch::sha256_hex, seam::Clock};
 
 pub const MAX_TRANSFER_BYTES: u64 = 1024 * 1024;
 pub const RECEIPT_ACK_INTERVAL_BYTES: u32 = ACK_INTERVAL_BYTES as u32;
@@ -343,18 +342,12 @@ fn ingest(state: &mut State, transfer_id: Uuid, offset: u32, bytes: &[u8]) -> Op
   }
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-  let mut hasher = Sha256::new();
-  hasher.update(bytes);
-  hex::encode(hasher.finalize())
-}
-
 #[cfg(test)]
 mod tests {
   use tokio::time::timeout;
 
   use super::{
-    super::fixture::{RecordingAcks, TestClock, ramp, sha256_hex},
+    super::fixture::{RecordingAcks, TestClock, ramp},
     *,
   };
 

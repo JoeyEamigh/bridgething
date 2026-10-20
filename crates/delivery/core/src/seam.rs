@@ -16,10 +16,7 @@ impl Clock for SystemClock {
   }
 
   fn unix_millis(&self) -> u64 {
-    std::time::SystemTime::now()
-      .duration_since(std::time::UNIX_EPOCH)
-      .map(|since| since.as_millis() as u64)
-      .unwrap_or(0)
+    bridgething_sdk_runtime::rt::unix_millis()
   }
 }
 

@@ -38,6 +38,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     private var reloadDetacher: ReloadDetacher?
     private var logStreamingDesired = false
     private var localLogStreamingDesired = false
+    private var picking: Task<BridgethingPickedMedia?, Error>?
 
     private var onProvidersChanged: (@Sendable ([BridgethingProviderInfo]) -> Void)?
     private var onPeerConnected: (@Sendable (BridgethingSessionPeer) -> Void)?
@@ -315,7 +316,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     public func deviceLogSnapshot(limit: Double) async -> [BridgethingDeviceLogLine] {
         guard let session = try? requireSession() else { return [] }
-        return session.deviceLogSnapshot(limit: UInt32(clamping: Int(max(0, limit)))).map {
+        return session.deviceLogSnapshot(limit: UInt32(saturating: limit)).map {
             BridgethingDeviceLogLine(
                 seq: Double($0.seq),
                 ts: Double($0.tsUnixMs),
@@ -352,7 +353,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         await onDisk {
             let lines = CompanionLogs.shared.store?.read(
                 id: archiveId,
-                limit: UInt32(clamping: Int(max(0, limit)))
+                limit: UInt32(saturating: limit)
             ) ?? []
             return lines.enumerated().map { index, line in
                 BridgethingDeviceLogLine(
@@ -468,7 +469,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             deviceId: deviceId,
             request: WebappInstallRequest(
                 url: url,
-                expected: ArtifactDigest(size: UInt64(max(0, size)), sha256: sha256.lowercased()),
+                expected: ArtifactDigest(size: UInt64(saturating: size), sha256: sha256.lowercased()),
                 provenance: provenance,
                 webappId: webappId,
                 webappName: webappName
@@ -519,7 +520,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             id: id,
             kind: .settings,
             origin: origin.map {
-                WebappResourceOrigin(url: $0.url, sha256: $0.sha256, size: UInt64($0.size), mime: $0.mime)
+                WebappResourceOrigin(url: $0.url, sha256: $0.sha256, size: UInt64(saturating: $0.size), mime: $0.mime)
             }
         )
         return try String(contentsOf: URL(fileURLWithPath: resolved.path), encoding: .utf8)
@@ -555,6 +556,63 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     public func deleteWebappDoc(deviceId: String, id: String, key: String) async throws {
         try await requireSession().deleteWebappDoc(deviceId: deviceId, id: id, key: key)
+    }
+
+    public func pickMedia(kind: BridgethingPickKind, coverWidth: Double?, coverHeight: Double?) async throws
+        -> BridgethingPickedMedia?
+    {
+        let cover = coverWidth.flatMap { width in
+            coverHeight.map { height in
+                MediaCover(width: max(1, UInt32(saturating: width)), height: max(1, UInt32(saturating: height)))
+            }
+        }
+        let companion = try requireCompanion()
+        let flight = Task {
+            try await plainly { try await companion.pickMedia(kind: toCorePickKind(kind), cover: cover).map(toRNPickedMedia) }
+        }
+        let tracked = stateLock.withLock { () -> Bool in
+            guard picking == nil else { return false }
+            picking = flight
+            return true
+        }
+        defer {
+            if tracked { stateLock.withLock { picking = nil } }
+        }
+        return try await withTaskCancellationHandler { try await flight.value } onCancel: { flight.cancel() }
+    }
+
+    public func abandonPick() {
+        stateLock.withLock { picking }?.cancel()
+    }
+
+    public func createBlobHandle(mime: String) async throws -> String {
+        try await plainly { try requireSession().createBlobHandle(mime: mime) }
+    }
+
+    public func appendBlobHandle(handle: String, base64: String) async throws -> Double {
+        try await plainly { Double(try await requireSession().appendBlobHandle(handle: handle, base64: base64)) }
+    }
+
+    public func putWebappBlob(
+        deviceId: String, id: String, key: String, handle: String,
+        onProgress: @escaping @Sendable (Double, Double) -> Void
+    ) async throws -> BridgethingWebappBlob {
+        try await plainly {
+            toRNWebappBlob(
+                try await requireSession().putWebappBlob(
+                    deviceId: deviceId, id: id, key: key, handle: handle,
+                    progress: ForwardedBlobProgress(onProgress)
+                )
+            )
+        }
+    }
+
+    public func deleteWebappBlob(deviceId: String, id: String, key: String) async throws {
+        try await plainly { try await requireSession().deleteWebappBlob(deviceId: deviceId, id: id, key: key) }
+    }
+
+    public func listWebappBlobs(deviceId: String, id: String) async throws -> [BridgethingWebappBlob] {
+        try await plainly { try await requireSession().listWebappBlobs(deviceId: deviceId, id: id).map(toRNWebappBlob) }
     }
 
     // MARK: - Capability flags + voice model
@@ -636,7 +694,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     public func otaRunProgress(deviceId: String, nowMs: Double) -> BridgethingOtaProgress? {
         guard let session = try? requireSession() else { return nil }
-        return session.otaRunProgress(deviceId: deviceId, nowMs: UInt64(max(0, nowMs))).map(toRNOtaProgress)
+        return session.otaRunProgress(deviceId: deviceId, nowMs: UInt64(saturating: nowMs)).map(toRNOtaProgress)
     }
 
     public func dismissOtaRun(deviceId: String) async throws {
@@ -891,6 +949,36 @@ private enum SessionError: Error {
     case unsupportedOnPlatform
 }
 
+private final class ForwardedBlobProgress: BlobProgressSink {
+    private let forward: @Sendable (Double, Double) -> Void
+
+    init(_ forward: @escaping @Sendable (Double, Double) -> Void) {
+        self.forward = forward
+    }
+
+    func progress(sent: UInt64, total: UInt64) {
+        forward(Double(sent), Double(total))
+    }
+}
+
+private struct PlainFailure: Error, CustomStringConvertible {
+    let description: String
+}
+
+private func plainly<T>(_ work: () async throws -> T) async throws -> T {
+    do {
+        return try await work()
+    } catch let error as CompanionError {
+        switch error {
+        case let .Cancelled(message), let .Runtime(message), let .NotConnected(message), let .Device(message),
+             let .ResourceNotAvailable(message):
+            throw PlainFailure(description: message)
+        }
+    } catch let error as LocalizedError {
+        throw PlainFailure(description: error.errorDescription ?? String(describing: error))
+    }
+}
+
 private extension NSLock {
     @discardableResult
     func withLock<T>(_ body: () throws -> T) rethrows -> T {
@@ -900,6 +988,30 @@ private extension NSLock {
 }
 
 // MARK: - Core -> RN projections
+
+private func toCorePickKind(_ kind: BridgethingPickKind) -> MediaPickKind {
+    switch kind {
+    case .image: .image
+    case .video: .video
+    case .any: .any
+    }
+}
+
+private func toRNPickedMedia(_ media: PickedMedia) -> BridgethingPickedMedia {
+    BridgethingPickedMedia(
+        handle: media.handle,
+        mime: media.mime,
+        size: Double(media.size),
+        width: media.width.map(Double.init),
+        height: media.height.map(Double.init),
+        durationMs: media.durationMs.map(Double.init),
+        preview: media.preview
+    )
+}
+
+private func toRNWebappBlob(_ blob: WebappBlob) -> BridgethingWebappBlob {
+    BridgethingWebappBlob(key: blob.key, sha256: blob.sha256, mime: blob.mime, size: Double(blob.size))
+}
 
 private func toRNSnapshot(_ snap: SessionSnapshot) -> BridgethingSessionSnapshot {
     BridgethingSessionSnapshot(
@@ -1174,7 +1286,7 @@ private func toRNWebappInfo(_ info: WebappInfo) -> BridgethingWebappInfo {
         iconHash: info.iconHash,
         settingsHash: info.settingsHash,
         overlayHash: info.overlayHash,
-        config: info.config.map(toRNConfigField),
+        configJson: info.config,
         permissions: info.permissions
     )
 }
@@ -1185,29 +1297,6 @@ private func toRNWebappSlots(_ slots: WebappSlots) -> BridgethingWebappSlots {
 
 private func toCoreWebappSlot(_ slot: BridgethingWebappSlot) -> WebappSlot {
     slot == .launcher ? .launcher : .overlay
-}
-
-private func toRNConfigField(_ field: ConfigField) -> BridgethingConfigField {
-    let kind: BridgethingConfigKind = switch field.kind {
-    case .string: .string
-    case .secret: .secret
-    case .number: .number
-    case .boolean: .boolean
-    case .enum: .enum
-    }
-    return BridgethingConfigField(
-        kind: kind,
-        key: field.key,
-        label: field.label,
-        pattern: field.pattern,
-        minLength: field.minLength.map(Double.init),
-        maxLength: field.maxLength.map(Double.init),
-        min: field.min,
-        max: field.max,
-        step: field.step,
-        choices: field.kind == .enum ? field.choices : nil,
-        defaultValue: field.defaultValue
-    )
 }
 
 private func toRNOtaManifest(_ m: OtaDiscoverManifest) -> BridgethingOtaManifest {
@@ -1336,7 +1425,7 @@ private func toRNOtaPollConfig(_ config: OtaPollConfig) -> BridgethingOtaPollCon
 
 private func toCoreOtaPollConfig(_ config: BridgethingOtaPollConfig) -> OtaPollConfig {
     OtaPollConfig(
-        intervalSeconds: UInt64(max(60, config.intervalSeconds)),
+        intervalSeconds: max(60, UInt64(saturating: config.intervalSeconds)),
         autoPush: config.autoPush,
         rootUrl: config.rootUrl
     )

@@ -3,17 +3,13 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use sha2::{Digest, Sha256};
-
+mod memory;
 mod slots;
 
+pub use memory::{MemoryBlobStore, MemorySlotIndex};
 pub use slots::FsSlotIndex;
 
 use crate::seam::BlobStore;
-
-pub fn digest_of(bytes: &[u8]) -> String {
-  hex::encode(Sha256::digest(bytes))
-}
 
 pub fn is_digest(digest: &str) -> bool {
   digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -83,13 +79,14 @@ fn write_then_rename(staged: &Path, dest: &Path, bytes: &[u8]) -> Result<(), Str
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::bundle::fetch::sha256_hex;
 
   #[test]
   fn a_put_round_trips_and_repeats_without_error() {
     let root = tempfile::tempdir().expect("a scratch directory");
     let store = FsBlobStore::new(root.path());
     let body = b"one more time".to_vec();
-    let digest = digest_of(&body);
+    let digest = sha256_hex(&body);
 
     assert!(!store.contains(&digest));
     store.put(&digest, &body).expect("the blob stores");
@@ -103,7 +100,7 @@ mod tests {
   fn a_missing_blob_reads_as_absent_rather_than_failing() {
     let root = tempfile::tempdir().expect("a scratch directory");
     let store = FsBlobStore::new(root.path());
-    let digest = digest_of(b"never stored");
+    let digest = sha256_hex(b"never stored");
 
     assert_eq!(store.get(&digest).expect("absent is not an error"), None);
     store.remove(&digest).expect("removing what is not there is a no-op");

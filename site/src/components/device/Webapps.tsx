@@ -1,6 +1,16 @@
 import { listedWebapps } from '@bridgething/catalog';
 import type { WebappInfo, WebappSlot, WebappSlots } from '@bridgething/companion-types';
-import { Button, Dialog, ListGroup, ListRow, Pill, SectionEmpty, SectionHeader, Spinner } from '@bridgething/ui';
+import {
+  Button,
+  Dialog,
+  ListGroup,
+  ListRow,
+  Pill,
+  SectionEmpty,
+  SectionHeader,
+  Spinner,
+  hasSettings,
+} from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 
@@ -8,11 +18,13 @@ import { message } from '../../lib/browser-session';
 import { useBrowser, useBrowserQuery } from '../../lib/browser-tier';
 import { reportInstalled } from '../../lib/directory-client';
 import { ErrorNote, Hint, Section } from './Screen';
+import { WebappSettings } from './WebappSettings';
 
 export function Webapps({ serial }: { serial: string | null }): VNode {
   const webapps = useBrowserQuery(['webapps'], s => s.webapps());
   const active = useBrowserQuery(['webapps'], s => s.webappActive());
   const [opened, setOpened] = useState<string | null>(null);
+  const [configuring, setConfiguring] = useState<string | null>(null);
 
   const held = webapps.data;
   useEffect(() => {
@@ -28,6 +40,9 @@ export function Webapps({ serial }: { serial: string | null }): VNode {
   const list = webapps.data ?? [];
   const listed = listedWebapps(list);
   const detail = list.find(webapp => webapp.id === opened) ?? null;
+  const configured = list.find(webapp => webapp.id === configuring) ?? null;
+
+  if (configured) return <WebappSettings webapp={configured} onClose={() => setConfiguring(null)} />;
 
   return (
     <>
@@ -72,7 +87,15 @@ export function Webapps({ serial }: { serial: string | null }): VNode {
       </Section>
 
       {detail ? (
-        <WebappDialog webapp={detail} running={active.data?.id === detail.id} onClose={() => setOpened(null)} />
+        <WebappDialog
+          webapp={detail}
+          running={active.data?.id === detail.id}
+          onClose={() => setOpened(null)}
+          onSettings={() => {
+            setOpened(null);
+            setConfiguring(detail.id);
+          }}
+        />
       ) : null}
 
       <Slots webapps={list} />
@@ -84,10 +107,12 @@ function WebappDialog({
   webapp,
   running,
   onClose,
+  onSettings,
 }: {
   webapp: WebappInfo;
   running: boolean;
   onClose: () => void;
+  onSettings: () => void;
 }): VNode {
   const session = useBrowser();
   const [busy, setBusy] = useState<'switch' | 'uninstall' | null>(null);
@@ -125,6 +150,7 @@ function WebappDialog({
                 uninstall
               </Button>
             ) : null}
+            {hasSettings(webapp) ? <Button onClick={onSettings}>settings</Button> : null}
             <Button variant="primary" loading={busy === 'switch'} disabled={running} onClick={() => void act('switch')}>
               {running ? 'already on screen' : 'switch to this'}
             </Button>
@@ -162,7 +188,6 @@ function WebappDialog({
             </div>
           ) : null}
 
-          {webapp.config.length > 0 ? <Hint>this app's settings are edited on the device itself.</Hint> : null}
           {failure ? <ErrorNote>{failure}</ErrorNote> : null}
         </div>
       </Dialog>

@@ -105,12 +105,6 @@ impl TransferSinks {
     ForwardStream { rx, queued }
   }
 
-  pub fn seed_forward_ack(&self, id: Uuid, received: u32) {
-    if let Some(Binding::Forward(state)) = self.inner.bindings.lock().unwrap().get_mut(&id) {
-      state.last_ack = received;
-    }
-  }
-
   pub fn unbind(&self, id: Uuid) {
     self.inner.bindings.lock().unwrap().remove(&id);
   }
@@ -282,24 +276,6 @@ mod tests {
     }
 
     assert_eq!(acks, vec![FORWARD_ACK_INTERVAL, 2 * FORWARD_ACK_INTERVAL]);
-  }
-
-  #[tokio::test]
-  async fn forward_resume_seeds_the_ack_baseline() {
-    let sinks = TransferSinks::default();
-    let id = Uuid::now_v7();
-    let _stream = sinks.bind_forward(id, AckPolicy::OnReceipt);
-    let resume = 30 * 1024 * 1024;
-    sinks.seed_forward_ack(id, resume);
-
-    let small = vec![0u8; 1024];
-    assert_eq!(sinks.fragment(id, resume, frag(&small)), None);
-
-    let rest = vec![0u8; FORWARD_ACK_INTERVAL as usize];
-    assert_eq!(
-      sinks.fragment(id, resume + 1024, frag(&rest)),
-      Some(resume + 1024 + FORWARD_ACK_INTERVAL)
-    );
   }
 
   #[tokio::test]

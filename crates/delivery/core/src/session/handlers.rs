@@ -6,16 +6,20 @@ use bridgething_gateway::{
   VoiceHandler, WebappHandler,
 };
 use libbridgething::{gateway::*, wire::WireError, *};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, broadcast};
 use uuid::Uuid;
 
-use crate::ota::service::OtaService;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::serve::tunnel::TunnelDispatcher;
+use crate::{ota::service::OtaService, transfer::TransferReceiver};
+
+const DOC_CHANGE_BACKLOG: usize = 64;
 
 pub struct DeliveryHandlers {
   device_id: String,
   ota: Arc<OtaService>,
+  pub(super) receiver: Arc<TransferReceiver>,
+  pub(super) docs: broadcast::Sender<WebappDocChanged>,
   #[cfg(not(target_arch = "wasm32"))]
   tunnel: TunnelDispatcher,
   pub announced: Notify,
@@ -23,20 +27,29 @@ pub struct DeliveryHandlers {
 
 impl DeliveryHandlers {
   #[cfg(not(target_arch = "wasm32"))]
-  pub fn new(device_id: String, ota: Arc<OtaService>, tunnel: TunnelDispatcher) -> Arc<Self> {
+  pub fn new(
+    device_id: String,
+    ota: Arc<OtaService>,
+    receiver: Arc<TransferReceiver>,
+    tunnel: TunnelDispatcher,
+  ) -> Arc<Self> {
     Arc::new(Self {
       device_id,
       ota,
+      receiver,
+      docs: broadcast::channel(DOC_CHANGE_BACKLOG).0,
       tunnel,
       announced: Notify::new(),
     })
   }
 
   #[cfg(target_arch = "wasm32")]
-  pub fn new(device_id: String, ota: Arc<OtaService>) -> Arc<Self> {
+  pub fn new(device_id: String, ota: Arc<OtaService>, receiver: Arc<TransferReceiver>) -> Arc<Self> {
     Arc::new(Self {
       device_id,
       ota,
+      receiver,
+      docs: broadcast::channel(DOC_CHANGE_BACKLOG).0,
       announced: Notify::new(),
     })
   }
@@ -321,11 +334,13 @@ impl TransferHandler for DeliveryHandlers {
       .transfer_ack(&self.device_id, payload.transfer_id, u64::from(payload.received));
     Ok(())
   }
-  async fn fragment(&self, _payload: TransferFragment) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
+  async fn fragment(&self, payload: TransferFragment) -> Result<(), WireError> {
+    self.receiver.on_fragment(payload);
+    Ok(())
   }
-  async fn abandon(&self, _payload: TransferAbandon) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
+  async fn abandon(&self, payload: TransferAbandon) -> Result<(), WireError> {
+    self.receiver.on_abandon(payload);
+    Ok(())
   }
 }
 
@@ -380,8 +395,9 @@ impl VoiceHandler for DeliveryHandlers {
 }
 
 impl WebappHandler for DeliveryHandlers {
-  async fn doc_changed(&self, _payload: WebappDocChanged) -> Result<(), WireError> {
-    Err(WireError::Unsupported)
+  async fn doc_changed(&self, payload: WebappDocChanged) -> Result<(), WireError> {
+    let _ = self.docs.send(payload);
+    Ok(())
   }
   async fn config_changed(&self, _payload: WebappConfigChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
@@ -392,6 +408,14 @@ impl WebappHandler for DeliveryHandlers {
   }
   async fn active_changed(&self, _payload: WebappActiveChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
+  }
+  async fn blob_stored(&self, payload: WebappBlobStored) -> Result<(), WireError> {
+    self.ota.blob_stored(&self.device_id, payload);
+    Ok(())
+  }
+  async fn blob_failed(&self, payload: WebappBlobFailed) -> Result<(), WireError> {
+    self.ota.blob_failed(&self.device_id, payload);
+    Ok(())
   }
 }
 

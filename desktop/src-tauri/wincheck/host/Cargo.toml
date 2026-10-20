@@ -12,6 +12,10 @@ path = "src/lib.rs"
 [dependencies]
 bridgething-companion = { path = "../../../../crates/companion", default-features = false }
 bridgething-delivery = { path = "../../../../crates/delivery/core" }
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "pnm", "tiff", "webp"] }
+thiserror = "2.0.21"
 tracing = "0.1.44"
 wincheck-winrt = { version = "0.0.0", path = "winrt" }
+
+[dev-dependencies]
+tempfile = "3.27.0"

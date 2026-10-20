@@ -1,4 +1,11 @@
-import { Device, compositeVersion, fetchManifest, otaArtifactUrls, type UpdateEvent } from '@bridgething/browser';
+import {
+  Device,
+  compositeVersion,
+  fetchManifest,
+  otaArtifactUrls,
+  type UpdateEvent,
+  type WebappDocChange,
+} from '@bridgething/browser';
 import type { BridgeThingMeta } from '@bridgething/lib';
 
 export { DEFAULT_HOST, gatewayUrl } from '@bridgething/browser';
@@ -152,13 +159,15 @@ export async function applyUpdate(
   hooks.log('image applied; the device reboots into the new slot', 'ok');
 }
 
-export function watchUpdateFeed(device: Device, onEvent: (event: UpdateEvent) => void): { stop(): void } {
+export type Feed = { stop(): void };
+
+export function follow<T>(next: () => Promise<T | null>, on: (item: T) => void): Feed {
   let running = true;
   void (async () => {
     while (running) {
-      const event = await device.nextEvent().catch(() => null);
-      if (!event || !running) return;
-      onEvent(event);
+      const item = await next().catch(() => null);
+      if (!item || !running) return;
+      on(item);
     }
   })();
   return {
@@ -168,7 +177,15 @@ export function watchUpdateFeed(device: Device, onEvent: (event: UpdateEvent) =>
   };
 }
 
-export function watchProgress(device: Device, onProgress: (percent: number, phase: string) => void): { stop(): void } {
+export function watchUpdateFeed(device: Device, onEvent: (event: UpdateEvent) => void): Feed {
+  return follow(() => device.nextEvent(), onEvent);
+}
+
+export function watchDocFeed(device: Device, onChange: (change: WebappDocChange) => void): Feed {
+  return follow(() => device.nextDocChange(), onChange);
+}
+
+export function watchProgress(device: Device, onProgress: (percent: number, phase: string) => void): Feed {
   return watchUpdateFeed(device, event => {
     if (event.kind !== 'progress' || !event.phase) return;
     const phase = event.phase;

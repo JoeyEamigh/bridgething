@@ -19,10 +19,12 @@ use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo},
   backend::{
-    ForeignHttp, ImageScaler, NativeHttp, StreamMetadata, StreamPresentation, StreamStatus, StreamTiming,
+    ForeignHttp, ImageScaler, ImageTarget, NativeHttp, ScaledImage, StreamMetadata, StreamPresentation, StreamStatus,
+    StreamTiming,
     net::{HttpDownloadSink, HttpHeader, HttpRequest, HttpSink, HttpTransport},
   },
   hub::Hub,
+  media::MediaSniff,
   provider::{PlayerTransport, Provider, ProviderError, ProviderRegistry, stream::StreamProvider},
   session::Session,
 };
@@ -133,8 +135,16 @@ impl Rig {
 struct TagScaler;
 
 impl ImageScaler for TagScaler {
-  fn downsample_jpeg(&self, bytes: Vec<u8>, max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
-    Some(format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes())
+  fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, target: ImageTarget) -> Option<ScaledImage> {
+    let ImageTarget::Thumbnail { max_edge, .. } = target else {
+      return None;
+    };
+    Some(ScaledImage {
+      bytes: format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes(),
+      mime: "image/jpeg".into(),
+      width: max_edge,
+      height: max_edge,
+    })
   }
 }
 
@@ -537,6 +547,7 @@ async fn session_start_attaches_the_stream_provider_with_the_host_bundle() {
     nlu: None,
     apple_music: None,
     image: None,
+    transcoder: None,
     model_validator: None,
     transfer_policy: None,
     connectivity: None,

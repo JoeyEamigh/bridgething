@@ -29,6 +29,8 @@ import type {
   AssetPreload,
   AssetReady,
   AudioErrorReply,
+  BlobChanged,
+  BlobListReply,
   BluetoothInterface,
   BluetoothPairingResult,
   BluetoothPin,
@@ -53,6 +55,8 @@ import type {
   DocListReply,
   DocSet,
   Earcon,
+  FactoryResetRefused,
+  FactoryResetStarted,
   FavoriteChanged,
   FavoritesSet,
   FavoritesSetMany,
@@ -179,6 +183,11 @@ export type AudioInboundHandlers = {
   errorEvent: (msg: AudioErrorReply) => void;
 };
 
+export type BlobInboundHandlers = {
+  list: (msg: BlobListReply) => void;
+  changed: (msg: BlobChanged) => void;
+};
+
 export type BluetoothInboundHandlers = {
   status: (msg: BluetoothStatus) => void;
   connectedDevice: (msg: ConnectedDevice) => void;
@@ -289,6 +298,8 @@ export type SystemInboundHandlers = {
   deviceNicknameChanged: (msg: DeviceNicknameReply) => void;
   launcherGestureReply: (msg: LauncherGestureReply) => void;
   launcherGestureChanged: (msg: LauncherGestureReply) => void;
+  factoryResetStarted: (msg: FactoryResetStarted) => void;
+  factoryResetRefused: (msg: FactoryResetRefused) => void;
 };
 
 export type TimeInboundHandlers = {
@@ -617,6 +628,80 @@ export class AudioSurface {
       data: { type: 'audio', data: { event: 'earcon', data: payload } },
     };
     await this._client.send(msg);
+  }
+}
+
+export class BlobSurface {
+  constructor(private readonly _client: BridgethingClient) {}
+
+  /** Subscribe to `Blob::List` from the daemon. */
+  onList(handler: (msg: BlobListReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'blob') return;
+      const inner = data.data;
+      if (inner.event !== 'list') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `Blob::Changed` from the daemon. */
+  onChanged(handler: (msg: BlobChanged) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'blob') return;
+      const inner = data.data;
+      if (inner.event !== 'changed') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Exhaustive subscribe over all inbound `Blob` variants. */
+  subscribe(handlers: BlobInboundHandlers): () => void {
+    return this._subscribe(handlers, false);
+  }
+
+  /** Same as `subscribe` but every handler is optional. */
+  subscribePartial(handlers: Partial<BlobInboundHandlers>): () => void {
+    return this._subscribe(handlers, true);
+  }
+
+  private _subscribe(handlers: Partial<BlobInboundHandlers>, partial: boolean): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'blob') return;
+      const inner = data.data;
+      switch (inner.event) {
+        case 'list': {
+          handlers.list?.(inner.data);
+          return;
+        }
+        case 'changed': {
+          handlers.changed?.(inner.data);
+          return;
+        }
+        default: {
+          if (!partial) this._client.logger.warn('Blob: no handler for inner', inner);
+          return;
+        }
+      }
+    });
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async list(options?: { timeoutMs?: number }): Promise<TypedRequestResult<BlobListReply, never>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'blob', data: { event: 'list' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'blob') {
+      const inner = d.data;
+      if (inner.event === 'list') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
   }
 }
 
@@ -2892,6 +2977,30 @@ export class SystemSurface {
     });
   }
 
+  /** Subscribe to `System::FactoryResetStarted` from the daemon. */
+  onFactoryResetStarted(handler: (msg: FactoryResetStarted) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'factoryResetStarted') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `System::FactoryResetRefused` from the daemon. */
+  onFactoryResetRefused(handler: (msg: FactoryResetRefused) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'factoryResetRefused') return;
+      handler(inner.data);
+    });
+  }
+
   /** Exhaustive subscribe over all inbound `System` variants. */
   subscribe(handlers: SystemInboundHandlers): () => void {
     return this._subscribe(handlers, false);
@@ -2957,6 +3066,14 @@ export class SystemSurface {
           handlers.launcherGestureChanged?.(inner.data);
           return;
         }
+        case 'factoryResetStarted': {
+          handlers.factoryResetStarted?.(inner.data);
+          return;
+        }
+        case 'factoryResetRefused': {
+          handlers.factoryResetRefused?.(inner.data);
+          return;
+        }
         default: {
           if (!partial) this._client.logger.warn('System: no handler for inner', inner);
           return;
@@ -2991,16 +3108,6 @@ export class SystemSurface {
       id: newUuid(),
       meta: { kind: 'command' },
       data: { type: 'system', data: { event: 'powerOff' } },
-    };
-    await this._client.send(msg);
-  }
-
-  /** Send `System::FactoryReset` to the daemon. */
-  async factoryReset(): Promise<void> {
-    const msg: ClientToBridgeMsg = {
-      id: newUuid(),
-      meta: { kind: 'command' },
-      data: { type: 'system', data: { event: 'factoryReset' } },
     };
     await this._client.send(msg);
   }
@@ -3078,6 +3185,22 @@ export class SystemSurface {
     if (d.type === 'system') {
       const inner = d.data;
       if (inner.event === 'deviceNickname') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async factoryReset(options?: {
+    timeoutMs?: number;
+  }): Promise<TypedRequestResult<FactoryResetStarted, FactoryResetRefused>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'system', data: { event: 'factoryReset' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'system') {
+      const inner = d.data;
+      if (inner.event === 'factoryResetStarted') return { ok: true, response: inner.data };
+      if (inner.event === 'factoryResetRefused') return { ok: false, kind: 'domain', error: inner.data };
     }
     if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
     return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
@@ -3715,6 +3838,7 @@ export class StoreSurface {
 export type ClientMessageHandlers = {
   asset: AssetInboundHandlers;
   audio: AudioInboundHandlers;
+  blob: BlobInboundHandlers;
   bluetooth: BluetoothInboundHandlers;
   capabilities: CapabilitiesInboundHandlers;
   config: ConfigInboundHandlers;
@@ -3737,6 +3861,7 @@ export type ClientMessageHandlers = {
 export type PartialClientMessageHandlers = {
   asset?: Partial<AssetInboundHandlers>;
   audio?: Partial<AudioInboundHandlers>;
+  blob?: Partial<BlobInboundHandlers>;
   bluetooth?: Partial<BluetoothInboundHandlers>;
   capabilities?: Partial<CapabilitiesInboundHandlers>;
   config?: Partial<ConfigInboundHandlers>;
@@ -3761,6 +3886,8 @@ export interface ClientSurfaces {
   readonly asset: AssetSurface;
   /** Methods scoped to the `Audio` wire surface. */
   readonly audio: AudioSurface;
+  /** Methods scoped to the `Blob` wire surface. */
+  readonly blob: BlobSurface;
   /** Methods scoped to the `Bluetooth` wire surface. */
   readonly bluetooth: BluetoothSurface;
   /** Methods scoped to the `Capabilities` wire surface. */
@@ -3807,6 +3934,7 @@ export interface ClientSurfaces {
 type ClientSurfaceCache = {
   asset?: AssetSurface;
   audio?: AudioSurface;
+  blob?: BlobSurface;
   bluetooth?: BluetoothSurface;
   capabilities?: CapabilitiesSurface;
   config?: ConfigSurface;
@@ -3853,6 +3981,14 @@ export function applyDispatch(): void {
     get(this: BridgethingClient): AudioSurface {
       const bucket = bucketFor(this);
       return (bucket.audio ??= new AudioSurface(this));
+    },
+  });
+  Object.defineProperty(BridgethingClient.prototype, 'blob', {
+    configurable: true,
+    enumerable: true,
+    get(this: BridgethingClient): BlobSurface {
+      const bucket = bucketFor(this);
+      return (bucket.blob ??= new BlobSurface(this));
     },
   });
   Object.defineProperty(BridgethingClient.prototype, 'bluetooth', {
@@ -4077,6 +4213,28 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           default: {
             if (!partial) c.logger.warn('Audio: no handler for inner', inner);
+            return;
+          }
+        }
+      }
+      case 'blob': {
+        const innerHandlers = handlers.blob;
+        if (!innerHandlers) {
+          if (!partial) c.logger.warn('subscribe: no handler for blob');
+          return;
+        }
+        const inner = data.data;
+        switch (inner.event) {
+          case 'list': {
+            innerHandlers.list?.(inner.data);
+            return;
+          }
+          case 'changed': {
+            innerHandlers.changed?.(inner.data);
+            return;
+          }
+          default: {
+            if (!partial) c.logger.warn('Blob: no handler for inner', inner);
             return;
           }
         }
@@ -4554,6 +4712,14 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           case 'launcherGestureChanged': {
             innerHandlers.launcherGestureChanged?.(inner.data);
+            return;
+          }
+          case 'factoryResetStarted': {
+            innerHandlers.factoryResetStarted?.(inner.data);
+            return;
+          }
+          case 'factoryResetRefused': {
+            innerHandlers.factoryResetRefused?.(inner.data);
             return;
           }
           default: {

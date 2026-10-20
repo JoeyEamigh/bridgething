@@ -6,7 +6,8 @@ description: Build, run, and ship a bridgething webapp for the Spotify Car Thing
 # Building a bridgething webapp
 
 - Calling the daemon, from now-playing to networking, plus every surface the SDK
-  ships: [reference/sdk.md](reference/sdk.md)
+  ships, the companion settings page, its config form, and files the user picks:
+  [reference/sdk.md](reference/sdk.md)
 - Running the app, screenshotting the 800x480 screen, and pressing the physical
   controls locally and over CDP on the device:
   [reference/develop.md](reference/develop.md)

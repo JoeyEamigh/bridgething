@@ -68,6 +68,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           return (
             <Press
               key={route.key}
+              testID={`tab-${name}`}
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
               className="flex-1 items-center gap-1.5 pb-2 pt-2.5"

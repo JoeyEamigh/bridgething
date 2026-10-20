@@ -20,8 +20,8 @@ use tokio_util::{
 use super::super::BluetoothResult;
 use crate::{
   bluetooth::{
-    Address, BluetoothEvent, GatewayType, InboundGatewayMessage, OutboundGatewayMessage, auto_nack_for_failed_decode,
-    peer_owners::PeerOwners,
+    Address, BluetoothEvent, GatewayType, InboundGatewayMessage, OutboundDrain, OutboundGatewayMessage,
+    auto_nack_for_failed_decode, peer_owners::PeerOwners,
   },
   peer::PeerTracker,
   state::meta::DeviceMeta,
@@ -119,6 +119,7 @@ pub struct Iap2EaGateway {
   conns: HashMap<Key, StreamConn>,
   peer_owners: PeerOwners,
   activity: EaActivity,
+  drain: OutboundDrain,
 }
 
 impl Iap2EaGateway {
@@ -127,6 +128,7 @@ impl Iap2EaGateway {
     peers: PeerTracker,
     bluetooth_tx: mpsc::Sender<BluetoothEvent>,
     peer_owners: PeerOwners,
+    drain: OutboundDrain,
   ) -> (Self, Iap2EaGatewayHandle) {
     let (send_tx, send_rx) = mpsc::channel(STREAM_INPUT_CAPACITY);
     let (open_tx, open_rx) = mpsc::channel(STREAM_INPUT_CAPACITY);
@@ -151,6 +153,7 @@ impl Iap2EaGateway {
       conns: HashMap::new(),
       peer_owners,
       activity,
+      drain,
     };
     (gateway, handle)
   }
@@ -160,7 +163,7 @@ impl Iap2EaGateway {
   }
 
   pub fn spawn(mut self) -> JoinHandle<()> {
-    tokio::spawn(async move { self.run().await })
+    self.drain.clone().spawn(async move { self.run().await })
   }
 
   async fn run(&mut self) {
@@ -180,6 +183,13 @@ impl Iap2EaGateway {
         }
         Some(msg) = self.send_rx.recv() => {
           self.dispatch_outbound(msg).await;
+        }
+        _ = self.drain.forwarded() => {
+          while let Ok(msg) = self.send_rx.try_recv() {
+            self.dispatch_outbound(msg).await;
+          }
+          tracing::debug!("iap2 ea gateway: outbound drained; exiting");
+          return;
         }
         else => {
           tracing::error!("iap2 ea gateway: all input channels closed");

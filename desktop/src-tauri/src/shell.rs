@@ -17,6 +17,7 @@ use bridgething_companion::{
 use bridgething_delivery::{blob::FsBlobStore, ota::service::OtaService, webapp::WebappResourceService};
 use bridgething_gateway::{Gateway, connect_ws, transport::WsConnector};
 use bridgething_io::HttpExecutor;
+use tauri::webview::PageLoadEvent;
 use tokio::sync::Notify;
 
 use crate::{
@@ -120,13 +121,15 @@ fn capability_support(model_platform: Option<ModelPlatform>, backends: &Companio
   }
 }
 
+pub fn auth_psk() -> Option<&'static str> {
+  Some(include_str!(concat!(env!("OUT_DIR"), "/auth_psk"))).filter(|psk| !psk.is_empty())
+}
+
 fn spotify_provider() -> Option<SpotifyProviderConfig> {
-  option_env!("BRIDGETHING_AUTH_PSK")
-    .filter(|psk| !psk.is_empty())
-    .map(|psk| SpotifyProviderConfig {
-      worker_base: spotify::auth::DEFAULT_WORKER_BASE.to_owned(),
-      psk: psk.to_owned(),
-    })
+  auth_psk().map(|psk| SpotifyProviderConfig {
+    worker_base: spotify::auth::DEFAULT_WORKER_BASE.to_owned(),
+    psk: psk.to_owned(),
+  })
 }
 
 impl Shell {
@@ -164,6 +167,7 @@ impl Shell {
       nlu: platform.nlu,
       apple_music: None,
       image: platform.image,
+      transcoder: platform.transcoder,
       model_validator: platform.model_validator,
       transfer_policy: None,
       connectivity: platform.connectivity,
@@ -260,6 +264,12 @@ impl Shell {
 
   pub fn session(&self) -> &Arc<CompanionSession> {
     &self.session
+  }
+
+  pub fn page_loading(&self, event: PageLoadEvent) {
+    if event == PageLoadEvent::Started {
+      self.session.session().clear_media_imports();
+    }
   }
 
   pub fn ota(&self) -> &Arc<OtaService> {

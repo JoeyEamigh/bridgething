@@ -35,6 +35,8 @@ pub enum ClientToBridgeMsgData {
   #[from]
   Audio(ClientToBridgeAudioMsg),
   #[from]
+  Blob(ClientToBridgeBlobMsg),
+  #[from]
   Bluetooth(ClientToBridgeBluetoothMsg),
   #[from]
   Capabilities(ClientToBridgeCapabilitiesMsg),
@@ -96,6 +98,8 @@ pub enum BridgeToClientMsgData {
   Asset(BridgeToClientAssetMsg),
   #[from]
   Audio(BridgeToClientAudioMsg),
+  #[from]
+  Blob(BridgeToClientBlobMsg),
   #[from]
   Bluetooth(BridgeToClientBluetoothMsg),
   #[from]

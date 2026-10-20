@@ -31,6 +31,8 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
+import com.margelo.nitro.bridgething.session.BridgethingPickKind
+import com.margelo.nitro.bridgething.session.BridgethingPickedMedia
 import com.margelo.nitro.bridgething.session.BridgethingProviderCredentials
 import com.margelo.nitro.bridgething.session.BridgethingProviderCredentialsKind
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
@@ -40,6 +42,7 @@ import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelState
 import com.margelo.nitro.bridgething.session.BridgethingVoiceTurn
+import com.margelo.nitro.bridgething.session.BridgethingWebappBlob
 import com.margelo.nitro.bridgething.session.BridgethingWebappIcon
 import com.margelo.nitro.bridgething.session.BridgethingWebappInfo
 import com.margelo.nitro.bridgething.session.BridgethingWebappSlot
@@ -47,8 +50,8 @@ import com.margelo.nitro.bridgething.session.BridgethingWebappSlots
 import java.io.File
 import java.net.URI
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -57,6 +60,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import uniffi.bridgething_companion.ArtifactDigest
+import uniffi.bridgething_companion.BlobProgressSink
 import uniffi.bridgething_companion.CompanionException
 import uniffi.bridgething_companion.CompanionSession
 import uniffi.bridgething_companion.ProviderCredentials
@@ -86,7 +90,6 @@ public class HybridBridgethingSessionImpl(
 
         private const val PREFS_NAME = "bridgething.session"
         private const val VOICE_MODEL_KEY = "caps.voiceModel"
-        private const val REQUEST_DIALER_ROLE = 0xBA02
         private const val AUTO_RESUME_PREFIX = "autoresume."
         private const val RESUME_TARGET_PREFIX = "resumetarget."
         private const val PROVIDER_PRIORITY_KEY = "providerPriority"
@@ -117,6 +120,7 @@ public class HybridBridgethingSessionImpl(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val stateLock = Mutex()
+    private val picking = AtomicReference<PickFlight?>(null)
     private var companion: BridgethingCompanion? = null
 
     private val foregroundGen = AtomicLong(0)
@@ -497,6 +501,64 @@ public class HybridBridgethingSessionImpl(
         requireSession().deleteWebappDoc(deviceId, id, key)
     }
 
+    override suspend fun pickMedia(
+        kind: BridgethingPickKind,
+        coverWidth: Double?,
+        coverHeight: Double?,
+    ): BridgethingPickedMedia? = plainly {
+        val core = toCorePickKind(kind)
+        val cover = toCoreCover(coverWidth, coverHeight)
+        val flight = PickFlight()
+        check(picking.compareAndSet(null, flight)) { "busy: a pick is already in flight" }
+        try {
+            MediaPicker.pick(context, core) { picked ->
+                if (flight.abandoned) return@pick null
+                val session = requireSession()
+                val ticket = session.mediaImportTicket()
+                flight.importing = session to ticket
+                if (flight.abandoned) session.cancelMediaImport(ticket)
+                try {
+                    toRnPickedMedia(session.importPickedMedia(ticket, picked.file.absolutePath, core, cover, picked.mime))
+                } catch (cancelled: CompanionException.Cancelled) {
+                    if (flight.abandoned) null else throw cancelled
+                }
+            }
+        } finally {
+            picking.compareAndSet(flight, null)
+        }
+    }
+
+    override fun abandonPick() {
+        val flight = picking.get() ?: return
+        flight.abandoned = true
+        flight.importing?.let { (session, ticket) -> session.cancelMediaImport(ticket) }
+    }
+
+    override suspend fun createBlobHandle(mime: String): String = plainly { requireSession().createBlobHandle(mime) }
+
+    override suspend fun appendBlobHandle(handle: String, base64: String): Double =
+        plainly { requireSession().appendBlobHandle(handle, base64).toDouble() }
+
+    override suspend fun putWebappBlob(
+        deviceId: String,
+        id: String,
+        key: String,
+        handle: String,
+        onProgress: (Double, Double) -> Unit,
+    ): BridgethingWebappBlob = plainly {
+        val forwarded = object : BlobProgressSink {
+            override fun progress(sent: ULong, total: ULong) = onProgress(sent.toDouble(), total.toDouble())
+        }
+        toRnWebappBlob(requireSession().putWebappBlob(deviceId, id, key, handle, forwarded))
+    }
+
+    override suspend fun deleteWebappBlob(deviceId: String, id: String, key: String) {
+        plainly { requireSession().deleteWebappBlob(deviceId, id, key) }
+    }
+
+    override suspend fun listWebappBlobs(deviceId: String, id: String): Array<BridgethingWebappBlob> =
+        plainly { requireSession().listWebappBlobs(deviceId, id).map(::toRnWebappBlob).toTypedArray() }
+
     override suspend fun setCapabilityFlags(flags: BridgethingCapabilityFlags) {
         saveCapabilityFlags(flags)
         requireSession().setCapabilityFlags(toCoreCapabilityFlags(flags))
@@ -616,12 +678,11 @@ public class HybridBridgethingSessionImpl(
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             val roleManager = ctx.getSystemService(android.app.role.RoleManager::class.java) ?: return
             if (!roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER)) return
-            val activity = BridgethingActivityRegistry.currentActivity ?: return
+            BridgethingActivityRegistry.currentActivity ?: return
             val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
-            val done = CompletableDeferred<Unit>()
-            BridgethingActivityRegistry.expectResult(REQUEST_DIALER_ROLE) { _, _ -> done.complete(Unit) }
-            activity.startActivityForResult(intent, REQUEST_DIALER_ROLE)
-            done.await()
+            BridgethingActivityRegistry.awaitResult(ActivityRequest.DIALER_ROLE) { activity, requestCode ->
+                activity.startActivityForResult(intent, requestCode)
+            }
         } else {
             @Suppress("DEPRECATION")
             val intent = Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
@@ -672,7 +733,7 @@ public class HybridBridgethingSessionImpl(
     }
 
     override suspend fun presentPairPicker(): BridgethingBtDevice? {
-        val picked = CompanionDevicePicker.pick(context.applicationContext) ?: return null
+        val picked = CompanionDevicePicker.pick() ?: return null
         CompanionDevicePicker.startObservingPresence(context)
         BridgethingConnectionService.start(context)
 
@@ -835,4 +896,10 @@ public class HybridBridgethingSessionImpl(
             // dropped: stale callback from a torn-down runtime
         }
     }
+}
+
+private class PickFlight {
+    @Volatile var abandoned = false
+
+    @Volatile var importing: Pair<CompanionSession, ULong>? = null
 }

@@ -1,2 +1,4 @@
 /gen/schemas
 /gen/macos
+/binaries
+!/build/

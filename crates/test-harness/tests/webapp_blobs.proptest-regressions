@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 423e0508c5a98d02dc222bf4499441d83d49129dc876458e78910e4bacde378a # shrinks to waves = [[Step { companion: 0, key: 0, action: Fresh(1) }], [Step { companion: 1, key: 0, action: Delete }, Step { companion: 1, key: 1, action: Copy(0) }]]

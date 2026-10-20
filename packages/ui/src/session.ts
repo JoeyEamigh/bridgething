@@ -19,6 +19,7 @@ import type {
   SessionPeer,
   SessionSnapshot,
   VoiceModelState,
+  WebappBlob,
   WebappInfo,
   WebappResourceKind,
   WebappSlot,
@@ -54,7 +55,7 @@ export type Endpoint = {
   nickname: string | null;
 };
 
-export type WebappResource = { digest: string; mime: string | null; bytes: number[] };
+export type WebappResource = { digest: string; mime: string | null; bytes: ArrayLike<number> };
 
 export type ResourceOrigin = { url: string; sha256: string; size: number; mime: string | null };
 
@@ -93,6 +94,16 @@ export interface DeviceSession {
   webappDocEntry(id: string, key: string): Promise<string | null>;
   setWebappDoc(id: string, key: string, value: string): Promise<void>;
   deleteWebappDoc(id: string, key: string): Promise<void>;
+  createBlobHandle(mime: string): Promise<string>;
+  appendBlobHandle(handle: string, base64: string): Promise<number>;
+  putWebappBlob(
+    id: string,
+    key: string,
+    handle: string,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<WebappBlob>;
+  deleteWebappBlob(id: string, key: string): Promise<void>;
+  webappBlobs(id: string): Promise<WebappBlob[]>;
 
   voiceModel(): Promise<VoiceModelState>;
 

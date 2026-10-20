@@ -1,10 +1,11 @@
-import type { InstalledWebapp } from '@bridgething/browser';
+import type { InstalledWebapp, WebappDocChange } from '@bridgething/browser';
 import { useQuery, useSession, type DeviceSession, type Query, type Topic } from '@bridgething/ui';
 
 export interface BrowserBackend extends DeviceSession {
   readonly host: 'browser';
 
   installWebappBytes(bundle: Uint8Array, provenance?: string): Promise<InstalledWebapp>;
+  watchDocs(watcher: (change: WebappDocChange) => void): () => void;
 }
 
 export function isBrowser(session: DeviceSession): session is BrowserBackend {

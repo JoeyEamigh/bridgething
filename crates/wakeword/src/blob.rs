@@ -75,8 +75,10 @@ impl<'a> Reader<'a> {
     self.at = end;
     Ok(
       slot
-        .chunks_exact(4)
-        .map(|value| f32::from_le_bytes(value.try_into().expect("four bytes")))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|value| f32::from_le_bytes(*value))
         .collect(),
     )
   }

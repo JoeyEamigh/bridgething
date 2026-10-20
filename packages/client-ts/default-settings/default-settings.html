@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>settings</title>
+    <style>
+      html {
+        color-scheme: var(--bt-scheme);
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bt-color-bg);
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+      }
+      .done {
+        align-self: stretch;
+        padding: 12px 16px;
+        border: 1px solid var(--bt-color-accent);
+        background: var(--bt-color-accent-soft);
+        color: var(--bt-color-fg);
+        font-family: var(--bt-font-mono);
+        font-size: var(--bt-text-body);
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -360,13 +360,13 @@ async function bridgethingPush({ scriptUrl }) {
     return parsed;
   };
   if (args.release) {
-    const manifest2 = readManifest();
-    for (const slot of declaredSlots(manifest2)) {
+    const manifest = readManifest();
+    for (const slot of declaredSlots(manifest)) {
       const result = await setSlot(target, slot, null);
       if (!result.ok) throw new Error(result.reason);
       console.log(`${slot} slot: reverted to the built-in one`);
     }
-    if (declaredSlots(manifest2).length === 0) console.log('this bundle declares no slots; nothing to release');
+    if (declaredSlots(manifest).length === 0) console.log('this bundle declares no slots; nothing to release');
     return;
   }
   if (!args.skipBuild) await buildBundle(repoDir);

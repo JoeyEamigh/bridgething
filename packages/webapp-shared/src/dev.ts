@@ -21,6 +21,7 @@ export { buildExtension } from './extension.js';
 
 export const DEVICE_MODE = 'device';
 export const AUTHORIZE_PATH = '/__extension/authorize';
+export const BLOB_URL_PREFIX = '/.bridgething/blob/';
 
 const DAEMON_PORT = 8891;
 const SWITCH_SETTLE_MS = 1_000;
@@ -32,12 +33,17 @@ export async function daemonProxyTarget(): Promise<string> {
 }
 
 export async function daemonProxy(): Promise<Record<string, ProxyOptions>> {
+  const target = await daemonProxyTarget();
   return {
     [DAEMON_PROXY_PATH]: {
-      target: await daemonProxyTarget(),
+      target,
       ws: true,
       changeOrigin: true,
       rewrite: path => path.slice(DAEMON_PROXY_PATH.length) || '/',
+    },
+    [BLOB_URL_PREFIX]: {
+      target: target.replace(/^ws/, 'http'),
+      changeOrigin: true,
     },
   };
 }

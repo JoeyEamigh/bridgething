@@ -1,6 +1,53 @@
-import type { ConfigEntry, ConfigField, DocEntry } from '@bridgething/lib';
+import {
+  UNKNOWN_VERB,
+  base64FromBytes,
+  blobChunks,
+  decodeSettingsMessage,
+  type BlobData,
+  type ConfigEntry,
+  type ConfigField,
+  type DocEntry,
+  type FetchVerbReply,
+  type FetchVerbRequest,
+  type KeyValue,
+  type PickKind,
+  type PickedMedia,
+  type SettingsContext,
+  type SettingsPayload,
+  type SettingsRequest,
+  type SettingsResult,
+  type SettingsVerb,
+  type Theme,
+  type WebappBlobEntry,
+  type WireBody,
+  type WireHeader,
+} from './settings-protocol.js';
+import { THEME_DEFAULTS_CSS, themeCss } from './theme.js';
 
-export type { ConfigEntry, ConfigField, DocEntry } from '@bridgething/lib';
+export type {
+  AuthorizeVerbReply,
+  AuthorizeVerbRequest,
+  BlobData,
+  BodyKind,
+  ByteProgress,
+  ConfigEntry,
+  ConfigField,
+  DocEntry,
+  FetchVerbReply,
+  FetchVerbRequest,
+  KeyValue,
+  PickKind,
+  PickedMedia,
+  SettingsContext,
+  Theme,
+  ThemeColor,
+  ThemeFont,
+  ThemeScheme,
+  ThemeText,
+  WebappBlobEntry,
+  WireBody,
+  WireHeader,
+} from './settings-protocol.js';
 
 const CALL_TIMEOUT_MS = 15_000;
 const AUTHORIZE_TIMEOUT_MS = 600_000;
@@ -10,33 +57,33 @@ const TEXTY = /json|text|xml|urlencoded/i;
 const NULL_BODY_STATUS = new Set([101, 103, 204, 205, 304]);
 const HOST_MISSING = 'not running inside a bridgething settings host (no companion webview, no host frame)';
 
-export type SettingsContext = { webappId: string; name: string; version: string; deviceId: string };
-export type BodyKind = 'text' | 'base64';
-export type WireBody = { kind: BodyKind; data: string };
-export type WireHeader = [name: string, value: string];
-export type FetchVerbRequest = {
-  url: string;
-  method?: string;
-  headers?: WireHeader[];
-  body?: WireBody;
-  timeoutMs?: number;
-};
-export type FetchVerbReply = { status: number; headers: WireHeader[]; body: WireBody };
-export type AuthorizeVerbRequest = { url: string };
-export type AuthorizeVerbReply = { url: string };
 export type SettingsRequestInit = RequestInit & { timeoutMs?: number };
 export type FetchErrorKind = 'network' | 'timeout' | 'invalid_url';
 export type AuthorizeErrorKind = 'cancelled' | 'busy' | 'unsupported';
-export type KeyValue = { key: string; value: string | null };
+export type BlobErrorKind =
+  | 'unsupported'
+  | 'disconnected'
+  | 'too_large'
+  | 'quota_exceeded'
+  | 'storage_full'
+  | 'not_media'
+  | 'unknown_handle'
+  | 'busy'
+  | 'no_gesture'
+  | 'failed';
+export type PickOptions = { kind: PickKind; cover?: [width: number, height: number] };
+export type BlobProgressListener = (sent: number, total: number) => void;
+export type BlobPutOptions = { onProgress?: BlobProgressListener };
 export type DocChangedListener = (key: string, value: string | null) => void;
-
-type HostReply = { id: number; ok: true; value: unknown } | { id: number; ok: false; error: string };
-type HostEvent = { event: 'docChanged'; key: string; value: string | null };
+export type ThemeChangedListener = (theme: Theme) => void;
+export type ContextChangedListener = (context: SettingsContext, previous: SettingsContext | null) => void;
+export type RefreshListener = (context: SettingsContext) => void;
 
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  timer: ReturnType<typeof setTimeout> | undefined;
+  progress?: BlobProgressListener;
 };
 
 declare global {
@@ -47,32 +94,75 @@ declare global {
 }
 
 let nextId = 1;
+let epoch = 0;
+let known: SettingsContext | null = null;
+const pins = new Map<number, number>();
 const pending = new Map<number, Pending>();
 const docListeners = new Set<DocChangedListener>();
+const themeListeners = new Set<ThemeChangedListener>();
+const contextListeners = new Set<ContextChangedListener>();
+const refreshListeners = new Set<RefreshListener>();
+let themeStyle: HTMLStyleElement | null = null;
 
-function deliver(json: string): void {
-  let parsed: HostReply | HostEvent;
-  try {
-    parsed = JSON.parse(json) as HostReply | HostEvent;
-  } catch {
-    return;
+function paintTheme(theme: Theme | undefined): void {
+  if (typeof document === 'undefined') return;
+  if (!themeStyle?.isConnected) {
+    themeStyle = document.createElement('style');
+    themeStyle.dataset.bridgethingTheme = '';
+    const parent = document.head ?? document.documentElement;
+    parent.insertBefore(themeStyle, parent.firstChild);
   }
-
-  if ('event' in parsed && parsed.event === 'docChanged') {
-    for (const listener of docListeners) listener(parsed.key, parsed.value);
-    return;
-  }
-
-  const reply = parsed as HostReply;
-  const entry = pending.get(reply.id);
-  if (!entry) return;
-  pending.delete(reply.id);
-  clearTimeout(entry.timer);
-  if (reply.ok) entry.resolve(reply.value);
-  else entry.reject(new Error(reply.error));
+  themeStyle.textContent = theme ? THEME_DEFAULTS_CSS + themeCss(theme) : THEME_DEFAULTS_CSS;
 }
 
-function send(json: string): boolean {
+function release(at: number): void {
+  send({ id: nextId++, verb: 'release', epoch: at });
+}
+
+function retarget(context: SettingsContext, next: number): void {
+  if (next < epoch) return;
+  const previous = known;
+  known = context;
+  if (next === epoch) return;
+  const left = epoch;
+  epoch = next;
+  for (let at = left; at < next; at += 1) if (!pins.has(at)) release(at);
+  if (context.theme) paintTheme(context.theme);
+  for (const listener of contextListeners) listener(context, previous);
+}
+
+function deliver(json: string): void {
+  const message = decodeSettingsMessage(json);
+  if (!message) return;
+
+  if ('event' in message) {
+    if (message.event === 'docChanged') for (const listener of docListeners) listener(message.key, message.value);
+    if (message.event === 'themeChanged') {
+      paintTheme(message.theme);
+      for (const listener of themeListeners) listener(message.theme);
+    }
+    if (message.event === 'contextChanged') retarget(message.context, message.epoch);
+    if (message.event === 'refresh') {
+      known = message.context;
+      if (message.context.theme) paintTheme(message.context.theme);
+      for (const listener of refreshListeners) listener(message.context);
+    }
+    if (message.event === 'progress') pending.get(message.id)?.progress?.(message.sent, message.total);
+    return;
+  }
+
+  if (message.ok && message.epoch !== undefined) retarget(message.value as SettingsContext, message.epoch);
+
+  const entry = pending.get(message.id);
+  if (!entry) return;
+  pending.delete(message.id);
+  clearTimeout(entry.timer);
+  if (message.ok) entry.resolve(message.value);
+  else entry.reject(new Error(message.error));
+}
+
+function send(request: SettingsRequest): boolean {
+  const json = JSON.stringify(request);
   if (typeof window === 'undefined') return false;
 
   const webview = window.ReactNativeWebView;
@@ -97,15 +187,26 @@ if (typeof window !== 'undefined') {
   });
 }
 
-function call<T>(verb: string, payload?: unknown, timeoutMs: number = CALL_TIMEOUT_MS): Promise<T> {
+function call<V extends SettingsVerb>(
+  verb: V,
+  payload: SettingsPayload<V>,
+  timeoutMs: number | null = CALL_TIMEOUT_MS,
+  progress?: BlobProgressListener,
+  at: number = epoch,
+): Promise<SettingsResult<V>> {
   const id = nextId++;
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (pending.delete(id)) reject(new Error(`bridgething settings call '${verb}' timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer });
+  return new Promise<SettingsResult<V>>((resolve, reject) => {
+    const timer =
+      timeoutMs === null
+        ? undefined
+        : setTimeout(() => {
+            if (pending.delete(id)) {
+              reject(new Error(`bridgething settings call '${verb}' timed out after ${timeoutMs}ms`));
+            }
+          }, timeoutMs);
+    pending.set(id, { resolve: resolve as (value: unknown) => void, reject, timer, progress });
     try {
-      if (!send(JSON.stringify({ id, verb, payload }))) throw new Error(HOST_MISSING);
+      if (!send({ id, verb, payload, epoch: at } as SettingsRequest)) throw new Error(HOST_MISSING);
     } catch (err) {
       pending.delete(id);
       clearTimeout(timer);
@@ -121,6 +222,16 @@ export class SettingsFetchError extends Error {
   ) {
     super(message);
     this.name = 'SettingsFetchError';
+  }
+}
+
+export class BlobError extends Error {
+  constructor(
+    public readonly kind: BlobErrorKind,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'BlobError';
   }
 }
 
@@ -143,7 +254,7 @@ function token(message: string): string {
 }
 
 function hostLacksVerb(message: string): boolean {
-  return message === HOST_MISSING || message.startsWith('unknown settings bridge verb');
+  return message === HOST_MISSING || message.startsWith(UNKNOWN_VERB);
 }
 
 function fetchFailure(err: unknown): Error {
@@ -165,21 +276,45 @@ function authorizeFailure(err: unknown): Error {
   return err instanceof Error ? err : new Error(message);
 }
 
+const BLOB_KINDS: Record<string, BlobErrorKind> = {
+  unsupported: 'unsupported',
+  not_connected: 'disconnected',
+  link_lost: 'disconnected',
+  too_large: 'too_large',
+  quota_exceeded: 'quota_exceeded',
+  storage_full: 'storage_full',
+  not_media: 'not_media',
+  unknown_handle: 'unknown_handle',
+  busy: 'busy',
+  no_gesture: 'no_gesture',
+};
+
+function blobFailure(err: unknown): Error {
+  if (err instanceof BlobError) return err;
+  const message = reason(err);
+  if (hostLacksVerb(message)) return new BlobError('unsupported', message);
+  return new BlobError(BLOB_KINDS[token(message)] ?? 'failed', message);
+}
+
+async function blobCall<V extends SettingsVerb>(
+  verb: V,
+  payload: SettingsPayload<V>,
+  timeoutMs?: number | null,
+  progress?: BlobProgressListener,
+): Promise<SettingsResult<V>> {
+  try {
+    return await call(verb, payload, timeoutMs, progress);
+  } catch (err) {
+    throw blobFailure(err);
+  }
+}
+
 function decodeUtf8(bytes: Uint8Array): string | null {
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
     return null;
   }
-}
-
-function base64FromBytes(bytes: Uint8Array): string {
-  const chunk = 0x8000;
-  let binary = '';
-  for (let at = 0; at < bytes.length; at += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(at, at + chunk));
-  }
-  return btoa(binary);
 }
 
 function bytesFromBase64(data: string): Uint8Array<ArrayBuffer> {
@@ -237,43 +372,70 @@ async function toVerbRequest(input: RequestInfo | URL, init?: SettingsRequestIni
   return verb;
 }
 
+export type ConfigVerbs = {
+  fields(): Promise<ConfigField[]>;
+  list(): Promise<ConfigEntry[]>;
+  set(key: string, value: string): Promise<KeyValue>;
+  delete(key: string): Promise<KeyValue>;
+};
+export type PinnedConfigVerbs = ConfigVerbs & { release(): void };
+
+function configVerbs(at: () => number): ConfigVerbs {
+  return {
+    fields: () => call('config.fields', undefined, CALL_TIMEOUT_MS, undefined, at()),
+    list: () => call('config.list', undefined, CALL_TIMEOUT_MS, undefined, at()),
+    set: (key, value) => call('config.set', { key, value }, CALL_TIMEOUT_MS, undefined, at()),
+    delete: key => call('config.delete', { key }, CALL_TIMEOUT_MS, undefined, at()),
+  };
+}
+
 export const settings = {
-  context(): Promise<SettingsContext> {
-    return call<SettingsContext>('context');
+  async context(): Promise<SettingsContext> {
+    const context = await call('context', undefined);
+    if (context.theme) paintTheme(context.theme);
+    return context;
   },
   config: {
-    fields(): Promise<ConfigField[]> {
-      return call<ConfigField[]>('config.fields');
-    },
-    list(): Promise<ConfigEntry[]> {
-      return call<ConfigEntry[]>('config.list');
-    },
-    set(key: string, value: string): Promise<KeyValue> {
-      return call<KeyValue>('config.set', { key, value });
-    },
-    delete(key: string): Promise<KeyValue> {
-      return call<KeyValue>('config.delete', { key });
+    ...configVerbs(() => epoch),
+    pin(): PinnedConfigVerbs {
+      const pinned = epoch;
+      pins.set(pinned, (pins.get(pinned) ?? 0) + 1);
+      let held = true;
+      return {
+        ...configVerbs(() => pinned),
+        release() {
+          if (!held) return;
+          held = false;
+          const left = (pins.get(pinned) ?? 1) - 1;
+          if (left > 0) {
+            pins.set(pinned, left);
+            return;
+          }
+          pins.delete(pinned);
+          if (pinned < epoch) release(pinned);
+        },
+      };
     },
   },
   doc: {
     get(key: string): Promise<KeyValue> {
-      return call<KeyValue>('doc.get', { key });
+      return call('doc.get', { key });
     },
     list(): Promise<DocEntry[]> {
-      return call<DocEntry[]>('doc.list');
+      return call('doc.list', undefined);
     },
     set(key: string, value: string): Promise<KeyValue> {
-      return call<KeyValue>('doc.set', { key, value });
+      return call('doc.set', { key, value });
     },
     delete(key: string): Promise<{ key: string; value: null }> {
-      return call<{ key: string; value: null }>('doc.delete', { key });
+      return call('doc.delete', { key });
     },
   },
   async fetch(input: RequestInfo | URL, init?: SettingsRequestInit): Promise<Response> {
     const verb = await toVerbRequest(input, init);
     const budget = verb.timeoutMs === undefined ? CALL_TIMEOUT_MS : verb.timeoutMs + FETCH_TIMEOUT_SLACK_MS;
     try {
-      return toResponse(await call<FetchVerbReply>('fetch', verb, Math.max(CALL_TIMEOUT_MS, budget)));
+      return toResponse(await call('fetch', verb, Math.max(CALL_TIMEOUT_MS, budget)));
     } catch (err) {
       throw fetchFailure(err);
     }
@@ -289,18 +451,71 @@ export const settings = {
   auth: {
     async authorize(url: string | URL): Promise<URL> {
       try {
-        const reply = await call<AuthorizeVerbReply>('auth.authorize', { url: String(url) }, AUTHORIZE_TIMEOUT_MS);
+        const reply = await call('auth.authorize', { url: String(url) }, AUTHORIZE_TIMEOUT_MS);
         return new URL(reply.url);
       } catch (err) {
         throw authorizeFailure(err);
       }
     },
   },
+  pick(options: PickOptions): Promise<PickedMedia | null> {
+    return blobCall(
+      'pick',
+      options.cover ? { kind: options.kind, cover: options.cover } : { kind: options.kind },
+      null,
+    );
+  },
+  blob: {
+    async create(mime: string): Promise<string> {
+      return (await blobCall('blob.create', { mime })).handle;
+    },
+    async append(handle: string, data: BlobData): Promise<number> {
+      let size: number | null = null;
+      for await (const chunk of blobChunks(data)) {
+        size = (await blobCall('blob.append', { handle, data: base64FromBytes(chunk) })).size;
+      }
+      return size ?? (await blobCall('blob.append', { handle, data: '' })).size;
+    },
+    put(key: string, handle: string, options: BlobPutOptions = {}): Promise<WebappBlobEntry> {
+      return blobCall('blob.put', { key, handle }, null, options.onProgress);
+    },
+    async delete(key: string): Promise<void> {
+      await blobCall('blob.delete', { key });
+    },
+    list(): Promise<WebappBlobEntry[]> {
+      return blobCall('blob.list', undefined);
+    },
+  },
   onDocChanged(listener: DocChangedListener): () => void {
     docListeners.add(listener);
-    return () => docListeners.delete(listener);
+    return () => {
+      docListeners.delete(listener);
+    };
+  },
+  onThemeChanged(listener: ThemeChangedListener): () => void {
+    themeListeners.add(listener);
+    return () => {
+      themeListeners.delete(listener);
+    };
+  },
+  onContextChanged(listener: ContextChangedListener): () => void {
+    contextListeners.add(listener);
+    return () => {
+      contextListeners.delete(listener);
+    };
+  },
+  onRefresh(listener: RefreshListener): () => void {
+    refreshListeners.add(listener);
+    return () => {
+      refreshListeners.delete(listener);
+    };
   },
   done(): void {
-    if (!send(JSON.stringify({ id: nextId++, verb: 'done' }))) throw new Error(HOST_MISSING);
+    if (!send({ id: nextId++, verb: 'done', epoch })) throw new Error(HOST_MISSING);
   },
 };
+
+if (typeof document !== 'undefined') {
+  paintTheme(undefined);
+  settings.context().catch(() => undefined);
+}

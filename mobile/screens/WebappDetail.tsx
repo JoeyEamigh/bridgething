@@ -1,15 +1,11 @@
 import { fillsSlot } from '@bridgething/catalog';
-import {
-  type BridgethingConfigEntry,
-  type BridgethingConfigField,
-} from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { ConfirmSheet } from '../components/ConfirmSheet';
-import { Field } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { ListGroup } from '../components/ListGroup';
 import { ListRow } from '../components/ListRow';
@@ -18,10 +14,8 @@ import { Pill } from '../components/Pill';
 import { Press } from '../components/Press';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
-import { Segmented } from '../components/Segmented';
 import { SlotAction } from '../components/SlotAction';
 import { Spinner } from '../components/Spinner';
-import { Switch } from '../components/ui/switch';
 import { WebappIcon } from '../components/WebappIcon';
 import { useUpdates } from '../lib/catalog';
 import {
@@ -30,9 +24,10 @@ import {
   usePeer,
   useSession,
 } from '../lib/session';
+import { selectSettings } from '../lib/settings-host';
 import { TEXT } from '../lib/theme';
 import { humanizePermission } from '../lib/webapp-permissions';
-import { useWebapps } from '../lib/webapps';
+import { hasSettings, useWebapps } from '../lib/webapps';
 import type { AppsScreenProps } from '../navigation';
 
 type Props = AppsScreenProps<'WebappDetail'>;
@@ -51,47 +46,17 @@ export function WebappDetailScreen({ navigation, route }: Props) {
       u => u.appId.toLowerCase() === id.toLowerCase(),
     ) ?? null;
 
-  const [entries, setEntries] = useState<Record<string, string>>({});
+  const settable = info !== null && hasSettings(info);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (settable) selectSettings({ deviceId, id });
+    }, [deviceId, id, settable]),
+  );
+
   const [busy, setBusy] = useState<'switch' | 'uninstall' | null>(null);
   const [askUninstall, setAskUninstall] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  const loadConfig = useCallback(async () => {
-    setLoadError(null);
-    try {
-      const config = await session.listWebappConfig(deviceId, id);
-      setEntries(toMap(config));
-    } catch (err) {
-      setLoadError(describeError(err));
-    }
-  }, [deviceId, id, session]);
-
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
-
-  const writeField = async (key: string, value: string) => {
-    setConfigError(null);
-    try {
-      await session.setWebappConfigField(deviceId, id, key, value);
-      setEntries(prev => ({ ...prev, [key]: value }));
-    } catch (err) {
-      setConfigError(describeError(err));
-    }
-  };
-
-  const resetField = async (key: string) => {
-    setConfigError(null);
-    try {
-      await session.deleteWebappConfigField(deviceId, id, key);
-      const fresh = await session.listWebappConfig(deviceId, id);
-      setEntries(toMap(fresh));
-    } catch (err) {
-      setConfigError(describeError(err));
-    }
-  };
 
   const switchActive = async () => {
     setBusy('switch');
@@ -130,11 +95,6 @@ export function WebappDetailScreen({ navigation, route }: Props) {
             {id}
           </Text>
         </View>
-        {loadError ? (
-          <Note tone="err" action="retry" onAction={() => void loadConfig()}>
-            {loadError}
-          </Note>
-        ) : null}
       </ScrollScreen>
     );
   }
@@ -273,8 +233,8 @@ export function WebappDetailScreen({ navigation, route }: Props) {
         </View>
       ) : null}
 
-      {info.settingsHash ? (
-        <View className="mb-8">
+      <View className="mb-8">
+        {settable ? (
           <Button
             onPress={() =>
               navigation.navigate('WebappSettings', {
@@ -288,44 +248,9 @@ export function WebappDetailScreen({ navigation, route }: Props) {
           >
             open {info.name} settings
           </Button>
-        </View>
-      ) : null}
-
-      <View className="mb-8">
-        <SectionHeader
-          title="settings"
-          hint={info.config.length > 0 ? 'changes save on commit' : undefined}
-        />
-        {info.config.length > 0 ? (
-          <View className="gap-3">
-            {info.config.map(field => (
-              <ConfigEditor
-                key={field.key}
-                field={field}
-                value={entries[field.key] ?? field.defaultValue ?? ''}
-                onCommit={value => writeField(field.key, value)}
-                onReset={() => resetField(field.key)}
-              />
-            ))}
-          </View>
         ) : (
-          <SectionEmpty>this app has no settings</SectionEmpty>
+          <SectionEmpty>no settings</SectionEmpty>
         )}
-        {loadError ? (
-          <Note
-            className="mt-2"
-            tone="err"
-            action="retry"
-            onAction={() => void loadConfig()}
-          >
-            {loadError}
-          </Note>
-        ) : null}
-        {configError ? (
-          <Note className="mt-2" tone="err">
-            {configError}
-          </Note>
-        ) : null}
       </View>
 
       {info.permissions.length > 0 ? (
@@ -351,112 +276,4 @@ export function WebappDetailScreen({ navigation, route }: Props) {
       ) : null}
     </ScrollScreen>
   );
-}
-
-function ConfigEditor({
-  field,
-  value,
-  onCommit,
-  onReset,
-}: {
-  field: BridgethingConfigField;
-  value: string;
-  onCommit: (value: string) => void;
-  onReset: () => void;
-}) {
-  return (
-    <View className="border border-rule bg-screen p-4">
-      <View className="mb-2 flex-row items-center justify-between">
-        <Text
-          className="flex-1 font-mono uppercase text-muted"
-          style={TEXT.eyebrow}
-        >
-          {field.label}
-        </Text>
-        {field.defaultValue !== undefined ? (
-          <Press
-            onPress={onReset}
-            hitSlop={10}
-            className="flex-row items-center gap-1"
-          >
-            <Icon name="RotateCcw" tone="accent" size={11} />
-            <Text
-              className="font-mono uppercase text-accent"
-              style={TEXT.eyebrow}
-            >
-              reset
-            </Text>
-          </Press>
-        ) : null}
-      </View>
-      <ConfigInput field={field} value={value} onCommit={onCommit} />
-    </View>
-  );
-}
-
-function ConfigInput({
-  field,
-  value,
-  onCommit,
-}: {
-  field: BridgethingConfigField;
-  value: string;
-  onCommit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-
-  switch (field.kind) {
-    case 'boolean': {
-      const on = value === 'true';
-      return (
-        <View className="flex-row items-center justify-between">
-          <Text className="font-sans text-fg" style={TEXT.body}>
-            {on ? 'enabled' : 'disabled'}
-          </Text>
-          <Switch
-            value={on}
-            onValueChange={next => onCommit(next ? 'true' : 'false')}
-          />
-        </View>
-      );
-    }
-    case 'enum':
-      return (
-        <Segmented
-          options={field.choices ?? []}
-          value={value}
-          onChange={onCommit}
-          size="sm"
-        />
-      );
-    case 'number':
-      return (
-        <Field
-          value={draft}
-          onChangeText={setDraft}
-          onCommit={onCommit}
-          keyboardType="numeric"
-        />
-      );
-    case 'secret':
-    case 'string':
-    default:
-      return (
-        <Field
-          value={draft}
-          onChangeText={setDraft}
-          onCommit={onCommit}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry={field.kind === 'secret'}
-        />
-      );
-  }
-}
-
-function toMap(entries: BridgethingConfigEntry[]): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const e of entries) map[e.key] = e.value;
-  return map;
 }

@@ -6,7 +6,6 @@ use std::{
 
 use libbridgething::AssetRetention;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set};
-use sha2::{Digest, Sha256};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::bytes::Bytes;
 
@@ -14,6 +13,7 @@ use super::{
   AssetError, CachedAsset, DISK_BUDGET_BYTES, DISK_FREE_HEADROOM_BYTES, MEMORY_BUDGET_BYTES, TTL_SWEEP_INTERVAL,
   storage::{AssetActiveModel, AssetColumn, AssetEntity},
 };
+use crate::digest::sha256_hex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tier {
@@ -124,9 +124,6 @@ pub(super) enum Command {
   },
   Clear {
     id: String,
-    ack: oneshot::Sender<Result<(), AssetError>>,
-  },
-  ClearAll {
     ack: oneshot::Sender<Result<(), AssetError>>,
   },
   ReserveDisk {
@@ -319,10 +316,6 @@ impl AssetActor {
         let result = self.handle_clear(id).await;
         let _ = ack.send(result);
       }
-      Command::ClearAll { ack } => {
-        let result = self.handle_clear_all().await;
-        let _ = ack.send(result);
-      }
       Command::ReserveDisk { need_bytes, ack } => {
         self.reserve_disk(need_bytes).await;
         let _ = ack.send(());
@@ -429,7 +422,7 @@ impl AssetActor {
         if dest.exists() {
           tokio::fs::remove_file(&dest).await.ok();
         }
-        rename_or_copy(&source, &dest).await?;
+        crate::paths::rename_or_copy(&source, &dest).await?;
         self.disk_byte_total = self.disk_byte_total.saturating_add(byte_len);
         if retention.is_disk_persisted() {
           self
@@ -547,15 +540,6 @@ impl AssetActor {
 
   async fn handle_clear(&mut self, id: String) -> Result<(), AssetError> {
     if self.entries.contains_key(&id) {
-      self.evict_entry(&id).await;
-      let _ = self.events_tx.send(AssetCacheEvent::Cleared { id });
-    }
-    Ok(())
-  }
-
-  async fn handle_clear_all(&mut self) -> Result<(), AssetError> {
-    let ids: Vec<String> = self.entries.keys().cloned().collect();
-    for id in ids {
       self.evict_entry(&id).await;
       let _ = self.events_tx.send(AssetCacheEvent::Cleared { id });
     }
@@ -794,24 +778,11 @@ impl AssetActor {
 }
 
 fn safe_blob_name(id: &str) -> String {
-  let mut h = Sha256::new();
-  h.update(id.as_bytes());
-  hex::encode(h.finalize())
+  sha256_hex(id.as_bytes())
 }
 
 fn disk_over_limit(current_bytes: u64, free_bytes: u64, budget: u64, headroom: u64) -> bool {
   current_bytes > budget || free_bytes < headroom
-}
-
-async fn rename_or_copy(source: &Path, dest: &Path) -> Result<(), AssetError> {
-  match tokio::fs::rename(source, dest).await {
-    Ok(()) => Ok(()),
-    Err(_) => {
-      tokio::fs::copy(source, dest).await?;
-      tokio::fs::remove_file(source).await.ok();
-      Ok(())
-    }
-  }
 }
 
 fn unix_now() -> i64 {

@@ -13,6 +13,7 @@ import { ActivityIndicator, StatusBar, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CrashBoundary } from './components/CrashBoundary';
+import { SettingsHostView } from './components/SettingsHostView';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
 import { Wordmark } from './components/Wordmark';
@@ -277,6 +278,7 @@ export default function App() {
             <RootStack.Screen name="Tabs" component={TabsScreen} />
           </RootStack.Navigator>
         </NavigationContainer>
+        <SettingsHostView />
       </CrashBoundary>
       <PortalHost />
     </SafeAreaProvider>

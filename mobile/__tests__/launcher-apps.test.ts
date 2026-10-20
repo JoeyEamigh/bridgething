@@ -17,7 +17,7 @@ function entry(version: string) {
         version: '1.0.0',
         source: 'builtin' as const,
         role: 'launcher' as const,
-        config: [],
+        configJson: '[]',
         permissions: [],
       },
       {
@@ -27,7 +27,7 @@ function entry(version: string) {
         source: 'installed' as const,
         role: 'launcher' as const,
         provenance: OFFICIAL,
-        config: [],
+        configJson: '[]',
         permissions: [],
       },
     ],

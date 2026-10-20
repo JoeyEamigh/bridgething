@@ -10,6 +10,7 @@ mod authority;
 mod capabilities;
 mod chrome;
 mod db;
+mod digest;
 
 mod handler;
 mod input;
@@ -22,13 +23,14 @@ mod proxy;
 mod state;
 mod transfer;
 mod transport;
+mod uboot_env;
 
 mod stock;
 
 mod monitoring;
 mod overlay;
 
-use std::{future::Future, net::SocketAddr, path::PathBuf, pin::Pin};
+use std::{future::Future, net::SocketAddr, path::PathBuf, pin::Pin, time::Duration};
 
 use als::{AlsConfig, AlsManager};
 use asset::AssetCache;
@@ -52,15 +54,24 @@ use player::Player;
 // don't pub anything else from core so that dead code lints still work
 pub use state::{AppState, State};
 use state::{
-  AudioManager, DeviceStore, KvStore, MetaStore, RouteTable, StateAssembly, TelephonyManager, TimeManager,
+  AudioManager, DeviceStore, KvStore, MetaStore, RouteTable, StateAssembly, TelephonyManager, TimeManager, WebappBlobs,
   WebappRegistry,
 };
-use systemd::Notify;
+pub use systemd::power::{ResetRig, ResetSupport, RigError};
+use systemd::{
+  Notify,
+  power::{DeviceRig, FactoryReset},
+};
+use tokio_util::sync::CancellationToken;
 use transfer::ChunkedTransfer;
 use transport::TransportController;
+
+const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
+
 pub struct Daemon {
   pub state: State,
   pub inject: Option<HeadlessInject>,
+  pub stop: CancellationToken,
   #[cfg(feature = "test-tap")]
   pub server_addrs: ServerAddrs,
   loop_fut: Pin<Box<dyn Future<Output = ()> + Send>>,
@@ -117,7 +128,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   let (client_man, mut client_listener) = net::create_client_manager();
   let bus = net::WireEventBus::new(client_man.clone());
 
-  let (db, assets_blobs_dir, transfers_dir) = match config.state_dir.as_deref() {
+  let (db, assets_blobs_dir, transfers_dir, blob_transfers_dir) = match config.state_dir.as_deref() {
     Some(dir) => {
       let assets = dir.join("assets");
       let transfers = dir.join("transfers");
@@ -127,12 +138,19 @@ pub async fn init(config: DaemonConfig) -> Daemon {
       tokio::fs::create_dir_all(&transfers)
         .await
         .expect("failed to create harness transfer dir");
-      let db = db::open(None).await.expect("failed to open in-memory state database");
-      (db, assets, transfers)
+      let db = state::open_db_from_dir(dir)
+        .await
+        .expect("failed to open harness state database");
+      (db, assets, transfers, dir.join("blob-transfers"))
     }
     None => {
       let db = state::open_state_db().await.expect("failed to open state database");
-      (db, paths::assets_blobs_dir(), paths::transfers_dir())
+      (
+        db,
+        paths::assets_blobs_dir(),
+        paths::transfers_dir(),
+        paths::blob_transfers_dir(),
+      )
     }
   };
 
@@ -172,7 +190,19 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   } else {
     Vec::new()
   };
-  let transfer_pending = ChunkedTransfer::init(transfers_dir, bandaid_sweep)
+  let (blob_events_tx, blob_events_rx) = tokio::sync::mpsc::channel(64);
+  let webapp_blobs = WebappBlobs::init(
+    config.webapp_blobs_dir.clone().unwrap_or_else(paths::webapp_blobs_dir),
+    blob_transfers_dir,
+    kv.clone(),
+    assets.clone(),
+    webapps.clone(),
+    blob_events_tx,
+  )
+  .await
+  .expect("failed to initialize webapp blob store");
+
+  let transfer_pending = ChunkedTransfer::init(transfers_dir, transfer::TRANSFER_DISK_BUDGET_BYTES, bandaid_sweep)
     .await
     .expect("failed to initialize chunked transfer manager");
   let (transfers, transfer_handle) = transfer_pending.spawn();
@@ -303,6 +333,9 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     assets.clone(),
   );
 
+  let factory_reset = FactoryReset::new(config.factory_reset.clone());
+  factory_reset.disarm_stale().await;
+
   let state = AppState::assemble(StateAssembly {
     client_man: client_man.clone(),
     bus,
@@ -311,6 +344,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     player,
     chrome,
     webapps,
+    webapp_blobs,
     assets,
     asset_wait,
     iap2_pending_art,
@@ -333,8 +367,8 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     log_tap,
     tunnel_routes,
     transfer_sinks,
-    db,
     meta_store,
+    factory_reset,
     asset_cache_handle,
     transfer_handle,
     als_handle,
@@ -342,6 +376,11 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   });
 
   spawn_ota_event_forwarder(bluetooth.clone(), state.client_man.clone(), ota_events_rx);
+  tokio::spawn(handler::gateway::webapp::forward_blob_events(
+    state.clone(),
+    bluetooth.clone(),
+    blob_events_rx,
+  ));
   spawn_nickname_observer(
     state.meta.subscribe(),
     bluetooth.clone(),
@@ -429,6 +468,9 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   let handle_signals = config.handle_signals;
 
   let iap2_shutdown = bluetooth.iap2.shutdown.clone();
+  let gateway_man = bluetooth.gateway_man.clone();
+  let stop = CancellationToken::new();
+  let stop_requested = stop.clone();
 
   let loop_fut = Box::pin(async move {
     let _asset_invalidator = _asset_invalidator;
@@ -464,10 +506,19 @@ pub async fn init(config: DaemonConfig) -> Daemon {
         _ = monitoring::wait_for_signal(), if handle_signals => {
           break;
         }
+        _ = stop_requested.cancelled() => {
+          break;
+        }
       }
     }
 
     tracing::info!("shutting down...");
+    let drained = tokio::time::timeout(SHUTDOWN_DRAIN, async {
+      tokio::join!(client_man.drain(), gateway_man.drain())
+    });
+    if drained.await.is_err() {
+      tracing::warn!("outbound queues did not drain within {SHUTDOWN_DRAIN:?}; exiting anyway");
+    }
     iap2_shutdown.shutdown().await;
     state.chrome.shutdown().await;
     server.shutdown().await;
@@ -479,6 +530,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   Daemon {
     state: state_out,
     inject: headless_inject,
+    stop,
     #[cfg(feature = "test-tap")]
     server_addrs,
     loop_fut,
@@ -510,8 +562,10 @@ pub struct DaemonConfig {
   pub install_logger: bool,
   pub state_dir: Option<PathBuf>,
   pub webapps_dir: Option<PathBuf>,
+  pub webapp_blobs_dir: Option<PathBuf>,
   pub ro_webapps_dir: Option<PathBuf>,
   pub examples_dir: Option<PathBuf>,
+  pub factory_reset: std::sync::Arc<dyn ResetRig>,
 }
 
 impl DaemonConfig {
@@ -529,8 +583,10 @@ impl DaemonConfig {
       install_logger: true,
       state_dir: None,
       webapps_dir: None,
+      webapp_blobs_dir: None,
       ro_webapps_dir: None,
       examples_dir: Some(paths::examples_dir()),
+      factory_reset: std::sync::Arc::new(DeviceRig),
     }
   }
 
@@ -559,9 +615,11 @@ impl DaemonConfig {
       handle_signals: false,
       install_logger: false,
       webapps_dir: Some(state_dir.join("webapps")),
+      webapp_blobs_dir: Some(state_dir.join("webapp-blobs")),
       ro_webapps_dir: Some(state_dir.join("builtin")),
       examples_dir: None,
       state_dir: Some(state_dir),
+      factory_reset: std::sync::Arc::new(DeviceRig),
     }
   }
 }

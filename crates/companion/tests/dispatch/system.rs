@@ -88,6 +88,10 @@ impl OtaInbound for RecordedOta {
     self.gestures.lock().unwrap().push(gesture);
     None
   }
+
+  fn blob_stored(&self, _stored: libbridgething::gateway::WebappBlobStored) {}
+
+  fn blob_failed(&self, _failed: libbridgething::gateway::WebappBlobFailed) {}
 }
 
 fn dispatcher() -> (SystemDispatcher, Arc<RecordedOta>, Arc<RecordedLogs>) {

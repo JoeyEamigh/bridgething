@@ -1,7 +1,9 @@
+import { closeSettings, ConfigForm, type ConfigFormHandle } from '@bridgething/client/form';
 import { settings, type SettingsContext } from '@bridgething/client/settings';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { domainOf, fetchStates, friendlyName, HaAuthError, type HaEntity } from './ha-ws';
+import { domainOf, fetchStates, friendlyName, type HaEntity } from './ha-ws';
+import { edited, fromDevice, NO_SELECTION, stored, toggled } from './selection';
 import './style.css';
 
 const SELECTION_KEY = 'selected_entities';
@@ -14,83 +16,76 @@ type Conn =
   | { kind: 'error'; message: string }
   | { kind: 'loaded'; entities: HaEntity[] };
 
-function splitIds(value: string | null): string[] {
-  return (value ?? '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-}
-
 function Settings() {
+  const form = useRef<ConfigFormHandle>(null);
   const [ctx, setCtx] = useState<SettingsContext | null>(null);
-  const [baseUrl, setBaseUrl] = useState('');
-  const [token, setToken] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selection, setSelection] = useState(NO_SELECTION);
   const [query, setQuery] = useState('');
   const [conn, setConn] = useState<Conn>({ kind: 'idle' });
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    (async () => {
+    const readSelection = async () => {
       try {
-        setCtx(await settings.context());
-        const entries = await settings.config.list();
-        const byKey = Object.fromEntries(entries.map(e => [e.key, e.value]));
-        setBaseUrl(byKey['base_url'] ?? '');
-        setToken(byKey['token'] ?? '');
         const doc = await settings.doc.get(SELECTION_KEY);
-        setSelected(new Set(splitIds(doc.value)));
+        setSelection(held => fromDevice(held, doc.value));
       } catch (err) {
         setStatus(errText(err));
       }
-    })();
+    };
+    settings.context().then(setCtx, (err: unknown) => setStatus(errText(err)));
+    void readSelection();
+    const offRefresh = settings.onRefresh(context => {
+      setCtx(context);
+      setStatus('');
+      void readSelection();
+    });
+    const offDoc = settings.onDocChanged((key, value) => {
+      if (key === SELECTION_KEY) setSelection(held => fromDevice(held, value));
+    });
+    return () => {
+      offRefresh();
+      offDoc();
+    };
   }, []);
 
-  async function saveConfig() {
-    setStatus('saving credentials...');
-    try {
-      await settings.config.set('base_url', baseUrl);
-      await settings.config.set('token', token);
-      setStatus('credentials saved');
-    } catch (err) {
-      setStatus(errText(err));
-    }
-  }
-
   async function connect() {
-    if (!baseUrl.trim() || !token.trim()) {
-      setConn({ kind: 'error', message: 'enter the Home Assistant URL and a long-lived access token first.' });
-      return;
-    }
     setConn({ kind: 'connecting' });
     setStatus('');
-    await saveConfig();
     try {
+      const values = await form.current?.flush();
+      const baseUrl = values?.['base_url'] ?? '';
+      const token = values?.['token'] ?? '';
+      if (!baseUrl.trim() || !token.trim()) {
+        setConn({ kind: 'error', message: 'enter the Home Assistant URL and a long-lived access token first.' });
+        return;
+      }
       const entities = await fetchStates(baseUrl, token);
       entities.sort((a, b) => friendlyName(a).localeCompare(friendlyName(b)));
       setConn({ kind: 'loaded', entities });
     } catch (err) {
-      setConn({ kind: 'error', message: err instanceof HaAuthError ? err.message : errText(err) });
+      setConn({ kind: 'error', message: errText(err) });
     }
   }
 
-  async function saveSelection() {
-    setStatus('saving selection to the device...');
+  async function close() {
     try {
-      await settings.doc.set(SELECTION_KEY, [...selected].join(','));
-      setStatus(`saved ${selected.size} ${selected.size === 1 ? 'entity' : 'entities'} to the device`);
+      await closeSettings(form.current);
     } catch (err) {
       setStatus(errText(err));
     }
   }
 
-  function toggle(id: string) {
-    setSelected(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  async function saveSelection() {
+    const ids = [...selection.picked];
+    setStatus('saving selection to the device...');
+    try {
+      await settings.doc.set(SELECTION_KEY, ids.join(','));
+      setSelection(held => stored(held, ids));
+      setStatus(`saved ${ids.length} ${ids.length === 1 ? 'entity' : 'entities'} to the device`);
+    } catch (err) {
+      setStatus(errText(err));
+    }
   }
 
   const groups = useMemo(() => {
@@ -115,31 +110,14 @@ function Settings() {
       <header>
         <h1>{ctx?.name ?? 'Home Assistant'} settings</h1>
         <p className="hint">
-          {ctx ? `${selected.size} selected on ${ctx.deviceId}` : 'connecting to the companion host...'}
+          {ctx
+            ? `${selection.picked.size} selected on ${ctx.deviceId}${edited(selection) ? ', not saved yet' : ''}`
+            : 'connecting to the companion host...'}
         </p>
       </header>
 
       <section className="creds">
-        <div className="field">
-          <label htmlFor="base_url">Home Assistant URL</label>
-          <input
-            id="base_url"
-            type="url"
-            placeholder="https://your-home.ui.nabu.casa"
-            value={baseUrl}
-            onInput={e => setBaseUrl((e.target as HTMLInputElement).value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="token">Long-Lived Access Token</label>
-          <input
-            id="token"
-            type="password"
-            placeholder="paste the token from your HA profile"
-            value={token}
-            onInput={e => setToken((e.target as HTMLInputElement).value)}
-          />
-        </div>
+        <ConfigForm ref={form} />
         <div className="row">
           <button type="button" onClick={connect} disabled={conn.kind === 'connecting'}>
             {conn.kind === 'connecting' ? 'connecting...' : conn.kind === 'loaded' ? 'reconnect' : 'connect'}
@@ -168,7 +146,11 @@ function Settings() {
                 <div className="group-head">{group.domain}</div>
                 {group.entities.map(e => (
                   <label className="entity" key={e.entityId}>
-                    <input type="checkbox" checked={selected.has(e.entityId)} onChange={() => toggle(e.entityId)} />
+                    <input
+                      type="checkbox"
+                      checked={selection.picked.has(e.entityId)}
+                      onChange={() => setSelection(held => toggled(held, e.entityId))}
+                    />
                     <span className="name">{friendlyName(e)}</span>
                     <span className="eid">{e.entityId}</span>
                   </label>
@@ -176,25 +158,19 @@ function Settings() {
               </div>
             ))}
           </div>
-
-          <footer>
-            <button type="button" onClick={saveSelection}>
-              Save selection
-            </button>
-            <button type="button" className="secondary" onClick={() => settings.done()}>
-              Done
-            </button>
-          </footer>
         </>
       )}
 
-      {conn.kind !== 'loaded' && (
-        <footer>
-          <button type="button" className="secondary" onClick={() => settings.done()}>
-            Done
+      <footer>
+        {conn.kind === 'loaded' && (
+          <button type="button" onClick={saveSelection}>
+            Save selection
           </button>
-        </footer>
-      )}
+        )}
+        <button type="button" className="secondary" onClick={close}>
+          Done
+        </button>
+      </footer>
     </main>
   );
 }

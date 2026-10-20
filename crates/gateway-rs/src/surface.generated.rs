@@ -464,6 +464,18 @@ impl<'a> WebappSurface<'a> {
   pub async fn doc_delete(&self, request: WebappDocDelete) -> Result<WebappDocAck, RequestFailure<WebappError>> {
     self.0.request(request).await
   }
+  pub async fn blob_put(&self, request: WebappBlobPut) -> Result<WebappBlobPutAck, RequestFailure<WebappError>> {
+    self.0.request(request).await
+  }
+  pub async fn blob_delete(
+    &self,
+    request: WebappBlobDelete,
+  ) -> Result<WebappBlobDeleteAck, RequestFailure<WebappError>> {
+    self.0.request(request).await
+  }
+  pub async fn blob_list(&self, request: WebappBlobList) -> Result<WebappBlobListReply, RequestFailure<WebappError>> {
+    self.0.request(request).await
+  }
   /// Stream of `Webapp` events.
   pub fn events(&self) -> impl Stream<Item = BridgeToGatewayWebappMsgEvent> + 'static {
     BroadcastStream::new(self.0.events()).filter_map(|msg| {
@@ -731,6 +743,8 @@ pub trait VoiceHandler {
 }
 
 pub trait WebappHandler {
+  fn blob_stored(&self, payload: WebappBlobStored) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn blob_failed(&self, payload: WebappBlobFailed) -> impl Future<Output = Result<(), WireError>> + Send;
   fn doc_changed(&self, payload: WebappDocChanged) -> impl Future<Output = Result<(), WireError>> + Send;
   fn config_changed(&self, payload: WebappConfigChanged) -> impl Future<Output = Result<(), WireError>> + Send;
   fn webapp_installed(&self, payload: WebappInfo) -> impl Future<Output = Result<(), WireError>> + Send;
@@ -1789,6 +1803,52 @@ where
         variant = "docAck",
         "response with no pending request"
       );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobPutAck(_)) => {
+      tracing::debug!(
+        surface = "webapp",
+        variant = "blobPutAck",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobDeleteAck(_)) => {
+      tracing::debug!(
+        surface = "webapp",
+        variant = "blobDeleteAck",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobList(_)) => {
+      tracing::debug!(
+        surface = "webapp",
+        variant = "blobList",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobStored(payload)) => {
+      if let Err(error) = <H as WebappHandler>::blob_stored(handlers, payload).await {
+        tracing::warn!(
+          surface = "webapp",
+          variant = "blobStored",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobFailed(payload)) => {
+      if let Err(error) = <H as WebappHandler>::blob_failed(handlers, payload).await {
+        tracing::warn!(
+          surface = "webapp",
+          variant = "blobFailed",
+          ?error,
+          "inbound not handled"
+        );
+      }
       Ok(())
     }
     BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::DocChanged(payload)) => {

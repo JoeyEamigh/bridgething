@@ -12,5 +12,5 @@ pub mod discovery;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod serve;
 
-#[cfg(test)]
-mod harness;
+#[cfg(any(test, feature = "test-support"))]
+pub mod harness;

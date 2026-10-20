@@ -17,11 +17,8 @@ use std::{
 };
 
 use libbridgething::{
-  OtaError, OtaErrorCode, OtaFinished, OtaKind, OtaPhase, OtaProgress, PeerCompanionStatus, WebappError, WebappInfo,
-  gateway::{
-    BridgeToGatewaySystemMsgEvent, BridgeToGatewayTransferMsgEvent, OtaBegin, OtaBeginAck, OtaBeginRejected, OtaPatch,
-    TransferAck,
-  },
+  OtaError, OtaErrorCode, OtaFinished, OtaKind, OtaPhase, OtaProgress, WebappError, WebappInfo,
+  gateway::{BridgeToGatewaySystemMsgEvent, OtaBegin, OtaBeginAck, OtaBeginRejected, OtaPatch},
 };
 pub use range_proxy::RangeProxy;
 use staging::StagedPiece;
@@ -36,7 +33,8 @@ pub use wakeword_swap::{
 use crate::{
   asset::AssetCache,
   bluetooth::{Address, GatewayMan},
-  peer::{PeerSnapshot, PeerTracker},
+  peer::PeerTracker,
+  systemd::power::TerminatorFn,
   transfer::{
     BeginOutcome, ChunkOutcome, ChunkedTransfer, TransferError,
     sinks::{AckPolicy, ForwardStream, TransferEvent, TransferSinks},
@@ -79,8 +77,6 @@ enum Command {
     peer: Option<Address>,
   },
 }
-
-pub type TerminatorFn = Arc<dyn Fn() + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct OtaTerminators {
@@ -279,7 +275,7 @@ impl OtaActor {
                 if peer_watch.changed().await.is_err() {
                   std::future::pending::<()>().await;
                 }
-                if !Self::peer_link_alive(&peer_watch.borrow(), &addr) {
+                if !peer_watch.borrow().companion_linked(&addr) {
                   return;
                 }
               },
@@ -292,7 +288,7 @@ impl OtaActor {
                 if failure_watch.changed().await.is_err() {
                   std::future::pending::<()>().await;
                 }
-                if Self::peer_link_alive(&failure_watch.borrow(), &addr) {
+                if failure_watch.borrow().companion_linked(&addr) {
                   return;
                 }
               },
@@ -356,13 +352,6 @@ impl OtaActor {
     tracing::info!("ota orchestrator exiting");
   }
 
-  fn peer_link_alive(snapshot: &PeerSnapshot, addr: &Address) -> bool {
-    snapshot
-      .peers
-      .get(addr)
-      .is_some_and(|p| !matches!(p.companion, PeerCompanionStatus::None))
-  }
-
   async fn handle_begin(
     &mut self,
     req: OtaBegin,
@@ -389,7 +378,7 @@ impl OtaActor {
     {
       let orphaned = self.state.pinned_peer().is_none()
         && !self.staged.is_empty()
-        && pinned.is_none_or(|addr| !Self::peer_link_alive(&self.peer_watch.borrow(), &addr));
+        && pinned.is_none_or(|addr| !self.peer_watch.borrow().companion_linked(&addr));
       if orphaned {
         tracing::warn!(
           pieces = self.staged.len(),
@@ -526,7 +515,6 @@ impl OtaActor {
           self.range_proxy.activate(update_id.clone(), peer).await;
         }
         let stream_rx = self.sinks.bind_forward(req.transfer.id, AckPolicy::OnDrain);
-        self.sinks.seed_forward_ack(req.transfer.id, resume_from_offset as u32);
         self.state = OtaState::Streaming {
           kind,
           update_id,
@@ -549,18 +537,6 @@ impl OtaActor {
           reason: format!("transfer begin failed: {err}"),
         }));
       }
-    }
-  }
-
-  async fn send_ack(&self, peer: Option<Address>, transfer_id: uuid::Uuid, received: u32) {
-    if let Some(address) = peer {
-      self
-        .gateway_man
-        .send_event(
-          address,
-          BridgeToGatewayTransferMsgEvent::Ack(TransferAck { transfer_id, received }),
-        )
-        .await;
     }
   }
 
@@ -598,14 +574,18 @@ impl OtaActor {
       }
     };
 
-    let last = offset as u64 + bytes.len() as u64 >= expected_size;
     let outcome = self
       .transfers
-      .accept_chunk(current_id.clone(), offset as u64, bytes, last)
+      .accept_chunk(current_id.clone(), offset as u64, bytes)
       .await;
     match outcome {
       Ok(ChunkOutcome::Continue { received }) => {
-        self.send_ack(peer, transfer_id, received as u32).await;
+        if let Some(address) = peer {
+          self
+            .gateway_man
+            .send_transfer_ack(address, transfer_id, received as u32)
+            .await;
+        }
         let percent = phase_percent(received, expected_size);
         let changed = self.last_streaming_percent != Some(percent);
         let floor_ok = self
@@ -618,7 +598,12 @@ impl OtaActor {
         }
       }
       Ok(ChunkOutcome::Completed { path, .. }) => {
-        self.send_ack(peer, transfer_id, expected_size as u32).await;
+        if let Some(address) = peer {
+          self
+            .gateway_man
+            .send_transfer_ack(address, transfer_id, expected_size as u32)
+            .await;
+        }
         emit_progress(&self.events_tx, OtaPhase::Streaming, 100, None).await;
         emit_progress(&self.events_tx, OtaPhase::Verifying, 100, None).await;
         self.last_streaming_emit_at = None;
@@ -715,7 +700,7 @@ impl OtaActor {
               if snapshot_rx.changed().await.is_err() {
                 return;
               }
-              let alive = Self::peer_link_alive(&snapshot_rx.borrow(), &addr);
+              let alive = snapshot_rx.borrow().companion_linked(&addr);
               if !alive {
                 tracing::warn!(%addr, "pinned peer disconnected mid-write; signalling cancel + holding OtaError");
                 let _ = self_tx_for_watcher
@@ -1112,7 +1097,7 @@ fn phase_percent(received: u64, expected: u64) -> u8 {
 fn transfer_error_code(err: &TransferError) -> OtaErrorCode {
   match err {
     TransferError::OffsetMismatch { .. } => OtaErrorCode::OffsetMismatch,
-    TransferError::SizeOverflow { .. } | TransferError::SizeMismatch { .. } => OtaErrorCode::SizeMismatch,
+    TransferError::SizeOverflow { .. } => OtaErrorCode::SizeMismatch,
     TransferError::HashMismatch { .. } => OtaErrorCode::HashMismatch,
     TransferError::UnknownTransfer { .. } => OtaErrorCode::UnknownUpdate,
     _ => OtaErrorCode::Internal,
@@ -1124,10 +1109,9 @@ mod tests {
   use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
   use libbridgething::{
-    WebappRole, WebappSource,
-    gateway::{BridgeToGatewayMsgData, BridgeToGatewayTransferMsg, OtaBegin, TransferRef},
+    PeerCompanionStatus, WebappRole, WebappSource,
+    gateway::{BridgeToGatewayMsgData, BridgeToGatewayTransferMsg, OtaBegin, TransferAck, TransferRef},
   };
-  use sha2::{Digest, Sha256};
   use tokio::time::{Duration, timeout};
   use tokio_util::bytes::Bytes;
 
@@ -1155,22 +1139,14 @@ mod tests {
 
   fn fixture_bytes() -> (Vec<u8>, String, u32) {
     let bytes = b"fake-swu-payload-for-orchestrator-tests".to_vec();
-    let sha = {
-      let mut h = Sha256::new();
-      h.update(&bytes);
-      hex::encode(h.finalize())
-    };
+    let sha = crate::digest::sha256_hex(&bytes);
     let size = bytes.len() as u32;
     (bytes, sha, size)
   }
 
   fn sized_fixture(n: usize) -> (Vec<u8>, String, u32) {
     let bytes: Vec<u8> = (0..n).map(|i| (i * 31 + 7) as u8).collect();
-    let sha = {
-      let mut h = Sha256::new();
-      h.update(&bytes);
-      hex::encode(h.finalize())
-    };
+    let sha = crate::digest::sha256_hex(&bytes);
     let size = bytes.len() as u32;
     (bytes, sha, size)
   }
@@ -1208,7 +1184,9 @@ mod tests {
   }
 
   async fn boot_on(root: PathBuf, peers: PeerTracker) -> Harness {
-    let pending = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap();
+    let pending = ChunkedTransfer::init(root.clone(), crate::transfer::TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap();
     let (transfers, _xfer_handle) = pending.spawn();
     let (events_tx, events) = mpsc::channel(64);
     let reboot_calls = Arc::new(AtomicUsize::new(0));
@@ -2063,11 +2041,7 @@ mod tests {
 
   fn fixture_seed(seed: &str) -> (Vec<u8>, String, u32) {
     let bytes = format!("fake-ota-payload-{seed}").into_bytes();
-    let sha = {
-      let mut hsh = Sha256::new();
-      hsh.update(&bytes);
-      hex::encode(hsh.finalize())
-    };
+    let sha = crate::digest::sha256_hex(&bytes);
     let size = bytes.len() as u32;
     (bytes, sha, size)
   }

@@ -445,8 +445,10 @@ mod tests {
     let sent_param = frame.find(6).expect("messages_sent_by_accessory");
     let sent_ids: Vec<u16> = sent_param
       .payload
-      .chunks_exact(2)
-      .map(|c| u16::from_be_bytes([c[0], c[1]]))
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|c| u16::from_be_bytes(*c))
       .collect();
     assert_eq!(
       sent_ids,
@@ -459,8 +461,10 @@ mod tests {
     let recv_param = frame.find(7).unwrap();
     let recv_ids: Vec<u16> = recv_param
       .payload
-      .chunks_exact(2)
-      .map(|c| u16::from_be_bytes([c[0], c[1]]))
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|c| u16::from_be_bytes(*c))
       .collect();
     assert_eq!(
       recv_ids,

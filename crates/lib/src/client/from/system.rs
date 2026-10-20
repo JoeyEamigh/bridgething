@@ -84,6 +84,19 @@ pub struct LogsUnsubscribe {
 )]
 pub struct DeviceGetNickname;
 
+/// Arms a wipe of the data partition and restarts the device.
+#[derive(Debug, Clone, Copy, Default, WireRequest)]
+#[wire_request(
+  direction = ClientToBridge,
+  surface = System,
+  request_variant = FactoryReset,
+  response = crate::client::FactoryResetStarted,
+  response_variant = FactoryResetStarted,
+  error = crate::client::FactoryResetRefused,
+  error_variant = FactoryResetRefused,
+)]
+pub struct RequestFactoryReset;
+
 /// Returns the M-button gesture that jumps to the launcher.
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
@@ -122,7 +135,7 @@ pub enum ClientToBridgeSystemMsg {
   Reboot,
   #[bridge_command]
   PowerOff,
-  #[bridge_command]
+  #[bridge_request]
   FactoryReset,
   #[bridge_request]
   DeviceGetNickname,

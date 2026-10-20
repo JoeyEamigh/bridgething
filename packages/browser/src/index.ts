@@ -1,4 +1,4 @@
-import type { BridgeThingMeta, LauncherGesture, WebappInfo } from '@bridgething/lib';
+import type { BridgeThingMeta, ConfigEntry, DocEntry, LauncherGesture, WebappInfo } from '@bridgething/lib';
 import { BRIDGETHING_DEFAULT_HOST, BRIDGETHING_NETWORK_GATEWAY_PORT } from '@bridgething/lib';
 import type { DeviceNicknameReply, WebappActive, WebappSlot, WebappSlots } from '@bridgething/lib/gateway';
 
@@ -9,7 +9,12 @@ import type {
   OtaDiscoverManifest,
   OtaUpdateKind,
   Phase,
+  ResourceOrigin,
   UpdateEvent,
+  WebappBlobEntry,
+  WebappDocChange,
+  WebappResourceBody,
+  WebappResourceKind,
 } from '../wasm/core-wasm.js';
 import initWasm, {
   ByteLink,
@@ -35,7 +40,12 @@ export type {
   Phase,
   PhaseKind,
   PlanStep,
+  ResourceOrigin,
   UpdateEvent,
+  WebappBlobEntry,
+  WebappDocChange,
+  WebappResourceBody,
+  WebappResourceKind,
 } from '../wasm/core-wasm.js';
 export { permittedSerialPorts, requestSerialPort, serialAvailable } from './web-serial.js';
 export type { SerialPort } from './web-serial.js';
@@ -138,6 +148,67 @@ export class Device {
 
   setWebappSlot(slot: WebappSlot, id: string | null): Promise<WebappSlots> {
     return this.session.setWebappSlot(slot, id ?? undefined) as Promise<WebappSlots>;
+  }
+
+  webappResource(id: string, kind: WebappResourceKind, origin?: ResourceOrigin | null): Promise<WebappResourceBody> {
+    return this.session.webappResource(id, kind, origin);
+  }
+
+  webappConfig(id: string): Promise<ConfigEntry[]> {
+    return this.session.webappConfig(id) as Promise<ConfigEntry[]>;
+  }
+
+  setWebappConfig(id: string, key: string, value: string): Promise<void> {
+    return this.session.setWebappConfig(id, key, value);
+  }
+
+  deleteWebappConfig(id: string, key: string): Promise<void> {
+    return this.session.deleteWebappConfig(id, key);
+  }
+
+  webappDoc(id: string): Promise<DocEntry[]> {
+    return this.session.webappDoc(id) as Promise<DocEntry[]>;
+  }
+
+  async webappDocEntry(id: string, key: string): Promise<string | null> {
+    return (await this.session.webappDocEntry(id, key)) ?? null;
+  }
+
+  setWebappDoc(id: string, key: string, value: string): Promise<void> {
+    return this.session.setWebappDoc(id, key, value);
+  }
+
+  deleteWebappDoc(id: string, key: string): Promise<void> {
+    return this.session.deleteWebappDoc(id, key);
+  }
+
+  createBlobHandle(mime: string): string {
+    return this.session.createBlobHandle(mime);
+  }
+
+  appendBlobHandle(handle: string, base64: string): number {
+    return this.session.appendBlobHandle(handle, base64);
+  }
+
+  putWebappBlob(
+    id: string,
+    key: string,
+    handle: string,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<WebappBlobEntry> {
+    return this.session.putWebappBlob(id, key, handle, onProgress);
+  }
+
+  deleteWebappBlob(id: string, key: string): Promise<void> {
+    return this.session.deleteWebappBlob(id, key);
+  }
+
+  webappBlobs(id: string): Promise<WebappBlobEntry[]> {
+    return this.session.webappBlobs(id);
+  }
+
+  nextDocChange(): Promise<WebappDocChange | null> {
+    return this.session.nextDocChange();
   }
 
   setNickname(nickname: string): Promise<DeviceNicknameReply> {

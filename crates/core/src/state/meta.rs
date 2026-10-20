@@ -1,12 +1,7 @@
-use std::{
-  io::{self, Read},
-  path::{Path, PathBuf},
-  sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use libbridgething::{BridgeThingMeta, LauncherGesture};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 
 use super::{KvStore, StateResult};
@@ -134,16 +129,14 @@ impl DeviceMeta {
     let tx = self.inner.daemon_sha_tx.clone();
     tokio::spawn(async move {
       let path = crate::ota::daemon_swap::patch_source_path();
-      let job_path = path.clone();
-      match tokio::task::spawn_blocking(move || hash_file(&job_path)).await {
-        Ok(Ok(digest)) => {
+      match crate::digest::sha256_file(&path).await {
+        Ok(digest) => {
           tracing::info!(path = %path.display(), sha256 = %digest, "daemon binary digest computed");
           tx.send_replace(Some(digest));
         }
-        Ok(Err(err)) => {
+        Err(err) => {
           tracing::warn!(path = %path.display(), %err, "could not hash daemon binary; patch sources go unverified")
         }
-        Err(err) => tracing::warn!(%err, "daemon binary hash task failed; patch sources go unverified"),
       }
     });
   }
@@ -209,20 +202,6 @@ impl DeviceMeta {
       self.wakeword_model_version(),
     )
   }
-}
-
-fn hash_file(path: &Path) -> io::Result<String> {
-  let mut file = std::fs::File::open(path)?;
-  let mut hasher = Sha256::new();
-  let mut buf = vec![0u8; 64 * 1024];
-  loop {
-    let n = file.read(&mut buf)?;
-    if n == 0 {
-      break;
-    }
-    hasher.update(&buf[..n]);
-  }
-  Ok(hex::encode(hasher.finalize()))
 }
 
 fn build_meta(

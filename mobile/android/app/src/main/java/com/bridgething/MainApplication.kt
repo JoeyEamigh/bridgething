@@ -29,6 +29,7 @@ class MainApplication : Application(), ReactApplication {
     CrashCapture.install()
     LogcatCapture.start()
     BridgethingActivityRegistry.installCallbacks(this)
+    MediaPicker.sweep(this)
     BridgethingApp.installBridgething(this)
     loadReactNative(this)
   }

@@ -1,23 +1,39 @@
 use libbridgething::{
   ConfigEntry, ConfigField, DocEntry, WebappError,
   client::{
-    BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent, BridgeToClientWebappMsgEvent, ConfigChanged, DocChanged,
-    WebappUninstalled,
+    BlobChanged, BridgeToClientBlobMsgEvent, BridgeToClientConfigMsgEvent, BridgeToClientDocMsgEvent,
+    BridgeToClientWebappMsgEvent, ConfigChanged, DocChanged, WebappUninstalled,
   },
   gateway::{
     BridgeToGatewayWebappMsgEvent, GatewayToBridgeWebappMsgRequestDispatch, GetActiveWebapp, GetWebappSlots,
-    ListWebapps, TransferBody, TransferRef, WebappActive, WebappConfigAck, WebappConfigChanged, WebappConfigDelete,
-    WebappConfigGet, WebappConfigGetReply, WebappConfigList, WebappConfigListReply, WebappConfigSet, WebappDocAck,
-    WebappDocDelete, WebappDocGet, WebappDocGetReply, WebappDocList, WebappDocListReply, WebappDocSet, WebappList,
-    WebappResource, WebappResourceKind, WebappResourceReply, WebappSetSlot, WebappSlot, WebappSwitchTo,
-    WebappUninstall,
+    ListWebapps, TransferBody, TransferRef, WebappActive, WebappBlobDelete, WebappBlobDeleteAck, WebappBlobEntry,
+    WebappBlobFailed, WebappBlobList, WebappBlobListReply, WebappBlobPut, WebappBlobPutAck, WebappBlobStored,
+    WebappConfigAck, WebappConfigChanged, WebappConfigDelete, WebappConfigGet, WebappConfigGetReply, WebappConfigList,
+    WebappConfigListReply, WebappConfigSet, WebappDocAck, WebappDocDelete, WebappDocGet, WebappDocGetReply,
+    WebappDocList, WebappDocListReply, WebappDocSet, WebappList, WebappResource, WebappResourceKind,
+    WebappResourceReply, WebappSetSlot, WebappSlot, WebappSwitchTo, WebappUninstall,
   },
   protocol::Compress,
 };
+use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
 use super::{HandlerResult, MsgHandle};
-use crate::{chrome::ChromeCommand, net::ClientScope, state::sha256_hex};
+use crate::{
+  bluetooth::{Address, BluetoothMan},
+  chrome::ChromeCommand,
+  digest::sha256_hex,
+  net::ClientScope,
+  peer::PeerSnapshot,
+  state::{
+    State,
+    blobs::{BlobEvent, BlobUpload, PutBegin, blob_url},
+  },
+  transfer::{
+    ChunkOutcome,
+    sinks::{AckPolicy, ForwardStream, TransferEvent},
+  },
+};
 
 const KIOSK_HOME_URL: &str = "http://127.0.0.1:8891/";
 const KIOSK_HUB_URL_BASE: &str = "http://127.0.0.1:8891/_hub/";
@@ -109,6 +125,7 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
     let removed = self.handle.state.webapps.uninstall(id).await?;
     if removed {
       self.handle.state.kv.webapp_purge(id).await?;
+      self.handle.state.webapp_blobs.purge(id).await?;
       self.broadcast_uninstalled(id, name.unwrap_or_default()).await;
     } else {
       tracing::debug!(
@@ -529,9 +546,162 @@ impl GatewayToBridgeWebappMsgRequestDispatch for WebappHandler {
       .await;
     Ok(())
   }
+
+  async fn blob_put(&self, params: WebappBlobPut) -> HandlerResult {
+    let WebappBlobPut {
+      id,
+      key,
+      mime,
+      transfer,
+    } = params;
+    let uploader = self.handle.address;
+    let peers = self.handle.state.peers.watch_snapshot();
+    let linked = uploader.is_some_and(|address| peers.borrow().companion_linked(&address));
+
+    let begun = self
+      .handle
+      .state
+      .webapp_blobs
+      .begin_put(id, key, mime, transfer.total_size, transfer.sha256.clone(), uploader)
+      .await;
+    match begun {
+      Err(err) => {
+        self.handle.respond_err::<WebappBlobPut>(err).await;
+      }
+      Ok(PutBegin::Stored { size }) => {
+        self
+          .handle
+          .respond_to::<WebappBlobPut>(WebappBlobPutAck {
+            resume_from_offset: size,
+          })
+          .await;
+      }
+      Ok(PutBegin::Stream { offset, upload }) => {
+        let stream = self
+          .handle
+          .state
+          .transfer_sinks
+          .bind_forward(transfer.id, AckPolicy::OnDrain);
+        self
+          .handle
+          .respond_to::<WebappBlobPut>(WebappBlobPutAck {
+            resume_from_offset: offset as u32,
+          })
+          .await;
+        let peer_lost = peer_lost(peers, upload.uploader, linked);
+        self.drive_blob_upload(transfer, upload, stream, peer_lost).await;
+      }
+    }
+    Ok(())
+  }
+
+  async fn blob_delete(&self, params: WebappBlobDelete) -> HandlerResult {
+    let WebappBlobDelete { id, key } = params;
+    if self.handle.state.webapps.bundle(id).await.is_none() {
+      self
+        .handle
+        .respond_err::<WebappBlobDelete>(WebappError::WebappNotFound { id: id.to_string() })
+        .await;
+      return Ok(());
+    }
+    self.handle.state.webapp_blobs.delete(id, key.clone()).await?;
+    self
+      .handle
+      .respond_to::<WebappBlobDelete>(WebappBlobDeleteAck { key })
+      .await;
+    Ok(())
+  }
+
+  async fn blob_list(&self, params: WebappBlobList) -> HandlerResult {
+    let WebappBlobList { id } = params;
+    if self.handle.state.webapps.bundle(id).await.is_none() {
+      self
+        .handle
+        .respond_err::<WebappBlobList>(WebappError::WebappNotFound { id: id.to_string() })
+        .await;
+      return Ok(());
+    }
+    let entries = self
+      .handle
+      .state
+      .webapp_blobs
+      .list(id)
+      .await?
+      .into_iter()
+      .map(|(key, meta)| WebappBlobEntry {
+        key,
+        sha256: meta.sha256,
+        mime: meta.mime,
+        size: meta.size,
+      })
+      .collect();
+    self
+      .handle
+      .respond_to::<WebappBlobList>(WebappBlobListReply { entries })
+      .await;
+    Ok(())
+  }
 }
 
 impl WebappHandler {
+  async fn drive_blob_upload(
+    &self,
+    transfer: TransferRef,
+    upload: BlobUpload,
+    mut stream: ForwardStream,
+    peer_lost: impl Future<Output = ()>,
+  ) {
+    let _binding = SinkBinding {
+      sinks: self.handle.state.transfer_sinks.clone(),
+      id: transfer.id,
+    };
+    let blobs = &self.handle.state.webapp_blobs;
+    let gateway_man = &self.handle.bluetooth.gateway_man;
+    let address = upload.uploader;
+    tokio::pin!(peer_lost);
+    loop {
+      let event = tokio::select! {
+        biased;
+        _ = upload.cancelled() => return,
+        _ = &mut peer_lost => {
+          tracing::info!(webapp = %upload.webapp, key = %upload.key, "blob upload peer disconnected; partial retained for resume");
+          return;
+        }
+        event = stream.recv() => event,
+      };
+      let (offset, bytes) = match event {
+        None => {
+          tracing::debug!(webapp = %upload.webapp, key = %upload.key, "blob upload sink unbound; partial retained for resume");
+          return;
+        }
+        Some(TransferEvent::Abandon { reason }) => {
+          tracing::info!(webapp = %upload.webapp, key = %upload.key, %reason, "companion abandoned blob upload; partial retained for resume");
+          return;
+        }
+        Some(TransferEvent::Fragment { offset, bytes }) => (offset, bytes),
+      };
+      match blobs.accept(&upload, offset, bytes).await {
+        Ok(ChunkOutcome::Continue { received }) => {
+          gateway_man
+            .send_transfer_ack(address, transfer.id, received as u32)
+            .await;
+        }
+        Ok(ChunkOutcome::Completed { path }) => {
+          gateway_man
+            .send_transfer_ack(address, transfer.id, upload.meta.size)
+            .await;
+          blobs.finish(upload, Ok(path)).await;
+          return;
+        }
+        Err(err) => {
+          tracing::warn!(webapp = %upload.webapp, key = %upload.key, ?err, "blob upload failed; discarding partial");
+          blobs.finish(upload, Err(err)).await;
+          return;
+        }
+      }
+    }
+  }
+
   async fn broadcast_config_change(&self, id: Uuid, key: &str, value: Option<String>) {
     self
       .handle
@@ -607,7 +777,99 @@ impl WebappHandler {
   }
 }
 
-pub async fn navigate_url_for_active(state: &crate::state::State) -> String {
+pub async fn forward_blob_events(state: State, bluetooth: BluetoothMan, mut events: mpsc::Receiver<BlobEvent>) {
+  while let Some(event) = events.recv().await {
+    match event {
+      BlobEvent::Stored {
+        webapp,
+        key,
+        meta,
+        changed,
+      } => {
+        if changed {
+          let changed = BlobChanged {
+            key: key.clone(),
+            sha256: Some(meta.sha256.clone()),
+            url: Some(blob_url(&key, &meta.sha256)),
+          };
+          tell_active_webapp(&state, webapp, changed).await;
+        }
+        bluetooth
+          .gateway_man
+          .broadcast(BridgeToGatewayWebappMsgEvent::BlobStored(WebappBlobStored {
+            id: webapp,
+            key,
+            sha256: meta.sha256,
+            size: meta.size,
+          }))
+          .await;
+      }
+      BlobEvent::Failed {
+        webapp,
+        key,
+        sha256,
+        error,
+      } => {
+        bluetooth
+          .gateway_man
+          .broadcast(BridgeToGatewayWebappMsgEvent::BlobFailed(WebappBlobFailed {
+            id: webapp,
+            key,
+            sha256,
+            error,
+          }))
+          .await;
+      }
+      BlobEvent::Replaced {
+        webapp,
+        key,
+        sha256,
+        uploader,
+      } => {
+        let error = WebappError::BlobTransferFailed {
+          key: key.clone(),
+          reason: "a newer upload of the same key replaced this one".into(),
+        };
+        bluetooth
+          .gateway_man
+          .send_event(
+            uploader,
+            BridgeToGatewayWebappMsgEvent::BlobFailed(WebappBlobFailed {
+              id: webapp,
+              key,
+              sha256,
+              error,
+            }),
+          )
+          .await;
+      }
+      BlobEvent::Removed { webapp, key } => {
+        let changed = BlobChanged {
+          key,
+          sha256: None,
+          url: None,
+        };
+        tell_active_webapp(&state, webapp, changed).await;
+      }
+    }
+  }
+}
+
+async fn tell_active_webapp(state: &State, id: Uuid, changed: BlobChanged) {
+  if !matches!(state.active_webapp().await, Ok(Some(active)) if active == id) {
+    return;
+  }
+  let event = BridgeToClientBlobMsgEvent::Changed(changed);
+  if let Err(errs) = state
+    .bus
+    .broadcast_event_to_scopes(&[ClientScope::ActiveWebapp], event)
+    .await
+  {
+    tracing::debug!("blob-change broadcast: {} non-fatal errors", errs.len());
+  }
+}
+
+pub async fn navigate_url_for_active(state: &State) -> String {
   let Ok(Some(active)) = state.active_webapp().await else {
     return KIOSK_HOME_URL.to_string();
   };
@@ -671,4 +933,82 @@ fn validate_value(field: &ConfigField, value: &str) -> Result<(), String> {
     }
   }
   Ok(())
+}
+
+struct SinkBinding {
+  sinks: crate::transfer::sinks::TransferSinks,
+  id: Uuid,
+}
+
+impl Drop for SinkBinding {
+  fn drop(&mut self) {
+    self.sinks.unbind(self.id);
+  }
+}
+
+async fn peer_lost(mut snapshot: watch::Receiver<PeerSnapshot>, address: Address, mut seen_linked: bool) {
+  loop {
+    let linked = snapshot.borrow_and_update().companion_linked(&address);
+    if seen_linked && !linked {
+      return;
+    }
+    seen_linked |= linked;
+    if snapshot.changed().await.is_err() {
+      std::future::pending::<()>().await;
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::{collections::HashMap, time::Duration};
+
+  use libbridgething::{Device, DeviceType, LinkKind, Peer, PeerCompanionStatus};
+
+  use super::*;
+
+  const PHONE: Address = Address([0xFE, 0xED, 0, 0, 0, 1]);
+  const PATIENCE: Duration = Duration::from_secs(5);
+
+  fn snapshot(linked: bool) -> PeerSnapshot {
+    let mut peer = Peer::new(Device {
+      name: "phone".into(),
+      device_type: DeviceType::Android,
+      id: PHONE.to_string(),
+      kind: LinkKind::Bluetooth,
+      default: false,
+    });
+    if linked {
+      peer.companion = PeerCompanionStatus::Pending;
+    }
+    PeerSnapshot {
+      peers: HashMap::from([(PHONE, peer)]),
+    }
+  }
+
+  #[tokio::test]
+  async fn a_link_that_dropped_while_the_put_was_beginning_is_lost_at_once() {
+    let (links, snapshots) = watch::channel(snapshot(true));
+    let linked = snapshots.borrow().companion_linked(&PHONE);
+    links.send(snapshot(false)).expect("a watcher is listening");
+
+    tokio::time::timeout(PATIENCE, peer_lost(snapshots, PHONE, linked))
+      .await
+      .expect("the upload does not park on a dead link");
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_peer_not_yet_seen_linked_is_lost_only_once_it_links_and_drops() {
+    let (links, snapshots) = watch::channel(snapshot(false));
+    let lost = peer_lost(snapshots, PHONE, false);
+    tokio::pin!(lost);
+
+    assert!(tokio::time::timeout(PATIENCE, &mut lost).await.is_err());
+    links.send(snapshot(true)).expect("a watcher is listening");
+    assert!(tokio::time::timeout(PATIENCE, &mut lost).await.is_err());
+    links.send(snapshot(false)).expect("a watcher is listening");
+    tokio::time::timeout(PATIENCE, &mut lost)
+      .await
+      .expect("the drop is seen");
+  }
 }

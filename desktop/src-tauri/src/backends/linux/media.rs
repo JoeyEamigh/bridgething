@@ -11,8 +11,8 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD_PAD_INDIFFERENT};
 use bridgething_companion::backend::{
-  ImageScaler, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
-  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode,
+  MediaSessionBackend, MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use bridgething_io::{DownloadBody, HttpExecutor, HttpHeader, HttpMethod, HttpRequest, ReqwestTransport};
 use futures::StreamExt;
@@ -737,15 +737,18 @@ async fn paint(players: &Players, art: &HttpExecutor, package: &str, token: &str
   };
   let bytes = fetch(art, &url).await?;
   tracing::debug!(name, bytes = bytes.len(), "a player handed over cover art");
-  let scaled =
-    tokio::task::spawn_blocking(move || PortableScaler.downsample_jpeg(bytes, MAX_ART_EDGE, ART_JPEG_QUALITY))
-      .await
-      .ok()
-      .flatten();
+  let target = ImageTarget::Thumbnail {
+    max_edge: MAX_ART_EDGE,
+    quality: ART_JPEG_QUALITY,
+  };
+  let scaled = tokio::task::spawn_blocking(move || sniff_and_scale(&PortableScaler::default(), bytes, target))
+    .await
+    .ok()
+    .flatten();
   match scaled {
-    Some(bytes) => Some(MediaArt {
-      bytes,
-      mime: "image/jpeg".to_owned(),
+    Some(scaled) => Some(MediaArt {
+      bytes: scaled.bytes,
+      mime: scaled.mime,
     }),
     None => {
       tracing::warn!(name, "cover art in a shape this desktop cannot re-encode");

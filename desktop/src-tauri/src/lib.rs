@@ -103,6 +103,14 @@ macro_rules! desktop_commands {
       $crate::commands::delete_webapp_config_field,
       $crate::commands::set_webapp_doc,
       $crate::commands::delete_webapp_doc,
+      $crate::commands::media_import_ticket,
+      $crate::commands::import_picked_media,
+      $crate::commands::cancel_media_import,
+      $crate::commands::create_blob_handle,
+      $crate::commands::append_blob_handle,
+      $crate::commands::put_webapp_blob,
+      $crate::commands::delete_webapp_blob,
+      $crate::commands::webapp_blobs,
       $crate::commands::set_ota_poll_config,
       $crate::commands::apply_ota_update,
       $crate::commands::ota_push_daemon,
@@ -208,6 +216,11 @@ pub fn run() {
       }
       tracing::info!(resident, "the shell is up and resident in the tray");
       Ok(())
+    })
+    .on_page_load(|webview, payload| {
+      if let Some(shell) = webview.try_state::<Arc<Shell>>() {
+        shell.page_loading(payload.event());
+      }
     })
     .on_window_event(tray::on_window_event)
     .invoke_handler(desktop_commands!())

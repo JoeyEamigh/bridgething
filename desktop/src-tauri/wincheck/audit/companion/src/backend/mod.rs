@@ -10,11 +10,13 @@ pub mod image;
 pub mod media;
 #[path = "../../../../../../../crates/companion/src/backend/stream.rs"]
 pub mod stream;
+#[path = "../../../../../../../crates/companion/src/backend/transcode.rs"]
+pub mod transcode;
 
 pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};
-pub use image::ImageScaler;
+pub use image::{ImageScaler, ImageTarget, ScaledImage, sniff_and_scale};
 pub use media::{
   MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend, MediaSessionInbox,
   MediaSessionSnapshot, MediaSnapshotSink,
@@ -22,3 +24,4 @@ pub use media::{
 pub use stream::{
   StreamBackend, StreamEvent, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };
+pub use transcode::{MediaTranscoder, TranscodeJob, TranscodeRequest, TranscodeSink, TranscodedVideo};

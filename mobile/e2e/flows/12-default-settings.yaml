@@ -1,0 +1,52 @@
+appId: com.bridgething.gateway
+name: config-only apps share the default page, which follows whichever app's settings are open
+---
+- runFlow: ../common/fresh-start.yaml
+- tapOn: ".*Weather.*"
+- tapOn: "open Weather settings"
+- extendedWaitUntil:
+    visible: "(?i).*location as lat,lon.*"
+    timeout: 60000
+- assertVisible: "metric"
+- tapOn: "imperial"
+- tapOn: "Done"
+- assertVisible: "open Weather settings"
+- assertNotVisible: "(?i).*location as lat,lon.*"
+
+- tapOn: "open Weather settings"
+- extendedWaitUntil:
+    visible: "(?i).*location as lat,lon.*"
+    timeout: 3000
+- tapOn: "Done"
+
+- tapOn:
+    id: "tab-apps"
+- tapOn: ".*Browser.*"
+- tapOn: "open Browser settings"
+- extendedWaitUntil:
+    visible: "(?i).*bookmarks.*"
+    timeout: 3000
+- assertNotVisible: "(?i).*location as lat,lon.*"
+- tapOn: "Done"
+
+- tapOn:
+    id: "tab-apps"
+- tapOn: ".*Home Assistant.*"
+- tapOn: "open Home Assistant settings"
+- extendedWaitUntil:
+    visible: "(?i).*long-lived access token.*"
+    timeout: 180000
+- assertNotVisible: "(?i).*bookmarks.*"
+- tapOn: "Done"
+
+- tapOn:
+    id: "tab-apps"
+- tapOn: ".*Weather.*"
+- tapOn: "open Weather settings"
+- extendedWaitUntil:
+    visible: "(?i).*location as lat,lon.*"
+    timeout: 5000
+- assertNotVisible: "(?i).*long-lived access token.*"
+- assertNotVisible: "(?i).*bookmarks.*"
+- tapOn: "Done"
+- assertVisible: "open Weather settings"

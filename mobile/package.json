@@ -9,12 +9,13 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/fixtures/blob-picker",
     "ui": "bunx @react-native-reusables/cli@latest"
   },
   "dependencies": {
     "@bottom-tabs/react-navigation": "^1.4.0",
     "@bridgething/catalog": "workspace:*",
+    "@bridgething/client": "workspace:*",
     "@bridgething/lib": "workspace:*",
     "@bridgething/session-react-native": "workspace:*",
     "@bridgething/ui": "workspace:*",
@@ -68,6 +69,7 @@
     "@react-native/jest-preset": "0.85.2",
     "@react-native/metro-config": "0.85.2",
     "@react-native/typescript-config": "0.85.2",
+    "@types/bun": "^1.4.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.14",

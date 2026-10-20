@@ -12,7 +12,7 @@ function sizeGuard(): Plugin {
   return {
     name: 'settings-size-guard',
     closeBundle() {
-      const out = resolve(__dirname, 'dist', 'settings.html');
+      const out = resolve(import.meta.dirname, 'dist', 'settings.html');
       let bytes: number;
       try {
         bytes = statSync(out).size;
@@ -42,12 +42,13 @@ function sizeGuard(): Plugin {
 export default defineConfig({
   root: 'settings',
   plugins: [preact(), viteSingleFile(), sizeGuard()],
+  resolve: { dedupe: ['preact'] },
   build: {
     target: 'es2022',
-    outDir: resolve(__dirname, 'dist'),
+    outDir: resolve(import.meta.dirname, 'dist'),
     emptyOutDir: false,
     rollupOptions: {
-      input: resolve(__dirname, 'settings', 'settings.html'),
+      input: resolve(import.meta.dirname, 'settings', 'settings.html'),
     },
   },
 });

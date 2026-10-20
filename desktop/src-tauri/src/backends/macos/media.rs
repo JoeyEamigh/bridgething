@@ -14,8 +14,8 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bridgething_companion::backend::{
-  ImageScaler, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
-  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode,
+  MediaSessionBackend, MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use serde::{Deserialize, Serialize};
 
@@ -373,11 +373,17 @@ fn shape(reply: HelperArt, token: &str) -> Option<MediaArt> {
   if mime == JPEG && jpeg::edge(&bytes).is_some_and(|edge| edge <= MAX_ART_EDGE) {
     return Some(MediaArt { bytes, mime });
   }
-  ImageIoScaler
-    .downsample_jpeg(bytes, MAX_ART_EDGE, ART_JPEG_QUALITY)
-    .map(|bytes| MediaArt {
-      bytes,
-      mime: JPEG.to_owned(),
+  sniff_and_scale(
+    &ImageIoScaler,
+    bytes,
+    ImageTarget::Thumbnail {
+      max_edge: MAX_ART_EDGE,
+      quality: ART_JPEG_QUALITY,
+    },
+  )
+  .map(|scaled| MediaArt {
+      bytes: scaled.bytes,
+      mime: scaled.mime,
     })
 }
 

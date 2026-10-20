@@ -71,6 +71,7 @@ function fold(
 const natives = new Map<string, FakeNative>();
 
 const syncMethods = new Set([
+  'abandonPick',
   'otaRunProgress',
   'setLogStreamingEnabled',
   'setLocalLogStreamingEnabled',

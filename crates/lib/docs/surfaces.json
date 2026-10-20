@@ -106,6 +106,27 @@
       "handlers": []
     },
     {
+      "name": "blob",
+      "title": "Blob",
+      "description": "Files the companion app uploaded for the active webapp, such as a picked image or video. `list` returns\nthem, and `onChanged` reports each upload and delete.",
+      "events": [
+        {
+          "method": "onChanged",
+          "payload": "BlobChanged",
+          "payload_ref": "BlobChanged"
+        }
+      ],
+      "requests": [
+        {
+          "method": "list",
+          "response": "BlobListReply",
+          "response_event": "onList"
+        }
+      ],
+      "commands": [],
+      "handlers": []
+    },
+    {
       "name": "bluetooth",
       "title": "Bluetooth",
       "description": "Bluetooth pairing and connection state. `onStatus` and `onConnectedDevice` track the connected\nphone, `onPin` carries a code to show on screen, and `list` returns the paired devices.",
@@ -863,6 +884,13 @@
           "response_event": "onDeviceNickname"
         },
         {
+          "method": "factoryReset",
+          "description": "Arms a wipe of the data partition and restarts the device. `factoryResetStarted` answers once the restart is\nunderway and the link drops soon after; `factoryResetRefused` says why nothing was erased.",
+          "response": "FactoryResetStarted",
+          "error": "FactoryResetRefused",
+          "response_event": "onFactoryResetStarted"
+        },
+        {
           "method": "launcherGestureGet",
           "description": "Returns the M-button gesture that jumps to the launcher.",
           "response": "LauncherGestureReply",
@@ -880,9 +908,6 @@
         },
         {
           "method": "powerOff"
-        },
-        {
-          "method": "factoryReset"
         },
         {
           "method": "launcherGestureSet",
@@ -1281,6 +1306,63 @@
           "name": "error",
           "type": "AudioError",
           "type_ref": "AudioError"
+        }
+      ]
+    },
+    "BlobChanged": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "name": "sha256",
+          "type": "string",
+          "optional": true,
+          "description": "Null when the key was deleted."
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "optional": true,
+          "description": "Null when the key was deleted."
+        }
+      ]
+    },
+    "BlobEntry": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "name": "sha256",
+          "type": "string"
+        },
+        {
+          "name": "mime",
+          "type": "string"
+        },
+        {
+          "name": "size",
+          "type": "number"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "description": "Same-origin path the daemon serves the bytes at. `?v=` names the content, so it never goes stale."
+        }
+      ]
+    },
+    "BlobListReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "entries",
+          "type": "BlobEntry[]",
+          "type_ref": "BlobEntry"
         }
       ]
     },
@@ -2184,6 +2266,45 @@
           "type": "number"
         }
       ]
+    },
+    "FactoryResetRefusal": {
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "OffDevice",
+          "description": "The daemon is not running on a Car Thing."
+        },
+        {
+          "name": "NoWipeStep",
+          "description": "The system image has no boot step that erases the device. Update the system image first."
+        },
+        {
+          "name": "Failed",
+          "description": "The reset failed before the restart, and nothing was erased."
+        },
+        {
+          "name": "StillArmed",
+          "description": "The restart failed and the wipe could not be called off, so the next restart erases the device."
+        }
+      ]
+    },
+    "FactoryResetRefused": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "refusal",
+          "type": "FactoryResetRefusal",
+          "type_ref": "FactoryResetRefusal"
+        },
+        {
+          "name": "reason",
+          "type": "string"
+        }
+      ]
+    },
+    "FactoryResetStarted": {
+      "kind": "struct",
+      "fields": []
     },
     "FavoriteChanged": {
       "kind": "struct",
@@ -6105,6 +6226,27 @@
         {
           "name": "InvalidDocValue",
           "description": "The doc value is over 256 KiB."
+        },
+        {
+          "name": "ReservedPath"
+        },
+        {
+          "name": "InvalidBlobKey"
+        },
+        {
+          "name": "InvalidBlobPut"
+        },
+        {
+          "name": "BlobTooLarge"
+        },
+        {
+          "name": "BlobQuotaExceeded"
+        },
+        {
+          "name": "BlobStorageFull"
+        },
+        {
+          "name": "BlobTransferFailed"
         },
         {
           "name": "Internal",

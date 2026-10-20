@@ -52,7 +52,7 @@ async fn a_peer_that_stops_acking_announces_itself_with_the_gap() {
 
   let window = AckWindow::new();
   let id = Uuid::now_v7();
-  window.note(id, 1);
+  window.open(id, 1);
 
   assert!(
     window.await_window(id, 16, 64, IMMEDIATE).await.is_ok(),

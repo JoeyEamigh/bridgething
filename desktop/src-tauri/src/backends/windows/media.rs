@@ -10,8 +10,8 @@ use std::{
 };
 
 use bridgething_companion::backend::{
-  ImageScaler, MediaArt, MediaArtSink, MediaControl, MediaRepeatMode, MediaSessionBackend, MediaSessionInbox,
-  MediaSessionSnapshot, MediaSnapshotSink,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaRepeatMode, MediaSessionBackend,
+  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use bridgething_delivery::bundle::fetch::sha256_hex;
 use windows::{
@@ -682,11 +682,17 @@ fn shaped(mime: &str, raw: Vec<u8>) -> Option<MediaArt> {
       mime: mime.to_owned(),
     });
   }
-  PortableScaler
-    .downsample_jpeg(raw, MAX_ART_EDGE, ART_JPEG_QUALITY)
-    .map(|bytes| MediaArt {
-      bytes,
-      mime: ART_MIME.to_owned(),
+  sniff_and_scale(
+    &PortableScaler::default(),
+    raw,
+    ImageTarget::Thumbnail {
+      max_edge: MAX_ART_EDGE,
+      quality: ART_JPEG_QUALITY,
+    },
+  )
+  .map(|scaled| MediaArt {
+      bytes: scaled.bytes,
+      mime: scaled.mime,
     })
 }
 

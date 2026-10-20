@@ -66,7 +66,7 @@ function installedEntry(version: string) {
         source: 'installed' as const,
         role: 'standard' as const,
         provenance: OFFICIAL,
-        config: [],
+        configJson: '[]',
         permissions: [],
       },
     ],

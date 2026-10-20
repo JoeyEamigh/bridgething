@@ -19,7 +19,10 @@ use bridgething_gateway::{HandlerError, Reply};
 use futures::future::BoxFuture;
 use libbridgething::{
   BridgeThingMeta, OtaError, OtaFinished, OtaProgress, WebappInfo,
-  gateway::{OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply, TransferAck},
+  gateway::{
+    OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply, TransferAck, WebappBlobFailed,
+    WebappBlobStored,
+  },
 };
 use tokio::{sync::mpsc, task::JoinHandle};
 use uuid::Uuid;
@@ -112,4 +115,6 @@ pub trait OtaInbound: Send + Sync {
   fn device_meta(&self, meta: BridgeThingMeta);
   fn transfer_ack(&self, ack: TransferAck);
   fn webapp_installed(&self, info: WebappInfo);
+  fn blob_stored(&self, stored: WebappBlobStored);
+  fn blob_failed(&self, failed: WebappBlobFailed);
 }

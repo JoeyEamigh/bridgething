@@ -17,6 +17,10 @@ impl Client {
   pub fn audio(&self) -> AudioSurface<'_> {
     AudioSurface(self)
   }
+  /// The `Blob` surface.
+  pub fn blob(&self) -> BlobSurface<'_> {
+    BlobSurface(self)
+  }
   /// The `Bluetooth` surface.
   pub fn bluetooth(&self) -> BluetoothSurface<'_> {
     BluetoothSurface(self)
@@ -152,6 +156,27 @@ impl<'a> AudioSurface<'a> {
       ready(match msg {
         Ok(msg) => match msg.data {
           BridgeToClientMsgData::Audio(inner) => inner.into_event(),
+          _ => None,
+        },
+        Err(_) => None,
+      })
+    })
+  }
+}
+
+/// Methods scoped to the `Blob` wire surface.
+pub struct BlobSurface<'a>(&'a Client);
+
+impl<'a> BlobSurface<'a> {
+  pub async fn list(&self) -> Result<BlobListReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(BlobList).await
+  }
+  /// Stream of `Blob` events.
+  pub fn events(&self) -> impl Stream<Item = BridgeToClientBlobMsgEvent> + 'static {
+    BroadcastStream::new(self.0.events()).filter_map(|msg| {
+      ready(match msg {
+        Ok(msg) => match msg.data {
+          BridgeToClientMsgData::Blob(inner) => inner.into_event(),
           _ => None,
         },
         Err(_) => None,
@@ -647,9 +672,6 @@ impl<'a> SystemSurface<'a> {
   pub async fn power_off(&self) -> Result<(), SdkError> {
     self.0.command(ClientToBridgeSystemMsgCommand::PowerOff).await
   }
-  pub async fn factory_reset(&self) -> Result<(), SdkError> {
-    self.0.command(ClientToBridgeSystemMsgCommand::FactoryReset).await
-  }
   pub async fn launcher_gesture_set(&self, payload: LauncherGestureSet) -> Result<(), SdkError> {
     self
       .0
@@ -676,6 +698,9 @@ impl<'a> SystemSurface<'a> {
   }
   pub async fn device_get_nickname(&self) -> Result<DeviceNicknameReply, RequestFailure<::core::convert::Infallible>> {
     self.0.request(DeviceGetNickname).await
+  }
+  pub async fn factory_reset(&self) -> Result<FactoryResetStarted, RequestFailure<FactoryResetRefused>> {
+    self.0.request(RequestFactoryReset).await
   }
   pub async fn launcher_gesture_get(
     &self,

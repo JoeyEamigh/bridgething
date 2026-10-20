@@ -8,7 +8,7 @@ use libbridgething::OtaKind;
 use tokio::fs;
 
 use super::staging::{self, StagePaths, StagedPiece};
-use crate::paths::{ON_DEVICE_SENTINEL, is_on_device};
+use crate::paths::{self, ON_DEVICE_SENTINEL, is_on_device};
 
 const DAEMON_DIR: &str = "/opt/bridgething/daemon";
 const CURRENT_NAME: &str = "bridgething.current";
@@ -89,7 +89,7 @@ pub async fn stage(staged_binary: &Path, update_id: String) -> Result<StagedPiec
   fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o755))
     .await
     .map_err(io_err("chmod incoming"))?;
-  sync_file(&incoming).await?;
+  paths::fsync(&incoming).await.map_err(io_err("fsync incoming"))?;
 
   tracing::info!("daemon binary staged at {}", incoming.display());
   Ok(StagedPiece {
@@ -101,16 +101,6 @@ pub async fn stage(staged_binary: &Path, update_id: String) -> Result<StagedPiec
       previous,
     }),
   })
-}
-
-async fn sync_file(path: &Path) -> Result<(), SwapError> {
-  let f = fs::OpenOptions::new()
-    .read(true)
-    .open(path)
-    .await
-    .map_err(io_err("open incoming for fsync"))?;
-  f.sync_all().await.map_err(io_err("fsync incoming"))?;
-  Ok(())
 }
 
 #[cfg(test)]

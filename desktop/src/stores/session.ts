@@ -58,16 +58,11 @@ export const otaRuns: ReadonlySignal<api.OtaRun[]> = computed(() => snapshot.dat
 export const otaAvailable: ReadonlySignal<api.OtaAvailable[]> = computed(() => snapshot.data.value?.otaAvailable ?? []);
 export const otaPoll: ReadonlySignal<api.OtaPollStatus | null> = computed(() => snapshot.data.value?.otaPoll ?? null);
 
-const configs = keyed<api.ConfigEntry[]>([]);
 const docs = keyed<api.DocEntry[]>([]);
 const manifests = keyed<api.OtaDiscoverManifest | null>(null);
 const logs = keyed<api.DeviceLogLine[]>([]);
 
 export const logLimit = signal(2000);
-
-export function webappConfigFor(id: string): Store<api.ConfigEntry[]> {
-  return configs.at(id, () => bound().webappConfig(id));
-}
 
 export function webappDocFor(id: string): Store<api.DocEntry[]> {
   return docs.at(id, () => bound().webappDoc(id));
@@ -101,7 +96,7 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   'now-playing': [snapshot],
   ancs: [snapshot],
   'device-meta': [snapshot, autoResume, resumeTarget],
-  webapps: [webapps, webappActive, webappSlots, { refresh: configs.refreshAll }],
+  webapps: [webapps, webappActive, webappSlots],
   'webapp-doc': [{ refresh: docs.refreshAll }],
   'known-devices': [knownDevices],
   'voice-model': [snapshot],

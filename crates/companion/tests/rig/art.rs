@@ -3,7 +3,10 @@ use std::sync::{
   atomic::{AtomicUsize, Ordering},
 };
 
-use bridgething_companion::backend::ImageScaler;
+use bridgething_companion::{
+  backend::{ImageScaler, ImageTarget, ScaledImage},
+  media::MediaSniff,
+};
 use bridgething_io::{HttpDownloadSink, HttpRequest, HttpResponse, HttpSink, HttpTransport};
 
 #[derive(Default)]
@@ -52,8 +55,16 @@ impl TagScaler {
 }
 
 impl ImageScaler for TagScaler {
-  fn downsample_jpeg(&self, bytes: Vec<u8>, max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
+  fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, target: ImageTarget) -> Option<ScaledImage> {
+    let ImageTarget::Thumbnail { max_edge, .. } = target else {
+      return None;
+    };
     self.scales.fetch_add(1, Ordering::SeqCst);
-    Some(format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes())
+    Some(ScaledImage {
+      bytes: format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes(),
+      mime: "image/jpeg".into(),
+      width: max_edge,
+      height: max_edge,
+    })
   }
 }

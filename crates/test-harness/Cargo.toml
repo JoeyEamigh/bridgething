@@ -37,7 +37,7 @@ default = ["chrome"]
 chrome = ["dep:chromiumoxide"]
 
 [dev-dependencies]
-base64 = "0.22.1"
+base64 = "0.23.1"
 bridgething-delivery = { path = "../delivery/core" }
 bridgething-host-gateway = { path = "../host-gateway" }
 hex = "0.4.3"

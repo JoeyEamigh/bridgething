@@ -13,9 +13,9 @@ use libbridgething::{
 };
 use tokio::{
   sync::{mpsc::error::TrySendError, oneshot},
-  task::{JoinHandle, JoinSet},
+  task::JoinHandle,
 };
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use uuid::Uuid;
 
 use super::{WSError, WSResult, connection::Connection};
@@ -116,6 +116,7 @@ pub type ClientMan = Arc<ClientManager>;
 pub struct ClientManager {
   connections: DashMap<SocketAddr, ClientData>,
   cancel_token: CancellationToken,
+  connection_tasks: TaskTracker,
 
   tx: RecvTx,
   pending: Mutex<HashMap<Uuid, oneshot::Sender<ClientToBridgeMsgData>>>,
@@ -132,6 +133,7 @@ impl ClientManager {
     Self {
       connections: DashMap::new(),
       cancel_token: CancellationToken::new(),
+      connection_tasks: TaskTracker::new(),
 
       tx,
       pending: Mutex::new(HashMap::new()),
@@ -380,15 +382,18 @@ impl ClientManager {
       scope,
       stock_call: StockCallSlot::default(),
 
-      _handle: Connection::spawn(
-        address,
-        ws,
-        self.tx.clone(),
-        rx,
-        cancel_token.clone(),
-        mode,
-        #[cfg(feature = "test-tap")]
-        self.frame_tap.clone(),
+      _handle: self.connection_tasks.spawn(
+        Connection::new(
+          address,
+          ws,
+          self.tx.clone(),
+          rx,
+          cancel_token.clone(),
+          mode,
+          #[cfg(feature = "test-tap")]
+          self.frame_tap.clone(),
+        )
+        .listen(),
       ),
       cancel_token,
     };
@@ -438,11 +443,9 @@ impl ClientManager {
     }
   }
 
-  pub async fn _handle_shutdown(self) {
+  pub async fn drain(&self) {
     self.cancel_token.cancel();
-
-    JoinSet::from_iter(self.connections.into_iter().map(|(_, c)| c._handle))
-      .join_all()
-      .await;
+    self.connection_tasks.close();
+    self.connection_tasks.wait().await;
   }
 }

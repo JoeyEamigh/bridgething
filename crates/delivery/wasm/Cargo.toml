@@ -34,6 +34,7 @@ wasm-bindgen-futures = "0.4.76"
 web-sys = { version = "0.3.103", features = ["console"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+bridgething-delivery = { path = "../core", features = ["test-support"] }
 wasm-bindgen-test = "0.3.76"
 
 [package.metadata.wasm-pack.profile.release]

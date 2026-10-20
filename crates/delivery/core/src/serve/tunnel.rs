@@ -229,6 +229,7 @@ impl TunnelHandler for TunnelDispatcher {
     let _ = socket.set_nodelay(true);
 
     let id = request.tunnel_id;
+    self.acks.open(id, 0);
     let (read_half, write_half) = socket.into_split();
     let (writes, write_rx) = mpsc::unbounded_channel::<Bytes>();
     let tasks = Arc::new(TunnelTasks {

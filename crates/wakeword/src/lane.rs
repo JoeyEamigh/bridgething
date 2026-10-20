@@ -45,7 +45,7 @@ pub fn accumulate(accumulator: &mut [Lane; PER_TILE], taps: &[Lane], value: f32)
 #[inline(always)]
 pub fn spill(accumulator: &[Lane; PER_TILE], out: &mut [f32]) {
   let mut tile = [0.0; TILE];
-  for (slot, lane) in tile.chunks_exact_mut(LANES).zip(accumulator) {
+  for (slot, lane) in tile.as_chunks_mut::<LANES>().0.iter_mut().zip(accumulator) {
     slot.copy_from_slice(lane.as_array());
   }
   out.copy_from_slice(&tile[..out.len()]);

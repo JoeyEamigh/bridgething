@@ -1,5 +1,6 @@
 pub(crate) mod asset;
 mod audio;
+mod blob;
 mod bluetooth;
 mod capabilities;
 mod config;
@@ -21,6 +22,7 @@ mod webapp;
 
 use asset::*;
 use audio::*;
+use blob::*;
 use bluetooth::*;
 use capabilities::*;
 use config::*;
@@ -83,6 +85,9 @@ impl ClientHandler {
           handle,
           move |h| async move { msg.dispatch(&AudioHandler::new(h)).await },
         );
+      }
+      RecvMsgData::Blob(msg) => {
+        dispatch(handle, move |h| async move { msg.dispatch(&BlobHandler::new(h)).await });
       }
       RecvMsgData::Bluetooth(msg) => {
         dispatch(

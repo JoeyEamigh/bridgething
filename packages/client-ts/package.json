@@ -34,6 +34,26 @@
     "./settings": {
       "types": "./dist/settings.d.ts",
       "default": "./dist/settings.js"
+    },
+    "./settings-protocol": {
+      "types": "./dist/settings-protocol.d.ts",
+      "default": "./dist/settings-protocol.js"
+    },
+    "./form": {
+      "types": "./dist/form.d.ts",
+      "default": "./dist/form.js"
+    },
+    "./theme": {
+      "types": "./dist/theme.d.ts",
+      "default": "./dist/theme.js"
+    },
+    "./default-settings": {
+      "types": "./dist/default-settings.d.ts",
+      "default": "./dist/default-settings.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     }
   },
   "files": [
@@ -41,7 +61,7 @@
   ],
   "scripts": {
     "prebuild": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && vite build -c vite.default-settings.config.ts",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -52,9 +72,24 @@
     "@msgpack/msgpack": "^3.1.3"
   },
   "peerDependencies": {
+    "react": ">=18",
     "typescript": "^6.0.3"
   },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@types/bun": "^1.4.0"
+    "@preact/preset-vite": "^2.10.6",
+    "@types/bun": "^1.4.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "^21.0.3",
+    "preact": "^11.0.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }

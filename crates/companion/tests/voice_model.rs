@@ -193,13 +193,13 @@ impl StagedFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for StagedFetch {
-  async fn text(&self, url: &str) -> Result<String, FetchError> {
+  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
     self.manifest_reads.fetch_add(1, Ordering::SeqCst);
     let held = self.manifests.lock().unwrap();
     held
       .iter()
       .find(|(slug, _)| url.contains(&format!("/{slug}/")))
-      .map(|(_, body)| body.clone())
+      .map(|(_, body)| body.clone().into_bytes())
       .ok_or_else(|| FetchError::Transport(format!("nothing staged for {url}")))
   }
 
@@ -351,6 +351,7 @@ impl ModelRig {
       nlu: Some(runner.clone()),
       apple_music: None,
       image: None,
+      transcoder: None,
       model_validator: Some(validator.clone()),
       transfer_policy: Some(policy),
       connectivity: None,

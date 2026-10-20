@@ -1,45 +1,32 @@
-import type {
-  BridgethingConfigField,
-  SessionEvent,
-} from '@bridgething/session-react-native';
-import { describeError } from '@bridgething/ui/errors';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { Note } from '../components/Note';
 import { Press } from '../components/Press';
-import { ScrollScreen } from '../components/ScrollScreen';
 import { Spinner } from '../components/Spinner';
-import { useSettingsOrigin } from '../lib/catalog';
-import { getSession } from '../lib/session';
 import {
-  settingsAuthorize,
-  settingsFetch,
-  type FetchVerbRequest,
-} from '../lib/settings-bridge';
+  hideSettings,
+  onSettingsDone,
+  retrySettings,
+  revealSettings,
+  selectSettings,
+  settingsAbsent,
+  settingsReady,
+  useSettingsHostStore,
+} from '../lib/settings-host';
 import { TEXT } from '../lib/theme';
-import { useWebapps } from '../lib/webapps';
 import type { AppsScreenProps } from '../navigation';
 
 type Props = AppsScreenProps<'WebappSettings'>;
 
-type BridgeRequest = {
-  id: number;
-  verb: string;
-  payload?: Record<string, unknown>;
-};
-
 export function WebappSettingsScreen({ navigation, route }: Props) {
-  const session = getSession();
   const { deviceId, id, name } = route.params;
-  const { list } = useWebapps(deviceId);
-  const info = list.find(w => w.id === id) ?? null;
-  const origin = useSettingsOrigin(info);
+  const placeholder = useRef<View>(null);
+  const appeared = useRef(false);
 
-  const webviewRef = useRef<WebView<object>>(null);
-  const [markup, setMarkup] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const failure = useSettingsHostStore(s => s.failure);
+  const ready = useSettingsHostStore(settingsReady);
+  const absent = useSettingsHostStore(settingsAbsent);
 
   const finish = useCallback(() => navigation.goBack(), [navigation]);
 
@@ -60,210 +47,62 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
     });
   }, [finish, name, navigation]);
 
-  const load = useRef(0);
-
-  const loadPage = useCallback(async () => {
-    const mine = ++load.current;
-    setError(null);
-    setMarkup(null);
-    try {
-      const page = await session.webappSettingsMarkup(deviceId, id, origin);
-      if (load.current === mine) setMarkup(page);
-    } catch (err) {
-      if (load.current === mine) setError(describeError(err));
-    }
-  }, [deviceId, id, origin, session]);
-
-  useEffect(() => {
-    void loadPage();
-  }, [loadPage]);
-
-  const deliver = useCallback((payload: unknown) => {
-    const json = JSON.stringify(JSON.stringify(payload));
-    webviewRef.current?.injectJavaScript(
-      `window.__bridgethingSettingsDeliver && window.__bridgethingSettingsDeliver(${json}); true;`,
+  const measure = useCallback(() => {
+    placeholder.current?.measureInWindow((x, y, width, height) =>
+      revealSettings({ x, y, width, height }),
     );
   }, []);
 
   useEffect(() => {
-    const unsubscribe = session.subscribe((event: SessionEvent) => {
-      if (
-        event.type === 'webappDocChanged' &&
-        event.deviceId === deviceId &&
-        event.webappId === id
-      ) {
-        deliver({ event: 'docChanged', key: event.key, value: event.value });
-      }
-    });
-    return unsubscribe;
-  }, [deliver, deviceId, id, session]);
-
-  const handleVerb = useCallback(
-    async (
-      verb: string,
-      payload: Record<string, unknown>,
-    ): Promise<unknown> => {
-      const key = typeof payload.key === 'string' ? payload.key : '';
-      const value = typeof payload.value === 'string' ? payload.value : '';
-      switch (verb) {
-        case 'context':
-          return {
-            webappId: id,
-            name: info?.name ?? name,
-            version: info?.version ?? '',
-            deviceId,
-          };
-        case 'config.fields':
-          return (info?.config ?? []).map(toWireConfigField);
-        case 'config.list':
-          return session.listWebappConfig(deviceId, id);
-        case 'config.set':
-          await session.setWebappConfigField(deviceId, id, key, value);
-          return { key, value };
-        case 'config.delete': {
-          await session.deleteWebappConfigField(deviceId, id, key);
-          const fresh = await session.listWebappConfig(deviceId, id);
-          return { key, value: fresh.find(e => e.key === key)?.value ?? null };
-        }
-        case 'doc.get':
-          return { key, value: await session.getWebappDoc(deviceId, id, key) };
-        case 'doc.list':
-          return session.listWebappDoc(deviceId, id);
-        case 'doc.set':
-          await session.setWebappDoc(deviceId, id, key, value);
-          return { key, value };
-        case 'doc.delete':
-          await session.deleteWebappDoc(deviceId, id, key);
-          return { key, value: null };
-        case 'fetch':
-          return settingsFetch(payload as FetchVerbRequest);
-        case 'auth.authorize':
-          return settingsAuthorize(
-            typeof payload.url === 'string' ? payload.url : '',
-          );
-        default:
-          throw new Error(`unknown settings bridge verb: ${verb}`);
-      }
-    },
-    [deviceId, id, info, name, session],
-  );
-
-  const onMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      let request: BridgeRequest;
-      try {
-        request = JSON.parse(event.nativeEvent.data) as BridgeRequest;
-      } catch {
-        return;
-      }
-      if (typeof request.id !== 'number' || typeof request.verb !== 'string')
-        return;
-      if (request.verb === 'done') {
-        finish();
-        return;
-      }
-      void (async () => {
-        try {
-          const value = await handleVerb(request.verb, request.payload ?? {});
-          deliver({ id: request.id, ok: true, value });
-        } catch (err) {
-          deliver({
-            id: request.id,
-            ok: false,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      })();
-    },
-    [deliver, finish, handleVerb],
-  );
-
-  if (error) {
-    return (
-      <ScrollScreen>
-        <Note tone="err" action="retry" onAction={() => void loadPage()}>
-          {error}
-        </Note>
-      </ScrollScreen>
-    );
-  }
-
-  if (markup === null) {
-    return (
-      <View className="flex-1 items-center justify-center gap-3 bg-bg">
-        <Spinner />
-        <Text className="font-mono text-dim" style={TEXT.hint}>
-          fetching settings from your car thing
-        </Text>
-      </View>
-    );
-  }
+    selectSettings({ deviceId, id });
+    const unsubscribe = [
+      onSettingsDone(finish),
+      navigation.addListener('focus', () => {
+        selectSettings({ deviceId, id });
+        if (appeared.current) measure();
+      }),
+      navigation.addListener('blur', hideSettings),
+      navigation.addListener('transitionStart', event => {
+        if (event.data.closing) hideSettings();
+      }),
+      navigation.addListener('transitionEnd', event => {
+        if (event.data.closing) return;
+        appeared.current = true;
+        measure();
+      }),
+    ];
+    return () => {
+      for (const off of unsubscribe) off();
+      hideSettings();
+    };
+  }, [deviceId, finish, id, measure, navigation]);
 
   return (
-    <WebView<object>
-      ref={webviewRef}
-      source={{ html: markup }}
-      originWhitelist={[]}
-      onMessage={onMessage}
-      style={{ flex: 1 }}
-    />
+    <View
+      ref={placeholder}
+      className="flex-1 bg-bg"
+      onLayout={() => {
+        if (useSettingsHostStore.getState().frame) measure();
+      }}
+    >
+      {failure ? (
+        <View className="p-4">
+          <Note tone="err" action="retry" onAction={retrySettings}>
+            {failure}
+          </Note>
+        </View>
+      ) : ready ? null : absent ? (
+        <View className="p-4">
+          <Note tone="warn">{`${name} is not on a connected car thing`}</Note>
+        </View>
+      ) : (
+        <View className="flex-1 items-center justify-center gap-3">
+          <Spinner />
+          <Text className="font-mono text-dim" style={TEXT.hint}>
+            fetching settings from your car thing
+          </Text>
+        </View>
+      )}
+    </View>
   );
-}
-
-function toWireConfigField(
-  field: BridgethingConfigField,
-): Record<string, unknown> {
-  switch (field.kind) {
-    case 'number':
-      return {
-        type: 'number',
-        data: {
-          key: field.key,
-          label: field.label,
-          min: field.min,
-          max: field.max,
-          step: field.step,
-          default:
-            field.defaultValue !== undefined
-              ? Number(field.defaultValue)
-              : undefined,
-        },
-      };
-    case 'boolean':
-      return {
-        type: 'boolean',
-        data: {
-          key: field.key,
-          label: field.label,
-          default:
-            field.defaultValue !== undefined
-              ? field.defaultValue === 'true'
-              : undefined,
-        },
-      };
-    case 'enum':
-      return {
-        type: 'enum',
-        data: {
-          key: field.key,
-          label: field.label,
-          choices: field.choices ?? [],
-          default: field.defaultValue,
-        },
-      };
-    case 'secret':
-    case 'string':
-    default:
-      return {
-        type: field.kind === 'secret' ? 'secret' : 'string',
-        data: {
-          key: field.key,
-          label: field.label,
-          pattern: field.pattern,
-          minLength: field.minLength,
-          maxLength: field.maxLength,
-          default: field.defaultValue,
-        },
-      };
-  }
 }

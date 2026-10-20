@@ -4,9 +4,9 @@ use libbridgething::{
   ForwardMessage,
   client::{
     BridgeToClientMsg, ClientLegacyStockCommand, ClientToBridgeAssetMsg, ClientToBridgeAudioMsgCommand,
-    ClientToBridgeBluetoothMsg, ClientToBridgeCapabilitiesMsgRequest, ClientToBridgeConfigMsgRequest,
-    ClientToBridgeDocMsgRequest, ClientToBridgeGeoMsg, ClientToBridgeHardwareMsg, ClientToBridgeLibraryMsg,
-    ClientToBridgeLyricsMsg, ClientToBridgeMsg, ClientToBridgeMsgData, ClientToBridgeNetMsg,
+    ClientToBridgeBlobMsgRequest, ClientToBridgeBluetoothMsg, ClientToBridgeCapabilitiesMsgRequest,
+    ClientToBridgeConfigMsgRequest, ClientToBridgeDocMsgRequest, ClientToBridgeGeoMsg, ClientToBridgeHardwareMsg,
+    ClientToBridgeLibraryMsg, ClientToBridgeLyricsMsg, ClientToBridgeMsg, ClientToBridgeMsgData, ClientToBridgeNetMsg,
     ClientToBridgeNotificationsMsg, ClientToBridgePhoneMsg, ClientToBridgePlayerMsg, ClientToBridgeStoreMsgRequest,
     ClientToBridgeSystemMsg, ClientToBridgeTimeMsgRequest, ClientToBridgeVoiceMsg, ClientToBridgeWebappMsg,
   },
@@ -41,6 +41,7 @@ pub struct RecvMsg {
 pub enum RecvMsgData {
   Asset(ClientToBridgeAssetMsg),
   Audio(ClientToBridgeAudioMsgCommand),
+  Blob(ClientToBridgeBlobMsgRequest),
   Bluetooth(ClientToBridgeBluetoothMsg),
   Capabilities(ClientToBridgeCapabilitiesMsgRequest),
   Config(ClientToBridgeConfigMsgRequest),
@@ -87,6 +88,10 @@ impl From<ClientToBridgeMsg> for RecvMsgData {
       ClientToBridgeMsgData::Asset(inner) => Self::Asset(inner),
       ClientToBridgeMsgData::Audio(inner) => match inner.into_command() {
         Some(cmd) => Self::Audio(cmd),
+        None => Self::Hole,
+      },
+      ClientToBridgeMsgData::Blob(inner) => match inner.into_request() {
+        Some(req) => Self::Blob(req),
         None => Self::Hole,
       },
       ClientToBridgeMsgData::Bluetooth(inner) => Self::Bluetooth(inner),

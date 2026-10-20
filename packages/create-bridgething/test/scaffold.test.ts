@@ -1,4 +1,7 @@
+import type { ConfigField, SettingsHost } from '@bridgething/client/settings-protocol';
+import { settingsPage } from '@bridgething/client/testing';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { Window } from 'happy-dom';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import {
   existsSync,
@@ -443,5 +446,175 @@ describe('the scaffolded extension bundler', () => {
     expect(bundle).toContain('"jsr:@std/assert@1"');
     expect(bundle).toContain('"node:fs"');
     expect(bundle).toContain('bundled from a relative module');
+  });
+});
+
+describe('the scaffolded dev server', () => {
+  test('sends the daemon socket and blob urls to the daemon through the generated plugin script', () => {
+    const app = scaffold();
+    app.lendModules();
+    app.write(
+      [
+        "import { daemonProxy } from './scripts/bridgething';",
+        'const proxy = await daemonProxy();',
+        'console.log(JSON.stringify(Object.fromEntries(Object.entries(proxy).map(([path, rule]) => [path, rule.target]))));',
+        '',
+      ].join('\n'),
+      'proxy-check.ts',
+    );
+
+    const result = spawnSync('bun', ['proxy-check.ts'], {
+      cwd: app.dir,
+      encoding: 'utf8',
+      env: { ...process.env, BRIDGETHING_DAEMON_URL: 'ws://127.0.0.1:8891/' },
+    });
+
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      '/__bridgething': 'ws://127.0.0.1:8891',
+      '/.bridgething/blob/': 'http://127.0.0.1:8891',
+    });
+  });
+});
+
+function run(app: Source, command: string, ...args: string[]): SpawnSyncReturns<string> {
+  return spawnSync(command, args, { cwd: app.dir, encoding: 'utf8' });
+}
+
+describe.each([
+  ['a plain app', [] as string[]],
+  ['an extension app', ['--extension']],
+  ['a launcher app', ['--launcher']],
+  ['an overlay app', ['--overlay']],
+])('%s as scaffolded', (_, flags) => {
+  let app: Source;
+
+  beforeAll(() => {
+    app = scaffold(...flags);
+    app.lendModules();
+  });
+
+  test('typechecks', () => {
+    const result = run(app, join(app.dir, 'node_modules', '.bin', 'tsc'), '--noEmit');
+    expect(result.stdout + result.stderr).toBe('');
+    expect(result.status).toBe(0);
+  });
+
+  test('builds', () => {
+    const result = run(app, 'bun', 'run', 'build');
+    expect(result.status).toBe(0);
+    expect(app.has('dist', 'index.html')).toBe(true);
+    expect(app.has('dist', 'settings.html')).toBe(true);
+  });
+});
+
+describe('the scaffolded settings page', () => {
+  const FIELDS = [{ type: 'string', data: { key: 'city', label: 'City' } }] as ConfigField[];
+  let html: string;
+
+  beforeAll(() => {
+    const app = scaffold();
+    app.lendModules();
+    const result = run(app, 'bun', 'run', 'build');
+    if (result.status !== 0) throw new Error(`build failed: ${result.stdout}\n${result.stderr}`);
+    html = app.read('dist', 'settings.html');
+  });
+
+  function host(events: string[], docs: Map<string, string>, refuse = false): SettingsHost {
+    const unused = () => Promise.reject(new Error('unused'));
+    return {
+      context: () => Promise.resolve({ webappId: 'my-app', name: 'My App', version: '0.1.0', deviceId: 'thing' }),
+      'config.fields': () => Promise.resolve(FIELDS),
+      'config.list': () => Promise.resolve([]),
+      'config.set': ({ key, value }) => {
+        events.push(`set ${key}=${value}`);
+        return refuse ? Promise.reject(new Error('the device said no')) : Promise.resolve({ key, value });
+      },
+      'config.delete': unused,
+      'doc.get': unused,
+      'doc.list': unused,
+      'doc.set': ({ key, value }) => {
+        docs.set(key, value);
+        return Promise.resolve({ key, value });
+      },
+      'doc.delete': unused,
+      fetch: unused,
+      'auth.authorize': unused,
+      pick: unused,
+      'blob.create': unused,
+      'blob.append': unused,
+      'blob.put': unused,
+      'blob.delete': unused,
+      'blob.list': unused,
+      done: () => void events.push('done'),
+    };
+  }
+
+  async function open(events: string[], docs: Map<string, string>, refuse = false) {
+    const window = new Window({
+      url: 'about:blank',
+      settings: { enableJavaScriptEvaluation: true, suppressInsecureJavaScriptEnvironmentWarning: true },
+    });
+    const page = settingsPage<string, Window>(window, { target: 'my-app', bind: () => host(events, docs, refuse) });
+    page.load(html);
+    await page.until(() => page.frame.document.querySelector('#bt-field-city') !== null);
+    return page;
+  }
+
+  test('saves what is typed even while the field still has focus', async () => {
+    const events: string[] = [];
+    const docs = new Map<string, string>();
+    const page = await open(events, docs);
+
+    page.enter('#bt-field-city', 'Detroit');
+    page.press('Save to device');
+    await page.until(() => docs.has('preferences'));
+
+    expect(events).toEqual(['set city=Detroit']);
+    expect(JSON.parse(docs.get('preferences')!)).toMatchObject({ values: { city: 'Detroit' } });
+
+    await page.close();
+  });
+
+  test('done writes what is still being typed before it closes', async () => {
+    const events: string[] = [];
+    const page = await open(events, new Map());
+
+    page.enter('#bt-field-city', 'Detroit');
+    page.press('Done');
+    await page.until(() => events.includes('done'));
+
+    expect(events).toEqual(['set city=Detroit', 'done']);
+
+    await page.close();
+  });
+
+  test('done stays open and says why when the device refuses the edit', async () => {
+    const events: string[] = [];
+    const page = await open(events, new Map(), true);
+
+    page.enter('#bt-field-city', 'Detroit');
+    page.press('Done');
+    await page.until(() => page.text().includes('City: the device said no'));
+
+    expect(page.text()).toContain('City: the device said no');
+    expect(events).toEqual(['set city=Detroit']);
+
+    await page.close();
+  });
+
+  test('names the app the host says it is, and follows a refresh', async () => {
+    const page = await open([], new Map());
+    expect(page.text()).toContain('My App settings');
+
+    page.session.notify({
+      event: 'refresh',
+      context: { webappId: 'my-app', name: 'My Renamed App', version: '0.2.0', deviceId: 'thing' },
+    });
+    await page.until(() => page.text().includes('My Renamed App settings'));
+
+    expect(page.text()).toContain('My Renamed App settings');
+
+    await page.close();
   });
 });

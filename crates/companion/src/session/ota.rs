@@ -4,7 +4,10 @@ use bridgething_delivery::ota::service::OtaService;
 use bridgething_gateway::{HandlerError, Reply};
 use libbridgething::{
   BridgeThingMeta, OtaError, OtaFinished, OtaProgress, WebappInfo,
-  gateway::{OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply, TransferAck},
+  gateway::{
+    OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply, TransferAck, WebappBlobFailed,
+    WebappBlobStored,
+  },
 };
 use uuid::Uuid;
 
@@ -70,5 +73,13 @@ impl OtaInbound for OtaLink {
 
   fn webapp_installed(&self, info: WebappInfo) {
     self.service.webapp_installed(&self.device_id, info);
+  }
+
+  fn blob_stored(&self, stored: WebappBlobStored) {
+    self.service.blob_stored(&self.device_id, stored);
+  }
+
+  fn blob_failed(&self, failed: WebappBlobFailed) {
+    self.service.blob_failed(&self.device_id, failed);
   }
 }

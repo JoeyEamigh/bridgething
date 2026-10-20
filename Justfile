@@ -13,10 +13,14 @@ device_features := 'superbird'
 dev_profile := '--config profile.release.lto=false --config profile.release.codegen-units=32'
 release_build := 'cargo build --release --locked -p bridgething --target ' + cross_target + ' --no-default-features --features ' + device_features
 device_bt_mac := env_var_or_default('SUPERBIRD_BT_MAC', '30:E3:D6:03:96:1E')
-dev_dir := justfile_directory() / '.dev'
 dev_gateway_url := 'ws://127.0.0.1:8892/'
 swupdate_vendor := justfile_directory() / 'crates/swupdate-sys/vendor/swupdate'
 swupdate_libdir := justfile_directory() / 'target/libswupdate'
+sidecar_dir := justfile_directory() / 'desktop/src-tauri/binaries'
+sidecar_target := arch() + if os() == 'windows' { '-pc-windows-msvc' } else { '-unknown-linux-gnu' }
+sidecar_targets := 'x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc aarch64-pc-windows-msvc'
+sidecar_image := 'docker build -t bridgething-ffmpeg-sidecar -f scripts/ffmpeg-sidecar.Dockerfile scripts'
+sidecar_run := 'docker run --rm -v bridgething-ffmpeg-sidecar:/cache'
 
 # --- Build image ---
 
@@ -45,8 +49,7 @@ fmt:
 
 # Run the daemon here with the radio untouched (no bluez session, no adapter), loopback binds, state under .dev/.
 dev-daemon:
-  mkdir -p {{dev_dir}}/state {{dev_dir}}/webapps {{dev_dir}}/examples
-  BRIDGETHING_STATE_DIR={{dev_dir}}/state BRIDGETHING_WEBAPPS_DIR={{dev_dir}}/webapps BRIDGETHING_EXAMPLES_DIR={{dev_dir}}/examples RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}" cargo run -p bridgething --features test-tap -- --dev
+  scripts/dev-daemon.sh run
 
 # Build and launch the dev daemon in the background; pidfile + log under .dev/.
 dev-daemon-start:
@@ -228,9 +231,44 @@ desktop-dev:
 desktop-build:
   cd desktop && bun run tauri build
 
-# JVM suites for every gradle subproject
+# The trimmed LGPL ffmpeg the linux and windows desktop bundles carry, for one rust target or `all`, built in docker
+ffmpeg-sidecar target=sidecar_target:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  recipe="$(scripts/ffmpeg-sidecar-recipe)"
+  out='{{sidecar_dir}}'
+  mkdir -p "$out"
+  {{sidecar_image}}
+  for target in {{ if target == 'all' { sidecar_targets } else { target } }}; do
+    {{sidecar_run}} -e SIDECAR_RECIPE="$recipe" -v "$out:/out" bridgething-ffmpeg-sidecar "$target"
+    (cd "$out" && if command -v sha256sum >/dev/null; then sha256sum -c bridgething-ffmpeg-"$target"*.sha256; else shasum -a 256 -c bridgething-ffmpeg-"$target"*.sha256; fi)
+  done
+
+# The recipe hash the sidecar is content-addressed by on ota.bridgething.com
+ffmpeg-sidecar-recipe:
+  @scripts/ffmpeg-sidecar-recipe
+
+# Mirror built sidecars, their NOTICE, the recipe and the pinned source tarballs to R2; needs the r2 rclone remote
+ffmpeg-sidecar-publish target='all':
+  #!/usr/bin/env bash
+  set -euo pipefail
+  sources="$(mktemp -d)"
+  trap 'rm -rf "$sources"' EXIT
+  {{sidecar_image}}
+  {{sidecar_run}} --entrypoint sh bridgething-ffmpeg-sidecar -c 'ffmpeg-sidecar sources >&2 && tar -C /out -cf - source' \
+    | tar -C "$sources" -xf -
+  R2_BUCKET="${R2_BUCKET:-bridgething-ota}" PUBLIC_BASE="${PUBLIC_BASE:-https://ota.bridgething.com}" \
+    scripts/bridgething-publish-ffmpeg-sidecar "$sources/source" {{ if target == 'all' { sidecar_targets } else { target } }}
+
+# JVM suites for every gradle subproject and the android app
 test-kotlin:
-  @bash -c 'source scripts/gradle-jdk.sh && gradle_jdk_env && JAVA_HOME="$GRADLE_JAVA" ./gradlew test :packages:companion:kotlin:companion:compileDebugAndroidTestSources {{gradle_force}} --no-daemon --console=plain --stacktrace -Porg.gradle.java.installations.paths="$GRADLE_INSTALLS" -Porg.gradle.java.installations.auto-download=false </dev/null'
+  #!/usr/bin/env bash
+  set -euo pipefail
+  source scripts/gradle-jdk.sh
+  gradle_jdk_env
+  gradle() { JAVA_HOME="$GRADLE_JAVA" ./gradlew "$@" {{gradle_force}} --no-daemon --console=plain --stacktrace -Porg.gradle.java.installations.paths="$GRADLE_INSTALLS" -Porg.gradle.java.installations.auto-download=false </dev/null; }
+  gradle test :packages:companion:kotlin:companion:compileDebugAndroidTestSources
+  cd mobile/android && gradle :app:testDebugUnitTest
 
 # Swift package suite
 test-swift:

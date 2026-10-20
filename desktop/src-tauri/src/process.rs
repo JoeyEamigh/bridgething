@@ -8,6 +8,10 @@ pub fn leave<R: Runtime>(app: &AppHandle<R>) -> ! {
   if let Some(extensions) = app.try_state::<Arc<Extensions>>() {
     extensions.halt();
   }
+  #[cfg(any(target_os = "linux", target_os = "windows"))]
+  if let Some(sidecar) = crate::backends::ffmpeg::Sidecar::bundled() {
+    sidecar.halt();
+  }
   app.cleanup_before_exit();
   unsafe { libc::_exit(0) }
 }

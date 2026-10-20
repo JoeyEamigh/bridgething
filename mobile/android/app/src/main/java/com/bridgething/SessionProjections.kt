@@ -7,8 +7,6 @@ import com.margelo.nitro.bridgething.session.BridgethingAuthKind
 import com.margelo.nitro.bridgething.session.BridgethingAuthState
 import com.margelo.nitro.bridgething.session.BridgethingCapabilityFlags
 import com.margelo.nitro.bridgething.session.BridgethingCompanionDebug
-import com.margelo.nitro.bridgething.session.BridgethingConfigField
-import com.margelo.nitro.bridgething.session.BridgethingConfigKind
 import com.margelo.nitro.bridgething.session.BridgethingDeviceAutoResume
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMetaEntry
@@ -25,7 +23,6 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaOutcome
 import com.margelo.nitro.bridgething.session.BridgethingOtaPhase
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
-import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRelease
@@ -33,8 +30,11 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaStep
 import com.margelo.nitro.bridgething.session.BridgethingOtaStepKind
 import com.margelo.nitro.bridgething.session.BridgethingPeerLinkStatus
+import com.margelo.nitro.bridgething.session.BridgethingPickKind
+import com.margelo.nitro.bridgething.session.BridgethingPickedMedia
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
 import com.margelo.nitro.bridgething.session.BridgethingRepeatMode
+import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealth
 import com.margelo.nitro.bridgething.session.BridgethingServiceHealthKind
 import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
@@ -46,25 +46,30 @@ import com.margelo.nitro.bridgething.session.BridgethingVoiceModelStatus
 import com.margelo.nitro.bridgething.session.BridgethingVoiceTurn
 import com.margelo.nitro.bridgething.session.BridgethingVoiceTurnPhase
 import com.margelo.nitro.bridgething.session.BridgethingVoiceTurnTrigger
+import com.margelo.nitro.bridgething.session.BridgethingWebappBlob
 import com.margelo.nitro.bridgething.session.BridgethingWebappInfo
 import com.margelo.nitro.bridgething.session.BridgethingWebappRole
 import com.margelo.nitro.bridgething.session.BridgethingWebappSlot
 import com.margelo.nitro.bridgething.session.BridgethingWebappSlots
 import com.margelo.nitro.bridgething.session.BridgethingWebappSource
+import java.io.IOException
+import kotlin.math.floor
+import kotlinx.coroutines.CancellationException
 import uniffi.bridgething_companion.ActiveWebapp
 import uniffi.bridgething_companion.AncsAuthStatus
 import uniffi.bridgething_companion.AuthKind
 import uniffi.bridgething_companion.AuthState
 import uniffi.bridgething_companion.CapabilityFlags
 import uniffi.bridgething_companion.CompanionDebug
-import uniffi.bridgething_companion.ConfigField
-import uniffi.bridgething_companion.ConfigKind
+import uniffi.bridgething_companion.CompanionException
 import uniffi.bridgething_companion.DeviceMeta
 import uniffi.bridgething_companion.DeviceWebappsEntry
 import uniffi.bridgething_companion.LauncherGesture
 import uniffi.bridgething_companion.LogLevel
 import uniffi.bridgething_companion.LogOrigin
 import uniffi.bridgething_companion.LogStoreLevel
+import uniffi.bridgething_companion.MediaCover
+import uniffi.bridgething_companion.MediaPickKind
 import uniffi.bridgething_companion.NowPlaying
 import uniffi.bridgething_companion.OtaAvailable
 import uniffi.bridgething_companion.OtaDiscoverManifest
@@ -77,6 +82,7 @@ import uniffi.bridgething_companion.OtaRunPhase
 import uniffi.bridgething_companion.OtaRunProgress
 import uniffi.bridgething_companion.OtaStepKind
 import uniffi.bridgething_companion.PeerLinkStatus
+import uniffi.bridgething_companion.PickedMedia
 import uniffi.bridgething_companion.ProviderInfo
 import uniffi.bridgething_companion.RepeatMode
 import uniffi.bridgething_companion.ResumeTarget
@@ -89,6 +95,7 @@ import uniffi.bridgething_companion.VoiceModelStatus
 import uniffi.bridgething_companion.VoiceTurn
 import uniffi.bridgething_companion.VoiceTurnPhase
 import uniffi.bridgething_companion.VoiceTurnTrigger
+import uniffi.bridgething_companion.WebappBlob
 import uniffi.bridgething_companion.WebappInfo
 import uniffi.bridgething_companion.WebappRole
 import uniffi.bridgething_companion.WebappSlot
@@ -301,9 +308,56 @@ internal fun toRnWebappInfo(info: WebappInfo): BridgethingWebappInfo = Bridgethi
     iconHash = info.iconHash,
     settingsHash = info.settingsHash,
     overlayHash = info.overlayHash,
-    config = info.config.map(::toRnConfigField).toTypedArray(),
+    configJson = info.config,
     permissions = info.permissions.toTypedArray(),
 )
+
+internal fun toCorePickKind(kind: BridgethingPickKind): MediaPickKind = when (kind) {
+    BridgethingPickKind.IMAGE -> MediaPickKind.IMAGE
+    BridgethingPickKind.VIDEO -> MediaPickKind.VIDEO
+    BridgethingPickKind.ANY -> MediaPickKind.ANY
+}
+
+internal fun toCoreCover(width: Double?, height: Double?): MediaCover? {
+    if (width == null && height == null) return null
+    return MediaCover(coverEdge(width), coverEdge(height))
+}
+
+private fun coverEdge(value: Double?): UInt {
+    if (value == null || value != floor(value) || value < 1.0 || value > UInt.MAX_VALUE.toDouble()) {
+        throw PlainFailure("invalid: cover edges must be whole numbers from 1 to ${UInt.MAX_VALUE}")
+    }
+    return value.toUInt()
+}
+
+internal fun toRnPickedMedia(media: PickedMedia): BridgethingPickedMedia = BridgethingPickedMedia(
+    handle = media.handle,
+    mime = media.mime,
+    size = media.size.toDouble(),
+    width = media.width?.toDouble(),
+    height = media.height?.toDouble(),
+    durationMs = media.durationMs?.toDouble(),
+    preview = media.preview,
+)
+
+internal fun toRnWebappBlob(blob: WebappBlob): BridgethingWebappBlob =
+    BridgethingWebappBlob(key = blob.key, sha256 = blob.sha256, mime = blob.mime, size = blob.size.toDouble())
+
+private class PlainFailure(message: String) : Exception(message) {
+    override fun toString(): String = message.orEmpty()
+}
+
+internal suspend fun <T> plainly(work: suspend () -> T): T = try {
+    work()
+} catch (error: CancellationException) {
+    throw error
+} catch (error: CompanionException) {
+    throw PlainFailure(error.message.orEmpty())
+} catch (error: IllegalStateException) {
+    throw PlainFailure(error.message.orEmpty())
+} catch (error: IOException) {
+    throw PlainFailure("io: ${error.message.orEmpty()}")
+}
 
 internal fun toRnWebappSlots(slots: WebappSlots): BridgethingWebappSlots = BridgethingWebappSlots(
     launcher = slots.launcher,
@@ -314,26 +368,6 @@ internal fun toCoreWebappSlot(slot: BridgethingWebappSlot): WebappSlot = when (s
     BridgethingWebappSlot.LAUNCHER -> WebappSlot.LAUNCHER
     BridgethingWebappSlot.OVERLAY -> WebappSlot.OVERLAY
 }
-
-internal fun toRnConfigField(field: ConfigField): BridgethingConfigField = BridgethingConfigField(
-    kind = when (field.kind) {
-        ConfigKind.STRING -> BridgethingConfigKind.STRING
-        ConfigKind.SECRET -> BridgethingConfigKind.SECRET
-        ConfigKind.NUMBER -> BridgethingConfigKind.NUMBER
-        ConfigKind.BOOLEAN -> BridgethingConfigKind.BOOLEAN
-        ConfigKind.ENUM -> BridgethingConfigKind.ENUM
-    },
-    key = field.key,
-    label = field.label,
-    pattern = field.pattern,
-    minLength = field.minLength?.toDouble(),
-    maxLength = field.maxLength?.toDouble(),
-    min = field.min,
-    max = field.max,
-    step = field.step,
-    choices = if (field.kind == ConfigKind.ENUM) field.choices.toTypedArray() else null,
-    defaultValue = field.defaultValue,
-)
 
 internal fun toRnOtaManifest(m: OtaDiscoverManifest): BridgethingOtaManifest {
     val channels = m.channels.map { (slug, ch) ->

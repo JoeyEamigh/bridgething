@@ -19,6 +19,8 @@ import type {
   BridgethingOtaPollStatus,
   BridgethingOtaProgress,
   BridgethingOtaRun,
+  BridgethingPickKind,
+  BridgethingPickedMedia,
   BridgethingProviderCredentials,
   BridgethingProviderInfo,
   BridgethingResourceOrigin,
@@ -27,6 +29,7 @@ import type {
   BridgethingSessionSnapshot,
   BridgethingVoiceModelState,
   BridgethingVoiceTurn,
+  BridgethingWebappBlob,
   BridgethingWebappIcon,
   BridgethingWebappInfo,
   BridgethingWebappSlot,
@@ -46,7 +49,6 @@ export type {
   BridgethingCapabilityFlags,
   BridgethingCompanionDebug,
   BridgethingConfigEntry,
-  BridgethingConfigField,
   BridgethingDeviceAutoResume,
   BridgethingDeviceLogLine,
   BridgethingDeviceMeta,
@@ -72,6 +74,8 @@ export type {
   BridgethingOtaStep,
   BridgethingOtaStepKind,
   BridgethingPeerLinkStatus,
+  BridgethingPickKind,
+  BridgethingPickedMedia,
   BridgethingProviderCredentials,
   BridgethingProviderCredentialsKind,
   BridgethingProviderInfo,
@@ -89,6 +93,7 @@ export type {
   BridgethingVoiceTurn,
   BridgethingVoiceTurnPhase,
   BridgethingVoiceTurnTrigger,
+  BridgethingWebappBlob,
   BridgethingWebappIcon,
   BridgethingWebappInfo,
   BridgethingWebappSlot,
@@ -290,6 +295,40 @@ export class BridgethingSession {
 
   async deleteWebappDoc(deviceId: string, id: string, key: string): Promise<void> {
     await this.native.deleteWebappDoc(deviceId, id, key);
+  }
+
+  async pickMedia(kind: BridgethingPickKind, cover?: [number, number]): Promise<BridgethingPickedMedia | null> {
+    return this.native.pickMedia(kind, cover?.[0], cover?.[1]);
+  }
+
+  abandonPick(): void {
+    this.native.abandonPick();
+  }
+
+  async createBlobHandle(mime: string): Promise<string> {
+    return this.native.createBlobHandle(mime);
+  }
+
+  async appendBlobHandle(handle: string, base64: string): Promise<number> {
+    return this.native.appendBlobHandle(handle, base64);
+  }
+
+  async putWebappBlob(
+    deviceId: string,
+    id: string,
+    key: string,
+    handle: string,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<BridgethingWebappBlob> {
+    return this.native.putWebappBlob(deviceId, id, key, handle, onProgress ?? (() => undefined));
+  }
+
+  async deleteWebappBlob(deviceId: string, id: string, key: string): Promise<void> {
+    await this.native.deleteWebappBlob(deviceId, id, key);
+  }
+
+  async listWebappBlobs(deviceId: string, id: string): Promise<BridgethingWebappBlob[]> {
+    return this.native.listWebappBlobs(deviceId, id);
   }
 
   async setCapabilityFlags(flags: BridgethingCapabilityFlags): Promise<void> {

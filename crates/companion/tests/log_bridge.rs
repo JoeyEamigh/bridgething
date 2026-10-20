@@ -44,6 +44,7 @@ async fn a_core_tracing_line_reaches_the_host_log_sink() {
     nlu: None,
     apple_music: None,
     image: None,
+    transcoder: None,
     model_validator: None,
     transfer_policy: None,
     connectivity: None,

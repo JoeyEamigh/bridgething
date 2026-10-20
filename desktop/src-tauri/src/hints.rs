@@ -236,7 +236,7 @@ fn log(level: bridgething_companion::backend::LogLevel, target: &str, message: &
 mod tests {
   use std::time::Instant;
 
-  use bridgething_companion::api::{DeviceWebappsEntry, WebappInfo, WebappRole, WebappSource};
+  use bridgething_companion::api::{ConfigFields, DeviceWebappsEntry, WebappInfo, WebappRole, WebappSource};
   use bridgething_io::{HttpDownloadSink, HttpExecutor, HttpRequest, HttpSink, HttpTransport};
 
   use super::*;
@@ -292,7 +292,7 @@ mod tests {
           icon_hash: None,
           settings_hash: None,
           overlay_hash: None,
-          config: Vec::new(),
+          config: ConfigFields::default(),
           permissions: Vec::new(),
           extension: None,
         }],

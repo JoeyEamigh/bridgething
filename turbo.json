@@ -52,6 +52,18 @@
       "inputs": ["src/**", "tsconfig*.json", "package.json"],
       "outputs": []
     },
+    "@bridgething/client#test": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
+    "@bridgething/client#typecheck": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
+    "@bridgething/client#lint": {
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
     "@bridgething/lib#build": {
       "dependsOn": ["^build"],
       "inputs": ["ts/**", "scripts/**", "tsconfig*.json", "package.json", "$TURBO_ROOT$/Cargo.toml"],

@@ -17,6 +17,13 @@ pub fn now() -> Instant {
   Instant::now()
 }
 
+pub fn unix_millis() -> u64 {
+  web_time::SystemTime::now()
+    .duration_since(web_time::UNIX_EPOCH)
+    .map(|since| since.as_millis() as u64)
+    .unwrap_or(0)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn<F: Future<Output = ()> + Send + 'static>(fut: F) {
   tokio::spawn(fut);

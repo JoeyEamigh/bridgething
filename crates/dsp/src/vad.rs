@@ -181,7 +181,7 @@ mod tests {
   fn scores(samples: &[f32]) -> (f32, f32) {
     let mut endpointer = VoiceEndpointer::new(config());
     let (mut low, mut high) = (f32::MAX, f32::MIN);
-    for frame in samples.chunks_exact(FRAME_SAMPLES) {
+    for frame in samples.as_chunks::<FRAME_SAMPLES>().0 {
       endpointer.scratch.copy_from_slice(frame);
       let score = endpointer.score_frame();
       low = low.min(score);
@@ -359,7 +359,7 @@ mod tests {
       vetoed.observe(frame, Some(0.05));
     }
     let (mut open_scores, mut vetoed_scores) = (Vec::new(), Vec::new());
-    for frame in voiced_frames(10).chunks_exact(FRAME_SAMPLES) {
+    for frame in voiced_frames(10).as_chunks::<FRAME_SAMPLES>().0 {
       open.scratch.copy_from_slice(frame);
       vetoed.scratch.copy_from_slice(frame);
       open_scores.push(open.score_frame());

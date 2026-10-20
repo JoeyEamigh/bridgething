@@ -11,43 +11,48 @@ import android.content.IntentSender
 import com.margelo.nitro.bridgething.session.BridgethingBtBondState
 import com.margelo.nitro.bridgething.session.BridgethingBtDevice
 import java.util.regex.Pattern
-import kotlinx.coroutines.CompletableDeferred
 
 public object CompanionDevicePicker {
-    private const val REQUEST_CDM_PICK = 0xBA01
-
     private val carThingNameRegex: Pattern =
         Pattern.compile("(Car Thing|bridgething)", Pattern.CASE_INSENSITIVE)
 
     @SuppressLint("MissingPermission")
-    public suspend fun pick(context: Context): BridgethingBtDevice? {
-        val activity = BridgethingActivityRegistry.currentActivity
-            ?: error("CompanionDevicePicker needs a foreground activity")
-        val manager = context.applicationContext
-            .getSystemService(Context.COMPANION_DEVICE_SERVICE) as? CompanionDeviceManager
-            ?: error("CompanionDeviceManager unavailable on this device")
+    public suspend fun pick(): BridgethingBtDevice? {
+        val result = BridgethingActivityRegistry.awaitResult(ActivityRequest.COMPANION_DEVICE) { activity, requestCode ->
+            val manager = activity.getSystemService(CompanionDeviceManager::class.java)
+                ?: error("CompanionDeviceManager unavailable on this device")
+            manager.associate(associationRequest(), object : CompanionDeviceManager.Callback() {
+                override fun onDeviceFound(chooserLauncher: IntentSender) {
+                    try {
+                        activity.startIntentSenderForResult(chooserLauncher, requestCode, null, 0, 0, 0)
+                    } catch (e: IntentSender.SendIntentException) {
+                        BridgethingActivityRegistry.deliverResult(requestCode, Activity.RESULT_CANCELED, null)
+                        android.util.Log.w(TAG, "CDM intent sender failed: ${e.message}")
+                    }
+                }
 
-        val deferred = CompletableDeferred<BridgethingBtDevice?>()
-        BridgethingActivityRegistry.expectResult(REQUEST_CDM_PICK) { resultCode, data ->
-            if (resultCode != Activity.RESULT_OK || data == null) {
-                deferred.complete(null)
-                return@expectResult
-            }
-            val device: BluetoothDevice? =
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    data.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE, BluetoothDevice::class.java)
-                } else {
-                    @Suppress("DEPRECATION") data.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
+                override fun onFailure(error: CharSequence?) {
+                    BridgethingActivityRegistry.deliverResult(requestCode, Activity.RESULT_CANCELED, null)
+                    if (!error.isNullOrEmpty()) android.util.Log.i(TAG, "CDM picker failure: $error")
                 }
-            device?.let {
-                if (it.bondState != BluetoothDevice.BOND_BONDED) {
-                    BondWatcher.beginPairing(it.address)
-                    runCatching { it.createBond() }
-                }
-            }
-            deferred.complete(device?.let(::toWireDevice))
+            }, null)
         }
+        val data = result.data?.takeIf { result.resultCode == Activity.RESULT_OK } ?: return null
+        val device: BluetoothDevice? =
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                data.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION") data.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
+            }
+        if (device == null) return null
+        if (device.bondState != BluetoothDevice.BOND_BONDED) {
+            BondWatcher.beginPairing(device.address)
+            runCatching { device.createBond() }
+        }
+        return toWireDevice(device)
+    }
 
+    private fun associationRequest(): AssociationRequest {
         val builder = AssociationRequest.Builder()
             .addDeviceFilter(
                 BluetoothDeviceFilter.Builder()
@@ -58,30 +63,7 @@ public object CompanionDevicePicker {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             builder.setDeviceProfile(AssociationRequest.DEVICE_PROFILE_WATCH)
         }
-        val request = builder.build()
-
-        manager.associate(request, object : CompanionDeviceManager.Callback() {
-            override fun onDeviceFound(chooserLauncher: IntentSender) {
-                try {
-                    activity.startIntentSenderForResult(
-                        chooserLauncher, REQUEST_CDM_PICK,
-                        null, 0, 0, 0,
-                    )
-                } catch (e: IntentSender.SendIntentException) {
-                    BridgethingActivityRegistry.deliverResult(REQUEST_CDM_PICK, Activity.RESULT_CANCELED, null)
-                    deferred.complete(null)
-                    android.util.Log.w(TAG, "CDM intent sender failed: ${e.message}")
-                }
-            }
-
-            override fun onFailure(error: CharSequence?) {
-                BridgethingActivityRegistry.deliverResult(REQUEST_CDM_PICK, Activity.RESULT_CANCELED, null)
-                deferred.complete(null)
-                if (!error.isNullOrEmpty()) android.util.Log.i(TAG, "CDM picker failure: $error")
-            }
-        }, null)
-
-        return deferred.await()
+        return builder.build()
     }
 
     public fun associations(context: Context): Set<String> {

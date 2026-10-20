@@ -1,4 +1,5 @@
 mod connectivity;
+mod contain;
 mod fnv;
 mod geo;
 mod image;
@@ -6,6 +7,7 @@ mod media;
 pub mod nlu;
 mod speech;
 mod stream;
+mod transcode;
 mod volume;
 
 use std::{path::Path, sync::Arc};
@@ -25,6 +27,7 @@ pub fn platform(config_dir: &Path) -> Platform {
     volume: Some(Arc::new(volume::CoreAudioVolume::default())),
     connectivity: Some(Arc::new(connectivity::NwPathConnectivity::default())),
     image: Some(Arc::new(image::ImageIoScaler)),
+    transcoder: Some(Arc::new(transcode::AvMediaTranscoder)),
     speech: Some(Arc::new(asr::WhisperSpeech::new(paths.clone()))),
     nlu: Some(Arc::new(nlu::CoreMlNlu::new(paths.clone()))),
     model_validator: Some(Arc::new(models::DesktopArtifactValidator)),

@@ -18,6 +18,7 @@ pub mod phone;
 pub mod secrets;
 pub mod speech;
 pub mod stream;
+pub mod transcode;
 pub mod wake;
 
 pub use apple_music::{
@@ -30,7 +31,7 @@ pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
 pub use extension::{ExtensionConfigEntry, ExtensionHost, ExtensionHostInbox, ExtensionMessage, ExtensionOutbound};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};
 pub use host::{HostClock, HostEnvironment};
-pub use image::ImageScaler;
+pub use image::{ImageScaler, ImageTarget, ScaledImage, sniff_and_scale};
 pub use link::{LinkDevice, LinkEvent, LinkInbox, LinkTransport};
 pub use log::{LogArchive, LogInbox, LogLevel, LogSink, LogStore, LogStoreLevel, LogStoreLine};
 pub use media::{
@@ -62,4 +63,5 @@ pub use speech::{PrepareEvent, PrepareSink, SpeechRecognizer, SpeechSegment, Tra
 pub use stream::{
   StreamBackend, StreamEvent, StreamMetadata, StreamPresentation, StreamSink, StreamSource, StreamStatus, StreamTiming,
 };
+pub use transcode::{MediaTranscoder, TranscodeJob, TranscodeRequest, TranscodeSink, TranscodedVideo};
 pub use wake::{DeviceWaker, WakeReason};

@@ -1,11 +1,26 @@
-import { Device, fetchManifest, type InstalledWebapp, type UpdateEvent } from '@bridgething/browser';
+import {
+  Device,
+  fetchManifest,
+  type InstalledWebapp,
+  type UpdateEvent,
+  type WebappDocChange,
+} from '@bridgething/browser';
 import type * as api from '@bridgething/companion-types';
-import type { BridgeThingMeta, ConfigField as WireConfigField, WebappInfo as WireWebappInfo } from '@bridgething/lib';
-import type { Endpoint, Invalidation, Topic, WebappResource } from '@bridgething/ui';
+import type { BridgeThingMeta, WebappInfo as WireWebappInfo } from '@bridgething/lib';
+import type { Endpoint, Invalidation, ResourceOrigin, Topic, WebappResource } from '@bridgething/ui';
 
 import type { BrowserBackend } from './browser-tier';
 import { fetchBundle } from './catalog-source';
-import { OTA_ROOT, applyUpdate, connectWired, planFor, resolveUpdate, watchUpdateFeed } from './wired';
+import {
+  OTA_ROOT,
+  applyUpdate,
+  connectWired,
+  planFor,
+  resolveUpdate,
+  watchDocFeed,
+  watchUpdateFeed,
+  type Feed,
+} from './wired';
 
 export const SERIAL_URL = 'serial:';
 
@@ -26,9 +41,11 @@ export class BrowserSession implements BrowserBackend {
   readonly host = 'browser' as const;
 
   private readonly listeners = new Set<(event: Invalidation) => void>();
+  private readonly docWatchers = new Set<(change: WebappDocChange) => void>();
   private link: Device | null = null;
   private info: BridgeThingMeta | null = null;
-  private feed: { stop(): void } | null = null;
+  private feed: Feed | null = null;
+  private docs: Feed | null = null;
   private run: api.OtaRun | null = null;
   private offered: api.OtaAvailable | null = null;
   private polled: api.OtaPollStatus = { lastPolledAt: null, error: null };
@@ -39,8 +56,22 @@ export class BrowserSession implements BrowserBackend {
     return () => this.listeners.delete(listener);
   }
 
+  watchDocs(watcher: (change: WebappDocChange) => void): () => void {
+    this.docWatchers.add(watcher);
+    return () => this.docWatchers.delete(watcher);
+  }
+
   private fan(...topics: Topic[]): void {
-    for (const topic of topics) for (const listener of this.listeners) listener({ topic, id: null });
+    for (const topic of topics) this.invalidate({ topic, id: null });
+  }
+
+  private invalidate(event: Invalidation): void {
+    for (const listener of this.listeners) listener(event);
+  }
+
+  private docChanged(change: WebappDocChange): void {
+    for (const watcher of this.docWatchers) watcher(change);
+    this.invalidate({ topic: 'webapp-doc', id: change.id });
   }
 
   private get device(): Device {
@@ -65,6 +96,7 @@ export class BrowserSession implements BrowserBackend {
     this.link = device;
     this.info = await device.meta();
     this.feed = watchUpdateFeed(device, event => this.absorb(event));
+    this.docs = watchDocFeed(device, change => this.docChanged(change));
     void device.closed().then(() => {
       if (this.link === device) void this.disconnect();
     });
@@ -77,6 +109,8 @@ export class BrowserSession implements BrowserBackend {
   private async drop(): Promise<void> {
     this.feed?.stop();
     this.feed = null;
+    this.docs?.stop();
+    this.docs = null;
     const going = this.link;
     this.link = null;
     this.info = null;
@@ -205,36 +239,63 @@ export class BrowserSession implements BrowserBackend {
     }
   }
 
-  webappResource(): Promise<WebappResource> {
-    return beyondTheLink('webapp resources');
+  webappResource(id: string, kind: api.WebappResourceKind, origin?: ResourceOrigin | null): Promise<WebappResource> {
+    return this.device.webappResource(id, kind, origin);
   }
 
-  webappConfig(): Promise<api.ConfigEntry[]> {
-    return beyondTheLink('webapp config');
+  webappConfig(id: string): Promise<api.ConfigEntry[]> {
+    return this.device.webappConfig(id);
   }
 
-  setWebappConfigField(): Promise<void> {
-    return beyondTheLink('webapp config');
+  setWebappConfigField(id: string, key: string, value: string): Promise<void> {
+    return this.device.setWebappConfig(id, key, value);
   }
 
-  deleteWebappConfigField(): Promise<void> {
-    return beyondTheLink('webapp config');
+  deleteWebappConfigField(id: string, key: string): Promise<void> {
+    return this.device.deleteWebappConfig(id, key);
   }
 
-  webappDoc(): Promise<api.DocEntry[]> {
-    return beyondTheLink('the webapp document store');
+  webappDoc(id: string): Promise<api.DocEntry[]> {
+    return this.device.webappDoc(id);
   }
 
-  webappDocEntry(): Promise<string | null> {
-    return beyondTheLink('the webapp document store');
+  webappDocEntry(id: string, key: string): Promise<string | null> {
+    return this.device.webappDocEntry(id, key);
   }
 
-  setWebappDoc(): Promise<void> {
-    return beyondTheLink('the webapp document store');
+  async setWebappDoc(id: string, key: string, value: string): Promise<void> {
+    await this.device.setWebappDoc(id, key, value);
+    this.invalidate({ topic: 'webapp-doc', id });
   }
 
-  deleteWebappDoc(): Promise<void> {
-    return beyondTheLink('the webapp document store');
+  async deleteWebappDoc(id: string, key: string): Promise<void> {
+    await this.device.deleteWebappDoc(id, key);
+    this.invalidate({ topic: 'webapp-doc', id });
+  }
+
+  createBlobHandle(mime: string): Promise<string> {
+    return Promise.resolve().then(() => this.device.createBlobHandle(mime));
+  }
+
+  appendBlobHandle(handle: string, base64: string): Promise<number> {
+    return Promise.resolve().then(() => this.device.appendBlobHandle(handle, base64));
+  }
+
+  putWebappBlob(
+    id: string,
+    key: string,
+    handle: string,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<api.WebappBlob> {
+    return this.device.putWebappBlob(id, key, handle, onProgress);
+  }
+
+  deleteWebappBlob(id: string, key: string): Promise<void> {
+    return this.device.deleteWebappBlob(id, key);
+  }
+
+  webappBlobs(id: string): Promise<api.WebappBlob[]> {
+    return this.device.webappBlobs(id);
   }
 
   voiceModel(): Promise<api.VoiceModelState> {
@@ -444,54 +505,10 @@ export function toWebappInfo(webapp: WireWebappInfo): api.WebappInfo {
     iconHash: webapp.iconHash,
     settingsHash: webapp.settingsHash,
     overlayHash: webapp.overlayHash,
-    config: webapp.config.map(toConfigField),
+    config: webapp.config,
     permissions: webapp.permissions,
     extension: webapp.extension ?? null,
   };
-}
-
-export function toConfigField(field: WireConfigField): api.ConfigField {
-  const flat = {
-    key: field.data.key,
-    label: field.data.label,
-    pattern: null,
-    minLength: null,
-    maxLength: null,
-    min: null,
-    max: null,
-    step: null,
-    choices: [] as string[],
-  };
-
-  switch (field.type) {
-    case 'string':
-    case 'secret':
-      return {
-        ...flat,
-        kind: field.type,
-        pattern: field.data.pattern,
-        minLength: field.data.minLength,
-        maxLength: field.data.maxLength,
-        defaultValue: field.data.default,
-      };
-    case 'number':
-      return {
-        ...flat,
-        kind: 'number',
-        min: field.data.min,
-        max: field.data.max,
-        step: field.data.step,
-        defaultValue: field.data.default === null ? null : String(field.data.default),
-      };
-    case 'boolean':
-      return {
-        ...flat,
-        kind: 'boolean',
-        defaultValue: field.data.default === null ? null : String(field.data.default),
-      };
-    case 'enum':
-      return { ...flat, kind: 'enum', choices: field.data.choices, defaultValue: field.data.default };
-  }
 }
 
 export function message(reason: unknown): string {

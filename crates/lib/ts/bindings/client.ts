@@ -114,6 +114,31 @@ export type AssetReady = { id: string };
 
 export type AudioErrorReply = { error: AudioError };
 
+export type BlobChanged = {
+  key: string;
+  /**
+   * Null when the key was deleted.
+   */
+  sha256: string | null;
+  /**
+   * Null when the key was deleted.
+   */
+  url: string | null;
+};
+
+export type BlobEntry = {
+  key: string;
+  sha256: string;
+  mime: string;
+  size: number;
+  /**
+   * Same-origin path the daemon serves the bytes at. `?v=` names the content, so it never goes stale.
+   */
+  url: string;
+};
+
+export type BlobListReply = { entries: Array<BlobEntry> };
+
 /**
  * The device's own bluetooth adapter.
  */
@@ -151,6 +176,12 @@ export type BridgeToClientAudioMsg =
   | { event: 'ttsEnded'; data: TtsEnded }
   | { event: 'volumeChanged'; data: VolumeChanged }
   | { event: 'errorEvent'; data: AudioErrorReply };
+
+/**
+ * Files the companion app uploaded for the active webapp, such as a picked image or video. `list` returns
+ * them, and `onChanged` reports each upload and delete.
+ */
+export type BridgeToClientBlobMsg = { event: 'list'; data: BlobListReply } | { event: 'changed'; data: BlobChanged };
 
 /**
  * Bluetooth pairing and connection state. `onStatus` and `onConnectedDevice` track the connected
@@ -241,6 +272,7 @@ export type BridgeToClientMsg = { id: string; meta: MsgMeta; data: BridgeToClien
 export type BridgeToClientMsgData =
   | { type: 'asset'; data: BridgeToClientAssetMsg }
   | { type: 'audio'; data: BridgeToClientAudioMsg }
+  | { type: 'blob'; data: BridgeToClientBlobMsg }
   | { type: 'bluetooth'; data: BridgeToClientBluetoothMsg }
   | { type: 'capabilities'; data: BridgeToClientCapabilitiesMsg }
   | { type: 'config'; data: BridgeToClientConfigMsg }
@@ -348,7 +380,9 @@ export type BridgeToClientSystemMsg =
   | { event: 'deviceNickname'; data: DeviceNicknameReply }
   | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply }
   | { event: 'launcherGestureReply'; data: LauncherGestureReply }
-  | { event: 'launcherGestureChanged'; data: LauncherGestureReply };
+  | { event: 'launcherGestureChanged'; data: LauncherGestureReply }
+  | { event: 'factoryResetStarted'; data: FactoryResetStarted }
+  | { event: 'factoryResetRefused'; data: FactoryResetRefused };
 
 /**
  * Wall clock, locale, and timezone for a webapp. The connected phone supplies all three. `get`
@@ -403,6 +437,8 @@ export type ClientToBridgeAudioMsg =
   | { event: 'ttsCancel'; data: TtsCancel }
   | { event: 'ttsCancelAll' }
   | { event: 'earcon'; data: Earcon };
+
+export type ClientToBridgeBlobMsg = { event: 'list' };
 
 /**
  * Manages the device's bluetooth adapter and its paired phones.
@@ -474,6 +510,7 @@ export type ClientToBridgeMsg = { id: string; meta: MsgMeta; data: ClientToBridg
 export type ClientToBridgeMsgData =
   | { type: 'asset'; data: ClientToBridgeAssetMsg }
   | { type: 'audio'; data: ClientToBridgeAudioMsg }
+  | { type: 'blob'; data: ClientToBridgeBlobMsg }
   | { type: 'bluetooth'; data: ClientToBridgeBluetoothMsg }
   | { type: 'capabilities'; data: ClientToBridgeCapabilitiesMsg }
   | { type: 'config'; data: ClientToBridgeConfigMsg }
@@ -674,6 +711,12 @@ export type Earcon = {
    */
   name: string;
 };
+
+export type FactoryResetRefusal = 'offDevice' | 'noWipeStep' | 'failed' | 'stillArmed';
+
+export type FactoryResetRefused = { refusal: FactoryResetRefusal; reason: string };
+
+export type FactoryResetStarted = Record<symbol, never>;
 
 /**
  * Fires for changes made through this client and for changes made in the phone's own music app.

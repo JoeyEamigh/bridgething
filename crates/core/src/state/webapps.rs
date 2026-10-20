@@ -16,11 +16,13 @@ use tokio::{
 use uuid::Uuid;
 
 use super::{StateResult, storage::WebappProvenanceStore};
+use crate::digest::sha256_file;
 
 const ICON_MAX_BYTES: u64 = 64 * 1024;
 pub const SETTINGS_MAX_BYTES: u64 = 1024 * 1024;
 pub const OVERLAY_MAX_BYTES: u64 = 512 * 1024;
 const EXTRACTED_SIZE_CAP_BYTES: u64 = 1024 * 1024 * 1024;
+const RESERVED_BUNDLE_DIR: &str = ".bridgething";
 const RESERVED_BUILTIN_IDS: &[Uuid] = &[STOCK_WEBAPP_ID, HUB_WEBAPP_ID, BROWSER_WEBAPP_ID];
 const DEV_SHADOW_NAMESPACE: Uuid = Uuid::from_u128(0x019759e0_dec0_5ade_8000_b71d6e7de5af);
 
@@ -235,6 +237,13 @@ impl WebappRegistry {
     if let Err(e) = extract_result {
       let _ = fs::remove_dir_all(&staging).await;
       return Err(e);
+    }
+
+    if fs::symlink_metadata(staging.join(RESERVED_BUNDLE_DIR)).await.is_ok() {
+      let _ = fs::remove_dir_all(&staging).await;
+      return Err(WebappError::ReservedPath {
+        path: format!("{RESERVED_BUNDLE_DIR}/"),
+      });
     }
 
     if !is_valid_bundle(&staging).await {
@@ -597,10 +606,7 @@ fn contained(root: &Path, name: &str) -> Option<PathBuf> {
 async fn hash_bundle_file(root: &Path, rel: &str, cap: u64, dir_name: &str, what: &str) -> Option<String> {
   let p = root.join(rel);
   match fs::metadata(&p).await {
-    Ok(meta) if meta.is_file() && meta.len() <= cap => {
-      let bytes = fs::read(&p).await.ok()?;
-      Some(sha256_hex(&bytes))
-    }
+    Ok(meta) if meta.is_file() && meta.len() <= cap => sha256_file(&p).await.ok(),
     Ok(meta) if meta.is_file() => {
       tracing::warn!(
         "webapp '{}' {} {} is {} bytes (cap {}); ignoring",
@@ -616,21 +622,19 @@ async fn hash_bundle_file(root: &Path, rel: &str, cap: u64, dir_name: &str, what
   }
 }
 
-pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
-  use sha2::{Digest, Sha256};
-  let mut hasher = Sha256::new();
-  hasher.update(bytes);
-  hex::encode(hasher.finalize())
+async fn compute_bundle_hash(root: PathBuf) -> String {
+  tokio::task::spawn_blocking(move || hash_bundle_dir(&root))
+    .await
+    .expect("hashing a webapp bundle ran to completion")
 }
 
-async fn compute_bundle_hash(root: PathBuf) -> String {
+fn hash_bundle_dir(root: &Path) -> String {
   use sha2::{Digest, Sha256};
   let mut hasher = Sha256::new();
-  let mut entries = collect_files(&root).await;
+  let mut entries = collect_files(root);
   entries.sort();
   for rel in entries {
-    let abs = root.join(&rel);
-    if let Ok(bytes) = fs::read(&abs).await {
+    if let Ok(bytes) = std::fs::read(root.join(&rel)) {
       hasher.update(rel.to_string_lossy().as_bytes());
       hasher.update([0u8]);
       hasher.update(&bytes);
@@ -641,14 +645,14 @@ async fn compute_bundle_hash(root: PathBuf) -> String {
   hex::encode(&digest[..8])
 }
 
-async fn collect_files(root: &Path) -> Vec<PathBuf> {
+fn collect_files(root: &Path) -> Vec<PathBuf> {
   let mut out = Vec::new();
   let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
   while let Some(dir) = stack.pop() {
-    let Ok(mut rd) = fs::read_dir(&dir).await else {
+    let Ok(entries) = std::fs::read_dir(&dir) else {
       continue;
     };
-    while let Ok(Some(entry)) = rd.next_entry().await {
+    for entry in entries.flatten() {
       let path = entry.path();
       if path.is_dir() {
         stack.push(path);
@@ -1122,6 +1126,28 @@ mod tests {
         "{case} must be refused at install, got {outcome:?}"
       );
     }
+  }
+
+  #[tokio::test]
+  async fn an_install_refuses_a_bundle_that_would_shadow_the_reserved_blob_route() {
+    let staging = TempDir::new().expect("tempdir");
+    let installed = TempDir::new().expect("tempdir");
+    let archives = TempDir::new().expect("tempdir");
+    let registry = registry(installed.path()).await;
+
+    let id = plant(staging.path(), None, false);
+    let bundle = staging.path().join(bundle_dir_name(id));
+    std::fs::create_dir_all(bundle.join(".bridgething/blob")).expect("reserved dir");
+    std::fs::write(bundle.join(".bridgething/blob/bg"), b"shadow").expect("shadow file");
+    let archive = archives.path().join("shadow.zip");
+    zip_of(&bundle, &archive);
+
+    let outcome = registry.install_from_path(archive, None).await;
+    assert!(
+      matches!(&outcome, Err(WebappError::ReservedPath { path }) if path == ".bridgething/"),
+      "got {outcome:?}"
+    );
+    assert!(registry.bundle(id).await.is_none());
   }
 
   #[tokio::test]

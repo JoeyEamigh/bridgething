@@ -176,7 +176,7 @@ impl Op {
             }
 
             let weights = &gemm.weights[tile * gemm.in_dim * PER_TILE..][..gemm.in_dim * PER_TILE];
-            for ((left, right), taps) in left.iter().zip(right).zip(weights.chunks_exact(PER_TILE)) {
+            for ((left, right), taps) in left.iter().zip(right).zip(weights.as_chunks::<PER_TILE>().0) {
               lane::accumulate(&mut accumulator[0], taps, *left);
               lane::accumulate(&mut accumulator[1], taps, *right);
             }

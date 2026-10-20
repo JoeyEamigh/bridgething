@@ -4,6 +4,8 @@ mod asr;
 mod geo;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod jpeg;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod ffmpeg;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -13,7 +15,7 @@ mod models;
 #[cfg(any(target_os = "linux", target_os = "windows", all(target_os = "macos", test)))]
 mod nlu;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
-mod portable;
+pub mod portable;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod utterance;
 #[cfg(target_os = "windows")]
@@ -29,8 +31,8 @@ use bridgething_companion::{
   api::{CompanionSession, ModelPlatform, VoiceModelPaths},
   backend::{
     AudioBackend, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler, LogLevel, LogSink,
-    MediaSessionBackend, ModelArtifactValidator, NluModelRunner, NotificationBackend, SecretStore, SpeechRecognizer,
-    StreamBackend, VolumeBackend,
+    MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, SecretStore,
+    SpeechRecognizer, StreamBackend, VolumeBackend,
   },
 };
 
@@ -46,6 +48,7 @@ pub struct Platform {
   pub volume: Option<Arc<dyn VolumeBackend>>,
   pub connectivity: Option<Arc<dyn ConnectivityMonitor>>,
   pub image: Option<Arc<dyn ImageScaler>>,
+  pub transcoder: Option<Arc<dyn MediaTranscoder>>,
   pub speech: Option<Arc<dyn SpeechRecognizer>>,
   pub nlu: Option<Arc<dyn NluModelRunner>>,
   pub model_validator: Option<Arc<dyn ModelArtifactValidator>>,

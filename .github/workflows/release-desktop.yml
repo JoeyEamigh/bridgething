@@ -49,8 +49,16 @@ jobs:
           echo "run=${run}" >>"$GITHUB_OUTPUT"
           echo "version ${version}, run=${run}"
 
-  build:
+  sidecar:
     needs: decide
+    if: needs.decide.outputs.run == 'true'
+    uses: ./.github/workflows/ffmpeg-sidecar.yml
+    secrets: inherit
+    with:
+      targets: '["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]'
+
+  build:
+    needs: [decide, sidecar]
     if: needs.decide.outputs.run == 'true'
     strategy:
       fail-fast: false
@@ -65,15 +73,19 @@ jobs:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             updater_target: linux-x86_64
+            sidecar: x86_64-unknown-linux-gnu
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             updater_target: linux-aarch64
+            sidecar: aarch64-unknown-linux-gnu
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             updater_target: windows-x86_64
+            sidecar: x86_64-pc-windows-msvc
           - runner: windows-11-arm
             updater_target: windows-aarch64
             bundles: nsis
+            sidecar: aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.runner }}
     steps:
@@ -125,6 +137,12 @@ jobs:
           grep -q '^export GDK_BACKEND=x11' "$gtk"
           sed -i '/^export GDK_BACKEND=x11/d' "$gtk"
           chmod +x "$gtk"
+
+      - uses: actions/download-artifact@v4
+        if: matrix.sidecar && !contains(fromJSON(needs.sidecar.outputs.published), matrix.sidecar)
+        with:
+          name: ffmpeg-sidecar-${{ matrix.sidecar }}
+          path: desktop/src-tauri/binaries
 
       - run: bun install --frozen-lockfile
 
@@ -187,6 +205,11 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/asc-key.p8
         run: bun run tauri build ${{ matrix.target && format('--target {0}', matrix.target) || '' }} ${{ matrix.bundles && format('--bundles {0}', matrix.bundles) || '' }}
 
+      - name: check the ffmpeg sidecar runs on this runner
+        if: matrix.sidecar
+        shell: bash
+        run: desktop/src-tauri/binaries/bridgething-ffmpeg-${{ matrix.sidecar }}${{ startsWith(matrix.runner, 'windows') && '.exe' || '' }} -hide_banner -version
+
       - name: resolve the bundle dir
         id: bundle
         shell: bash
@@ -194,7 +217,7 @@ jobs:
           set -euo pipefail
           echo "dir=target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/bundle" >>"$GITHUB_OUTPUT"
 
-      - name: check the appimage leaves the host graphics stack alone
+      - name: check the appimage leaves the host graphics stack alone and carries a runnable sidecar
         if: startsWith(matrix.runner, 'ubuntu')
         shell: bash
         run: |
@@ -209,6 +232,10 @@ jobs:
           fi
           if grep -rq 'GDK_BACKEND=x11' "$root/apprun-hooks"; then
             echo "the appimage pins gdk to x11, which routes every wayland session through xwayland and dies outright without it" >&2
+            exit 1
+          fi
+          if ! "$root/usr/bin/bridgething-ffmpeg" -hide_banner -version >/dev/null; then
+            echo "the appimage's ffmpeg sidecar is missing or does not run, so video and heif normalization would fail" >&2
             exit 1
           fi
           rm -rf "$work"

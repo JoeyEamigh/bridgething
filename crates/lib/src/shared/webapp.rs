@@ -65,6 +65,33 @@ pub enum WebappError {
     key: String,
     reason: String,
   },
+  ReservedPath {
+    path: String,
+  },
+  InvalidBlobKey {
+    key: String,
+    reason: String,
+  },
+  InvalidBlobPut {
+    key: String,
+    reason: String,
+  },
+  BlobTooLarge {
+    key: String,
+    max_bytes: u32,
+  },
+  BlobQuotaExceeded {
+    key: String,
+    max_bytes: u32,
+  },
+  BlobStorageFull {
+    key: String,
+    needed_bytes: u32,
+  },
+  BlobTransferFailed {
+    key: String,
+    reason: String,
+  },
   /// An unexpected failure.
   Internal {
     reason: String,

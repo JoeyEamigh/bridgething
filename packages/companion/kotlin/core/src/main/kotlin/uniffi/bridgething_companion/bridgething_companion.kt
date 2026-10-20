@@ -778,6 +778,16 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
     )
 }
 
+internal interface UniffiCallbackInterfaceBlobProgressSinkMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `sent`: Long,
+        `total`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
 internal interface UniffiCallbackInterfaceSessionEventSinkMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1233,8 +1243,8 @@ internal interface UniffiCallbackInterfaceImageScalerMethod0 : com.sun.jna.Callb
     fun callback(
         `uniffiHandle`: Long,
         `bytes`: RustBuffer.ByValue,
-        `maxEdge`: Int,
-        `quality`: Float,
+        `sniff`: RustBuffer.ByValue,
+        `target`: RustBuffer.ByValue,
         `uniffiOutReturn`: RustBuffer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
@@ -1635,6 +1645,33 @@ internal interface UniffiCallbackInterfaceStreamBackendMethod6 : com.sun.jna.Cal
     )
 }
 
+internal interface UniffiCallbackInterfaceMediaTranscoderMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        `uniffiOutReturn`: LongByReference,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceMediaTranscoderMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `source`: RustBuffer.ByValue,
+        `uniffiOutReturn`: RustBuffer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceTranscodeJobMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
 internal interface UniffiCallbackInterfaceDeviceWakerMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1643,6 +1680,26 @@ internal interface UniffiCallbackInterfaceDeviceWakerMethod0 : com.sun.jna.Callb
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
+}
+
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "progress")
+internal open class UniffiVTableCallbackInterfaceBlobProgressSink(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `progress`: UniffiCallbackInterfaceBlobProgressSinkMethod0? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `progress`: UniffiCallbackInterfaceBlobProgressSinkMethod0? = null,
+    ) : UniffiVTableCallbackInterfaceBlobProgressSink(`uniffiFree`, `uniffiClone`, `progress`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceBlobProgressSink) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `progress` = other.`progress`
+    }
 }
 
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "onEvent")
@@ -2049,23 +2106,23 @@ internal open class UniffiVTableCallbackInterfaceHostEnvironment(
     }
 }
 
-@Structure.FieldOrder("uniffiFree", "uniffiClone", "downsampleJpeg")
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "scale")
 internal open class UniffiVTableCallbackInterfaceImageScaler(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
     @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
-    @JvmField internal var `downsampleJpeg`: UniffiCallbackInterfaceImageScalerMethod0? = null,
+    @JvmField internal var `scale`: UniffiCallbackInterfaceImageScalerMethod0? = null,
 ) : Structure() {
     class UniffiByValue(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
         `uniffiClone`: UniffiCallbackInterfaceClone? = null,
-        `downsampleJpeg`: UniffiCallbackInterfaceImageScalerMethod0? = null,
-    ) : UniffiVTableCallbackInterfaceImageScaler(`uniffiFree`, `uniffiClone`, `downsampleJpeg`),
+        `scale`: UniffiCallbackInterfaceImageScalerMethod0? = null,
+    ) : UniffiVTableCallbackInterfaceImageScaler(`uniffiFree`, `uniffiClone`, `scale`),
         Structure.ByValue
 
     internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceImageScaler) {
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
-        `downsampleJpeg` = other.`downsampleJpeg`
+        `scale` = other.`scale`
     }
 }
 
@@ -2447,6 +2504,49 @@ internal open class UniffiVTableCallbackInterfaceStreamBackend(
     }
 }
 
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "transcode", "poster")
+internal open class UniffiVTableCallbackInterfaceMediaTranscoder(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `transcode`: UniffiCallbackInterfaceMediaTranscoderMethod0? = null,
+    @JvmField internal var `poster`: UniffiCallbackInterfaceMediaTranscoderMethod1? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `transcode`: UniffiCallbackInterfaceMediaTranscoderMethod0? = null,
+        `poster`: UniffiCallbackInterfaceMediaTranscoderMethod1? = null,
+    ) : UniffiVTableCallbackInterfaceMediaTranscoder(`uniffiFree`, `uniffiClone`, `transcode`, `poster`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceMediaTranscoder) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `transcode` = other.`transcode`
+        `poster` = other.`poster`
+    }
+}
+
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "cancel")
+internal open class UniffiVTableCallbackInterfaceTranscodeJob(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `cancel`: UniffiCallbackInterfaceTranscodeJobMethod0? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `cancel`: UniffiCallbackInterfaceTranscodeJobMethod0? = null,
+    ) : UniffiVTableCallbackInterfaceTranscodeJob(`uniffiFree`, `uniffiClone`, `cancel`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceTranscodeJob) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `cancel` = other.`cancel`
+    }
+}
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "wakeDevice")
 internal open class UniffiVTableCallbackInterfaceDeviceWaker(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -2516,11 +2616,21 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_func_parse_ota_discover_manifest(): Int
 
+    external fun uniffi_bridgething_companion_checksum_func_plan_cover(): Int
+
+    external fun uniffi_bridgething_companion_checksum_func_plan_video(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_blobprogresssink_progress(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_append_blob_handle(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_apply_ota_update(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_available_providers(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_cancel_auth(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update(): Int
 
@@ -2532,9 +2642,13 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_connect_provider(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_create_blob_handle(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_current_webapp(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_blob(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field(): Int
 
@@ -2558,9 +2672,13 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_import_picked_media(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_install_webapp(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_blobs(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config(): Int
 
@@ -2570,7 +2688,11 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_log_inbox(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_media_import_ticket(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_ota_run_progress(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_put_webapp_blob(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_resumed(): Int
 
@@ -2790,7 +2912,7 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_hostenvironment_clock(): Int
 
-    external fun uniffi_bridgething_companion_checksum_method_imagescaler_downsample_jpeg(): Int
+    external fun uniffi_bridgething_companion_checksum_method_imagescaler_scale(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_linkinbox_on_bytes(): Int
 
@@ -2974,6 +3096,16 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_streamsink_on_timing(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_mediatranscoder_transcode(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_mediatranscoder_poster(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_transcodejob_cancel(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_transcodesink_complete(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_transcodesink_fail(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_devicewaker_wake_device(): Int
 
     external fun uniffi_bridgething_companion_checksum_constructor_companionsession_create(): Int
@@ -2995,6 +3127,7 @@ internal object UniffiLib {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "bridgething_companion"))
         uniffiCallbackInterfaceAppleMusicBackend.register(this)
         uniffiCallbackInterfaceAudioBackend.register(this)
+        uniffiCallbackInterfaceBlobProgressSink.register(this)
         uniffiCallbackInterfaceConnectivityMonitor.register(this)
         uniffiCallbackInterfaceDeviceWaker.register(this)
         uniffiCallbackInterfaceExtensionHost.register(this)
@@ -3005,6 +3138,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceLinkTransport.register(this)
         uniffiCallbackInterfaceLogSink.register(this)
         uniffiCallbackInterfaceMediaSessionBackend.register(this)
+        uniffiCallbackInterfaceMediaTranscoder.register(this)
         uniffiCallbackInterfaceModelArtifactValidator.register(this)
         uniffiCallbackInterfaceNluModelRunner.register(this)
         uniffiCallbackInterfaceNotificationBackend.register(this)
@@ -3013,11 +3147,33 @@ internal object UniffiLib {
         uniffiCallbackInterfaceSessionEventSink.register(this)
         uniffiCallbackInterfaceSpeechRecognizer.register(this)
         uniffiCallbackInterfaceStreamBackend.register(this)
+        uniffiCallbackInterfaceTranscodeJob.register(this)
         uniffiCallbackInterfaceTransferPolicy.register(this)
         uniffiCallbackInterfaceVolumeBackend.register(this)
         uniffiCallbackInterfaceWebappBundleSink.register(this)
         uniffiCallbackInterfaceWsTransport.register(this)
     }
+
+    external fun uniffi_bridgething_companion_fn_clone_blobprogresssink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_blobprogresssink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_init_callback_vtable_blobprogresssink(
+        `vtable`: UniffiVTableCallbackInterfaceBlobProgressSink,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_blobprogresssink_progress(
+        `ptr`: Long,
+        `sent`: Long,
+        `total`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 
     external fun uniffi_bridgething_companion_fn_clone_companionsession(
         `handle`: Long,
@@ -3036,6 +3192,12 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_append_blob_handle(
+        `ptr`: Long,
+        `handle`: RustBuffer.ByValue,
+        `base64`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_apply_ota_update(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
@@ -3050,6 +3212,12 @@ internal object UniffiLib {
         `ptr`: Long,
         `id`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_cancel_media_import(
+        `ptr`: Long,
+        `ticket`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_check_for_ota_update(
         `ptr`: Long,
@@ -3078,6 +3246,12 @@ internal object UniffiLib {
         `id`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_create_blob_handle(
+        `ptr`: Long,
+        `mime`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_current_webapp(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
@@ -3087,6 +3261,13 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_blob(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `id`: RustBuffer.ByValue,
+        `key`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_config_field(
         `ptr`: Long,
@@ -3150,6 +3331,15 @@ internal object UniffiLib {
         `key`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_import_picked_media(
+        `ptr`: Long,
+        `ticket`: Long,
+        `path`: RustBuffer.ByValue,
+        `kind`: RustBuffer.ByValue,
+        `cover`: RustBuffer.ByValue,
+        `mimeHint`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_install_webapp(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
@@ -3164,6 +3354,12 @@ internal object UniffiLib {
         `deviceId`: RustBuffer.ByValue,
         `request`: RustBuffer.ByValue,
         `sink`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_list_webapp_blobs(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `id`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_list_webapp_config(
@@ -3188,12 +3384,26 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_media_import_ticket(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_ota_run_progress(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
         `nowMs`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_put_webapp_blob(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `id`: RustBuffer.ByValue,
+        `key`: RustBuffer.ByValue,
+        `handle`: RustBuffer.ByValue,
+        `progress`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_resumed(`ptr`: Long): Long
 
@@ -4159,11 +4369,11 @@ internal object UniffiLib {
 
     external fun uniffi_bridgething_companion_fn_init_callback_vtable_imagescaler(`vtable`: UniffiVTableCallbackInterfaceImageScaler): Unit
 
-    external fun uniffi_bridgething_companion_fn_method_imagescaler_downsample_jpeg(
+    external fun uniffi_bridgething_companion_fn_method_imagescaler_scale(
         `ptr`: Long,
         `bytes`: RustBuffer.ByValue,
-        `maxEdge`: Int,
-        `quality`: Float,
+        `sniff`: RustBuffer.ByValue,
+        `target`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -5071,6 +5281,74 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_clone_mediatranscoder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_mediatranscoder(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_init_callback_vtable_mediatranscoder(
+        `vtable`: UniffiVTableCallbackInterfaceMediaTranscoder,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_mediatranscoder_transcode(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_mediatranscoder_poster(
+        `ptr`: Long,
+        `source`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_clone_transcodejob(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_transcodejob(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_init_callback_vtable_transcodejob(
+        `vtable`: UniffiVTableCallbackInterfaceTranscodeJob,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_transcodejob_cancel(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_transcodesink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_transcodesink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_transcodesink_complete(
+        `ptr`: Long,
+        `video`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_transcodesink_fail(
+        `ptr`: Long,
+        `reason`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_bridgething_companion_fn_clone_devicewaker(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -5160,6 +5438,26 @@ internal object UniffiLib {
 
     external fun uniffi_bridgething_companion_fn_func_parse_ota_discover_manifest(
         `json`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_func_plan_cover(
+        `format`: RustBuffer.ByValue,
+        `width`: Int,
+        `height`: Int,
+        `hasAlpha`: Byte,
+        `coverWidth`: Int,
+        `coverHeight`: Int,
+        `encodable`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_func_plan_video(
+        `width`: Int,
+        `height`: Int,
+        `coverWidth`: Int,
+        `coverHeight`: Int,
+        `maxBitrate`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -5416,6 +5714,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_func_parse_ota_discover_manifest() != 65227) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_func_plan_cover() != 12676) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_func_plan_video() != 11548) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_blobprogresssink_progress() != 36137) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_append_blob_handle() != 14957) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_apply_ota_update() != 43986) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -5423,6 +5733,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_cancel_auth() != 2483) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import() != 14729) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update() != 64188) {
@@ -5440,10 +5753,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_connect_provider() != 25749) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_create_blob_handle() != 54640) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_current_webapp() != 44144) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target() != 39836) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_blob() != 43388) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field() != 42200) {
@@ -5479,10 +5798,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_import_picked_media() != 21994) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_blobs() != 64623) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -5497,7 +5822,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_log_inbox() != 46480) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_media_import_ticket() != 3957) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_ota_run_progress() != 5569) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_put_webapp_blob() != 6884) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_resumed() != 18676) {
@@ -5827,7 +6158,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_hostenvironment_clock() != 57610) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_imagescaler_downsample_jpeg() != 45721) {
+    if (lib.uniffi_bridgething_companion_checksum_method_imagescaler_scale() != 41747) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_linkinbox_on_bytes() != 13274) {
@@ -6101,6 +6432,21 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_streamsink_on_timing() != 22810) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_mediatranscoder_transcode() != 18884) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_mediatranscoder_poster() != 29278) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_transcodejob_cancel() != 19353) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_transcodesink_complete() != 43921) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_transcodesink_fail() != 50571) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {
@@ -11085,7 +11431,324 @@ public object FfiConverterTypeAudioBackend : FfiConverter<AudioBackend, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+public interface BlobProgressSink {
+    fun `progress`(
+        `sent`: kotlin.ULong,
+        `total`: kotlin.ULong,
+    )
+
+    companion object
+}
+
+open class BlobProgressSinkImpl :
+    Disposable,
+    AutoCloseable,
+    BlobProgressSink {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_blobprogresssink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_blobprogresssink(handle, status)
+        }
+    }
+
+    override fun `progress`(
+        `sent`: kotlin.ULong,
+        `total`: kotlin.ULong,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_blobprogresssink_progress(
+                it,
+                FfiConverterULong.lower(`sent`),
+                FfiConverterULong.lower(`total`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceBlobProgressSink {
+    internal object `progress` : UniffiCallbackInterfaceBlobProgressSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `sent`: Long,
+            `total`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeBlobProgressSink.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`progress`(
+                    FfiConverterULong.lift(`sent`),
+                    FfiConverterULong.lift(`total`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeBlobProgressSink.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeBlobProgressSink.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceBlobProgressSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `progress`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_bridgething_companion_fn_init_callback_vtable_blobprogresssink(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBlobProgressSink : FfiConverter<BlobProgressSink, Long> {
+    internal val handleMap = UniffiHandleMap<BlobProgressSink>()
+
+    override fun lower(value: BlobProgressSink): Long {
+        if (value is BlobProgressSinkImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): BlobProgressSink {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return BlobProgressSinkImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): BlobProgressSink = lift(buf.getLong())
+
+    override fun allocationSize(value: BlobProgressSink) = 8UL
+
+    override fun write(
+        value: BlobProgressSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface CompanionSessionInterface {
+    suspend fun `appendBlobHandle`(
+        `handle`: kotlin.String,
+        `base64`: kotlin.String,
+    ): kotlin.ULong
+
     suspend fun `applyOtaUpdate`(
         `deviceId`: kotlin.String,
         `channel`: kotlin.String,
@@ -11096,6 +11759,8 @@ public interface CompanionSessionInterface {
     suspend fun `availableProviders`(): List<ProviderInfo>
 
     suspend fun `cancelAuth`(`id`: kotlin.String)
+
+    fun `cancelMediaImport`(`ticket`: kotlin.ULong)
 
     suspend fun `checkForOtaUpdate`(`rootUrl`: kotlin.String)
 
@@ -11113,9 +11778,17 @@ public interface CompanionSessionInterface {
 
     suspend fun `connectProvider`(`id`: kotlin.String)
 
+    fun `createBlobHandle`(`mime`: kotlin.String): kotlin.String
+
     suspend fun `currentWebapp`(`deviceId`: kotlin.String): ActiveWebapp?
 
     fun `defaultResumeTarget`(): ResumeTarget
+
+    suspend fun `deleteWebappBlob`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+        `key`: kotlin.String,
+    )
 
     suspend fun `deleteWebappConfigField`(
         `deviceId`: kotlin.String,
@@ -11158,6 +11831,14 @@ public interface CompanionSessionInterface {
         `key`: kotlin.String,
     ): kotlin.String?
 
+    suspend fun `importPickedMedia`(
+        `ticket`: kotlin.ULong,
+        `path`: kotlin.String,
+        `kind`: MediaPickKind,
+        `cover`: MediaCover? = null,
+        `mimeHint`: kotlin.String? = null,
+    ): PickedMedia
+
     suspend fun `installWebapp`(
         `deviceId`: kotlin.String,
         `archivePath`: kotlin.String,
@@ -11171,6 +11852,11 @@ public interface CompanionSessionInterface {
         `request`: WebappInstallRequest,
         `sink`: WebappBundleSink? = null,
     ): WebappInfo
+
+    suspend fun `listWebappBlobs`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+    ): List<WebappBlob>
 
     suspend fun `listWebappConfig`(
         `deviceId`: kotlin.String,
@@ -11186,10 +11872,20 @@ public interface CompanionSessionInterface {
 
     fun `logInbox`(): LogInbox
 
+    fun `mediaImportTicket`(): kotlin.ULong
+
     fun `otaRunProgress`(
         `deviceId`: kotlin.String,
         `nowMs`: kotlin.ULong,
     ): OtaRunProgress?
+
+    suspend fun `putWebappBlob`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+        `key`: kotlin.String,
+        `handle`: kotlin.String,
+        `progress`: BlobProgressSink? = null,
+    ): WebappBlob
 
     suspend fun `resumed`()
 
@@ -11372,6 +12068,29 @@ open class CompanionSession :
         }
     }
 
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `appendBlobHandle`(
+        `handle`: kotlin.String,
+        `base64`: kotlin.String,
+    ): kotlin.ULong =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_append_blob_handle(
+                    uniffiHandle,
+                    FfiConverterString.lower(`handle`),
+                    FfiConverterString.lower(`base64`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_u64(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_u64(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_u64(future) },
+            // lift function
+            { FfiConverterULong.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
+        )
+
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `applyOtaUpdate`(
         `deviceId`: kotlin.String,
@@ -11437,6 +12156,17 @@ open class CompanionSession :
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
+
+    override fun `cancelMediaImport`(`ticket`: kotlin.ULong) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_cancel_media_import(
+                    it,
+                    FfiConverterULong.lower(`ticket`),
+                    _status,
+                )
+            }
+        }
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `checkForOtaUpdate`(`rootUrl`: kotlin.String) =
@@ -11532,6 +12262,20 @@ open class CompanionSession :
         )
 
     @Throws(CompanionException::class)
+    override fun `createBlobHandle`(`mime`: kotlin.String): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(CompanionException) { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_create_blob_handle(
+                        it,
+                        FfiConverterString.lower(`mime`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `currentWebapp`(`deviceId`: kotlin.String): ActiveWebapp? =
         uniffiRustCallAsync(
@@ -11567,6 +12311,30 @@ open class CompanionSession :
                 }
             },
         )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteWebappBlob`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+        `key`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_blob(
+                uniffiHandle,
+                FfiConverterString.lower(`deviceId`),
+                FfiConverterString.lower(`id`),
+                FfiConverterString.lower(`key`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        CompanionException.ErrorHandler,
+    )
 
     @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -11811,6 +12579,41 @@ open class CompanionSession :
 
     @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `importPickedMedia`(
+        `ticket`: kotlin.ULong,
+        `path`: kotlin.String,
+        `kind`: MediaPickKind,
+        `cover`: MediaCover?,
+        `mimeHint`: kotlin.String?,
+    ): PickedMedia =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_import_picked_media(
+                    uniffiHandle,
+                    FfiConverterULong.lower(`ticket`),
+                    FfiConverterString.lower(`path`),
+                    FfiConverterTypeMediaPickKind.lower(`kind`),
+                    FfiConverterOptionalTypeMediaCover.lower(`cover`),
+                    FfiConverterOptionalString.lower(`mimeHint`),
+                )
+            },
+            {
+                future,
+                callback,
+                continuation,
+                ->
+                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
+            },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypePickedMedia.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
+        )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `installWebapp`(
         `deviceId`: kotlin.String,
         `archivePath`: kotlin.String,
@@ -11871,6 +12674,35 @@ open class CompanionSession :
             { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterTypeWebappInfo.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
+        )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listWebappBlobs`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+    ): List<WebappBlob> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_list_webapp_blobs(
+                    uniffiHandle,
+                    FfiConverterString.lower(`deviceId`),
+                    FfiConverterString.lower(`id`),
+                )
+            },
+            {
+                future,
+                callback,
+                continuation,
+                ->
+                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
+            },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeWebappBlob.lift(it) },
             // Error FFI converter
             CompanionException.ErrorHandler,
         )
@@ -11970,6 +12802,18 @@ open class CompanionSession :
             },
         )
 
+    override fun `mediaImportTicket`(): kotlin.ULong =
+        FfiConverterULong.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_media_import_ticket(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
     override fun `otaRunProgress`(
         `deviceId`: kotlin.String,
         `nowMs`: kotlin.ULong,
@@ -11985,6 +12829,41 @@ open class CompanionSession :
                     )
                 }
             },
+        )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `putWebappBlob`(
+        `deviceId`: kotlin.String,
+        `id`: kotlin.String,
+        `key`: kotlin.String,
+        `handle`: kotlin.String,
+        `progress`: BlobProgressSink?,
+    ): WebappBlob =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_put_webapp_blob(
+                    uniffiHandle,
+                    FfiConverterString.lower(`deviceId`),
+                    FfiConverterString.lower(`id`),
+                    FfiConverterString.lower(`key`),
+                    FfiConverterString.lower(`handle`),
+                    FfiConverterOptionalTypeBlobProgressSink.lower(`progress`),
+                )
+            },
+            {
+                future,
+                callback,
+                continuation,
+                ->
+                UniffiLib.ffi_bridgething_companion_rust_future_poll_rust_buffer(future, callback, continuation)
+            },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeWebappBlob.lift(it) },
+            // Error FFI converter
+            CompanionException.ErrorHandler,
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -16471,11 +17350,11 @@ public object FfiConverterTypeHttpTransport : FfiConverter<HttpTransport, Long> 
 //
 
 public interface ImageScaler {
-    fun `downsampleJpeg`(
+    fun `scale`(
         `bytes`: kotlin.ByteArray,
-        `maxEdge`: kotlin.UInt,
-        `quality`: kotlin.Float,
-    ): kotlin.ByteArray?
+        `sniff`: MediaSniff,
+        `target`: ImageTarget,
+    ): ScaledImage?
 
     companion object
 }
@@ -16584,19 +17463,19 @@ open class ImageScalerImpl :
         }
     }
 
-    override fun `downsampleJpeg`(
+    override fun `scale`(
         `bytes`: kotlin.ByteArray,
-        `maxEdge`: kotlin.UInt,
-        `quality`: kotlin.Float,
-    ): kotlin.ByteArray? =
-        FfiConverterOptionalByteArray.lift(
+        `sniff`: MediaSniff,
+        `target`: ImageTarget,
+    ): ScaledImage? =
+        FfiConverterOptionalTypeScaledImage.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_bridgething_companion_fn_method_imagescaler_downsample_jpeg(
+                    UniffiLib.uniffi_bridgething_companion_fn_method_imagescaler_scale(
                         it,
                         FfiConverterByteArray.lower(`bytes`),
-                        FfiConverterUInt.lower(`maxEdge`),
-                        FfiConverterFloat.lower(`quality`),
+                        FfiConverterTypeMediaSniff.lower(`sniff`),
+                        FfiConverterTypeImageTarget.lower(`target`),
                         _status,
                     )
                 }
@@ -16611,24 +17490,24 @@ open class ImageScalerImpl :
 
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceImageScaler {
-    internal object `downsampleJpeg` : UniffiCallbackInterfaceImageScalerMethod0 {
+    internal object `scale` : UniffiCallbackInterfaceImageScalerMethod0 {
         override fun callback(
             `uniffiHandle`: Long,
             `bytes`: RustBuffer.ByValue,
-            `maxEdge`: Int,
-            `quality`: Float,
+            `sniff`: RustBuffer.ByValue,
+            `target`: RustBuffer.ByValue,
             `uniffiOutReturn`: RustBuffer,
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeImageScaler.handleMap.get(uniffiHandle)
             val makeCall = {
-                uniffiObj.`downsampleJpeg`(
+                uniffiObj.`scale`(
                     FfiConverterByteArray.lift(`bytes`),
-                    FfiConverterUInt.lift(`maxEdge`),
-                    FfiConverterFloat.lift(`quality`),
+                    FfiConverterTypeMediaSniff.lift(`sniff`),
+                    FfiConverterTypeImageTarget.lift(`target`),
                 )
             }
-            val writeReturn = { value: kotlin.ByteArray? -> uniffiOutReturn.setValue(FfiConverterOptionalByteArray.lower(value)) }
+            val writeReturn = { value: ScaledImage? -> uniffiOutReturn.setValue(FfiConverterOptionalTypeScaledImage.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
         }
     }
@@ -16647,7 +17526,7 @@ internal object uniffiCallbackInterfaceImageScaler {
         UniffiVTableCallbackInterfaceImageScaler.UniffiByValue(
             uniffiFree,
             uniffiClone,
-            `downsampleJpeg`,
+            `scale`,
         )
 
     // Registers the foreign callback with the Rust side.
@@ -19614,6 +20493,355 @@ public object FfiConverterTypeMediaSnapshotSink : FfiConverter<MediaSnapshotSink
 
     override fun write(
         value: MediaSnapshotSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+public interface MediaTranscoder {
+    fun `transcode`(
+        `request`: TranscodeRequest,
+        `sink`: TranscodeSink,
+    ): TranscodeJob
+
+    fun `poster`(`source`: kotlin.String): kotlin.ByteArray?
+
+    companion object
+}
+
+open class MediaTranscoderImpl :
+    Disposable,
+    AutoCloseable,
+    MediaTranscoder {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_mediatranscoder(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_mediatranscoder(handle, status)
+        }
+    }
+
+    override fun `transcode`(
+        `request`: TranscodeRequest,
+        `sink`: TranscodeSink,
+    ): TranscodeJob =
+        FfiConverterTypeTranscodeJob.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_mediatranscoder_transcode(
+                        it,
+                        FfiConverterTypeTranscodeRequest.lower(`request`),
+                        FfiConverterTypeTranscodeSink.lower(`sink`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `poster`(`source`: kotlin.String): kotlin.ByteArray? =
+        FfiConverterOptionalByteArray.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_mediatranscoder_poster(
+                        it,
+                        FfiConverterString.lower(`source`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceMediaTranscoder {
+    internal object `transcode` : UniffiCallbackInterfaceMediaTranscoderMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `request`: RustBuffer.ByValue,
+            `sink`: Long,
+            `uniffiOutReturn`: LongByReference,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeMediaTranscoder.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`transcode`(
+                    FfiConverterTypeTranscodeRequest.lift(`request`),
+                    FfiConverterTypeTranscodeSink.lift(`sink`),
+                )
+            }
+            val writeReturn = { value: TranscodeJob -> uniffiOutReturn.setValue(FfiConverterTypeTranscodeJob.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `poster` : UniffiCallbackInterfaceMediaTranscoderMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `source`: RustBuffer.ByValue,
+            `uniffiOutReturn`: RustBuffer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeMediaTranscoder.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`poster`(
+                    FfiConverterString.lift(`source`),
+                )
+            }
+            val writeReturn = { value: kotlin.ByteArray? -> uniffiOutReturn.setValue(FfiConverterOptionalByteArray.lower(value)) }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeMediaTranscoder.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeMediaTranscoder.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceMediaTranscoder.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `transcode`,
+            `poster`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_bridgething_companion_fn_init_callback_vtable_mediatranscoder(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaTranscoder : FfiConverter<MediaTranscoder, Long> {
+    internal val handleMap = UniffiHandleMap<MediaTranscoder>()
+
+    override fun lower(value: MediaTranscoder): Long {
+        if (value is MediaTranscoderImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): MediaTranscoder {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return MediaTranscoderImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): MediaTranscoder = lift(buf.getLong())
+
+    override fun allocationSize(value: MediaTranscoder) = 8UL
+
+    override fun write(
+        value: MediaTranscoder,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -24710,6 +25938,558 @@ public object FfiConverterTypeStreamSink : FfiConverter<StreamSink, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+public interface TranscodeJob {
+    fun `cancel`()
+
+    companion object
+}
+
+open class TranscodeJobImpl :
+    Disposable,
+    AutoCloseable,
+    TranscodeJob {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_transcodejob(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_transcodejob(handle, status)
+        }
+    }
+
+    override fun `cancel`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_transcodejob_cancel(
+                    it,
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceTranscodeJob {
+    internal object `cancel` : UniffiCallbackInterfaceTranscodeJobMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeTranscodeJob.handleMap.get(uniffiHandle)
+            val makeCall = { uniffiObj.`cancel`() }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeTranscodeJob.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeTranscodeJob.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceTranscodeJob.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `cancel`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_bridgething_companion_fn_init_callback_vtable_transcodejob(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscodeJob : FfiConverter<TranscodeJob, Long> {
+    internal val handleMap = UniffiHandleMap<TranscodeJob>()
+
+    override fun lower(value: TranscodeJob): Long {
+        if (value is TranscodeJobImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): TranscodeJob {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return TranscodeJobImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): TranscodeJob = lift(buf.getLong())
+
+    override fun allocationSize(value: TranscodeJob) = 8UL
+
+    override fun write(
+        value: TranscodeJob,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+public interface TranscodeSinkInterface {
+    fun `complete`(`video`: TranscodedVideo)
+
+    fun `fail`(`reason`: kotlin.String)
+
+    companion object
+}
+
+open class TranscodeSink :
+    Disposable,
+    AutoCloseable,
+    TranscodeSinkInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_transcodesink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_transcodesink(handle, status)
+        }
+    }
+
+    override fun `complete`(`video`: TranscodedVideo) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_transcodesink_complete(
+                    it,
+                    FfiConverterTypeTranscodedVideo.lower(`video`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `fail`(`reason`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_transcodesink_fail(
+                    it,
+                    FfiConverterString.lower(`reason`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscodeSink : FfiConverter<TranscodeSink, Long> {
+    override fun lower(value: TranscodeSink): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): TranscodeSink = TranscodeSink(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): TranscodeSink = lift(buf.getLong())
+
+    override fun allocationSize(value: TranscodeSink) = 8UL
+
+    override fun write(
+        value: TranscodeSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface TranscriptionSinkInterface {
     fun `complete`(`transcription`: Transcription)
 
@@ -27511,6 +29291,7 @@ data class CompanionBackends(
     var `nlu`: NluModelRunner? = null,
     var `appleMusic`: AppleMusicBackend? = null,
     var `image`: ImageScaler? = null,
+    var `transcoder`: MediaTranscoder? = null,
     var `modelValidator`: ModelArtifactValidator? = null,
     var `transferPolicy`: TransferPolicy? = null,
     var `connectivity`: ConnectivityMonitor? = null,
@@ -27537,6 +29318,7 @@ data class CompanionBackends(
             this.`nlu`,
             this.`appleMusic`,
             this.`image`,
+            this.`transcoder`,
             this.`modelValidator`,
             this.`transferPolicy`,
             this.`connectivity`,
@@ -27571,6 +29353,7 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
             FfiConverterOptionalTypeNluModelRunner.read(buf),
             FfiConverterOptionalTypeAppleMusicBackend.read(buf),
             FfiConverterOptionalTypeImageScaler.read(buf),
+            FfiConverterOptionalTypeMediaTranscoder.read(buf),
             FfiConverterOptionalTypeModelArtifactValidator.read(buf),
             FfiConverterOptionalTypeTransferPolicy.read(buf),
             FfiConverterOptionalTypeConnectivityMonitor.read(buf),
@@ -27597,6 +29380,7 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
                 FfiConverterOptionalTypeNluModelRunner.allocationSize(value.`nlu`) +
                 FfiConverterOptionalTypeAppleMusicBackend.allocationSize(value.`appleMusic`) +
                 FfiConverterOptionalTypeImageScaler.allocationSize(value.`image`) +
+                FfiConverterOptionalTypeMediaTranscoder.allocationSize(value.`transcoder`) +
                 FfiConverterOptionalTypeModelArtifactValidator.allocationSize(value.`modelValidator`) +
                 FfiConverterOptionalTypeTransferPolicy.allocationSize(value.`transferPolicy`) +
                 FfiConverterOptionalTypeConnectivityMonitor.allocationSize(value.`connectivity`) +
@@ -27625,6 +29409,7 @@ public object FfiConverterTypeCompanionBackends : FfiConverterRustBuffer<Compani
         FfiConverterOptionalTypeNluModelRunner.write(value.`nlu`, buf)
         FfiConverterOptionalTypeAppleMusicBackend.write(value.`appleMusic`, buf)
         FfiConverterOptionalTypeImageScaler.write(value.`image`, buf)
+        FfiConverterOptionalTypeMediaTranscoder.write(value.`transcoder`, buf)
         FfiConverterOptionalTypeModelArtifactValidator.write(value.`modelValidator`, buf)
         FfiConverterOptionalTypeTransferPolicy.write(value.`transferPolicy`, buf)
         FfiConverterOptionalTypeConnectivityMonitor.write(value.`connectivity`, buf)
@@ -27786,74 +29571,6 @@ public object FfiConverterTypeConfigEntry : FfiConverterRustBuffer<ConfigEntry> 
     ) {
         FfiConverterString.write(value.`key`, buf)
         FfiConverterString.write(value.`value`, buf)
-    }
-}
-
-data class ConfigField(
-    var `kind`: ConfigKind,
-    var `key`: kotlin.String,
-    var `label`: kotlin.String,
-    var `pattern`: kotlin.String?,
-    var `minLength`: kotlin.UInt?,
-    var `maxLength`: kotlin.UInt?,
-    var `min`: kotlin.Double?,
-    var `max`: kotlin.Double?,
-    var `step`: kotlin.Double?,
-    var `choices`: List<kotlin.String>,
-    var `defaultValue`: kotlin.String?,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeConfigField : FfiConverterRustBuffer<ConfigField> {
-    override fun read(buf: ByteBuffer): ConfigField =
-        ConfigField(
-            FfiConverterTypeConfigKind.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalUInt.read(buf),
-            FfiConverterOptionalUInt.read(buf),
-            FfiConverterOptionalDouble.read(buf),
-            FfiConverterOptionalDouble.read(buf),
-            FfiConverterOptionalDouble.read(buf),
-            FfiConverterSequenceString.read(buf),
-            FfiConverterOptionalString.read(buf),
-        )
-
-    override fun allocationSize(value: ConfigField) =
-        (
-            FfiConverterTypeConfigKind.allocationSize(value.`kind`) +
-                FfiConverterString.allocationSize(value.`key`) +
-                FfiConverterString.allocationSize(value.`label`) +
-                FfiConverterOptionalString.allocationSize(value.`pattern`) +
-                FfiConverterOptionalUInt.allocationSize(value.`minLength`) +
-                FfiConverterOptionalUInt.allocationSize(value.`maxLength`) +
-                FfiConverterOptionalDouble.allocationSize(value.`min`) +
-                FfiConverterOptionalDouble.allocationSize(value.`max`) +
-                FfiConverterOptionalDouble.allocationSize(value.`step`) +
-                FfiConverterSequenceString.allocationSize(value.`choices`) +
-                FfiConverterOptionalString.allocationSize(value.`defaultValue`)
-        )
-
-    override fun write(
-        value: ConfigField,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterTypeConfigKind.write(value.`kind`, buf)
-        FfiConverterString.write(value.`key`, buf)
-        FfiConverterString.write(value.`label`, buf)
-        FfiConverterOptionalString.write(value.`pattern`, buf)
-        FfiConverterOptionalUInt.write(value.`minLength`, buf)
-        FfiConverterOptionalUInt.write(value.`maxLength`, buf)
-        FfiConverterOptionalDouble.write(value.`min`, buf)
-        FfiConverterOptionalDouble.write(value.`max`, buf)
-        FfiConverterOptionalDouble.write(value.`step`, buf)
-        FfiConverterSequenceString.write(value.`choices`, buf)
-        FfiConverterOptionalString.write(value.`defaultValue`, buf)
     }
 }
 
@@ -28589,6 +30306,38 @@ public object FfiConverterTypeMediaArt : FfiConverterRustBuffer<MediaArt> {
     }
 }
 
+data class MediaCover(
+    var `width`: kotlin.UInt,
+    var `height`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaCover : FfiConverterRustBuffer<MediaCover> {
+    override fun read(buf: ByteBuffer): MediaCover =
+        MediaCover(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: MediaCover) =
+        (
+            FfiConverterUInt.allocationSize(value.`width`) +
+                FfiConverterUInt.allocationSize(value.`height`)
+        )
+
+    override fun write(
+        value: MediaCover,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`width`, buf)
+        FfiConverterUInt.write(value.`height`, buf)
+    }
+}
+
 data class MediaQueueEntry(
     var `queueId`: kotlin.Long,
     var `title`: kotlin.String?,
@@ -28722,6 +30471,46 @@ public object FfiConverterTypeMediaSessionSnapshot : FfiConverterRustBuffer<Medi
         FfiConverterOptionalBoolean.write(value.`liked`, buf)
         FfiConverterBoolean.write(value.`likeSupported`, buf)
         FfiConverterOptionalString.write(value.`queueTitle`, buf)
+    }
+}
+
+data class MediaSniff(
+    var `format`: MediaFormat,
+    var `kind`: MediaKind,
+    var `animated`: kotlin.Boolean,
+    var `mime`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaSniff : FfiConverterRustBuffer<MediaSniff> {
+    override fun read(buf: ByteBuffer): MediaSniff =
+        MediaSniff(
+            FfiConverterTypeMediaFormat.read(buf),
+            FfiConverterTypeMediaKind.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: MediaSniff) =
+        (
+            FfiConverterTypeMediaFormat.allocationSize(value.`format`) +
+                FfiConverterTypeMediaKind.allocationSize(value.`kind`) +
+                FfiConverterBoolean.allocationSize(value.`animated`) +
+                FfiConverterOptionalString.allocationSize(value.`mime`)
+        )
+
+    override fun write(
+        value: MediaSniff,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMediaFormat.write(value.`format`, buf)
+        FfiConverterTypeMediaKind.write(value.`kind`, buf)
+        FfiConverterBoolean.write(value.`animated`, buf)
+        FfiConverterOptionalString.write(value.`mime`, buf)
     }
 }
 
@@ -29953,6 +31742,58 @@ public object FfiConverterTypePhoneState : FfiConverterRustBuffer<PhoneState> {
     }
 }
 
+data class PickedMedia(
+    var `handle`: kotlin.String,
+    var `mime`: kotlin.String,
+    var `size`: kotlin.ULong,
+    var `width`: kotlin.UInt?,
+    var `height`: kotlin.UInt?,
+    var `durationMs`: kotlin.ULong?,
+    var `preview`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePickedMedia : FfiConverterRustBuffer<PickedMedia> {
+    override fun read(buf: ByteBuffer): PickedMedia =
+        PickedMedia(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: PickedMedia) =
+        (
+            FfiConverterString.allocationSize(value.`handle`) +
+                FfiConverterString.allocationSize(value.`mime`) +
+                FfiConverterULong.allocationSize(value.`size`) +
+                FfiConverterOptionalUInt.allocationSize(value.`width`) +
+                FfiConverterOptionalUInt.allocationSize(value.`height`) +
+                FfiConverterOptionalULong.allocationSize(value.`durationMs`) +
+                FfiConverterOptionalString.allocationSize(value.`preview`)
+        )
+
+    override fun write(
+        value: PickedMedia,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`handle`, buf)
+        FfiConverterString.write(value.`mime`, buf)
+        FfiConverterULong.write(value.`size`, buf)
+        FfiConverterOptionalUInt.write(value.`width`, buf)
+        FfiConverterOptionalUInt.write(value.`height`, buf)
+        FfiConverterOptionalULong.write(value.`durationMs`, buf)
+        FfiConverterOptionalString.write(value.`preview`, buf)
+    }
+}
+
 data class Position(
     var `lat`: kotlin.Double,
     var `lon`: kotlin.Double,
@@ -30054,6 +31895,46 @@ public object FfiConverterTypeProviderInfo : FfiConverterRustBuffer<ProviderInfo
         FfiConverterTypeSignInMethod.write(value.`signIn`, buf)
         FfiConverterTypeAuthState.write(value.`authState`, buf)
         FfiConverterTypeServiceHealth.write(value.`serviceHealth`, buf)
+    }
+}
+
+data class ScaledImage(
+    var `bytes`: kotlin.ByteArray,
+    var `mime`: kotlin.String,
+    var `width`: kotlin.UInt,
+    var `height`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeScaledImage : FfiConverterRustBuffer<ScaledImage> {
+    override fun read(buf: ByteBuffer): ScaledImage =
+        ScaledImage(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: ScaledImage) =
+        (
+            FfiConverterByteArray.allocationSize(value.`bytes`) +
+                FfiConverterString.allocationSize(value.`mime`) +
+                FfiConverterUInt.allocationSize(value.`width`) +
+                FfiConverterUInt.allocationSize(value.`height`)
+        )
+
+    override fun write(
+        value: ScaledImage,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`bytes`, buf)
+        FfiConverterString.write(value.`mime`, buf)
+        FfiConverterUInt.write(value.`width`, buf)
+        FfiConverterUInt.write(value.`height`, buf)
     }
 }
 
@@ -30497,6 +32378,86 @@ public object FfiConverterTypeStreamTiming : FfiConverterRustBuffer<StreamTiming
     }
 }
 
+data class TranscodeRequest(
+    var `source`: kotlin.String,
+    var `destination`: kotlin.String,
+    var `coverWidth`: kotlin.UInt,
+    var `coverHeight`: kotlin.UInt,
+    var `maxBitrate`: kotlin.UInt?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscodeRequest : FfiConverterRustBuffer<TranscodeRequest> {
+    override fun read(buf: ByteBuffer): TranscodeRequest =
+        TranscodeRequest(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+        )
+
+    override fun allocationSize(value: TranscodeRequest) =
+        (
+            FfiConverterString.allocationSize(value.`source`) +
+                FfiConverterString.allocationSize(value.`destination`) +
+                FfiConverterUInt.allocationSize(value.`coverWidth`) +
+                FfiConverterUInt.allocationSize(value.`coverHeight`) +
+                FfiConverterOptionalUInt.allocationSize(value.`maxBitrate`)
+        )
+
+    override fun write(
+        value: TranscodeRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`source`, buf)
+        FfiConverterString.write(value.`destination`, buf)
+        FfiConverterUInt.write(value.`coverWidth`, buf)
+        FfiConverterUInt.write(value.`coverHeight`, buf)
+        FfiConverterOptionalUInt.write(value.`maxBitrate`, buf)
+    }
+}
+
+data class TranscodedVideo(
+    var `width`: kotlin.UInt,
+    var `height`: kotlin.UInt,
+    var `durationMs`: kotlin.ULong,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTranscodedVideo : FfiConverterRustBuffer<TranscodedVideo> {
+    override fun read(buf: ByteBuffer): TranscodedVideo =
+        TranscodedVideo(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterULong.read(buf),
+        )
+
+    override fun allocationSize(value: TranscodedVideo) =
+        (
+            FfiConverterUInt.allocationSize(value.`width`) +
+                FfiConverterUInt.allocationSize(value.`height`) +
+                FfiConverterULong.allocationSize(value.`durationMs`)
+        )
+
+    override fun write(
+        value: TranscodedVideo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`width`, buf)
+        FfiConverterUInt.write(value.`height`, buf)
+        FfiConverterULong.write(value.`durationMs`, buf)
+    }
+}
+
 data class Transcription(
     var `text`: kotlin.String,
     var `alternatives`: List<kotlin.String>,
@@ -30534,6 +32495,54 @@ public object FfiConverterTypeTranscription : FfiConverterRustBuffer<Transcripti
         FfiConverterSequenceString.write(value.`alternatives`, buf)
         FfiConverterSequenceTypeSpeechSegment.write(value.`segments`, buf)
         FfiConverterOptionalFloat.write(value.`confidence`, buf)
+    }
+}
+
+data class VideoPlan(
+    var `width`: kotlin.UInt,
+    var `height`: kotlin.UInt,
+    var `maxFps`: kotlin.UInt,
+    var `bitrate`: kotlin.UInt,
+    var `fitted`: kotlin.Boolean,
+    var `keyframeSeconds`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVideoPlan : FfiConverterRustBuffer<VideoPlan> {
+    override fun read(buf: ByteBuffer): VideoPlan =
+        VideoPlan(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: VideoPlan) =
+        (
+            FfiConverterUInt.allocationSize(value.`width`) +
+                FfiConverterUInt.allocationSize(value.`height`) +
+                FfiConverterUInt.allocationSize(value.`maxFps`) +
+                FfiConverterUInt.allocationSize(value.`bitrate`) +
+                FfiConverterBoolean.allocationSize(value.`fitted`) +
+                FfiConverterUInt.allocationSize(value.`keyframeSeconds`)
+        )
+
+    override fun write(
+        value: VideoPlan,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`width`, buf)
+        FfiConverterUInt.write(value.`height`, buf)
+        FfiConverterUInt.write(value.`maxFps`, buf)
+        FfiConverterUInt.write(value.`bitrate`, buf)
+        FfiConverterBoolean.write(value.`fitted`, buf)
+        FfiConverterUInt.write(value.`keyframeSeconds`, buf)
     }
 }
 
@@ -30733,6 +32742,46 @@ public object FfiConverterTypeVolumeLevel : FfiConverterRustBuffer<VolumeLevel> 
     }
 }
 
+data class WebappBlob(
+    var `key`: kotlin.String,
+    var `sha256`: kotlin.String,
+    var `mime`: kotlin.String,
+    var `size`: kotlin.ULong,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeWebappBlob : FfiConverterRustBuffer<WebappBlob> {
+    override fun read(buf: ByteBuffer): WebappBlob =
+        WebappBlob(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+        )
+
+    override fun allocationSize(value: WebappBlob) =
+        (
+            FfiConverterString.allocationSize(value.`key`) +
+                FfiConverterString.allocationSize(value.`sha256`) +
+                FfiConverterString.allocationSize(value.`mime`) +
+                FfiConverterULong.allocationSize(value.`size`)
+        )
+
+    override fun write(
+        value: WebappBlob,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`key`, buf)
+        FfiConverterString.write(value.`sha256`, buf)
+        FfiConverterString.write(value.`mime`, buf)
+        FfiConverterULong.write(value.`size`, buf)
+    }
+}
+
 data class WebappInfo(
     var `id`: kotlin.String,
     var `name`: kotlin.String,
@@ -30744,7 +32793,7 @@ data class WebappInfo(
     var `iconHash`: kotlin.String?,
     var `settingsHash`: kotlin.String?,
     var `overlayHash`: kotlin.String?,
-    var `config`: List<ConfigField>,
+    var `config`: ConfigFields,
     var `permissions`: List<kotlin.String>,
     var `extension`: ExtensionInfo?,
 ) {
@@ -30767,7 +32816,7 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
-            FfiConverterSequenceTypeConfigField.read(buf),
+            FfiConverterTypeConfigFields.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalTypeExtensionInfo.read(buf),
         )
@@ -30784,7 +32833,7 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
                 FfiConverterOptionalString.allocationSize(value.`iconHash`) +
                 FfiConverterOptionalString.allocationSize(value.`settingsHash`) +
                 FfiConverterOptionalString.allocationSize(value.`overlayHash`) +
-                FfiConverterSequenceTypeConfigField.allocationSize(value.`config`) +
+                FfiConverterTypeConfigFields.allocationSize(value.`config`) +
                 FfiConverterSequenceString.allocationSize(value.`permissions`) +
                 FfiConverterOptionalTypeExtensionInfo.allocationSize(value.`extension`)
         )
@@ -30803,7 +32852,7 @@ public object FfiConverterTypeWebappInfo : FfiConverterRustBuffer<WebappInfo> {
         FfiConverterOptionalString.write(value.`iconHash`, buf)
         FfiConverterOptionalString.write(value.`settingsHash`, buf)
         FfiConverterOptionalString.write(value.`overlayHash`, buf)
-        FfiConverterSequenceTypeConfigField.write(value.`config`, buf)
+        FfiConverterTypeConfigFields.write(value.`config`, buf)
         FfiConverterSequenceString.write(value.`permissions`, buf)
         FfiConverterOptionalTypeExtensionInfo.write(value.`extension`, buf)
     }
@@ -31764,13 +33813,18 @@ public object FfiConverterTypeCompanionError : FfiConverterRustBuffer<CompanionE
     }
 }
 
-enum class ConfigKind {
-    STRING,
-    NUMBER,
-    BOOLEAN,
-    ENUM,
-    SECRET,
-    ;
+sealed class CoverPlan {
+    object Keep : CoverPlan()
+
+    data class Encode(
+        val `width`: kotlin.UInt,
+        val `height`: kotlin.UInt,
+        val `format`: uniffi.bridgething_companion.StillFormat,
+        val `mime`: kotlin.String,
+        val `quality`: kotlin.Float,
+    ) : CoverPlan() {
+        companion object
+    }
 
     companion object
 }
@@ -31778,21 +33832,70 @@ enum class ConfigKind {
 /**
  * @suppress
  */
-public object FfiConverterTypeConfigKind : FfiConverterRustBuffer<ConfigKind> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            ConfigKind.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+public object FfiConverterTypeCoverPlan : FfiConverterRustBuffer<CoverPlan> {
+    override fun read(buf: ByteBuffer): CoverPlan =
+        when (buf.getInt()) {
+            1 -> {
+                CoverPlan.Keep
+            }
+
+            2 -> {
+                CoverPlan.Encode(
+                    FfiConverterUInt.read(buf),
+                    FfiConverterUInt.read(buf),
+                    FfiConverterTypeStillFormat.read(buf),
+                    FfiConverterString.read(buf),
+                    FfiConverterFloat.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
         }
 
-    override fun allocationSize(value: ConfigKind) = 4UL
+    override fun allocationSize(value: CoverPlan): ULong =
+        when (value) {
+            is CoverPlan.Keep -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is CoverPlan.Encode -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterUInt.allocationSize(value.`width`) +
+                        FfiConverterUInt.allocationSize(value.`height`) +
+                        FfiConverterTypeStillFormat.allocationSize(value.`format`) +
+                        FfiConverterString.allocationSize(value.`mime`) +
+                        FfiConverterFloat.allocationSize(value.`quality`)
+                )
+            }
+        }
 
     override fun write(
-        value: ConfigKind,
+        value: CoverPlan,
         buf: ByteBuffer,
     ) {
-        buf.putInt(value.ordinal + 1)
+        when (value) {
+            is CoverPlan.Keep -> {
+                buf.putInt(1)
+                Unit
+            }
+
+            is CoverPlan.Encode -> {
+                buf.putInt(2)
+                FfiConverterUInt.write(value.`width`, buf)
+                FfiConverterUInt.write(value.`height`, buf)
+                FfiConverterTypeStillFormat.write(value.`format`, buf)
+                FfiConverterString.write(value.`mime`, buf)
+                FfiConverterFloat.write(value.`quality`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -32236,6 +34339,92 @@ public object FfiConverterTypeHttpMethod : FfiConverterRustBuffer<HttpMethod> {
     }
 }
 
+sealed class ImageTarget {
+    data class Thumbnail(
+        val `maxEdge`: kotlin.UInt,
+        val `quality`: kotlin.Float,
+    ) : ImageTarget() {
+        companion object
+    }
+
+    data class Cover(
+        val `width`: kotlin.UInt,
+        val `height`: kotlin.UInt,
+    ) : ImageTarget() {
+        companion object
+    }
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageTarget : FfiConverterRustBuffer<ImageTarget> {
+    override fun read(buf: ByteBuffer): ImageTarget =
+        when (buf.getInt()) {
+            1 -> {
+                ImageTarget.Thumbnail(
+                    FfiConverterUInt.read(buf),
+                    FfiConverterFloat.read(buf),
+                )
+            }
+
+            2 -> {
+                ImageTarget.Cover(
+                    FfiConverterUInt.read(buf),
+                    FfiConverterUInt.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ImageTarget): ULong =
+        when (value) {
+            is ImageTarget.Thumbnail -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterUInt.allocationSize(value.`maxEdge`) +
+                        FfiConverterFloat.allocationSize(value.`quality`)
+                )
+            }
+
+            is ImageTarget.Cover -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterUInt.allocationSize(value.`width`) +
+                        FfiConverterUInt.allocationSize(value.`height`)
+                )
+            }
+        }
+
+    override fun write(
+        value: ImageTarget,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ImageTarget.Thumbnail -> {
+                buf.putInt(1)
+                FfiConverterUInt.write(value.`maxEdge`, buf)
+                FfiConverterFloat.write(value.`quality`, buf)
+                Unit
+            }
+
+            is ImageTarget.Cover -> {
+                buf.putInt(2)
+                FfiConverterUInt.write(value.`width`, buf)
+                FfiConverterUInt.write(value.`height`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
 enum class InitiateCallType {
     DESTINATION,
     VOICEMAIL,
@@ -32641,6 +34830,105 @@ public object FfiConverterTypeMediaControl : FfiConverterRustBuffer<MediaControl
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+enum class MediaFormat {
+    JPEG,
+    PNG,
+    GIF,
+    WEBP,
+    AVIF,
+    HEIF,
+    BMP,
+    TIFF,
+    ISO_VIDEO,
+    MATROSKA,
+    AVI,
+    UNKNOWN,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaFormat : FfiConverterRustBuffer<MediaFormat> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MediaFormat.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MediaFormat) = 4UL
+
+    override fun write(
+        value: MediaFormat,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+enum class MediaKind {
+    IMAGE,
+    VIDEO,
+    OTHER,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaKind : FfiConverterRustBuffer<MediaKind> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MediaKind.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MediaKind) = 4UL
+
+    override fun write(
+        value: MediaKind,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+enum class MediaPickKind {
+    IMAGE,
+    VIDEO,
+    ANY,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMediaPickKind : FfiConverterRustBuffer<MediaPickKind> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MediaPickKind.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MediaPickKind) = 4UL
+
+    override fun write(
+        value: MediaPickKind,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
     }
 }
 
@@ -35267,6 +37555,37 @@ public object FfiConverterTypeSignInMethod : FfiConverterRustBuffer<SignInMethod
     }
 }
 
+enum class StillFormat {
+    JPEG,
+    PNG,
+    GIF,
+    WEBP,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeStillFormat : FfiConverterRustBuffer<StillFormat> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            StillFormat.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: StillFormat) = 4UL
+
+    override fun write(
+        value: StillFormat,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 sealed class StreamStatus {
     object Buffering : StreamStatus()
 
@@ -36125,6 +38444,38 @@ public object FfiConverterOptionalTypeAudioBackend : FfiConverterRustBuffer<Audi
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeBlobProgressSink : FfiConverterRustBuffer<BlobProgressSink?> {
+    override fun read(buf: ByteBuffer): BlobProgressSink? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeBlobProgressSink.read(buf)
+    }
+
+    override fun allocationSize(value: BlobProgressSink?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeBlobProgressSink.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: BlobProgressSink?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeBlobProgressSink.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeConnectivityMonitor : FfiConverterRustBuffer<ConnectivityMonitor?> {
     override fun read(buf: ByteBuffer): ConnectivityMonitor? {
         if (buf.get().toInt() == 0) {
@@ -36342,6 +38693,38 @@ public object FfiConverterOptionalTypeMediaSessionBackend : FfiConverterRustBuff
         } else {
             buf.put(1)
             FfiConverterTypeMediaSessionBackend.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeMediaTranscoder : FfiConverterRustBuffer<MediaTranscoder?> {
+    override fun read(buf: ByteBuffer): MediaTranscoder? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeMediaTranscoder.read(buf)
+    }
+
+    override fun allocationSize(value: MediaTranscoder?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeMediaTranscoder.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: MediaTranscoder?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeMediaTranscoder.write(value, buf)
         }
     }
 }
@@ -36797,6 +39180,38 @@ public object FfiConverterOptionalTypeMediaArt : FfiConverterRustBuffer<MediaArt
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeMediaCover : FfiConverterRustBuffer<MediaCover?> {
+    override fun read(buf: ByteBuffer): MediaCover? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeMediaCover.read(buf)
+    }
+
+    override fun allocationSize(value: MediaCover?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeMediaCover.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: MediaCover?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeMediaCover.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeNluFastPathHit : FfiConverterRustBuffer<NluFastPathHit?> {
     override fun read(buf: ByteBuffer): NluFastPathHit? {
         if (buf.get().toInt() == 0) {
@@ -37078,6 +39493,38 @@ public object FfiConverterOptionalTypeOtaRunProgress : FfiConverterRustBuffer<Ot
         } else {
             buf.put(1)
             FfiConverterTypeOtaRunProgress.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeScaledImage : FfiConverterRustBuffer<ScaledImage?> {
+    override fun read(buf: ByteBuffer): ScaledImage? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeScaledImage.read(buf)
+    }
+
+    override fun allocationSize(value: ScaledImage?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeScaledImage.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: ScaledImage?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeScaledImage.write(value, buf)
         }
     }
 }
@@ -37753,34 +40200,6 @@ public object FfiConverterSequenceTypeConfigEntry : FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeConfigField : FfiConverterRustBuffer<List<ConfigField>> {
-    override fun read(buf: ByteBuffer): List<ConfigField> {
-        val len = buf.getInt()
-        return List<ConfigField>(len) {
-            FfiConverterTypeConfigField.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<ConfigField>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeConfigField.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(
-        value: List<ConfigField>,
-        buf: ByteBuffer,
-    ) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeConfigField.write(it, buf)
-        }
-    }
-}
-
-/**
- * @suppress
- */
 public object FfiConverterSequenceTypeDeviceAutoResume : FfiConverterRustBuffer<List<DeviceAutoResume>> {
     override fun read(buf: ByteBuffer): List<DeviceAutoResume> {
         val len = buf.getInt()
@@ -38341,6 +40760,34 @@ public object FfiConverterSequenceTypeSpeechSegment : FfiConverterRustBuffer<Lis
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeWebappBlob : FfiConverterRustBuffer<List<WebappBlob>> {
+    override fun read(buf: ByteBuffer): List<WebappBlob> {
+        val len = buf.getInt()
+        return List<WebappBlob>(len) {
+            FfiConverterTypeWebappBlob.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<WebappBlob>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeWebappBlob.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<WebappBlob>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeWebappBlob.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeWebappInfo : FfiConverterRustBuffer<List<WebappInfo>> {
     override fun read(buf: ByteBuffer): List<WebappInfo> {
         val len = buf.getInt()
@@ -38390,6 +40837,34 @@ public object FfiConverterSequenceTypeOtaStoreChange : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeOtaStoreChange.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeStillFormat : FfiConverterRustBuffer<List<StillFormat>> {
+    override fun read(buf: ByteBuffer): List<StillFormat> {
+        val len = buf.getInt()
+        return List<StillFormat>(len) {
+            FfiConverterTypeStillFormat.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<StillFormat>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeStillFormat.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<StillFormat>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeStillFormat.write(it, buf)
         }
     }
 }
@@ -38627,6 +41102,9 @@ public object FfiConverterMapStringTypeOtaPatchDigest : FfiConverterRustBuffer<M
     }
 }
 
+public typealias ConfigFields = kotlin.String
+public typealias FfiConverterTypeConfigFields = FfiConverterString
+
 fun `parseLrc`(`text`: kotlin.String): List<LrcLine> =
     FfiConverterSequenceTypeLrcLine.lift(
         uniffiRustCall { _status ->
@@ -38778,5 +41256,49 @@ fun `parseOtaDiscoverManifest`(`json`: kotlin.String): OtaDiscoverManifest =
     FfiConverterTypeOtaDiscoverManifest.lift(
         uniffiRustCallWithError(OtaManifestException) { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_func_parse_ota_discover_manifest(FfiConverterString.lower(`json`), _status)
+        },
+    )
+
+fun `planCover`(
+    `format`: MediaFormat,
+    `width`: kotlin.UInt,
+    `height`: kotlin.UInt,
+    `hasAlpha`: kotlin.Boolean,
+    `coverWidth`: kotlin.UInt,
+    `coverHeight`: kotlin.UInt,
+    `encodable`: List<StillFormat>,
+): CoverPlan =
+    FfiConverterTypeCoverPlan.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_func_plan_cover(
+                FfiConverterTypeMediaFormat.lower(`format`),
+                FfiConverterUInt.lower(`width`),
+                FfiConverterUInt.lower(`height`),
+                FfiConverterBoolean.lower(`hasAlpha`),
+                FfiConverterUInt.lower(`coverWidth`),
+                FfiConverterUInt.lower(`coverHeight`),
+                FfiConverterSequenceTypeStillFormat.lower(`encodable`),
+                _status,
+            )
+        },
+    )
+
+fun `planVideo`(
+    `width`: kotlin.UInt,
+    `height`: kotlin.UInt,
+    `coverWidth`: kotlin.UInt,
+    `coverHeight`: kotlin.UInt,
+    `maxBitrate`: kotlin.UInt?,
+): VideoPlan =
+    FfiConverterTypeVideoPlan.lift(
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_func_plan_video(
+                FfiConverterUInt.lower(`width`),
+                FfiConverterUInt.lower(`height`),
+                FfiConverterUInt.lower(`coverWidth`),
+                FfiConverterUInt.lower(`coverHeight`),
+                FfiConverterOptionalUInt.lower(`maxBitrate`),
+                _status,
+            )
         },
     )

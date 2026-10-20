@@ -10,6 +10,13 @@
   --text: #e7ecf0;
   --muted: #8b96a2;
   --accent: #03a9f4;
+  --bt-color-bg: var(--panel);
+  --bt-color-screen: var(--bg);
+  --bt-color-fg: var(--text);
+  --bt-color-muted: var(--muted);
+  --bt-color-accent: var(--accent);
+  --bt-color-rule: var(--line);
+  --bt-color-edge: var(--line);
 }
 
 * {
@@ -53,18 +60,6 @@ h1 {
   gap: 10px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.field label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 input {

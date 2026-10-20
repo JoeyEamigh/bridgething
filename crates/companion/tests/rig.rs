@@ -1,9 +1,13 @@
 #[path = "rig/backends.rs"]
 mod backends;
+#[path = "rig/blobs.rs"]
+mod blobs;
 #[path = "rig/extension_host.rs"]
 mod extension_host;
 #[path = "rig/fakes.rs"]
 mod fakes;
+#[path = "../src/media/fixture.rs"]
+mod fixture;
 #[path = "rig/install.rs"]
 mod install;
 #[path = "rig/log_sink.rs"]

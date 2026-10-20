@@ -5,16 +5,19 @@ use std::{
   time::{Duration, Instant},
 };
 
-use bridgething_companion::provider::{ResumeTarget, spotify, subsonic};
+use bridgething_companion::{
+  api::MediaPickKind,
+  provider::{ResumeTarget, spotify, subsonic},
+};
 use bridgething_desktop::{
   commands::{self, InstallOutcome, OtaOutcome},
   hints::{self, Hint, Invalidation},
-  shell::{DEFAULT_GATEWAY_URL, Shell},
+  shell::{self, DEFAULT_GATEWAY_URL, Shell},
 };
 use libbridgething::{BRIDGETHING_MDNS_SERVICE_TYPE, BRIDGETHING_STOCK_WS_PORT, gateway::WebappResourceKind};
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use support::{Channel, DRIVE_DEADLINE, Daemon, SETTLE, daemon_host, mock_app, model_root, shell_config};
-use tauri::Manager;
+use tauri::{Manager, webview::PageLoadEvent};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -236,6 +239,104 @@ async fn the_window_is_told_which_gateway_a_bare_connect_would_reach() {
     DEFAULT_GATEWAY_URL,
     "the standing row dials whatever a bare connect would have reached"
   );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_blob_command_that_fails_tells_the_page_why_behind_a_leading_token() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  let app = mock_app(probe_shell(spool.path()));
+  let webapp = Uuid::now_v7().to_string();
+  let told = |refusal: commands::BlobRejection| {
+    serde_json::from_value::<String>(serde_json::to_value(refusal).expect("the refusal reaches the window as json"))
+      .expect("the refusal is one string")
+  };
+
+  let handle = commands::create_blob_handle(app.state(), "image/png".into())
+    .await
+    .expect("a handle needs no link");
+  let unlinked = [
+    told(
+      commands::webapp_blobs(app.state(), webapp.clone())
+        .await
+        .expect_err("nothing is linked to list"),
+    ),
+    told(
+      commands::delete_webapp_blob(app.state(), webapp.clone(), "cover".into())
+        .await
+        .expect_err("nothing is linked to delete from"),
+    ),
+    told(
+      commands::put_webapp_blob(
+        app.state(),
+        webapp,
+        "cover".into(),
+        handle,
+        tauri::ipc::Channel::new(|_| Ok(())),
+      )
+      .await
+      .expect_err("nothing is linked to put to"),
+    ),
+  ];
+  for refusal in unlinked {
+    assert_eq!(refusal, "not_connected: no link to the device");
+  }
+
+  let appended = told(
+    commands::append_blob_handle(app.state(), "never-minted".into(), "AAAA".into())
+      .await
+      .expect_err("a handle nobody minted takes no bytes"),
+  );
+  assert!(appended.starts_with("unknown_handle: "), "{appended}");
+
+  let missing = spool.path().join("missing.png").to_string_lossy().into_owned();
+  let ticket = commands::media_import_ticket(app.state());
+  let picked = told(
+    commands::import_picked_media(app.state(), ticket, missing.clone(), MediaPickKind::Image, None)
+      .await
+      .expect_err("a file that is not there cannot be picked"),
+  );
+  assert!(picked.starts_with("io: "), "{picked}");
+
+  let abandoned = commands::media_import_ticket(app.state());
+  commands::cancel_media_import(app.state(), abandoned);
+  let cancelled = told(
+    commands::import_picked_media(app.state(), abandoned, missing, MediaPickKind::Image, None)
+      .await
+      .expect_err("an abandoned pick is not imported"),
+  );
+  assert_eq!(cancelled, "failed: cancelled");
+
+  let finished = commands::media_import_ticket(app.state());
+  let stale = commands::media_import_ticket(app.state());
+  app.state::<Arc<Shell>>().page_loading(PageLoadEvent::Finished);
+  let kept = told(
+    commands::import_picked_media(
+      app.state(),
+      finished,
+      spool.path().join("gone").to_string_lossy().into_owned(),
+      MediaPickKind::Image,
+      None,
+    )
+    .await
+    .expect_err("the file is not there"),
+  );
+  assert!(
+    kept.starts_with("io: "),
+    "a finished load leaves the page's tickets alone: {kept}"
+  );
+  app.state::<Arc<Shell>>().page_loading(PageLoadEvent::Started);
+  let reloaded = told(
+    commands::import_picked_media(
+      app.state(),
+      stale,
+      spool.path().join("gone").to_string_lossy().into_owned(),
+      MediaPickKind::Image,
+      None,
+    )
+    .await
+    .expect_err("the document that held the ticket is gone"),
+  );
+  assert_eq!(reloaded, "failed: cancelled", "a new document starts with no tickets");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -540,7 +641,7 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
   let mut offered: Vec<&str> = providers.iter().map(|provider| provider.id.as_str()).collect();
   offered.sort_unstable();
   let mut expected = vec![subsonic::PROVIDER_NAME];
-  if option_env!("BRIDGETHING_AUTH_PSK").is_some_and(|psk| !psk.is_empty()) {
+  if shell::auth_psk().is_some() {
     expected.push(spotify::PROVIDER_NAME);
   }
   expected.sort_unstable();

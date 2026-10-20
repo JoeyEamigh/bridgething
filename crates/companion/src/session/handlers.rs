@@ -401,6 +401,14 @@ impl WebappHandler for Peer {
     }
     Ok(())
   }
+  async fn blob_stored(&self, payload: WebappBlobStored) -> Result<(), WireError> {
+    self.ota.blob_stored(payload);
+    Ok(())
+  }
+  async fn blob_failed(&self, payload: WebappBlobFailed) -> Result<(), WireError> {
+    self.ota.blob_failed(payload);
+    Ok(())
+  }
 }
 
 impl ForwardHandler for Peer {

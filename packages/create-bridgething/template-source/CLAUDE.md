@@ -14,9 +14,10 @@ Listen with a `keydown` handler and a `wheel` handler on `window`.
 | Mode         | `keydown` key `"m"`                   |
 | Back         | `keydown` key `"Escape"`              |
 | Rotary wheel | `wheel` with horizontal `deltaX`      |
+| Wheel click  | `keydown` key `"Enter"`               |
 | Touch        | pointer and touch events              |
 
-Make horizontal wheel scroll move through the main list. Five fast presses of Mode returns to the launcher.
+Make horizontal wheel scroll move through the main list and wheel click activate the selected item. Five fast presses of Mode returns to the launcher.
 
 ## The client
 
@@ -33,7 +34,7 @@ Construct it once and reuse it. It connects and reconnects on its own. Call `dae
 
 Now-playing and library data come from the phone's Spotify, so render a placeholder when no phone is connected. Fetch artwork with `client.asset.get` using the opaque id on the track.
 
-Every surface: `player asset config store doc capabilities library audio notifications phone peer geo net hardware bluetooth system time voice lyrics webapp forward`. Each method is an event, a request, or a command.
+Every surface: `player asset config store doc blob capabilities library audio notifications phone peer geo net hardware bluetooth system time voice lyrics webapp forward`. Each method is an event, a request, or a command.
 
 Methods, types, and examples: `.claude/skills/bridgething/reference/sdk.md`. That skill lives once at the repo root and every app symlinks it, so it is one copy for the whole workspace. `bun run skills` refreshes it from the published `create-bridgething`; `bun run check` says when it is behind.
 
@@ -62,10 +63,10 @@ Running and driving the app: `.claude/skills/bridgething/reference/develop.md`. 
 - `id` identifies this webapp on the device. It is a uuidv7 generated once at scaffold time. **Never change it**: the device keys upgrade-in-place and the app's key-value namespace on it, so a new uuid orphans everyone's installed copy and its data.
 - `version` is what the store publishes against. Move it with `bun run bump`, never by hand.
 - `description` is the store tagline and must not be empty.
-- `config` declares the settings the companion app edits and `client.config` reads.
+- `config` declares the settings `client.config` reads. The companion app edits them through `<ConfigForm/>` from `@bridgething/client/form`, on a default page when the app has no `settings` page.
 - `permissions` grants `geo` and `net.proxy`.
 - `art.heroPx` and `art.thumbPx` are the sizes artwork arrives at.
-- `settings` names the page built from `settings/`, capped at 1 MiB. It talks to the companion app through `@bridgething/client/settings`.
+- `settings` names the page built from `settings/`, capped at 1 MiB. It talks to the companion app through `@bridgething/client/settings` and embeds `<ConfigForm/>` for the declared fields. A button on it that acts on those fields awaits the form's `flush()` first. The companion keeps the page loaded between visits, so it rereads device state in `settings.onRefresh`. It is also where a user picks a file for the app (`settings.pick` + `settings.blob.put`), which the webapp then shows through `client.blob`.
 - `extension` declares the desktop-side Deno process and the host permissions it gets.
 
 **`apps/<slug>/catalog.json`** is the store listing and nothing else: `author`, `homepage`, `source`, an `icon` override, `screenshots`, and `min_libbridgething_version` (the oldest daemon the app works against). Never restate anything the manifest already says. An app that ships an extension must carry its `github.com` repo url in `source`, because the store shows that link next to the host permissions it is asking for.

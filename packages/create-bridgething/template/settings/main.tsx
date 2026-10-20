@@ -1,52 +1,35 @@
-import { settings, type ConfigField, type SettingsContext } from '@bridgething/client/settings';
-import { useEffect, useState, type FormEvent, type InputEvent } from 'react';
+import { ConfigForm, closeSettings, type ConfigFormHandle } from '@bridgething/client/form';
+import { settings, type SettingsContext } from '@bridgething/client/settings';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
 
-function fieldMeta(field: ConfigField): { key: string; label: string } {
-  return { key: field.data.key, label: field.data.label };
-}
-
 function Settings() {
+  const form = useRef<ConfigFormHandle>(null);
   const [ctx, setCtx] = useState<SettingsContext | null>(null);
-  const [fields, setFields] = useState<ConfigField[]>([]);
-  const [values, setValues] = useState<Record<string, string>>({});
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    (async () => {
-      try {
-        setCtx(await settings.context());
-        const [schema, entries] = await Promise.all([settings.config.fields(), settings.config.list()]);
-        setFields(schema);
-        setValues(Object.fromEntries(entries.map(e => [e.key, e.value])));
-      } catch (err) {
-        setStatus(err instanceof Error ? err.message : String(err));
-      }
-    })();
+    settings.context().then(setCtx, (err: unknown) => setStatus(errText(err)));
+    return settings.onRefresh(setCtx);
   }, []);
-
-  async function saveConfig(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus('saving...');
-    try {
-      for (const field of fields) {
-        const { key } = fieldMeta(field);
-        await settings.config.set(key, values[key] ?? '');
-      }
-      setStatus('settings saved');
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : String(err));
-    }
-  }
 
   async function saveToDevice() {
     setStatus('writing to device...');
     try {
+      const values = await form.current?.flush();
       await settings.doc.set('preferences', JSON.stringify({ values, savedAt: Date.now() }));
       setStatus('synced a preferences doc to the device');
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : String(err));
+      setStatus(errText(err));
+    }
+  }
+
+  async function close() {
+    try {
+      await closeSettings(form.current);
+    } catch (err) {
+      setStatus(errText(err));
     }
   }
 
@@ -55,50 +38,24 @@ function Settings() {
       <h1>{ctx?.name ?? '__PROJECT_NAME__'} settings</h1>
       <p className="hint">{ctx ? `${ctx.webappId} on ${ctx.deviceId}` : 'connecting to the companion host...'}</p>
 
-      <form onSubmit={saveConfig}>
-        {fields.length === 0 && <p className="hint">this webapp declares no config fields yet.</p>}
-        {fields.map(field => {
-          const { key, label } = fieldMeta(field);
-          const value = values[key] ?? '';
-          const onInput = (e: InputEvent<HTMLInputElement | HTMLSelectElement>) =>
-            setValues({ ...values, [key]: (e.target as HTMLInputElement).value });
-          return (
-            <div className="field" key={key}>
-              <label htmlFor={key}>{label}</label>
-              {field.type === 'enum' ? (
-                <select id={key} value={value} onInput={onInput}>
-                  {field.data.choices.map(choice => (
-                    <option value={choice} key={choice}>
-                      {choice}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id={key}
-                  type={field.type === 'number' ? 'number' : field.type === 'secret' ? 'password' : 'text'}
-                  value={value}
-                  onInput={onInput}
-                />
-              )}
-            </div>
-          );
-        })}
+      <ConfigForm ref={form} />
 
-        <div className="row">
-          <button type="submit">Save settings</button>
-          <button type="button" className="secondary" onClick={saveToDevice}>
-            Save to device
-          </button>
-          <button type="button" className="secondary" onClick={() => settings.done()}>
-            Done
-          </button>
-        </div>
-      </form>
+      <div className="row">
+        <button type="button" onClick={saveToDevice}>
+          Save to device
+        </button>
+        <button type="button" className="secondary" onClick={close}>
+          Done
+        </button>
+      </div>
 
       <p className="status">{status}</p>
     </main>
   );
+}
+
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 createRoot(document.getElementById('root')!).render(<Settings />);

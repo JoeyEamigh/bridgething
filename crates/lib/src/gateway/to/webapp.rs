@@ -109,6 +109,65 @@ pub struct WebappConfigChanged {
 }
 
 #[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobPutAck {
+  pub resume_from_offset: u32,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobDeleteAck {
+  pub key: String,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobEntry {
+  pub key: String,
+  pub sha256: String,
+  pub mime: String,
+  pub size: u32,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobListReply {
+  pub entries: Vec<WebappBlobEntry>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobStored {
+  #[ts(type = "string")]
+  pub id: Uuid,
+  pub key: String,
+  pub sha256: String,
+  pub size: u32,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct WebappBlobFailed {
+  #[ts(type = "string")]
+  pub id: Uuid,
+  pub key: String,
+  pub sha256: String,
+  pub error: WebappError,
+}
+
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
@@ -169,6 +228,16 @@ pub enum BridgeToGatewayWebappMsg {
   DocList(WebappDocListReply),
   #[bridge_response]
   DocAck(WebappDocAck),
+  #[bridge_response]
+  BlobPutAck(WebappBlobPutAck),
+  #[bridge_response]
+  BlobDeleteAck(WebappBlobDeleteAck),
+  #[bridge_response]
+  BlobList(WebappBlobListReply),
+  #[bridge_event]
+  BlobStored(WebappBlobStored),
+  #[bridge_event]
+  BlobFailed(WebappBlobFailed),
   #[bridge_event]
   DocChanged(WebappDocChanged),
   #[bridge_event]

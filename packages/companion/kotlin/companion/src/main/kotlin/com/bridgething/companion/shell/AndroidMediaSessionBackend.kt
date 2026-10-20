@@ -352,7 +352,7 @@ public class AndroidMediaSessionBackend(
     }.getOrNull()
 
     private fun encodeBitmap(bitmap: Bitmap): MediaArt? =
-        scaleToJpeg(bitmap, MAX_ART_EDGE, ART_JPEG_QUALITY)?.let { MediaArt(bytes = it, mime = "image/jpeg") }
+        scaleToJpeg(bitmap, MAX_ART_EDGE, ART_JPEG_QUALITY)?.let { MediaArt(bytes = it.bytes, mime = it.mime) }
 
     private fun digest(value: String): String =
         MessageDigest.getInstance("MD5").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }

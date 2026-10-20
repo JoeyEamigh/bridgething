@@ -108,7 +108,9 @@ fn render_scene(
 
 fn channel_average(interleaved: &[i32]) -> Vec<f32> {
   interleaved
-    .chunks_exact(CHANNELS)
+    .as_chunks::<CHANNELS>()
+    .0
+    .iter()
     .map(|mics| mics.iter().map(|s| *s as f64).sum::<f64>() / CHANNELS as f64 / i32::MAX as f64)
     .map(|v| v as f32)
     .collect()
@@ -120,7 +122,7 @@ fn score(mono: &[f32], speech_start: usize, speech_len: usize, threshold: f32) -
   let mono = &mono[..];
   let mut vad = Detector::default();
   let (mut hit, mut speech_frames, mut false_alarm, mut quiet_frames) = (0usize, 0usize, 0usize, 0usize);
-  for (index, frame) in mono.chunks_exact(FRAME).enumerate() {
+  for (index, frame) in mono.as_chunks::<FRAME>().0.iter().enumerate() {
     let at = index * FRAME;
     let voiced = vad.predict_f32(frame) >= threshold;
     if at >= speech_start && at + FRAME <= speech_start + speech_len {

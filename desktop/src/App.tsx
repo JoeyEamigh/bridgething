@@ -3,6 +3,7 @@ import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect, useRef } from 'preact/hooks';
 
 import { Sidebar } from './components/Sidebar.tsx';
+import { WebappSettingsFrame } from './components/WebappSettingsFrame.tsx';
 import { useDesktop } from './desktop.ts';
 import { PATHS } from './routes.ts';
 import { AppDetailRoute, AppsRoute } from './screens/Apps.tsx';
@@ -13,7 +14,8 @@ import { SettingsScreen } from './screens/Settings.tsx';
 import { CatalogAppRoute, SourceAppRoute, SourceRoute, StoreRoute } from './screens/Store.tsx';
 import { UpdatesScreen } from './screens/Updates.tsx';
 import { completeFirstRun, firstRunDone } from './stores/first-run.ts';
-import { keptRoute, peers } from './stores/session.ts';
+import { keptRoute, peers, webapps } from './stores/session.ts';
+import { followRoute, settingsRoute } from './stores/settings-host.ts';
 
 export function App(): VNode {
   return (
@@ -31,6 +33,11 @@ function Shell(): VNode {
   const onboarding = !firstRunDone.value && !connected;
 
   const restored = useRef(false);
+  const settings = settingsRoute(url);
+  const open = settings?.open ? settings.id : null;
+  const installed = webapps.data.value;
+
+  useEffect(() => followRoute(url, installed), [url, installed]);
 
   useEffect(() => {
     if (connected) completeFirstRun();
@@ -51,11 +58,12 @@ function Shell(): VNode {
   return (
     <div class="flex h-full min-w-0">
       <Sidebar peers={linked} />
-      <div key={url} class="route-enter flex min-h-0 min-w-0 flex-1">
+      <div key={url} class={open === null ? 'route-enter flex min-h-0 min-w-0 flex-1' : 'hidden'}>
         <Router>
           <Route path={PATHS.devices} component={DevicesScreen} />
           <Route path={PATHS.apps} component={AppsRoute} />
           <Route path="/apps/:webappId" component={AppDetailRoute} />
+          <Route path="/apps/:webappId/settings" component={SettingsRoute} />
           <Route path={PATHS.store} component={StoreRoute} />
           <Route path="/store/app/:appId" component={CatalogAppRoute} />
           <Route path="/store/source/:source" component={SourceRoute} />
@@ -66,6 +74,11 @@ function Shell(): VNode {
           <Route default component={DevicesScreen} />
         </Router>
       </div>
+      <WebappSettingsFrame open={open} />
     </div>
   );
+}
+
+function SettingsRoute(): null {
+  return null;
 }

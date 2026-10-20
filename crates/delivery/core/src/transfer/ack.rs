@@ -33,24 +33,22 @@ impl AckWindow {
     Self::default()
   }
 
+  pub fn open(&self, transfer_id: Uuid, resume_from: u64) {
+    let mut entries = self.entries.lock().unwrap();
+    let entry = entries.entry(transfer_id).or_default();
+    if resume_from > entry.received {
+      entry.received = resume_from;
+      entry.notify.notify_waiters();
+    }
+  }
+
   pub fn note(&self, transfer_id: Uuid, received: u64) {
     let mut entries = self.entries.lock().unwrap();
-    match entries.get_mut(&transfer_id) {
-      Some(entry) if received > entry.received => {
-        entry.received = received;
-        entry.notify.notify_waiters();
-      }
-      Some(_) => {}
-      None if received > 0 => {
-        entries.insert(
-          transfer_id,
-          Entry {
-            received,
-            notify: Arc::default(),
-          },
-        );
-      }
-      None => {}
+    if let Some(entry) = entries.get_mut(&transfer_id)
+      && received > entry.received
+    {
+      entry.received = received;
+      entry.notify.notify_waiters();
     }
   }
 
@@ -72,12 +70,12 @@ impl AckWindow {
 
   pub async fn wait_for_progress(&self, transfer_id: Uuid, beyond: u64, timeout: Duration) -> bool {
     let notify = {
-      let mut entries = self.entries.lock().unwrap();
-      let entry = entries.entry(transfer_id).or_default();
-      if entry.received > beyond {
-        return true;
+      let entries = self.entries.lock().unwrap();
+      match entries.get(&transfer_id) {
+        Some(entry) if entry.received > beyond => return true,
+        Some(entry) => entry.notify.clone(),
+        None => return false,
       }
-      entry.notify.clone()
     };
 
     let mut progressed = std::pin::pin!(notify.notified());
@@ -155,6 +153,7 @@ mod tests {
   async fn note_wakes_the_waiter_for_its_own_transfer() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
+    window.open(id, 0);
 
     let waiter = tokio::spawn({
       let window = window.clone();
@@ -175,7 +174,7 @@ mod tests {
   async fn finish_wakes_a_parked_waiter_instead_of_stranding_it_until_timeout() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
-    window.note(id, 16 * 1024);
+    window.open(id, 16 * 1024);
 
     let waiter = tokio::spawn({
       let window = window.clone();
@@ -197,6 +196,8 @@ mod tests {
     let window = Arc::new(AckWindow::new());
     let watched = Uuid::now_v7();
     let other = Uuid::now_v7();
+    window.open(watched, 0);
+    window.open(other, 0);
 
     let waiter = tokio::spawn({
       let window = window.clone();
@@ -218,7 +219,7 @@ mod tests {
   async fn a_waiter_that_already_has_progress_never_parks() {
     let window = AckWindow::new();
     let id = Uuid::now_v7();
-    window.note(id, 32 * 1024);
+    window.open(id, 32 * 1024);
 
     assert!(
       timeout(
@@ -234,7 +235,7 @@ mod tests {
   async fn a_replayed_ack_is_not_progress() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
-    window.note(id, 16 * 1024);
+    window.open(id, 16 * 1024);
 
     let waiter = tokio::spawn({
       let window = window.clone();
@@ -276,6 +277,7 @@ mod tests {
   async fn a_sender_past_the_window_waits_for_the_ack_that_opens_it() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
+    window.open(id, 0);
 
     let sender = tokio::spawn({
       let window = window.clone();
@@ -300,6 +302,7 @@ mod tests {
   async fn await_window_fails_fast_once_the_transfer_finishes() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
+    window.open(id, 0);
 
     let sender = tokio::spawn({
       let window = window.clone();
@@ -327,7 +330,9 @@ mod tests {
   async fn a_silent_peer_stalls_the_sender_at_the_ack_timeout() {
     let window = AckWindow::new();
     let id = Uuid::now_v7();
+    window.open(id, 0);
 
+    let at = Instant::now();
     let outcome = timeout(
       Duration::from_secs(3),
       window.await_window(id, 64 * 1024, 16 * 1024, Duration::from_millis(150)),
@@ -341,13 +346,60 @@ mod tests {
         offset: 64 * 1024
       })
     );
+    assert!(
+      at.elapsed() >= Duration::from_millis(150),
+      "the gate waits out the ack timeout before giving up"
+    );
+  }
+
+  #[tokio::test]
+  async fn an_ack_for_a_transfer_that_is_not_open_is_dropped() {
+    let window = AckWindow::new();
+    let never_opened = Uuid::now_v7();
+    let finished = Uuid::now_v7();
+    window.open(finished, 0);
+    window.note(finished, 8 * 1024);
+    window.finish(finished);
+
+    window.note(never_opened, 4 * 1024);
+    window.note(finished, 16 * 1024);
+
+    assert_eq!(window.received_bytes(never_opened), 0);
+    assert_eq!(window.received_bytes(finished), 0);
+    assert!(
+      window.entries.lock().unwrap().is_empty(),
+      "a late ack must not leave bookkeeping behind for a transfer nobody is sending"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_sender_past_the_window_of_a_finished_transfer_stalls_at_once() {
+    let window = AckWindow::new();
+    let id = Uuid::now_v7();
+    window.open(id, 0);
+    window.finish(id);
+
+    let outcome = timeout(
+      IMMEDIATE,
+      window.await_window(id, 64 * 1024, 16 * 1024, Duration::from_secs(30)),
+    )
+    .await
+    .expect("a finished transfer never parks its sender");
+    assert_eq!(
+      outcome,
+      Err(TransferStalled {
+        transfer_id: id,
+        offset: 64 * 1024
+      })
+    );
+    assert!(window.entries.lock().unwrap().is_empty());
   }
 
   #[tokio::test]
   async fn a_stalled_gate_tears_the_transfer_down() {
     let window = AckWindow::new();
     let id = Uuid::now_v7();
-    window.note(id, 8 * 1024);
+    window.open(id, 8 * 1024);
 
     let _ = window
       .await_window(id, 64 * 1024, 16 * 1024, Duration::from_millis(150))
@@ -360,10 +412,10 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn a_resume_baseline_is_seeded_by_a_note() {
+  async fn a_resume_baseline_is_seeded_when_the_transfer_opens() {
     let window = AckWindow::new();
     let id = Uuid::now_v7();
-    window.note(id, 30 * 1024 * 1024);
+    window.open(id, 30 * 1024 * 1024);
     assert_eq!(window.received_bytes(id), 30 * 1024 * 1024);
 
     timeout(
@@ -379,6 +431,7 @@ mod tests {
   async fn every_waiter_on_one_transfer_wakes_together() {
     let window = Arc::new(AckWindow::new());
     let id = Uuid::now_v7();
+    window.open(id, 0);
 
     let waiters: Vec<_> = (0..3)
       .map(|_| {

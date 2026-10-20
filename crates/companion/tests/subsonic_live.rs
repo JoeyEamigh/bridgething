@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use bridgething_companion::{
   api::{CapabilityFlags, HostInfo},
-  backend::{ForeignHttp, ImageScaler, NativeHttp, StreamStatus},
+  backend::{ForeignHttp, ImageScaler, ImageTarget, NativeHttp, ScaledImage, StreamStatus},
   hub::Hub,
+  media::MediaSniff,
   provider::{
     PlayerTransport, Provider, ProviderAuthState,
     subsonic::{SubsonicConfig, SubsonicProvider},
@@ -31,8 +32,13 @@ const PASSWORD_VAR: &str = "BRIDGETHING_SUBSONIC_LIVE_PASSWORD";
 struct KeepBytes;
 
 impl ImageScaler for KeepBytes {
-  fn downsample_jpeg(&self, bytes: Vec<u8>, _max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
-    Some(bytes)
+  fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, _target: ImageTarget) -> Option<ScaledImage> {
+    Some(ScaledImage {
+      bytes,
+      mime: "image/jpeg".into(),
+      width: 0,
+      height: 0,
+    })
   }
 }
 

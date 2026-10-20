@@ -1,0 +1,133 @@
+name: ffmpeg-sidecar
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: JSON list of rust target triples the caller bundles
+        required: true
+        type: string
+    outputs:
+      published:
+        description: JSON list of the requested targets the mirror already serves; build.rs fetches those itself
+        value: ${{ jobs.plan.outputs.published }}
+  push:
+    branches: [dev, main]
+    paths:
+      - "scripts/ffmpeg-sidecar*"
+      - "scripts/bridgething-publish-ffmpeg-sidecar"
+      - ".github/workflows/ffmpeg-sidecar.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PUBLIC_BASE: https://ota.bridgething.com
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      recipe: ${{ steps.plan.outputs.recipe }}
+      published: ${{ steps.plan.outputs.published }}
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: split the targets into published and to-build
+        id: plan
+        env:
+          TARGETS: ${{ inputs.targets || '["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"]' }}
+        run: |
+          set -euo pipefail
+          recipe="$(scripts/ffmpeg-sidecar-recipe)"
+          published=()
+          build=()
+          for target in $(jq -r '.[]' <<<"$TARGETS"); do
+            name="bridgething-ffmpeg-${target}"
+            [[ "$target" == *windows* ]] && name+=.exe
+            if curl -fsI --max-time 20 -o /dev/null "${PUBLIC_BASE}/ffmpeg-sidecar/${recipe}/${name}.sha256"; then
+              published+=("$target")
+            else
+              build+=("$target")
+            fi
+          done
+          {
+            echo "recipe=${recipe}"
+            echo "published=$(jq -cn '$ARGS.positional' --args "${published[@]}")"
+            echo "build=$(jq -cn '$ARGS.positional' --args "${build[@]}")"
+          } >>"$GITHUB_OUTPUT"
+          echo "recipe ${recipe}: published ${published[*]:-none}, building ${build[*]:-none}"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.build) }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ffmpeg-sidecar-${{ needs.plan.outputs.recipe }}-${{ matrix.target }}
+      cancel-in-progress: false
+    env:
+      BINARY: bridgething-ffmpeg-${{ matrix.target }}${{ contains(matrix.target, 'windows') && '.exe' || '' }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: desktop/src-tauri/binaries
+          key: ffmpeg-sidecar-${{ matrix.target }}-${{ needs.plan.outputs.recipe }}
+
+      - uses: extractions/setup-just@v3
+
+      - name: build the sidecar
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: just ffmpeg-sidecar ${{ matrix.target }}
+
+      - name: install rclone (R2 client)
+        if: env.R2_ACCESS_KEY_ID != ''
+        run: |
+          set -euo pipefail
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [r2]
+          type = s3
+          provider = Cloudflare
+          access_key_id = ${R2_ACCESS_KEY_ID}
+          secret_access_key = ${R2_SECRET_ACCESS_KEY}
+          endpoint = https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com
+          region = auto
+          no_check_bucket = true
+          EOF
+
+      - name: mirror the sidecar, its recipe and its sources
+        if: env.R2_ACCESS_KEY_ID != ''
+        env:
+          R2_BUCKET: bridgething-ota
+          PURGE_URLS: /tmp/purge-urls.txt
+        run: just ffmpeg-sidecar-publish ${{ matrix.target }}
+
+      - name: purge the cloudflare edge
+        if: always() && env.R2_ACCESS_KEY_ID != ''
+        env:
+          PURGE_URLS: /tmp/purge-urls.txt
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+        run: scripts/cf-purge
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-sidecar-${{ matrix.target }}
+          path: |
+            desktop/src-tauri/binaries/${{ env.BINARY }}
+            desktop/src-tauri/binaries/${{ env.BINARY }}.recipe
+            desktop/src-tauri/binaries/bridgething-ffmpeg-NOTICE.txt
+          if-no-files-found: error

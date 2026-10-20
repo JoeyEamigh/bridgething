@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/bridgething-ffmpeg"],
+    "resources": {
+      "binaries/bridgething-ffmpeg-NOTICE.txt": "licenses/bridgething-ffmpeg-NOTICE.txt"
+    }
+  }
+}

@@ -13,7 +13,6 @@ use libbridgething::{
   protocol::{try_probe_envelope_json, try_probe_envelope_msgpack},
   wire::{MsgMeta, ResponseMeta, WireError},
 };
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -43,7 +42,7 @@ pub struct Connection {
 }
 
 impl Connection {
-  pub fn spawn(
+  pub fn new(
     address: SocketAddr,
     ws: WebSocket,
     tx: RecvTx,
@@ -51,33 +50,28 @@ impl Connection {
     cancel_token: CancellationToken,
     mode: ClientMode,
     #[cfg(feature = "test-tap")] frame_tap: tokio::sync::broadcast::Sender<super::connman::TappedFrame>,
-  ) -> JoinHandle<()> {
+  ) -> Self {
     tracing::debug!("spawning listener for {address} in {:?} mode", &mode);
     let (writer, reader) = ws.split();
+    Self {
+      mode,
+      encoding: ClientEncoding::Json,
+      address,
 
-    tokio::spawn(async move {
-      Self {
-        mode,
-        encoding: ClientEncoding::Json,
-        address,
+      writer,
+      reader,
 
-        writer,
-        reader,
+      tx,
+      rx,
 
-        tx,
-        rx,
+      cancel_token,
 
-        cancel_token,
-
-        #[cfg(feature = "test-tap")]
-        frame_tap,
-      }
-      .listen()
-      .await
-    })
+      #[cfg(feature = "test-tap")]
+      frame_tap,
+    }
   }
 
-  pub async fn listen(&mut self) {
+  pub async fn listen(mut self) {
     let (code, reason) = self.run().await;
     tracing::info!("({}) connection torn down: {:?} {}", &self.address, code, &reason);
     self.forward((code, reason)).await;
@@ -123,6 +117,7 @@ impl Connection {
 
         _ = self.cancel_token.cancelled() => {
           tracing::debug!("({}) connection was cancelled, shutting down", &self.address);
+          self.flush().await;
           self.close().await;
           return (ws::close_code::NORMAL, "cancelled".to_string());
         }
@@ -280,6 +275,13 @@ impl Connection {
     if let Err(err) = self.writer.send(frame).await {
       tracing::error!(target: "bridgething::ws::connection::send", "({}) error sending message to websocket!!: {:?}", &self.address, err);
     };
+  }
+
+  async fn flush(&mut self) {
+    self.rx.close();
+    while let Some(msg) = self.rx.recv().await {
+      self.send(msg).await;
+    }
   }
 
   async fn close(&mut self) {

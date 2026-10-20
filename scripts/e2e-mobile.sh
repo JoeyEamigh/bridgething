@@ -15,7 +15,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 E2E_DIR="${ROOT}/.e2e"
 FIXTURE_PORT="${E2E_FIXTURE_PORT:-8899}"
 PACKAGE=com.bridgething.gateway
-HA_DIR="${ROOT}/packages/webapps/catalog/home-assistant"
+EXAMPLES=(home-assistant weather)
+BUILTINS=(hub browser)
+FIXTURES="${ROOT}/mobile/e2e/fixtures"
 FLOWS=("$@")
 [ "${#FLOWS[@]}" -gt 0 ] || FLOWS=("${ROOT}/mobile/e2e/flows")
 
@@ -23,6 +25,7 @@ AVD="${BRIDGETHING_E2E_AVD:-Pixel_10_Pro}"
 ABI="${BRIDGETHING_E2E_ABI:-arm64-v8a}"
 APK="${ROOT}/mobile/android/app/build/outputs/apk/debug/app-debug.apk"
 EMULATOR="${ANDROID_HOME:-$HOME/Library/Android/sdk}/emulator/emulator"
+BOOT_TIMEOUT="${BRIDGETHING_E2E_BOOT_TIMEOUT:-300}"
 
 SIM="${BRIDGETHING_E2E_SIM:-iPhone 17 Pro}"
 DERIVED="${E2E_DIR}/ios-derived"
@@ -31,6 +34,7 @@ APP="${DERIVED}/Build/Products/Debug-iphonesimulator/bridgething.app"
 started_emulator=""
 started_sim=""
 sim_udid=""
+emulator_serial=""
 fixture_pid=""
 
 cleanup() {
@@ -38,7 +42,7 @@ cleanup() {
     BRIDGETHING_DEV_DIR="$E2E_DIR" "${ROOT}/scripts/dev-daemon.sh" stop >/dev/null 2>&1 || true
     [ -n "$fixture_pid" ] && kill "$fixture_pid" 2>/dev/null || true
     if [ "${BRIDGETHING_E2E_KEEP_DEVICE:-0}" != "1" ]; then
-        [ -n "$started_emulator" ] && adb emu kill >/dev/null 2>&1 || true
+        [ -n "$started_emulator" ] && adb -s "$emulator_serial" emu kill >/dev/null 2>&1 || true
         [ -n "$started_sim" ] && xcrun simctl shutdown "$started_sim" >/dev/null 2>&1 || true
     fi
     exit "$status"
@@ -49,6 +53,7 @@ for tool in maestro bun cargo zip; do
     command -v "$tool" >/dev/null || { echo "[e2e] $tool not found" >&2; exit 1; }
 done
 
+rm -rf "${E2E_DIR}/examples"
 mkdir -p "${E2E_DIR}/examples"
 
 echo "== workspace bundles =="
@@ -56,11 +61,25 @@ echo "== workspace bundles =="
 ( cd "$ROOT" && bunx turbo run build \
     --filter='@bridgething/mobile...' \
     --filter='@bridgething/webapp-hub...' \
-    --filter='@bridgething/webapp-home-assistant...' )
+    --filter='@bridgething/webapp-home-assistant...' \
+    --filter='@bridgething/webapp-weather...' \
+    --filter='@bridgething/webapp-browser...' )
 
-echo "== fixture bundle: home assistant =="
-rm -f "${E2E_DIR}/examples/home-assistant.zip"
-( cd "${HA_DIR}/dist" && zip -qr "${E2E_DIR}/examples/home-assistant.zip" . )
+for name in "${EXAMPLES[@]}"; do
+    echo "== fixture bundle: ${name} =="
+    ( cd "${ROOT}/packages/webapps/catalog/${name}/dist" && zip -qr "${E2E_DIR}/examples/${name}.zip" . )
+done
+
+echo "== fixture bundle: blob-picker =="
+bun "${FIXTURES}/blob-picker/build.ts" "${E2E_DIR}/blob-picker"
+( cd "${E2E_DIR}/blob-picker" && zip -qr "${E2E_DIR}/examples/blob-picker.zip" . )
+
+export BRIDGETHING_RO_WEBAPPS_DIR="${E2E_DIR}/builtin"
+rm -rf "$BRIDGETHING_RO_WEBAPPS_DIR"
+mkdir -p "$BRIDGETHING_RO_WEBAPPS_DIR"
+for name in "${BUILTINS[@]}"; do
+    ln -s "${ROOT}/packages/webapps/builtin/${name}/dist" "${BRIDGETHING_RO_WEBAPPS_DIR}/${name}"
+done
 
 android_build() {
     echo "== apk ($ABI, js bundled) =="
@@ -75,16 +94,41 @@ android_build() {
         -Porg.gradle.java.installations.auto-download=false </dev/null )
 }
 
+android_emulator_serial() {
+    local serial
+    for serial in $(adb devices | awk '$1 ~ /^emulator-/ && $2 == "device" {print $1}'); do
+        if [ "$(adb -s "$serial" emu avd name 2>/dev/null | head -n 1 | tr -d '\r')" = "$AVD" ]; then
+            echo "$serial"
+            return 0
+        fi
+    done
+    return 1
+}
+
 android_device() {
     command -v adb >/dev/null || { echo "[e2e] adb not found" >&2; exit 1; }
-    echo "== emulator =="
-    if ! adb get-state >/dev/null 2>&1; then
+    echo "== emulator ($AVD) =="
+    if ! emulator_serial="$(android_emulator_serial)"; then
         [ -x "$EMULATOR" ] || { echo "[e2e] no emulator binary at $EMULATOR" >&2; exit 1; }
-        nohup "$EMULATOR" -avd "$AVD" -no-snapshot-load -no-boot-anim </dev/null >"${E2E_DIR}/emulator.log" 2>&1 &
+        nohup "$EMULATOR" -avd "$AVD" -no-snapshot-load -no-boot-anim -no-metrics -crash-report-mode never </dev/null >"${E2E_DIR}/emulator.log" 2>&1 &
         started_emulator=1
-        adb wait-for-device
+        local waited=0
+        until emulator_serial="$(android_emulator_serial)"; do
+            kill -0 "$!" 2>/dev/null || { echo "[e2e] emulator exited; see ${E2E_DIR}/emulator.log" >&2; exit 1; }
+            [ "$waited" -lt "$BOOT_TIMEOUT" ] || { echo "[e2e] emulator never attached to adb in ${BOOT_TIMEOUT}s; see ${E2E_DIR}/emulator.log" >&2; exit 1; }
+            sleep 2
+            waited=$((waited + 2))
+        done
     fi
-    until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do sleep 2; done
+    export ANDROID_SERIAL="$emulator_serial"
+    echo "[e2e] targeting ${ANDROID_SERIAL}"
+    adb wait-for-device
+    local booted=0
+    until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+        [ "$booted" -lt "$BOOT_TIMEOUT" ] || { echo "[e2e] ${ANDROID_SERIAL} never finished booting in ${BOOT_TIMEOUT}s" >&2; exit 1; }
+        sleep 2
+        booted=$((booted + 2))
+    done
     adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
     adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
     adb shell settings put secure anr_show_background 0 >/dev/null 2>&1 || true
@@ -95,6 +139,7 @@ android_device() {
     adb install -t "$APK" >/dev/null
     FIXTURE_HOST=10.0.2.2
     EXCLUDE_TAGS=ios-only
+    TARGET="$emulator_serial"
 }
 
 ios_resolve_sim() {
@@ -134,8 +179,10 @@ ios_device() {
 
     xcrun simctl uninstall "$sim_udid" "$PACKAGE" >/dev/null 2>&1 || true
     xcrun simctl install "$sim_udid" "$APP"
+    xcrun simctl addmedia "$sim_udid" "${FIXTURES}/loop.gif"
     FIXTURE_HOST=127.0.0.1
     EXCLUDE_TAGS=android-only
+    TARGET="$sim_udid"
 }
 
 "${PLATFORM}_build"
@@ -148,7 +195,7 @@ fi
 "${PLATFORM}_device"
 
 echo "== host daemon (seeded from ${E2E_DIR}/examples) =="
-rm -rf "${E2E_DIR}/state" "${E2E_DIR}/webapps" "${E2E_DIR}/.seeded"
+rm -rf "${E2E_DIR}/state" "${E2E_DIR}/webapps" "${E2E_DIR}/webapp-blobs" "${E2E_DIR}/.seeded"
 BRIDGETHING_DEV_DIR="$E2E_DIR" "${ROOT}/scripts/dev-daemon.sh" start
 
 echo "== fixture server :${FIXTURE_PORT} =="
@@ -163,7 +210,7 @@ pending=("${FLOWS[@]}")
 
 for attempt in $(seq 1 "$attempts"); do
   rm -f "$report"
-  if maestro test --format=JUNIT --output="$report" --exclude-tags "$EXCLUDE_TAGS" \
+  if maestro --platform "$PLATFORM" --device "$TARGET" test --format=JUNIT --output="$report" --exclude-tags "$EXCLUDE_TAGS" \
     -e FIXTURE_HOST="$FIXTURE_HOST" -e FIXTURE_PORT="$FIXTURE_PORT" "${pending[@]}"; then
     exit 0
   fi

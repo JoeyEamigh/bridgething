@@ -42,6 +42,33 @@ pub struct LogsSubscribeReply {
   pub token: String,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct FactoryResetStarted {}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub enum FactoryResetRefusal {
+  /// The daemon is not running on a Car Thing.
+  OffDevice,
+  /// The system image has no boot step that erases the device. Update the system image first.
+  NoWipeStep,
+  /// The reset failed before the restart, and nothing was erased.
+  Failed,
+  /// The restart failed and the wipe could not be called off, so the next restart erases the device.
+  StillArmed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct FactoryResetRefused {
+  pub refusal: FactoryResetRefusal,
+  pub reason: String,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
@@ -76,4 +103,8 @@ pub enum BridgeToClientSystemMsg {
   LauncherGestureReply(LauncherGestureReply),
   #[bridge_event]
   LauncherGestureChanged(LauncherGestureReply),
+  #[bridge_response]
+  FactoryResetStarted(FactoryResetStarted),
+  #[bridge_response]
+  FactoryResetRefused(FactoryResetRefused),
 }

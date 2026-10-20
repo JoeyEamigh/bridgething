@@ -30,14 +30,18 @@ fn frame(seq: u64) -> Vec<u8> {
 
 fn decode_seqs(stream: &[u8]) -> Vec<u64> {
   stream
-    .chunks_exact(FRAME_BYTES)
+    .as_chunks::<FRAME_BYTES>()
+    .0
+    .iter()
     .map(|c| u64::from_be_bytes(c[..8].try_into().expect("8 bytes")))
     .collect()
 }
 
 fn corrupt_frames(stream: &[u8]) -> Vec<u64> {
   stream
-    .chunks_exact(FRAME_BYTES)
+    .as_chunks::<FRAME_BYTES>()
+    .0
+    .iter()
     .filter_map(|c| {
       let seq = u64::from_be_bytes(c[..8].try_into().expect("8 bytes"));
       c[8..].iter().any(|b| *b != seq as u8).then_some(seq)

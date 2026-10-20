@@ -1,6 +1,9 @@
 use std::{
   path::Path,
-  sync::atomic::{AtomicU8, Ordering},
+  sync::{
+    Arc,
+    atomic::{AtomicU8, Ordering},
+  },
   time::Duration,
 };
 
@@ -9,6 +12,7 @@ mod chrome;
 #[cfg(target_os = "linux")]
 mod device;
 pub mod model;
+mod reset;
 mod seam;
 use anyhow::Result;
 use bridgething::{
@@ -22,6 +26,7 @@ pub use chrome::ChromeView;
 #[cfg(target_os = "linux")]
 pub use device::DeviceHarness;
 use futures::StreamExt;
+pub use reset::FakeResetRig;
 pub use seam::{
   CommandDriver, FrameObserve, GatewayDriver, HarnessIap2Source, Iap2OutboundObserve, Iap2Source, Iap2SourceDriver,
   ModernClientDriver, OverAirTransport, WebappProvision,
@@ -30,6 +35,7 @@ pub use seam::{
 pub use seam::{DeviceIap2Source, DeviceTier};
 use tokio::{net::TcpStream, sync::broadcast, task::JoinHandle};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 const DUPLEX_BUF: usize = 256 * 1024;
@@ -40,7 +46,9 @@ pub struct Harness {
   inject: HeadlessInject,
   server_addrs: ServerAddrs,
   next_peer: AtomicU8,
-  _daemon: JoinHandle<()>,
+  reset_rig: Arc<FakeResetRig>,
+  stop: CancellationToken,
+  daemon: JoinHandle<()>,
   _state_dir: tempfile::TempDir,
 }
 
@@ -58,7 +66,8 @@ impl Harness {
     if provision_stock {
       provision_stock_bundle(state_dir.path())?;
     }
-    let assembled = bridgething::init(DaemonConfig::headless(state_dir.path().to_path_buf())).await;
+    let reset_rig = Arc::new(FakeResetRig::default());
+    let assembled = bridgething::init(headless_config(state_dir.path(), &reset_rig)).await;
 
     let state = assembled.state.clone();
     let inject = assembled
@@ -66,6 +75,7 @@ impl Harness {
       .clone()
       .expect("headless assembly must expose inject handles");
     let server_addrs = assembled.server_addrs;
+    let stop = assembled.stop.clone();
     let daemon = tokio::spawn(assembled.run());
 
     Ok(Self {
@@ -73,7 +83,9 @@ impl Harness {
       inject,
       server_addrs,
       next_peer: AtomicU8::new(1),
-      _daemon: daemon,
+      reset_rig,
+      stop,
+      daemon,
       _state_dir: state_dir,
     })
   }
@@ -84,6 +96,22 @@ impl Harness {
 
   pub fn state_dir(&self) -> &Path {
     self._state_dir.path()
+  }
+
+  pub fn reset_rig(&self) -> &FakeResetRig {
+    &self.reset_rig
+  }
+
+  pub fn stop_daemon(&self) {
+    self.stop.cancel();
+  }
+
+  pub fn stop_daemon_on_reboot(&self) {
+    self.reset_rig.stop_on_reboot(self.stop.clone());
+  }
+
+  pub fn daemon_exited(&self) -> bool {
+    self.daemon.is_finished()
   }
 
   pub async fn activate_webapp_declaring(&self, permissions: &[&str]) -> Result<Uuid> {
@@ -106,16 +134,17 @@ impl Harness {
   }
 
   pub async fn restart(mut self) -> Result<Self> {
-    self._daemon.abort();
-    let _ = (&mut self._daemon).await;
-    let assembled = bridgething::init(DaemonConfig::headless(self._state_dir.path().to_path_buf())).await;
+    self.daemon.abort();
+    let _ = (&mut self.daemon).await;
+    let assembled = bridgething::init(headless_config(self._state_dir.path(), &self.reset_rig)).await;
     self.state = assembled.state.clone();
     self.inject = assembled
       .inject
       .clone()
       .expect("headless assembly must expose inject handles");
     self.server_addrs = assembled.server_addrs;
-    self._daemon = tokio::spawn(assembled.run());
+    self.stop = assembled.stop.clone();
+    self.daemon = tokio::spawn(assembled.run());
     Ok(self)
   }
 
@@ -262,6 +291,13 @@ impl FrameObserver {
   }
 }
 
+pub fn proptest_cases(default: u32) -> u32 {
+  std::env::var("PROPTEST_CASES")
+    .ok()
+    .and_then(|raw| raw.trim().parse().ok())
+    .unwrap_or(default)
+}
+
 pub fn extract_substring_starting_with(haystack: &str, prefix: &str) -> Option<String> {
   let start = haystack.find(prefix)?;
   let tail = &haystack[start..];
@@ -352,10 +388,35 @@ impl MockWsClient {
     None
   }
 
+  pub async fn recv_until_closed(&mut self) -> (Vec<String>, Option<(u16, String)>) {
+    let mut texts = Vec::new();
+    while let Some(msg) = self.stream.next().await {
+      match msg {
+        Ok(Message::Text(text)) => texts.push(text.to_string()),
+        Ok(Message::Close(frame)) => {
+          return (
+            texts,
+            frame.map(|frame| (u16::from(frame.code), frame.reason.to_string())),
+          );
+        }
+        Ok(_) => continue,
+        Err(_) => break,
+      }
+    }
+    (texts, None)
+  }
+
   pub async fn send_text(&mut self, text: impl Into<String>) -> Result<()> {
     use futures::SinkExt;
     self.stream.send(Message::Text(text.into().into())).await?;
     Ok(())
+  }
+}
+
+fn headless_config(state_dir: &Path, reset_rig: &Arc<FakeResetRig>) -> DaemonConfig {
+  DaemonConfig {
+    factory_reset: reset_rig.clone(),
+    ..DaemonConfig::headless(state_dir.to_path_buf())
   }
 }
 

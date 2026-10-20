@@ -1,6 +1,6 @@
 import type * as api from '@bridgething/companion-types';
 import type { CompanionSession, Endpoint, Invalidation, ResourceOrigin, Topic, WebappResource } from '@bridgething/ui';
-import { invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 import type { BundleExtension, ExtensionEntry, KnownDevice } from './desktop.ts';
@@ -135,6 +135,19 @@ export class TauriSession implements CompanionSession {
   webappDocEntry = (id: string, key: string) => invoke<string | null>('webapp_doc_entry', { id, key });
   setWebappDoc = (id: string, key: string, value: string) => invoke<void>('set_webapp_doc', { id, key, value });
   deleteWebappDoc = (id: string, key: string) => invoke<void>('delete_webapp_doc', { id, key });
+  createBlobHandle = (mime: string) => invoke<string>('create_blob_handle', { mime });
+  appendBlobHandle = (handle: string, base64: string) => invoke<number>('append_blob_handle', { handle, base64 });
+  putWebappBlob = (id: string, key: string, handle: string, onProgress?: (sent: number, total: number) => void) => {
+    const progress = new Channel<{ sent: number; total: number }>();
+    if (onProgress) progress.onmessage = tick => onProgress(tick.sent, tick.total);
+    return invoke<api.WebappBlob>('put_webapp_blob', { id, key, handle, progress });
+  };
+  deleteWebappBlob = (id: string, key: string) => invoke<void>('delete_webapp_blob', { id, key });
+  webappBlobs = (id: string) => invoke<api.WebappBlob[]>('webapp_blobs', { id });
+  mediaImportTicket = () => invoke<number>('media_import_ticket');
+  importPickedMedia = (ticket: number, path: string, kind: api.MediaPickKind, cover: api.MediaCover | null) =>
+    invoke<api.PickedMedia>('import_picked_media', { ticket, path, kind, cover });
+  cancelMediaImport = (ticket: number) => invoke<void>('cancel_media_import', { ticket });
 
   voiceModel = () => invoke<api.VoiceModelState>('voice_model');
 

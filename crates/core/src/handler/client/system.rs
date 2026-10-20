@@ -4,8 +4,9 @@ use libbridgething::{
   Diagnostics,
   client::{
     BridgeToClientSystemMsgEvent, ClientToBridgeSystemMsgDispatch, DeviceGetNickname, DeviceNicknameReply,
-    DiagnosticsGet, DiagnosticsReply, LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe,
-    LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe, RequestVersion,
+    DiagnosticsGet, DiagnosticsReply, FactoryResetRefusal, FactoryResetRefused, FactoryResetStarted,
+    LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail,
+    LogsTailReply, LogsUnsubscribe, RequestFactoryReset, RequestVersion,
   },
 };
 use uuid::Uuid;
@@ -13,7 +14,7 @@ use uuid::Uuid;
 use super::{HandlerResult, MsgHandle};
 use crate::{
   state::log_tap::{LogOwner, LogSink},
-  systemd::power,
+  systemd::power::{self, FactoryResetError},
 };
 
 pub struct SystemHandler {
@@ -139,19 +140,34 @@ impl ClientToBridgeSystemMsgDispatch for SystemHandler {
   }
 
   async fn factory_reset(&self) -> HandlerResult {
-    if let Err(err) = self.handle.bluetooth.profile_man.reset().await {
-      tracing::error!("error resetting bluetooth devices: {:?}", err);
+    match self.handle.state.factory_reset().await {
+      Ok(()) => {
+        self
+          .handle
+          .respond_to::<RequestFactoryReset>(FactoryResetStarted {})
+          .await?
+      }
+      Err(err) => {
+        tracing::error!("factory reset did not happen: {err}");
+        self.handle.respond_err::<RequestFactoryReset>(refused(err)).await?
+      }
     }
-
-    if let Err(err) = self.handle.state.reset().await {
-      tracing::error!("error resetting state: {:?}", err);
-    }
-
-    if let Err(err) = power::reboot().await {
-      tracing::error!("reboot failed: {err}");
-    }
-
     Ok(())
+  }
+}
+
+fn refused(err: FactoryResetError) -> FactoryResetRefused {
+  let refusal = match err {
+    FactoryResetError::OffDevice => FactoryResetRefusal::OffDevice,
+    FactoryResetError::NoWipeStep => FactoryResetRefusal::NoWipeStep,
+    FactoryResetError::Probe(_) | FactoryResetError::Arm(_) | FactoryResetError::Reboot(_) => {
+      FactoryResetRefusal::Failed
+    }
+    FactoryResetError::StillArmed { .. } => FactoryResetRefusal::StillArmed,
+  };
+  FactoryResetRefused {
+    refusal,
+    reason: err.to_string(),
   }
 }
 

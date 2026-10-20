@@ -1,4 +1,5 @@
 export { cx } from './cx.ts';
+export { documentTheme, readTheme, schemeFor, watchTheme } from './document-theme.ts';
 export { describeError } from './errors.ts';
 export { fetchIcon, looksLikeSvg, svgDataUrl, type ResolvedIcon } from './icon.ts';
 export { SessionProvider, useQuery, useSession, type Query } from './query.tsx';
@@ -13,6 +14,24 @@ export {
   type Topic,
   type WebappResource,
 } from './session.ts';
+export {
+  SETTINGS_PAGE_CRASHED,
+  deviceSettingsVerbs,
+  hasSettings,
+  serveSettingsFrame,
+  warmSettings,
+  warmSettingsState,
+  type DeviceSettingsVerbs,
+  type SettingsDevice,
+  type SettingsFrameEvent,
+  type SettingsFrameHub,
+  type SettingsFramePort,
+  type WarmPage,
+  type WarmSettings,
+  type WarmSettingsApp,
+  type WarmSettingsOptions,
+  type WarmSettingsState,
+} from './settings-host.ts';
 export { type BoxSize, type Tone } from './tokens.ts';
 
 export { Button, type ButtonSize, type ButtonVariant } from './components/Button.tsx';
@@ -26,6 +45,7 @@ export { RemoteIcon } from './components/RemoteIcon.tsx';
 export { ScreenHeader } from './components/ScreenHeader.tsx';
 export { SectionEmpty, SectionHeader } from './components/Section.tsx';
 export { Segmented, type Segment, type SegmentedOption } from './components/Segmented.tsx';
+export { SettingsFrame } from './components/SettingsFrame.tsx';
 export { Spinner } from './components/Spinner.tsx';
 export { StatusStrip } from './components/StatusStrip.tsx';
 export { Switch } from './components/Switch.tsx';

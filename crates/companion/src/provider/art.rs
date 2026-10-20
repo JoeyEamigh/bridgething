@@ -6,7 +6,7 @@ use std::{
 
 use bridgething_io::{HttpExecutor, HttpMethod, HttpRequest};
 
-use crate::backend::ImageScaler;
+use crate::backend::{ImageScaler, ImageTarget, sniff_and_scale};
 
 const JPEG_QUALITY: f32 = 0.6;
 const FETCH_TIMEOUT_MS: u32 = 6_000;
@@ -14,10 +14,15 @@ const CACHE_BYTES: usize = 16 << 20;
 
 async fn downsample(scaler: Option<Arc<dyn ImageScaler>>, data: Vec<u8>, max_edge: u32) -> Option<Vec<u8>> {
   let scaler = scaler?;
-  tokio::task::spawn_blocking(move || scaler.downsample_jpeg(data, max_edge, JPEG_QUALITY))
+  let target = ImageTarget::Thumbnail {
+    max_edge,
+    quality: JPEG_QUALITY,
+  };
+  tokio::task::spawn_blocking(move || sniff_and_scale(scaler.as_ref(), data, target))
     .await
     .ok()
     .flatten()
+    .map(|scaled| scaled.bytes)
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -209,6 +214,7 @@ mod tests {
   use bridgething_io::{HttpDownloadSink, HttpResponse, HttpSink, HttpTransport};
 
   use super::*;
+  use crate::{backend::ScaledImage, media::MediaSniff};
 
   const CODEC: ImageAssetCodec = ImageAssetCodec {
     namespace: "spotify/img/",
@@ -251,9 +257,18 @@ mod tests {
   }
 
   impl ImageScaler for Scaler {
-    fn downsample_jpeg(&self, bytes: Vec<u8>, max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
+    fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, target: ImageTarget) -> Option<ScaledImage> {
+      let ImageTarget::Thumbnail { max_edge, quality } = target else {
+        panic!("art asks for a thumbnail, got {target:?}");
+      };
+      assert_eq!(quality, JPEG_QUALITY);
       self.scales.fetch_add(1, Ordering::SeqCst);
-      Some(format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes())
+      Some(ScaledImage {
+        bytes: format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes(),
+        mime: "image/jpeg".into(),
+        width: max_edge,
+        height: max_edge,
+      })
     }
   }
 

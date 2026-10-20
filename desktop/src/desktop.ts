@@ -59,6 +59,14 @@ export interface DesktopSession extends CompanionSession {
   otaPushDaemon(artifact: string): Promise<OtaOutcome>;
   otaInstallWebapp(bundle: string, provenance?: string, confirmed?: string[]): Promise<InstallOutcome>;
   webappBundleExtension(bundle: string): Promise<BundleExtension | null>;
+  mediaImportTicket(): Promise<number>;
+  importPickedMedia(
+    ticket: number,
+    path: string,
+    kind: api.MediaPickKind,
+    cover: api.MediaCover | null,
+  ): Promise<api.PickedMedia>;
+  cancelMediaImport(ticket: number): Promise<void>;
 
   installWebappFromUrl(
     url: string,

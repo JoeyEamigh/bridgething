@@ -99,7 +99,7 @@ export type BridgethingWebappInfo = {
   iconHash?: string;
   settingsHash?: string;
   overlayHash?: string;
-  config: BridgethingConfigField[];
+  configJson: string;
   permissions: string[];
 };
 
@@ -113,22 +113,6 @@ export type BridgethingWebappSlot = 'launcher' | 'overlay';
 export type BridgethingWebappSlots = {
   launcher?: string;
   overlay?: string;
-};
-
-export type BridgethingConfigKind = 'string' | 'number' | 'boolean' | 'enum' | 'secret';
-
-export type BridgethingConfigField = {
-  kind: BridgethingConfigKind;
-  key: string;
-  label: string;
-  pattern?: string;
-  minLength?: number;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  step?: number;
-  choices?: string[];
-  defaultValue?: string;
 };
 
 export type BridgethingConfigEntry = {
@@ -152,6 +136,25 @@ export type BridgethingResourceOrigin = {
 export type BridgethingDocEntry = {
   key: string;
   value: string;
+};
+
+export type BridgethingPickKind = 'image' | 'video' | 'any';
+
+export type BridgethingPickedMedia = {
+  handle: string;
+  mime: string;
+  size: number;
+  width?: number;
+  height?: number;
+  durationMs?: number;
+  preview?: string;
+};
+
+export type BridgethingWebappBlob = {
+  key: string;
+  sha256: string;
+  mime: string;
+  size: number;
 };
 
 export type BridgethingCapabilityFlags = {
@@ -439,6 +442,23 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   listWebappDoc(deviceId: string, id: string): Promise<BridgethingDocEntry[]>;
   setWebappDoc(deviceId: string, id: string, key: string, value: string): Promise<void>;
   deleteWebappDoc(deviceId: string, id: string, key: string): Promise<void>;
+  pickMedia(
+    kind: BridgethingPickKind,
+    coverWidth?: number,
+    coverHeight?: number,
+  ): Promise<BridgethingPickedMedia | null>;
+  abandonPick(): void;
+  createBlobHandle(mime: string): Promise<string>;
+  appendBlobHandle(handle: string, base64: string): Promise<number>;
+  putWebappBlob(
+    deviceId: string,
+    id: string,
+    key: string,
+    handle: string,
+    onProgress: (sent: number, total: number) => void,
+  ): Promise<BridgethingWebappBlob>;
+  deleteWebappBlob(deviceId: string, id: string, key: string): Promise<void>;
+  listWebappBlobs(deviceId: string, id: string): Promise<BridgethingWebappBlob[]>;
 
   setCapabilityFlags(flags: BridgethingCapabilityFlags): Promise<void>;
 

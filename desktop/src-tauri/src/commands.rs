@@ -2,9 +2,10 @@ use std::{path::PathBuf, sync::Arc};
 
 use bridgething_companion::{
   api::{
-    ActiveWebapp, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry, DocEntry,
-    LauncherGesture, NowPlaying, OtaPollConfig, ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer,
-    SessionSnapshot, VoiceModelState, WebappInfo, WebappInstallRequest, WebappSlot, WebappSlots,
+    ActiveWebapp, BlobProgressSink, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry,
+    DocEntry, LauncherGesture, MediaCover, MediaPickKind, NowPlaying, OtaPollConfig, PickedMedia, ProviderCredentials,
+    ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappBlob, WebappInfo,
+    WebappInstallRequest, WebappSlot, WebappSlots,
     ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
   },
   provider::ResumeTarget,
@@ -14,11 +15,11 @@ use bridgething_delivery::{
   ota::{event::OtaPhaseSnapshot, service::WebappInstallResult, stream::FileSource},
   seam::BlobStore,
   transfer::FragmentSource,
-  webapp::ResourceOrigin,
+  webapp::{ResourceOrigin, blob::BlobError},
 };
 use libbridgething::{ExtensionPermission, gateway::WebappResourceKind};
 use serde::Serialize;
-use tauri::{AppHandle, Runtime, State};
+use tauri::{AppHandle, Runtime, State, ipc::Channel};
 use uuid::Uuid;
 
 use crate::{
@@ -68,6 +69,46 @@ impl From<CompanionError> for CommandError {
 }
 
 type Answer<T> = Result<T, CommandError>;
+
+const UNTOKENED: &str = "failed";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct BlobRejection(String);
+
+impl From<CommandError> for BlobRejection {
+  fn from(error: CommandError) -> Self {
+    let reason = match error {
+      CommandError::NotConnected => BlobError::NotConnected.to_string(),
+      CommandError::Link(reason)
+      | CommandError::Device(reason)
+      | CommandError::Artifact(reason)
+      | CommandError::Host(reason) => reason,
+    };
+    Self(if leads_with_token(&reason) {
+      reason
+    } else {
+      format!("{UNTOKENED}: {reason}")
+    })
+  }
+}
+
+impl From<CompanionError> for BlobRejection {
+  fn from(error: CompanionError) -> Self {
+    CommandError::from(error).into()
+  }
+}
+
+fn leads_with_token(reason: &str) -> bool {
+  reason.split_once(':').is_some_and(|(token, _)| {
+    token.starts_with(|first: char| first.is_ascii_lowercase())
+      && token
+        .chars()
+        .all(|part| part.is_ascii_lowercase() || part.is_ascii_digit() || part == '_')
+  })
+}
+
+type BlobAnswer<T> = Result<T, BlobRejection>;
 
 fn webapp_id(raw: &str) -> Answer<Uuid> {
   Uuid::parse_str(raw).map_err(|_| CommandError::Device(format!("not a webapp id: {raw}")))
@@ -485,6 +526,83 @@ pub async fn delete_webapp_doc(shell: State<'_, Arc<Shell>>, id: String, key: St
 }
 
 #[tauri::command]
+pub fn media_import_ticket(shell: State<'_, Arc<Shell>>) -> u64 {
+  shell.session().media_import_ticket()
+}
+
+#[tauri::command]
+pub async fn import_picked_media(
+  shell: State<'_, Arc<Shell>>,
+  ticket: u64,
+  path: String,
+  kind: MediaPickKind,
+  cover: Option<MediaCover>,
+) -> BlobAnswer<PickedMedia> {
+  Ok(
+    shell
+      .session()
+      .import_picked_media(ticket, path, kind, cover, None)
+      .await?,
+  )
+}
+
+#[tauri::command]
+pub fn cancel_media_import(shell: State<'_, Arc<Shell>>, ticket: u64) {
+  shell.session().cancel_media_import(ticket);
+}
+
+#[tauri::command]
+pub async fn create_blob_handle(shell: State<'_, Arc<Shell>>, mime: String) -> BlobAnswer<String> {
+  Ok(shell.session().create_blob_handle(mime)?)
+}
+
+#[tauri::command]
+pub async fn append_blob_handle(shell: State<'_, Arc<Shell>>, handle: String, base64: String) -> BlobAnswer<u64> {
+  Ok(shell.session().append_blob_handle(handle, base64).await?)
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct BlobTick {
+  pub sent: u64,
+  pub total: u64,
+}
+
+struct ChannelTicks(Channel<BlobTick>);
+
+impl BlobProgressSink for ChannelTicks {
+  fn progress(&self, sent: u64, total: u64) {
+    let _ = self.0.send(BlobTick { sent, total });
+  }
+}
+
+#[tauri::command]
+pub async fn put_webapp_blob(
+  shell: State<'_, Arc<Shell>>,
+  id: String,
+  key: String,
+  handle: String,
+  progress: Channel<BlobTick>,
+) -> BlobAnswer<WebappBlob> {
+  let sink: Arc<dyn BlobProgressSink> = Arc::new(ChannelTicks(progress));
+  Ok(
+    shell
+      .session()
+      .put_webapp_blob(peer(&shell)?, id, key, handle, Some(sink))
+      .await?,
+  )
+}
+
+#[tauri::command]
+pub async fn delete_webapp_blob(shell: State<'_, Arc<Shell>>, id: String, key: String) -> BlobAnswer<()> {
+  Ok(shell.session().delete_webapp_blob(peer(&shell)?, id, key).await?)
+}
+
+#[tauri::command]
+pub async fn webapp_blobs(shell: State<'_, Arc<Shell>>, id: String) -> BlobAnswer<Vec<WebappBlob>> {
+  Ok(shell.session().list_webapp_blobs(peer(&shell)?, id).await?)
+}
+
+#[tauri::command]
 pub async fn set_ota_poll_config(shell: State<'_, Arc<Shell>>, config: Option<OtaPollConfig>) -> Answer<()> {
   shell.session().set_ota_poll_config(config).await;
   shell.announce(Hint::bare(hints::OTA_POLL));
@@ -678,4 +796,60 @@ fn spool(path: PathBuf) -> Answer<Arc<FileSource>> {
     .read_at(0, &mut probe)
     .map_err(|reason| CommandError::Artifact(format!("{}: {reason}", path.display())))?;
   Ok(source)
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::json;
+
+  use super::*;
+
+  fn rejected(error: impl Into<BlobRejection>) -> serde_json::Value {
+    serde_json::to_value(error.into()).unwrap()
+  }
+
+  #[test]
+  fn a_blob_command_with_no_link_rejects_with_the_not_connected_token() {
+    assert_eq!(
+      rejected(CommandError::NotConnected),
+      json!("not_connected: no link to the device")
+    );
+    assert_eq!(
+      rejected(CompanionError::NotConnected),
+      json!("not_connected: no link to the device")
+    );
+  }
+
+  #[test]
+  fn a_tokened_reason_reaches_the_page_as_it_stands() {
+    for reason in [
+      "too_large: a handle holds at most 67108864 bytes",
+      "unknown_handle: 7 is not a live handle",
+      "link_lost: the link to the device dropped",
+      "io: No such file or directory (os error 2)",
+    ] {
+      assert_eq!(rejected(CompanionError::Device(reason.to_owned())), json!(reason));
+    }
+  }
+
+  #[test]
+  fn a_reason_without_a_token_gains_the_generic_one() {
+    assert_eq!(
+      rejected(CompanionError::Device("not a webapp id: seven".to_owned())),
+      json!("failed: not a webapp id: seven")
+    );
+    assert_eq!(
+      rejected(CompanionError::Runtime("task 12 panicked".to_owned())),
+      json!("failed: task 12 panicked")
+    );
+    assert_eq!(rejected(CompanionError::Cancelled), json!("failed: cancelled"));
+    assert_eq!(
+      rejected(CommandError::Host("C:\\media: access denied".to_owned())),
+      json!("failed: C:\\media: access denied")
+    );
+    assert_eq!(
+      rejected(CommandError::Link(": empty".to_owned())),
+      json!("failed: : empty")
+    );
+  }
 }

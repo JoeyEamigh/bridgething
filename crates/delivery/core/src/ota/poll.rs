@@ -79,12 +79,13 @@ mod tests {
 
   use super::OtaPollConfig;
   use crate::{
+    bundle::fetch::sha256_hex,
     ota::{
       autopush::{LINK_STABILITY_MS, MIN_POLL_INTERVAL_SECONDS},
       event::{OtaPollEvent, OtaStepKind},
       harness::{
         DEVICE, FakeDevice, FakeFetch, ManifestFixture, OTHER_DEVICE, Spool, TestClock, digest_of, linked_gateway,
-        meta, pattern, route_into, sha256_hex,
+        meta, pattern, route_into,
       },
       manifest::OtaArtifactUrls,
       service::{OtaService, OtaServiceDeps},
@@ -722,7 +723,7 @@ mod tests {
     assert_eq!(begin.kind, OtaKind::WakewordModel);
     assert_eq!(
       begin.update_id,
-      crate::ota::harness::sha256_hex(&body),
+      sha256_hex(&body),
       "the artifact pushed is the one the manifest declared"
     );
     assert_eq!(

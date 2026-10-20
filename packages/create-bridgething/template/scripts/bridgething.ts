@@ -1,7 +1,4 @@
 // Generated from @bridgething/webapp-shared.
-import { createRequire } from 'node:module';
-var __require = /* @__PURE__ */ createRequire(import.meta.url);
-
 // ../webapp-shared/src/dev.ts
 import { spawn as spawn2 } from 'node:child_process';
 import { isIPv4 } from 'node:net';
@@ -14,7 +11,7 @@ var DAEMON_PROXY_PATH = '/__bridgething';
 // ../webapp-shared/src/extension.ts
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { createRequire as createRequire2 } from 'node:module';
+import { createRequire } from 'node:module';
 import { homedir, platform } from 'node:os';
 import { delimiter, dirname, join as join2, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -383,7 +380,7 @@ async function resolveDeno(root) {
 }
 function denoPackageDir(root) {
   try {
-    return dirname(createRequire2(join2(root, 'package.json')).resolve('deno/package.json'));
+    return dirname(createRequire(join2(root, 'package.json')).resolve('deno/package.json'));
   } catch {
     return null;
   }
@@ -824,6 +821,7 @@ ${lines.join(`
 // ../webapp-shared/src/dev.ts
 var DEVICE_MODE = 'device';
 var AUTHORIZE_PATH = '/__extension/authorize';
+var BLOB_URL_PREFIX = '/.bridgething/blob/';
 var DAEMON_PORT = 8891;
 var SWITCH_SETTLE_MS = 1000;
 async function daemonProxyTarget() {
@@ -832,12 +830,17 @@ async function daemonProxyTarget() {
   return `ws://${await resolveHost(deviceHostName())}:${DAEMON_PORT}`;
 }
 async function daemonProxy() {
+  const target = await daemonProxyTarget();
   return {
     [DAEMON_PROXY_PATH]: {
-      target: await daemonProxyTarget(),
+      target,
       ws: true,
       changeOrigin: true,
       rewrite: path => path.slice(DAEMON_PROXY_PATH.length) || '/',
+    },
+    [BLOB_URL_PREFIX]: {
+      target: target.replace(/^ws/, 'http'),
+      changeOrigin: true,
     },
   };
 }
@@ -1083,4 +1086,4 @@ ${note ? `<p class="note">${escapeHtml(note)}</p>` : ''}
 ${status}
 `;
 }
-export { AUTHORIZE_PATH, bridgething, buildExtension, daemonProxy, daemonProxyTarget, DEVICE_MODE };
+export { AUTHORIZE_PATH, BLOB_URL_PREFIX, bridgething, buildExtension, daemonProxy, daemonProxyTarget, DEVICE_MODE };

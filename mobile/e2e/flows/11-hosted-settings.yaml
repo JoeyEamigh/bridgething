@@ -68,3 +68,10 @@ name: an installed app's settings page comes from the catalog's hosted copy, not
     env:
       CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
       PHASE: after
+
+- tapOn: "‹ back"
+- assertVisible: ".*open Fixture Calendar settings.*"
+- tapOn: ".*open Fixture Calendar settings.*"
+- extendedWaitUntil:
+    visible: ".*the settings page rendered.*"
+    timeout: 3000

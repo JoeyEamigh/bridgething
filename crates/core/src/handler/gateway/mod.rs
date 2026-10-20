@@ -29,8 +29,7 @@ use forward::*;
 use geo::*;
 use libbridgething::{
   gateway::{
-    BridgeToGatewayTransferMsgEvent, GatewayToBridgeAssetMsg, GatewayToBridgeMsg, GatewayToBridgeMsgData,
-    GatewayToBridgeTransferMsg, TransferAck, TransferBody,
+    GatewayToBridgeAssetMsg, GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgeTransferMsg, TransferBody,
   },
   wire::MsgMeta,
 };
@@ -214,9 +213,13 @@ impl GatewayHandler {
           if let Some(received) = ack_received
             && let Some(address) = handle.address
           {
-            let ack = BridgeToGatewayTransferMsgEvent::Ack(TransferAck { transfer_id, received });
             let bluetooth = handle.bluetooth.clone();
-            tokio::spawn(async move { bluetooth.gateway_man.send_event(address, ack).await });
+            tokio::spawn(async move {
+              bluetooth
+                .gateway_man
+                .send_transfer_ack(address, transfer_id, received)
+                .await
+            });
           }
         }
         GatewayToBridgeTransferMsg::Abandon(a) => {

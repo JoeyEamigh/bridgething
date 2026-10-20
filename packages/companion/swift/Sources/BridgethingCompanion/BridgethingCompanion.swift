@@ -100,6 +100,7 @@
                     nlu: CoreMlNluRunner { sessionRef.current?.voiceModelPaths().nluBundleDir },
                     appleMusic: MusicKitBackend(),
                     image: ImageIoScaler(),
+                    transcoder: AvMediaTranscoder(),
                     modelValidator: CoreMlArtifactValidator(),
                     transferPolicy: UnmeteredTransferPolicy(),
                     connectivity: NwPathConnectivityMonitor(),

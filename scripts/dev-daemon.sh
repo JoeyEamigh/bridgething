@@ -25,7 +25,7 @@ gateway_up() {
     (exec 3<>"/dev/tcp/${GATEWAY_HOST}/${GATEWAY_PORT}") 2>/dev/null
 }
 
-do_start() {
+claim_gateway() {
     local pid
     if pid="$(running_pid)"; then
         echo "[dev-daemon] already running (pid ${pid}); stop it first" >&2
@@ -36,27 +36,43 @@ do_start() {
         echo "[dev-daemon] something already listens on ${GATEWAY_HOST}:${GATEWAY_PORT}; stop it first" >&2
         exit 1
     fi
+}
 
-    mkdir -p "${DEV_DIR}/state" "${DEV_DIR}/webapps" "${DEV_DIR}/examples"
+enter_dev_env() {
+    mkdir -p "${DEV_DIR}/state" "${DEV_DIR}/webapps" "${DEV_DIR}/webapp-blobs" "${DEV_DIR}/examples"
 
-    WAKEWORD_MODEL="${BRIDGETHING_WAKEWORD_MODEL:-${DEV_DIR}/wakeword/hey_bridgething.btww}"
-    if [ ! -f "$WAKEWORD_MODEL" ]; then
-        mkdir -p "$(dirname "$WAKEWORD_MODEL")"
-        head -c 4096 /dev/zero | tr '\0' 'w' >"$WAKEWORD_MODEL"
-        printf '%s\n' "${BRIDGETHING_WAKEWORD_VERSION:-0.1.0}" >"${WAKEWORD_MODEL%.btww}.version"
+    local wakeword_model="${BRIDGETHING_WAKEWORD_MODEL:-${DEV_DIR}/wakeword/hey_bridgething.btww}"
+    if [ ! -f "$wakeword_model" ]; then
+        mkdir -p "$(dirname "$wakeword_model")"
+        head -c 4096 /dev/zero | tr '\0' 'w' >"$wakeword_model"
+        printf '%s\n' "${BRIDGETHING_WAKEWORD_VERSION:-0.1.0}" >"${wakeword_model%.btww}.version"
     fi
+
+    export BRIDGETHING_STATE_DIR="${DEV_DIR}/state"
+    export BRIDGETHING_WEBAPPS_DIR="${DEV_DIR}/webapps"
+    export BRIDGETHING_WEBAPP_BLOBS_DIR="${DEV_DIR}/webapp-blobs"
+    export BRIDGETHING_EXAMPLES_DIR="${DEV_DIR}/examples"
+    export BRIDGETHING_WAKEWORD_MODEL="$wakeword_model"
+    export RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}"
+}
+
+do_run() {
+    claim_gateway
+    enter_dev_env
+    exec cargo run -p bridgething --features test-tap -- --dev
+}
+
+do_start() {
+    local pid
+    claim_gateway
 
     echo "[dev-daemon] building"
     cargo build -p bridgething --features test-tap
 
+    enter_dev_env
     echo "[dev-daemon] launching, logging to ${LOGFILE}"
     : >"$LOGFILE"
-    BRIDGETHING_STATE_DIR="${DEV_DIR}/state" \
-        BRIDGETHING_WEBAPPS_DIR="${DEV_DIR}/webapps" \
-        BRIDGETHING_EXAMPLES_DIR="${DEV_DIR}/examples" \
-        BRIDGETHING_WAKEWORD_MODEL="$WAKEWORD_MODEL" \
-        RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}" \
-        nohup "$BIN" --dev </dev/null >>"$LOGFILE" 2>&1 &
+    nohup "$BIN" --dev </dev/null >>"$LOGFILE" 2>&1 &
     pid=$!
     echo "$pid" >"$PIDFILE"
 
@@ -123,11 +139,12 @@ do_status() {
 }
 
 case "${1:-}" in
+run) do_run ;;
 start) do_start ;;
 stop) do_stop ;;
 status) do_status ;;
 *)
-    echo "usage: dev-daemon.sh {start|stop|status}" >&2
+    echo "usage: dev-daemon.sh {run|start|stop|status}" >&2
     exit 2
     ;;
 esac

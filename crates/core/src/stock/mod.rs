@@ -171,6 +171,7 @@ pub fn server_event_to_stock(
     BridgeToClientMsgData::Capabilities(_)
     | BridgeToClientMsgData::Config(_)
     | BridgeToClientMsgData::Doc(_)
+    | BridgeToClientMsgData::Blob(_)
     | BridgeToClientMsgData::Geo(_)
     | BridgeToClientMsgData::Hardware(_)
     | BridgeToClientMsgData::Library(_)
@@ -319,7 +320,9 @@ impl From<BridgeToClientSystemMsg> for StockSendMsg {
       | BridgeToClientSystemMsg::DeviceNickname(_)
       | BridgeToClientSystemMsg::DeviceNicknameChanged(_)
       | BridgeToClientSystemMsg::LauncherGestureReply(_)
-      | BridgeToClientSystemMsg::LauncherGestureChanged(_) => StockSendMsg::Unsupported,
+      | BridgeToClientSystemMsg::LauncherGestureChanged(_)
+      | BridgeToClientSystemMsg::FactoryResetStarted(_)
+      | BridgeToClientSystemMsg::FactoryResetRefused(_) => StockSendMsg::Unsupported,
     }
   }
 }

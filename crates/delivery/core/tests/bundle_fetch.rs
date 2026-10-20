@@ -418,7 +418,7 @@ async fn a_manifest_body_past_the_memory_cap_is_refused() {
   let oversize = payload(MEMORY_BODY_CAP + 1);
 
   let err = fetcher(StubServer::serving(oversize))
-    .text("https://ota.example/nlu/stable/manifest.json")
+    .bytes("https://ota.example/nlu/stable/manifest.json", MEMORY_BODY_CAP)
     .await
     .unwrap_err();
 
@@ -457,12 +457,25 @@ async fn a_body_that_is_not_the_expected_json_fails_to_decode() {
 }
 
 #[tokio::test]
-async fn text_carries_the_body_through_verbatim() {
-  let fetch = fetcher(StubServer::serving(b"  0.8.4+image.2026.05.0\n".to_vec()));
+async fn bytes_carry_the_body_through_verbatim() {
+  let body = vec![0xff, 0x00, b' ', 0xfe, b'\n'];
+  let fetch = fetcher(StubServer::serving(body.clone()));
 
-  let body = fetch.text("https://ota.example/version").await.unwrap();
+  let fetched = fetch
+    .bytes("https://ota.example/version", MEMORY_BODY_CAP)
+    .await
+    .unwrap();
 
-  assert_eq!(body, "  0.8.4+image.2026.05.0\n");
+  assert_eq!(fetched, body);
+}
+
+#[tokio::test]
+async fn a_body_past_the_callers_limit_is_refused_at_that_limit() {
+  let fetch = fetcher(StubServer::serving(payload(4097)));
+
+  let err = fetch.bytes("https://ota.example/page.html", 4096).await.unwrap_err();
+
+  assert!(matches!(err, FetchError::TooLarge { limit: 4096 }), "{err}");
 }
 
 #[test]

@@ -11,4 +11,4 @@ pub mod stream;
 pub mod watchdog;
 
 #[cfg(test)]
-mod harness;
+pub(crate) mod harness;

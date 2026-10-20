@@ -11,7 +11,9 @@
         "$TURBO_ROOT$/crates/delivery/wasm/**",
         "$TURBO_ROOT$/crates/delivery/core/**",
         "$TURBO_ROOT$/crates/gateway-rs/**",
-        "$TURBO_ROOT$/crates/io/**"
+        "$TURBO_ROOT$/crates/io/**",
+        "$TURBO_ROOT$/crates/lib/**",
+        "$TURBO_ROOT$/crates/sdk-runtime/**"
       ],
       "outputs": ["dist/**", "wasm/**"]
     }

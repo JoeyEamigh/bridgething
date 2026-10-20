@@ -19,7 +19,7 @@ serde_with = { workspace = true, features = ["json"] }
 derive_more = { workspace = true, features = ["debug", "from"] }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-util = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
@@ -51,7 +51,7 @@ axum = { version = "0.8.9", features = ["ws", "macros"] }
 tower-http = { version = "0.6.8", features = ["fs"] }
 dirs = "6.0.0"
 dashmap = { version = "6.1.0", features = ["serde"] }
-base64 = "0.22.1"
+base64 = "0.23.1"
 reqwest = { version = "0.13.4", default-features = false, features = ["json"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 tower = { version = "0.5.3", features = ["util"] }
@@ -86,6 +86,7 @@ bridgething-delivery = { path = "../delivery/core" }
 bridgething-sdk-runtime = { path = "../sdk-runtime" }
 bridgething-io = { path = "../io", default-features = false }
 url = "2.5.8"
+percent-encoding = "2.3.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bluer = { workspace = true, features = ["bluetoothd", "l2cap", "rfcomm"] }

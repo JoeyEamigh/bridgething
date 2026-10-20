@@ -12,15 +12,14 @@ import {
   Spinner,
   Switch,
   describeError,
+  hasSettings,
   useSession,
 } from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useState } from 'preact/hooks';
 
-import { ConfigEditor } from '../components/ConfigEditor.tsx';
 import { BackButton, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
-import { WebappSettingsFrame } from '../components/WebappSettingsFrame.tsx';
 import { useDesktop, type ExtensionEntry } from '../desktop.ts';
 import {
   EXTENSION_MISSING,
@@ -34,7 +33,7 @@ import { Icon } from '../lib/icons.tsx';
 import { humanizePermission } from '../lib/permissions.ts';
 import { WebappIcon } from '../lib/webapp-icon.tsx';
 import { PATHS } from '../routes.ts';
-import { extensions, webappActive, webappConfigFor, webappSlots, webapps } from '../stores/session.ts';
+import { extensions, webappActive, webappSlots, webapps } from '../stores/session.ts';
 
 export function AppsRoute(): VNode {
   const { route } = useLocation();
@@ -138,16 +137,13 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
   const session = useSession();
   const { route } = useLocation();
   const active = webappActive.data.value;
-  const config = webappConfigFor(webapp.id);
 
   const [busy, setBusy] = useState<'switch' | 'uninstall' | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
   const builtin = webapp.source === 'builtin';
   const running = active?.id === webapp.id;
-  const values = new Map(config.data.value.map(entry => [entry.key, entry.value]));
 
   const act = async (kind: 'switch' | 'uninstall') => {
     setBusy(kind);
@@ -165,8 +161,6 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
       setConfirming(false);
     }
   };
-
-  if (showSettings) return <WebappSettingsFrame webapp={webapp} onClose={() => setShowSettings(false)} />;
 
   return (
     <Screen>
@@ -197,11 +191,6 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
           onClick={() => void act('switch')}>
           {running ? 'already on screen' : 'switch to this'}
         </Button>
-        {webapp.settingsHash ? (
-          <Button icon={<Icon name="gear" />} onClick={() => setShowSettings(true)}>
-            settings page
-          </Button>
-        ) : null}
         {!builtin ? (
           <Button variant="destructive" icon={<Icon name="trash" />} onClick={() => setConfirming(true)}>
             uninstall
@@ -232,27 +221,14 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
       </Dialog>
 
       <Section>
-        <SectionHeader title="settings" hint="written to the device as you commit each field" />
-        {webapp.config.length === 0 ? (
-          <SectionEmpty>this app declares no tunable settings</SectionEmpty>
+        <SectionHeader title="settings" />
+        {hasSettings(webapp) ? (
+          <Button icon={<Icon name="gear" />} onClick={() => route(PATHS.appSettings(webapp.id))}>
+            open {webapp.name} settings
+          </Button>
         ) : (
-          <div class="flex flex-col gap-2">
-            {webapp.config.map(field => (
-              <ConfigEditor
-                key={field.key}
-                field={field}
-                value={values.get(field.key) ?? field.defaultValue ?? ''}
-                onCommit={value => {
-                  void session.setWebappConfigField(webapp.id, field.key, value);
-                }}
-                onReset={() => {
-                  void session.deleteWebappConfigField(webapp.id, field.key);
-                }}
-              />
-            ))}
-          </div>
+          <SectionEmpty>no settings</SectionEmpty>
         )}
-        {config.error.value ? <ErrorNote>{config.error.value}</ErrorNote> : null}
       </Section>
 
       <Section>

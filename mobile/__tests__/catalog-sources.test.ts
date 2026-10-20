@@ -376,7 +376,7 @@ function inventory(
         entry.provenance === null
           ? undefined
           : (entry.provenance ?? THIRD_PARTY),
-      config: [],
+      configJson: '[]',
       permissions: [],
     })),
     active: undefined,

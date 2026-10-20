@@ -109,6 +109,61 @@ impl KvStore {
     self.delete_raw(&config_namespace_key(app_id, key)).await
   }
 
+  pub async fn blob_get(&self, app_id: Uuid, key: &str) -> StateResult<Option<String>> {
+    self.read_raw(&blob_namespace_key(app_id, key)).await
+  }
+
+  pub async fn blob_set(&self, app_id: Uuid, key: &str, value: String) -> StateResult<()> {
+    self.write_raw(blob_namespace_key(app_id, key), value).await
+  }
+
+  pub async fn blob_delete(&self, app_id: Uuid, key: &str) -> StateResult<()> {
+    self.delete_raw(&blob_namespace_key(app_id, key)).await
+  }
+
+  pub async fn blob_list(&self, app_id: Uuid) -> StateResult<Vec<(String, String)>> {
+    let prefix = blob_namespace_prefix(app_id);
+    let pattern = format!("{prefix}%");
+    let rows = KvEntity::find()
+      .filter(KvColumn::Key.like(&pattern))
+      .all(&self.db)
+      .await
+      .map_err(StateError::from)?;
+    Ok(
+      rows
+        .into_iter()
+        .filter_map(|m| m.key.strip_prefix(&prefix).map(|k| (k.to_string(), m.value)))
+        .collect(),
+    )
+  }
+
+  pub async fn blob_rows(&self) -> StateResult<Vec<(Uuid, String, String)>> {
+    let pattern = format!("{}:blob:%", "_".repeat(uuid::fmt::Simple::LENGTH));
+    let rows = KvEntity::find()
+      .filter(KvColumn::Key.like(&pattern))
+      .all(&self.db)
+      .await
+      .map_err(StateError::from)?;
+    Ok(
+      rows
+        .into_iter()
+        .filter_map(|m| {
+          let (app_id, key) = m.key.split_once(":blob:")?;
+          Some((Uuid::try_parse(app_id).ok()?, key.to_string(), m.value))
+        })
+        .collect(),
+    )
+  }
+
+  pub async fn blob_purge(&self, app_id: Uuid) -> StateResult<()> {
+    let pattern = format!("{}%", blob_namespace_prefix(app_id));
+    KvEntity::delete_many()
+      .filter(KvColumn::Key.like(&pattern))
+      .exec(&self.db)
+      .await?;
+    Ok(())
+  }
+
   async fn read_raw(&self, key: &str) -> StateResult<Option<String>> {
     Ok(
       KvEntity::find_by_id(key.to_string())
@@ -225,4 +280,12 @@ fn doc_namespace_key(app_id: Uuid, key: &str) -> String {
 
 fn doc_namespace_prefix(app_id: Uuid) -> String {
   format!("{}:doc:", app_id.simple())
+}
+
+fn blob_namespace_key(app_id: Uuid, key: &str) -> String {
+  format!("{}:blob:{key}", app_id.simple())
+}
+
+fn blob_namespace_prefix(app_id: Uuid) -> String {
+  format!("{}:blob:", app_id.simple())
 }

@@ -72,6 +72,8 @@ jobs:
               - 'crates/companion/**'
               - '*.gradle.kts'
               - 'gradle/**'
+              - 'mobile/android/**'
+              - 'packages/session-rn/android/**'
             swift:
               - *shared
               - 'packages/companion/swift/**'
@@ -82,10 +84,16 @@ jobs:
               - 'desktop/**'
               - 'crates/companion/**'
               - 'crates/delivery/**'
+              - 'scripts/ffmpeg-sidecar*'
+              - 'scripts/bridgething-publish-ffmpeg-sidecar'
+              - '.github/workflows/ffmpeg-sidecar.yml'
             desktop:
               - *shared
               - 'desktop/**'
               - 'crates/**'
+              - 'scripts/ffmpeg-sidecar*'
+              - 'scripts/bridgething-publish-ffmpeg-sidecar'
+              - '.github/workflows/ffmpeg-sidecar.yml'
             mobile:
               - *shared
               - 'mobile/**'
@@ -130,8 +138,16 @@ jobs:
 
       - run: just test-shipping
 
-  desktop:
+  sidecar:
     needs: scope
+    if: needs.scope.outputs.desktop == 'true' || needs.scope.outputs.windows == 'true'
+    uses: ./.github/workflows/ffmpeg-sidecar.yml
+    secrets: inherit
+    with:
+      targets: '["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]'
+
+  desktop:
+    needs: [scope, sidecar]
     if: needs.scope.outputs.desktop == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -142,10 +158,16 @@ jobs:
 
       - uses: ./.github/actions/rust-host
 
-      - name: tauri bundling deps
+      - name: tauri bundling deps and the ffmpeg that synthesizes media fixtures
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf ffmpeg
+
+      - uses: actions/download-artifact@v4
+        if: ${{ !contains(fromJSON(needs.sidecar.outputs.published), 'x86_64-unknown-linux-gnu') }}
+        with:
+          name: ffmpeg-sidecar-x86_64-unknown-linux-gnu
+          path: desktop/src-tauri/binaries
 
       - uses: denoland/setup-deno@v2
         with:
@@ -157,12 +179,17 @@ jobs:
         run: just test-desktop
 
   windows:
-    needs: scope
+    needs: [scope, sidecar]
     if: needs.scope.outputs.windows == 'true'
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        if: ${{ !contains(fromJSON(needs.sidecar.outputs.published), 'x86_64-pc-windows-msvc') }}
+        with:
+          name: ffmpeg-sidecar-x86_64-pc-windows-msvc
+          path: desktop/src-tauri/binaries
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -174,6 +201,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: just check-windows
       - run: cargo clippy -p bridgething-desktop --all-targets -- -D warnings
+      - shell: bash
+        run: desktop/src-tauri/binaries/bridgething-ffmpeg-x86_64-pc-windows-msvc.exe -hide_banner -version
 
   swift:
     needs: scope
@@ -208,6 +237,10 @@ jobs:
         with:
           save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
       - uses: extractions/setup-just@v3
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
       - run: just test-kotlin
 
   ts:
@@ -379,6 +412,7 @@ jobs:
       [
         rust,
         rust-shipping,
+        sidecar,
         desktop,
         windows,
         swift,

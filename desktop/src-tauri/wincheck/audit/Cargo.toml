@@ -11,26 +11,13 @@ path = "src/lib.rs"
 
 [dependencies]
 bridgething-delivery = { path = "../../../../crates/delivery/core" }
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "pnm", "tiff", "webp"] }
+thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
 tracing = "0.1.44"
 wincheck-companion = { version = "0.0.0", path = "companion" }
-windows = { version = "0.62.2", features = [
-  "Devices_Geolocation",
-  "Foundation",
-  "Foundation_Collections",
-  "Media_Control",
-  "Media_Core",
-  "Media_Playback",
-  "Media_SpeechSynthesis",
-  "Media_Streaming_Adaptive",
-  "Networking_Connectivity",
-  "Storage_Streams",
-  "Win32_Foundation",
-  "Win32_Media_Audio",
-  "Win32_Media_Audio_Endpoints",
-  "Win32_System_Com",
-  "Win32_System_Com_StructuredStorage",
-  "Win32_System_Variant",
-] }
+windows = { version = "0.62.2", features = ["Devices_Geolocation", "Foundation", "Foundation_Collections", "Media_Control", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Media_Streaming_Adaptive", "Networking_Connectivity", "Storage_Streams", "Win32_Foundation", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_Security", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Variant"] }
 windows-core = "0.62.2"
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,8 +1,5 @@
 package com.bridgething.companion.shell
 
-import io.ktor.server.cio.CIO
-import io.ktor.server.engine.EmbeddedServer
-import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.receive
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
@@ -12,7 +9,6 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -64,11 +60,7 @@ class KtorHttpTransportTest {
     private fun request(url: String, method: HttpMethod = HttpMethod.Get, body: ByteArray = ByteArray(0)) =
         HttpRequest(method = method, url = url, headers = emptyList(), body = body, timeoutMs = 5_000u)
 
-    private fun server(build: io.ktor.server.routing.Routing.() -> Unit): Pair<EmbeddedServer<*, *>, Int> {
-        val srv = embeddedServer(CIO, port = 0) { routing { build() } }.start(wait = false)
-        val port = runBlocking { srv.engine.resolvedConnectors().first().port }
-        return srv to port
-    }
+    private fun server(build: io.ktor.server.routing.Routing.() -> Unit) = loopbackServer { routing { build() } }
 
     @Test
     fun executeRoundTripsStatusHeadersAndBody() {
@@ -79,12 +71,14 @@ class KtorHttpTransportTest {
             }
         }
         try {
-            val sink = RecordingHttpSink()
-            KtorHttpTransport().execute(request("http://127.0.0.1:$port/hello"), sink)
-            val resp = sink.outcomes.poll(5, TimeUnit.SECONDS)!!.getOrThrow()
-            assertEquals(200.toUShort(), resp.status)
-            assertEquals("hi there", resp.body.decodeToString())
-            assertEquals("yes", resp.headers.firstOrNull { it.name.equals("x-thing", true) }?.value)
+            KtorHttpTransport().use { transport ->
+                val sink = RecordingHttpSink()
+                transport.execute(request("http://$LOOPBACK:$port/hello"), sink)
+                val resp = sink.outcomes.poll(5, TimeUnit.SECONDS)!!.getOrThrow()
+                assertEquals(200.toUShort(), resp.status)
+                assertEquals("hi there", resp.body.decodeToString())
+                assertEquals("yes", resp.headers.firstOrNull { it.name.equals("x-thing", true) }?.value)
+            }
         } finally {
             srv.stop(0, 0)
         }
@@ -100,13 +94,12 @@ class KtorHttpTransportTest {
             }
         }
         try {
-            val sink = RecordingHttpSink()
-            KtorHttpTransport().execute(
-                request("http://127.0.0.1:$port/echo", HttpMethod.Post, byteArrayOf(4, 5, 6)),
-                sink,
-            )
-            assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
-            assertArrayEquals(byteArrayOf(4, 5, 6), received.poll(1, TimeUnit.SECONDS))
+            KtorHttpTransport().use { transport ->
+                val sink = RecordingHttpSink()
+                transport.execute(request("http://$LOOPBACK:$port/echo", HttpMethod.Post, byteArrayOf(4, 5, 6)), sink)
+                assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
+                assertArrayEquals(byteArrayOf(4, 5, 6), received.poll(1, TimeUnit.SECONDS))
+            }
         } finally {
             srv.stop(0, 0)
         }
@@ -124,13 +117,12 @@ class KtorHttpTransportTest {
             }
         }
         try {
-            val sink = RecordingHttpSink()
-            KtorHttpTransport().execute(
-                request("http://127.0.0.1:$port/dav", HttpMethod.Other("PROPFIND")),
-                sink,
-            )
-            assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
-            assertEquals("PROPFIND", seen.poll(1, TimeUnit.SECONDS))
+            KtorHttpTransport().use { transport ->
+                val sink = RecordingHttpSink()
+                transport.execute(request("http://$LOOPBACK:$port/dav", HttpMethod.Other("PROPFIND")), sink)
+                assertTrue(sink.outcomes.poll(5, TimeUnit.SECONDS)!!.isSuccess)
+                assertEquals("PROPFIND", seen.poll(1, TimeUnit.SECONDS))
+            }
         } finally {
             srv.stop(0, 0)
         }
@@ -138,11 +130,13 @@ class KtorHttpTransportTest {
 
     @Test
     fun aConnectFailureLandsAsFailNeverAHang() {
-        val port = java.net.ServerSocket(0).use { it.localPort }
-        val sink = RecordingHttpSink()
-        KtorHttpTransport().execute(request("http://127.0.0.1:$port/nope"), sink)
-        val outcome = sink.outcomes.poll(10, TimeUnit.SECONDS)
-        assertTrue(outcome != null && outcome.isFailure, "expected a fail, got $outcome")
+        val port = closedLoopbackPort()
+        KtorHttpTransport().use { transport ->
+            val sink = RecordingHttpSink()
+            transport.execute(request("http://$LOOPBACK:$port/nope"), sink)
+            val outcome = sink.outcomes.poll(10, TimeUnit.SECONDS)
+            assertTrue(outcome != null && outcome.isFailure, "expected a fail, got $outcome")
+        }
     }
 
     @Test
@@ -152,14 +146,16 @@ class KtorHttpTransportTest {
             get("/artifact") { call.respondBytes(payload) }
         }
         try {
-            val sink = RecordingDownloadSink()
-            KtorHttpTransport().download(request("http://127.0.0.1:$port/artifact"), sink)
-            assertEquals("response:200:${payload.size}", sink.events.poll(5, TimeUnit.SECONDS))
-            assertEquals("finished", sink.events.poll(5, TimeUnit.SECONDS))
-            val whole = synchronized(sink.chunks) {
-                sink.chunks.fold(ByteArray(0)) { acc, chunk -> acc + chunk }
+            KtorHttpTransport().use { transport ->
+                val sink = RecordingDownloadSink()
+                transport.download(request("http://$LOOPBACK:$port/artifact"), sink)
+                assertEquals("response:200:${payload.size}", sink.events.poll(5, TimeUnit.SECONDS))
+                assertEquals("finished", sink.events.poll(5, TimeUnit.SECONDS))
+                val whole = synchronized(sink.chunks) {
+                    sink.chunks.fold(ByteArray(0)) { acc, chunk -> acc + chunk }
+                }
+                assertArrayEquals(payload, whole)
             }
-            assertArrayEquals(payload, whole)
         } finally {
             srv.stop(0, 0)
         }
@@ -172,11 +168,13 @@ class KtorHttpTransportTest {
             get("/radio") { call.respondBytes(payload) }
         }
         try {
-            val sink = RecordingDownloadSink(accept = false)
-            KtorHttpTransport().download(request("http://127.0.0.1:$port/radio"), sink)
-            assertEquals("response:200:${payload.size}", sink.events.poll(5, TimeUnit.SECONDS))
-            assertEquals("finished", sink.events.poll(5, TimeUnit.SECONDS))
-            assertTrue(synchronized(sink.chunks) { sink.chunks.isEmpty() }, "the refused body reached the sink")
+            KtorHttpTransport().use { transport ->
+                val sink = RecordingDownloadSink(accept = false)
+                transport.download(request("http://$LOOPBACK:$port/radio"), sink)
+                assertEquals("response:200:${payload.size}", sink.events.poll(5, TimeUnit.SECONDS))
+                assertEquals("finished", sink.events.poll(5, TimeUnit.SECONDS))
+                assertTrue(synchronized(sink.chunks) { sink.chunks.isEmpty() }, "the refused body reached the sink")
+            }
         } finally {
             srv.stop(0, 0)
         }

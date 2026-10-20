@@ -162,13 +162,13 @@ impl FakeFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for FakeFetch {
-  async fn text(&self, url: &str) -> Result<String, FetchError> {
+  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
     self.texts.fetch_add(1, Ordering::SeqCst);
     self.urls.lock().unwrap().push(url.to_string());
     if let Some(reason) = self.text_error.lock().unwrap().clone() {
       return Err(FetchError::Transport(reason));
     }
-    Ok(self.manifest.lock().unwrap().clone())
+    Ok(self.manifest.lock().unwrap().clone().into_bytes())
   }
 
   async fn download(&self, request: DownloadRequest) -> Result<PathBuf, FetchError> {

@@ -19,11 +19,11 @@ use reqwest::StatusCode;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
 use tower::util::ServiceExt;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
   handler::client::{ClientMode, PossibleSendMsg},
-  state::State as BridgeThingState,
+  state::{State as BridgeThingState, blobs::BLOB_URL_PREFIX},
 };
 
 type ServerTx = tokio::sync::mpsc::Sender<(WebSocket, SocketAddr, ClientMode, ClientScope)>;
@@ -270,6 +270,11 @@ async fn modern_handler(
     Err(req) => *req,
   };
 
+  if let Some(encoded) = req.uri().path().strip_prefix(BLOB_URL_PREFIX) {
+    let encoded = encoded.to_owned();
+    return serve_blob(&state.state, &encoded, req).await;
+  }
+
   let active_path = match resolve_active_webapp(&state.state).await {
     Some(p) => p,
     None => {
@@ -348,6 +353,82 @@ async fn try_serve_hub(state: &BridgeThingState, req: Request<Body>) -> Result<R
     axum::http::HeaderValue::from_static("public, max-age=31536000, immutable"),
   );
   Ok(resp)
+}
+
+async fn serve_blob(state: &BridgeThingState, encoded: &str, req: Request<Body>) -> Response {
+  use axum::http::{HeaderValue, header};
+
+  let Ok(key) = percent_encoding::percent_decode_str(encoded).decode_utf8() else {
+    return (StatusCode::BAD_REQUEST, "blob key is not utf-8").into_response();
+  };
+  let Ok(Some(active)) = state.active_webapp().await else {
+    return (StatusCode::NOT_FOUND, "no active webapp").into_response();
+  };
+  let (path, meta) = match state.webapp_blobs.get(active, &key).await {
+    Ok(Some(found)) => found,
+    Ok(None) => return (StatusCode::NOT_FOUND, "no such blob").into_response(),
+    Err(err) => {
+      tracing::warn!(?err, %active, %key, "blob lookup failed");
+      return (StatusCode::INTERNAL_SERVER_ERROR, "blob lookup failed").into_response();
+    }
+  };
+
+  let etag = format!("\"{}\"", meta.sha256);
+  let pinned = req.uri().query().is_some_and(|query| {
+    query
+      .split('&')
+      .any(|pair| pair.strip_prefix("v=") == Some(meta.sha256.as_str()))
+  });
+  let cache_control = HeaderValue::from_static(if pinned {
+    "public, max-age=31536000, immutable"
+  } else {
+    "no-cache"
+  });
+  let etag_value = HeaderValue::from_str(&etag).expect("hex digest is a valid header value");
+
+  let header_matches = |value: Option<&HeaderValue>| {
+    value.and_then(|v| v.to_str().ok()).is_some_and(|v| {
+      v.split(',')
+        .map(|tag| tag.trim().trim_start_matches("W/"))
+        .any(|tag| tag == "*" || tag == etag)
+    })
+  };
+  if header_matches(req.headers().get(header::IF_NONE_MATCH)) {
+    return axum::http::Response::builder()
+      .status(StatusCode::NOT_MODIFIED)
+      .header(header::ETAG, etag_value)
+      .header(header::CACHE_CONTROL, cache_control)
+      .body(Body::empty())
+      .expect("not-modified response");
+  }
+  let range_is_current =
+    !req.headers().contains_key(header::IF_RANGE) || header_matches(req.headers().get(header::IF_RANGE));
+  let mut file_req = Request::new(Body::empty());
+  *file_req.method_mut() = req.method().clone();
+  if let Some(range) = req.headers().get(header::RANGE).filter(|_| range_is_current) {
+    file_req.headers_mut().insert(header::RANGE, range.clone());
+  }
+
+  let resp = match ServeFile::new(&path).oneshot(file_req).await {
+    Ok(resp) => resp,
+    Err(err) => {
+      tracing::error!(?err, %active, %key, "blob ServeFile error");
+      return (StatusCode::INTERNAL_SERVER_ERROR, "serve error").into_response();
+    }
+  };
+  let mut resp = resp.map(Body::new);
+  if resp.status().is_client_error() || resp.status().is_server_error() {
+    return resp;
+  }
+  let headers = resp.headers_mut();
+  headers.remove(header::LAST_MODIFIED);
+  headers.insert(
+    header::CONTENT_TYPE,
+    HeaderValue::from_str(&meta.mime).unwrap_or(HeaderValue::from_static("application/octet-stream")),
+  );
+  headers.insert(header::ETAG, etag_value);
+  headers.insert(header::CACHE_CONTROL, cache_control);
+  resp
 }
 
 fn scope_from_query(query: Option<&str>) -> ClientScope {

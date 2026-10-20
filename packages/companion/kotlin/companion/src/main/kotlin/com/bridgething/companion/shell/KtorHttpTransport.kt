@@ -28,7 +28,7 @@ import uniffi.bridgething_companion.HttpResponse
 import uniffi.bridgething_companion.HttpSink
 import uniffi.bridgething_companion.HttpTransport
 
-public class KtorHttpTransport : HttpTransport {
+public class KtorHttpTransport : HttpTransport, AutoCloseable {
     private val lock = Any()
     private var scope: CoroutineScope? = null
     private var client: HttpClient? = null
@@ -45,7 +45,7 @@ public class KtorHttpTransport : HttpTransport {
         liveScope to liveClient
     }
 
-    public fun close() {
+    override fun close() {
         val (deadScope, deadClient) = synchronized(lock) {
             val held = scope to client
             scope = null

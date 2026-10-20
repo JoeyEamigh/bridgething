@@ -31,6 +31,15 @@ const phase = await device.push('daemon', binary);
 if (phase.kind === 'failed') console.error(phase.reason);
 ```
 
+A webapp's settings are reachable too: `webappConfig` and `setWebappConfig`,
+the shared doc namespace through `webappDoc`, `setWebappDoc` and
+`nextDocChange`, and its settings page or icon through `webappResource`.
+
+```ts
+const page = await device.webappResource(app.id, 'settings');
+const html = new Blob([page.bytes], { type: page.mime ?? 'text/html' });
+```
+
 `installWebapp` records the second argument as the install's source.
 `nextEvent` reads the progress feed during a push. `fetchManifest`,
 `compositeVersion`, and `otaArtifactUrls` read the release manifest the device

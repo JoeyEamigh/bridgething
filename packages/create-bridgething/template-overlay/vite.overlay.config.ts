@@ -13,7 +13,7 @@ function sizeGuard(): Plugin {
     closeBundle() {
       let bytes: number;
       try {
-        bytes = statSync(resolve(__dirname, 'dist', 'overlay.js')).size;
+        bytes = statSync(resolve(import.meta.dirname, 'dist', 'overlay.js')).size;
       } catch {
         return;
       }
@@ -28,11 +28,11 @@ export default defineConfig({
   plugins: [preact(), tailwindcss(), sizeGuard()],
   build: {
     target: 'es2022',
-    outDir: resolve(__dirname, 'dist'),
+    outDir: resolve(import.meta.dirname, 'dist'),
     emptyOutDir: false,
     cssCodeSplit: false,
     lib: {
-      entry: resolve(__dirname, 'overlay', 'main.tsx'),
+      entry: resolve(import.meta.dirname, 'overlay', 'main.tsx'),
       formats: ['iife'],
       name: '__overlay',
       fileName: () => 'overlay.js',

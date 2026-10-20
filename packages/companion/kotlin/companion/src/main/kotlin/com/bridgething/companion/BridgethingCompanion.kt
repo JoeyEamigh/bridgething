@@ -10,6 +10,7 @@ import com.bridgething.companion.shell.AndroidGeoProvider
 import com.bridgething.companion.shell.AndroidHostEnvironment
 import com.bridgething.companion.shell.AndroidImageScaler
 import com.bridgething.companion.shell.AndroidMediaSessionBackend
+import com.bridgething.companion.shell.AndroidMediaTranscoder
 import com.bridgething.companion.shell.AndroidNotificationBackend
 import com.bridgething.companion.shell.AndroidPhoneBackend
 import com.bridgething.companion.shell.AndroidStreamBackend
@@ -91,6 +92,7 @@ public class BridgethingCompanion(
                 nlu = LitertNluRunner { session.voiceModelPaths().nluBundleDir },
                 appleMusic = null,
                 image = AndroidImageScaler(),
+                transcoder = AndroidMediaTranscoder(appContext),
                 modelValidator = LitertArtifactValidator(),
                 transferPolicy = UnmeteredTransferPolicy(appContext),
                 connectivity = AndroidConnectivityMonitor(appContext),

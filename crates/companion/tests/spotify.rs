@@ -1061,6 +1061,7 @@ fn catalog_session(secrets: Arc<MemorySecrets>) -> Arc<Session> {
       nlu: None,
       apple_music: None,
       image: None,
+      transcoder: None,
       model_validator: Some(Arc::new(NoopValidator)),
       transfer_policy: Some(Arc::new(Unmetered)),
       connectivity: None,

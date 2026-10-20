@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use libbridgething::GatewayInfo;
-use sea_orm::{DatabaseConnection, DbErr, EntityTrait, TransactionTrait};
+use sea_orm::{DatabaseConnection, DbErr};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -16,10 +16,12 @@ use crate::{
   net::{ClientMan, WireEventBus},
   paths,
   peer::PeerTracker,
+  systemd::power::{FactoryReset, FactoryResetError},
   transfer::{TransferError, outbound::TransferOutbound, sinks::TransferSinks},
 };
 
 mod audio;
+pub mod blobs;
 mod browse_content;
 mod cache;
 mod geo_watchers;
@@ -36,6 +38,7 @@ mod tunnel_routes;
 mod webapps;
 
 pub use audio::{AudioError, AudioManager};
+pub use blobs::WebappBlobs;
 pub use browse_content::BrowseContentCache;
 pub use geo_watchers::{GeoLastFix, GeoWatchers, WatchAggregate, WatchChange};
 pub use log_tap::{LogTap, LogTapLayer};
@@ -44,18 +47,17 @@ pub use playback_targets::{PlaybackTargetError, PlaybackTargetStore};
 pub use root_browse::RootBrowseCache;
 pub use routes::RouteTable;
 pub use storage::{DeviceStore, KvStore, MetaStore, SlotsReleased};
-use storage::{device::Entity as DeviceEntity, kv_storage::Entity as KvEntity, meta::Entity as MetaEntity};
 pub use telephony::TelephonyManager;
 pub use time::TimeManager;
 pub use tunnel_routes::{TunnelInbound, TunnelRoutes};
+pub(crate) use webapps::extract_zip;
 pub use webapps::{BROWSER_WEBAPP_ID, HUB_WEBAPP_ID, STOCK_WEBAPP_ID, WebappRegistry};
-pub(crate) use webapps::{extract_zip, sha256_hex};
 
 pub const GEO_PERMISSION: &str = "geo";
 
 pub type State = Arc<AppState>;
 
-#[derive(Debug)]
+#[derive(derive_more::Debug)]
 pub struct AppState {
   pub client_man: ClientMan,
   pub bus: WireEventBus,
@@ -63,6 +65,7 @@ pub struct AppState {
   pub player: crate::player::Player,
   pub chrome: chrome::Chrome,
   pub webapps: WebappRegistry,
+  pub webapp_blobs: WebappBlobs,
   pub assets: AssetCache,
   pub asset_wait: AssetWaitTracker,
   pub iap2_pending_art: Iap2PendingArt,
@@ -91,8 +94,9 @@ pub struct AppState {
   pub transfer_outbound: TransferOutbound,
   pub modern_port: u16,
 
-  db: DatabaseConnection,
   meta_store: MetaStore,
+  #[debug(skip)]
+  factory_reset: FactoryReset,
   _asset_cache_handle: JoinHandle<()>,
   _transfer_handle: JoinHandle<()>,
   _als_handle: JoinHandle<()>,
@@ -109,6 +113,7 @@ impl AppState {
       player,
       chrome,
       webapps,
+      webapp_blobs,
       assets,
       asset_wait,
       iap2_pending_art,
@@ -131,8 +136,8 @@ impl AppState {
       tunnel_routes,
       playback_targets,
       transfer_sinks,
-      db,
       meta_store,
+      factory_reset,
       asset_cache_handle,
       transfer_handle,
       als_handle,
@@ -145,6 +150,7 @@ impl AppState {
       player,
       chrome,
       webapps,
+      webapp_blobs,
       assets,
       asset_wait,
       iap2_pending_art,
@@ -172,8 +178,8 @@ impl AppState {
       transfer_sinks,
       transfer_outbound: TransferOutbound::default(),
       modern_port,
-      db,
       meta_store,
+      factory_reset,
       _asset_cache_handle: asset_cache_handle,
       _transfer_handle: transfer_handle,
       _als_handle: als_handle,
@@ -322,16 +328,8 @@ impl AppState {
     self.peers.connected_companion()
   }
 
-  pub async fn reset(&self) -> StateResult<()> {
-    let tx = self.db.begin().await?;
-    DeviceEntity::delete_many().exec(&tx).await?;
-    KvEntity::delete_many().exec(&tx).await?;
-    MetaEntity::delete_many().exec(&tx).await?;
-    tx.commit().await?;
-    if let Err(err) = self.assets.clear_all().await {
-      tracing::warn!(?err, "factory reset: asset cache wipe failed");
-    }
-    Ok(())
+  pub async fn factory_reset(&self) -> Result<(), FactoryResetError> {
+    self.factory_reset.run().await
   }
 }
 
@@ -343,6 +341,7 @@ pub struct StateAssembly {
   pub player: crate::player::Player,
   pub chrome: chrome::Chrome,
   pub webapps: WebappRegistry,
+  pub webapp_blobs: WebappBlobs,
   pub assets: AssetCache,
   pub asset_wait: AssetWaitTracker,
   pub iap2_pending_art: Iap2PendingArt,
@@ -365,8 +364,8 @@ pub struct StateAssembly {
   pub tunnel_routes: TunnelRoutes,
   pub playback_targets: PlaybackTargetStore,
   pub transfer_sinks: TransferSinks,
-  pub db: DatabaseConnection,
   pub meta_store: MetaStore,
+  pub factory_reset: FactoryReset,
   pub asset_cache_handle: JoinHandle<()>,
   pub transfer_handle: JoinHandle<()>,
   pub als_handle: JoinHandle<()>,
@@ -382,13 +381,13 @@ pub async fn open_state_db() -> StateResult<DatabaseConnection> {
 }
 
 #[cfg(not(feature = "no-persist"))]
-async fn open_db_from_dir(state_dir: &std::path::Path) -> Result<DatabaseConnection, StateError> {
+pub(crate) async fn open_db_from_dir(state_dir: &std::path::Path) -> Result<DatabaseConnection, StateError> {
   let path = state_dir.join("bridgething.db");
   Ok(crate::db::open(Some(&path)).await?)
 }
 
 #[cfg(feature = "no-persist")]
-async fn open_db_from_dir(_state_dir: &std::path::Path) -> Result<DatabaseConnection, StateError> {
+pub(crate) async fn open_db_from_dir(_state_dir: &std::path::Path) -> Result<DatabaseConnection, StateError> {
   tracing::trace!("debug mode: in-memory state database");
   Ok(crate::db::open(None).await?)
 }
@@ -404,4 +403,6 @@ pub enum StateError {
   Asset(#[from] AssetError),
   #[error(transparent)]
   Transfer(#[from] TransferError),
+  #[error("the webapp blob store has stopped")]
+  BlobStoreStopped,
 }

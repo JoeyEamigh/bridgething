@@ -1,0 +1,22 @@
+appId: com.bridgething.gateway
+name: picks a gif from the photo library and the device stores it byte for byte
+tags:
+  - ios-only
+---
+- runFlow: ../common/fresh-start.yaml
+- tapOn: ".*Blob Picker.*"
+- tapOn: "open Blob Picker settings"
+- extendedWaitUntil:
+    visible: "pick a gif"
+    timeout: 180000
+- tapOn: "pick a gif"
+- extendedWaitUntil:
+    visible: "Cancel"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    point: "16%,53%"
+- extendedWaitUntil:
+    visible: "stored image/gif c6567e21feddbbaff1ac9cec192b52e0b275a7bc1a15505262d365961a90b3b7 with progress"
+    timeout: 60000

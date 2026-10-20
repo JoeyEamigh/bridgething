@@ -13,6 +13,11 @@ than fixtures. `SUPERBIRD_HOST=bridgething-<serial>.local` targets another
 device, and `BRIDGETHING_DAEMON_URL=ws://host:8891` targets a daemon anywhere
 else.
 
+Blob urls from `client.blob` (`/.bridgething/blob/...`) go through the dev
+server to that same daemon. The daemon serves blobs for its active webapp only,
+so they load once this app is the active one on the device. `bun run dev:device`
+and `bun run push` both make it active.
+
 ## Show it on the Car Thing with hot reload
 
 ```bash
@@ -55,6 +60,7 @@ await page.keyboard.press('1'); // preset 1  (also '2' '3' '4')
 await page.keyboard.press('m'); // Mode button
 await page.keyboard.press('Escape'); // Back button
 await page.mouse.wheel(120, 0); // rotary wheel: HORIZONTAL scroll (deltaX)
+await page.keyboard.press('Enter'); // wheel click
 // touch: page.tap('selector')  or  page.mouse.click(x, y)
 ```
 
@@ -64,8 +70,8 @@ Loop: edit code, let vite hot-reload, screenshot, adjust. Keep the viewport at
 ## Your own browser and DevTools
 
 Open `http://localhost:5173/`, then set a custom device of 800 x 480 in DevTools'
-device toolbar. Type `1` through `4`, `m`, and `Escape`, and hold shift while
-scrolling for the rotary's horizontal wheel.
+device toolbar. Type `1` through `4`, `m`, `Escape`, and `Enter` for the wheel click, and hold
+shift while scrolling for the rotary's horizontal wheel.
 
 ## Drive the real device over CDP
 
@@ -131,11 +137,13 @@ const key = (type: string, k: string, code: string, vk: number) =>
     type,
     key: k,
     code,
-    text: k.length === 1 ? k : '',
+    text: k === 'Enter' ? '\r' : k.length === 1 ? k : '',
     windowsVirtualKeyCode: vk,
   });
 await key('keyDown', '3', 'Digit3', 51); // preset 3
 await key('keyUp', '3', 'Digit3', 51);
+await key('keyDown', 'Enter', 'Enter', 13); // wheel click
+await key('keyUp', 'Enter', 'Enter', 13);
 
 // rotary wheel = horizontal scroll:
 await send('Input.dispatchMouseEvent', {
@@ -160,4 +168,5 @@ actual screen on the device.
 | Mode (M)     | `keydown` key `"m"`                   | `KeyM` / 77                |
 | Back         | `keydown` key `"Escape"`              | `Escape` / 27              |
 | Rotary wheel | `wheel` with `deltaX` (horizontal)    | mouseWheel `deltaX`        |
+| Wheel click  | `keydown` key `"Enter"`               | `Enter` / 13               |
 | Touch        | pointer / touch events                | `Input.dispatchTouchEvent` |

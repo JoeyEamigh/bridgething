@@ -1,4 +1,4 @@
-@theme {
+@theme static {
   --color-off-white: #efefef;
   --color-bg: #0a0c0e;
   --color-screen: #060809;
@@ -27,6 +27,7 @@
     transparent
   );
   --color-neutral-soft: color-mix(in srgb, var(--color-fg) 8%, transparent);
+  --color-scrim: rgba(0, 0, 0, 0.55);
 
   --text-eyebrow: 0.6875rem;
   --text-hint: 0.75rem;

@@ -44,7 +44,7 @@ pub struct FragmentStream<'a> {
 
 impl FragmentStream<'_> {
   pub async fn run(&self, pacer: &mut Pacer) -> Result<u64, SendError> {
-    self.acks.note(self.transfer_id, self.resume_from);
+    self.acks.open(self.transfer_id, self.resume_from);
 
     let total: u64 = self.ranges.iter().map(|range| range.length).sum();
     let mut buf = vec![0u8; self.fragment_bytes];

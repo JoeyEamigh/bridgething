@@ -27,7 +27,7 @@ use tokio_util::{
 
 use super::{Address, BluetoothResult, GatewayRecvTx, GatewaySendRx, peer_owners::PeerOwners};
 use crate::{
-  bluetooth::{GatewayType, InboundGatewayMessage, OutboundGatewayMessage, auto_nack_for_failed_decode},
+  bluetooth::{GatewayType, InboundGatewayMessage, OutboundDrain, OutboundGatewayMessage, auto_nack_for_failed_decode},
   peer::PeerTracker,
   state::meta::DeviceMeta,
 };
@@ -104,7 +104,7 @@ struct Connection {
 }
 
 impl Connection {
-  fn new<S>(address: Address, stream: S, tx: ConnectionTx) -> Self
+  fn new<S>(address: Address, stream: S, tx: ConnectionTx, drain: &OutboundDrain) -> Self
   where
     S: AsyncRead + AsyncWrite + Send + 'static,
   {
@@ -113,7 +113,7 @@ impl Connection {
     let _reader_handle = tokio::spawn(reader_task(address, reader, tx));
 
     let (lanes, feed) = lanes(RFCOMM_LANE_BYTES, RFCOMM_BATCH_BYTES);
-    let _writer_handle = tokio::spawn(writer_task(address, write_half, feed));
+    let _writer_handle = drain.spawn(writer_task(address, write_half, feed));
 
     Self {
       address,
@@ -204,6 +204,7 @@ pub struct RfcommGateway {
   recv_tx: GatewayRecvTx,
   send_rx: GatewaySendRx,
   peer_owners: PeerOwners,
+  drain: OutboundDrain,
 }
 
 impl RfcommGateway {
@@ -214,6 +215,7 @@ impl RfcommGateway {
     recv_tx: GatewayRecvTx,
     send_rx: GatewaySendRx,
     peer_owners: PeerOwners,
+    drain: OutboundDrain,
   ) -> Self {
     let (conn_tx, conn_rx) = mpsc::channel(16);
 
@@ -229,11 +231,12 @@ impl RfcommGateway {
       recv_tx,
       send_rx,
       peer_owners,
+      drain,
     }
   }
 
   pub fn spawn(mut self) -> JoinHandle<()> {
-    tokio::spawn(async move { self.recv().await })
+    self.drain.clone().spawn(async move { self.recv().await })
   }
 
   async fn recv(&mut self) {
@@ -262,24 +265,13 @@ impl RfcommGateway {
             return;
           }
         },
-        Some(data) = self.send_rx.recv() => {
-          tracing::trace!(target: "bridgething::rfcomm::frame", "rfcomm gateway received message: {:?}", data);
-          let OutboundGatewayMessage { address, priority, compress, msg } = data;
-          if let Some(address) = address {
-            if let Some(conn) = self.connections.get(&address) {
-              if let Err(e) = conn.send(&msg, priority, compress).await {
-                tracing::error!("failed to send rfcomm frame: {:?}", e);
-              }
-            } else {
-              tracing::trace!("rfcomm: no connection for {address}; addressed send dropped");
-            }
-          } else {
-            for conn in self.connections.values() {
-              if let Err(e) = conn.send(&msg, priority, compress).await {
-                tracing::error!("failed to send rfcomm frame: {:?}", e);
-              }
-            }
+        Some(data) = self.send_rx.recv() => self.dispatch_outbound(data).await,
+        _ = self.drain.forwarded() => {
+          while let Ok(data) = self.send_rx.try_recv() {
+            self.dispatch_outbound(data).await;
           }
+          tracing::debug!("rfcomm gateway: outbound drained; exiting");
+          return;
         },
         Some((address, msg)) = self.conn_rx.recv() => {
           tracing::trace!(target: "bridgething::rfcomm::frame", "rfcomm message from {}: {:?}", address, msg);
@@ -308,11 +300,36 @@ impl RfcommGateway {
     }
   }
 
+  async fn dispatch_outbound(&self, data: OutboundGatewayMessage) {
+    tracing::trace!(target: "bridgething::rfcomm::frame", "rfcomm gateway received message: {:?}", data);
+    let OutboundGatewayMessage {
+      address,
+      priority,
+      compress,
+      msg,
+    } = data;
+    if let Some(address) = address {
+      if let Some(conn) = self.connections.get(&address) {
+        if let Err(e) = conn.send(&msg, priority, compress).await {
+          tracing::error!("failed to send rfcomm frame: {:?}", e);
+        }
+      } else {
+        tracing::trace!("rfcomm: no connection for {address}; addressed send dropped");
+      }
+    } else {
+      for conn in self.connections.values() {
+        if let Err(e) = conn.send(&msg, priority, compress).await {
+          tracing::error!("failed to send rfcomm frame: {:?}", e);
+        }
+      }
+    }
+  }
+
   async fn add_connection<S>(&mut self, address: Address, stream: S) -> BluetoothResult<()>
   where
     S: AsyncRead + AsyncWrite + Send + 'static,
   {
-    let connection = Connection::new(address, stream, self.conn_tx.clone());
+    let connection = Connection::new(address, stream, self.conn_tx.clone(), &self.drain);
     let version = BridgeToGatewayMsg {
       id: uuid::Uuid::now_v7(),
       meta: MsgMeta::Event,

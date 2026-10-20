@@ -3312,13 +3312,218 @@ public func FfiConverterTypeAudioBackend_lower(_ value: AudioBackend) -> UInt64 
 
 
 
+public protocol BlobProgressSink: AnyObject, Sendable {
+    
+    func progress(sent: UInt64, total: UInt64) 
+    
+}
+open class BlobProgressSinkImpl: BlobProgressSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_blobprogresssink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_blobprogresssink(handle, $0) }
+    }
+
+    
+
+    
+open func progress(sent: UInt64, total: UInt64)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_blobprogresssink_progress(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(sent),
+        FfiConverterUInt64.lower(total),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceBlobProgressSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceBlobProgressSink = UniffiVTableCallbackInterfaceBlobProgressSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeBlobProgressSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface BlobProgressSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeBlobProgressSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface BlobProgressSink: handle missing in uniffiClone")
+            }
+        },
+        progress: { (
+            uniffiHandle: UInt64,
+            sent: UInt64,
+            total: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeBlobProgressSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.progress(
+                     sent: try FfiConverterUInt64.lift(sent),
+                     total: try FfiConverterUInt64.lift(total)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceBlobProgressSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceBlobProgressSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitBlobProgressSink() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_blobprogresssink(UniffiCallbackInterfaceBlobProgressSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBlobProgressSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<BlobProgressSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = BlobProgressSink
+
+    public static func lift(_ handle: UInt64) throws -> BlobProgressSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return BlobProgressSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: BlobProgressSink) -> UInt64 {
+         if let rustImpl = value as? BlobProgressSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BlobProgressSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: BlobProgressSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBlobProgressSink_lift(_ handle: UInt64) throws -> BlobProgressSink {
+    return try FfiConverterTypeBlobProgressSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBlobProgressSink_lower(_ value: BlobProgressSink) -> UInt64 {
+    return FfiConverterTypeBlobProgressSink.lower(value)
+}
+
+
+
+
+
+
 public protocol CompanionSessionProtocol: AnyObject, Sendable {
+    
+    func appendBlobHandle(handle: String, base64: String) async throws  -> UInt64
     
     func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String) async 
     
     func availableProviders() async  -> [ProviderInfo]
     
     func cancelAuth(id: String) async 
+    
+    func cancelMediaImport(ticket: UInt64) 
     
     func checkForOtaUpdate(rootUrl: String) async 
     
@@ -3330,9 +3535,13 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func connectProvider(id: String) async throws 
     
+    func createBlobHandle(mime: String) throws  -> String
+    
     func currentWebapp(deviceId: String) async throws  -> ActiveWebapp?
     
     func defaultResumeTarget()  -> ResumeTarget
+    
+    func deleteWebappBlob(deviceId: String, id: String, key: String) async throws 
     
     func deleteWebappConfigField(deviceId: String, id: String, key: String) async throws 
     
@@ -3356,9 +3565,13 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
     
+    func importPickedMedia(ticket: UInt64, path: String, kind: MediaPickKind, cover: MediaCover?, mimeHint: String?) async throws  -> PickedMedia
+    
     func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?) async throws  -> WebappInfo
     
     func installWebappFromUrl(deviceId: String, request: WebappInstallRequest, sink: WebappBundleSink?) async throws  -> WebappInfo
+    
+    func listWebappBlobs(deviceId: String, id: String) async throws  -> [WebappBlob]
     
     func listWebappConfig(deviceId: String, id: String) async throws  -> [ConfigEntry]
     
@@ -3368,7 +3581,11 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func logInbox()  -> LogInbox
     
+    func mediaImportTicket()  -> UInt64
+    
     func otaRunProgress(deviceId: String, nowMs: UInt64)  -> OtaRunProgress?
+    
+    func putWebappBlob(deviceId: String, id: String, key: String, handle: String, progress: BlobProgressSink?) async throws  -> WebappBlob
     
     func resumed() async 
     
@@ -3475,6 +3692,22 @@ public static func create(config: CompanionConfig, backends: CompanionBackends, 
     
 
     
+open func appendBlobHandle(handle: String, base64: String)async throws  -> UInt64  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_append_blob_handle(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(handle),FfiConverterString.lower(base64)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_u64,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_u64,
+            freeFunc: ffi_bridgething_companion_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
+}
+    
 open func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String)async   {
     return
         try!  await uniffiRustCallAsync(
@@ -3524,6 +3757,15 @@ open func cancelAuth(id: String)async   {
             errorHandler: nil
             
         )
+}
+    
+open func cancelMediaImport(ticket: UInt64)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_cancel_media_import(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt64.lower(ticket),uniffiCallStatus
+    )
+}
 }
     
 open func checkForOtaUpdate(rootUrl: String)async   {
@@ -3600,6 +3842,16 @@ open func connectProvider(id: String)async throws   {
         )
 }
     
+open func createBlobHandle(mime: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCompanionError_lift) {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_create_blob_handle(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(mime),uniffiCallStatus
+    )
+})
+}
+    
 open func currentWebapp(deviceId: String)async throws  -> ActiveWebapp?  {
     return
         try  await uniffiRustCallAsync(
@@ -3623,6 +3875,22 @@ open func defaultResumeTarget() -> ResumeTarget  {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
+}
+    
+open func deleteWebappBlob(deviceId: String, id: String, key: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_delete_webapp_blob(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(id),FfiConverterString.lower(key)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
 }
     
 open func deleteWebappConfigField(deviceId: String, id: String, key: String)async throws   {
@@ -3799,6 +4067,22 @@ open func getWebappDoc(deviceId: String, id: String, key: String)async throws  -
         )
 }
     
+open func importPickedMedia(ticket: UInt64, path: String, kind: MediaPickKind, cover: MediaCover? = nil, mimeHint: String? = nil)async throws  -> PickedMedia  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_import_picked_media(
+                        self.uniffiCloneHandle(),FfiConverterUInt64.lower(ticket),FfiConverterString.lower(path),FfiConverterTypeMediaPickKind_lower(kind),FfiConverterOptionTypeMediaCover.lower(cover),FfiConverterOptionString.lower(mimeHint)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
+            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePickedMedia_lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
+}
+    
 open func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String? = nil, webappName: String? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
@@ -3827,6 +4111,22 @@ open func installWebappFromUrl(deviceId: String, request: WebappInstallRequest, 
             completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
             freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeWebappInfo_lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
+}
+    
+open func listWebappBlobs(deviceId: String, id: String)async throws  -> [WebappBlob]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_list_webapp_blobs(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(id)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
+            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeWebappBlob.lift,
             errorHandler: FfiConverterTypeCompanionError_lift
         )
 }
@@ -3888,6 +4188,15 @@ open func logInbox() -> LogInbox  {
 })
 }
     
+open func mediaImportTicket() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_media_import_ticket(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func otaRunProgress(deviceId: String, nowMs: UInt64) -> OtaRunProgress?  {
     return try!  FfiConverterOptionTypeOtaRunProgress.lift(try! rustCall() {
         uniffiCallStatus in
@@ -3897,6 +4206,22 @@ open func otaRunProgress(deviceId: String, nowMs: UInt64) -> OtaRunProgress?  {
         FfiConverterUInt64.lower(nowMs),uniffiCallStatus
     )
 })
+}
+    
+open func putWebappBlob(deviceId: String, id: String, key: String, handle: String, progress: BlobProgressSink? = nil)async throws  -> WebappBlob  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_put_webapp_blob(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(id),FfiConverterString.lower(key),FfiConverterString.lower(handle),FfiConverterOptionTypeBlobProgressSink.lower(progress)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_rust_buffer,
+            freeFunc: ffi_bridgething_companion_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeWebappBlob_lift,
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
 }
     
 open func resumed()async   {
@@ -6817,7 +7142,7 @@ public func FfiConverterTypeHttpTransport_lower(_ value: HttpTransport) -> UInt6
 
 public protocol ImageScaler: AnyObject, Sendable {
     
-    func downsampleJpeg(bytes: Data, maxEdge: UInt32, quality: Float)  -> Data?
+    func scale(bytes: Data, sniff: MediaSniff, target: ImageTarget)  -> ScaledImage?
     
 }
 open class ImageScalerImpl: ImageScaler, @unchecked Sendable {
@@ -6873,14 +7198,14 @@ open class ImageScalerImpl: ImageScaler, @unchecked Sendable {
     
 
     
-open func downsampleJpeg(bytes: Data, maxEdge: UInt32, quality: Float) -> Data?  {
-    return try!  FfiConverterOptionData.lift(try! rustCall() {
+open func scale(bytes: Data, sniff: MediaSniff, target: ImageTarget) -> ScaledImage?  {
+    return try!  FfiConverterOptionTypeScaledImage.lift(try! rustCall() {
         uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_imagescaler_downsample_jpeg(
+    uniffi_bridgething_companion_fn_method_imagescaler_scale(
             self.uniffiCloneHandle(),
         FfiConverterData.lower(bytes),
-        FfiConverterUInt32.lower(maxEdge),
-        FfiConverterFloat.lower(quality),uniffiCallStatus
+        FfiConverterTypeMediaSniff_lower(sniff),
+        FfiConverterTypeImageTarget_lower(target),uniffiCallStatus
     )
 })
 }
@@ -6913,28 +7238,28 @@ fileprivate struct UniffiCallbackInterfaceImageScaler {
                 fatalError("Uniffi callback interface ImageScaler: handle missing in uniffiClone")
             }
         },
-        downsampleJpeg: { (
+        scale: { (
             uniffiHandle: UInt64,
             bytes: RustBuffer,
-            maxEdge: UInt32,
-            quality: Float,
+            sniff: RustBuffer,
+            target: RustBuffer,
             uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
             uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
         ) in
             let makeCall = {
-                () throws -> Data? in
+                () throws -> ScaledImage? in
                 guard let uniffiObj = try? FfiConverterTypeImageScaler.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return uniffiObj.downsampleJpeg(
+                return uniffiObj.scale(
                      bytes: try FfiConverterData.lift(bytes),
-                     maxEdge: try FfiConverterUInt32.lift(maxEdge),
-                     quality: try FfiConverterFloat.lift(quality)
+                     sniff: try FfiConverterTypeMediaSniff_lift(sniff),
+                     target: try FfiConverterTypeImageTarget_lift(target)
                 )
             }
 
             
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionTypeScaledImage.lower($0) }
             uniffiTraitInterfaceCall(
                 callStatus: uniffiCallStatus,
                 makeCall: makeCall,
@@ -8827,6 +9152,244 @@ public func FfiConverterTypeMediaSnapshotSink_lift(_ handle: UInt64) throws -> M
 #endif
 public func FfiConverterTypeMediaSnapshotSink_lower(_ value: MediaSnapshotSink) -> UInt64 {
     return FfiConverterTypeMediaSnapshotSink.lower(value)
+}
+
+
+
+
+
+
+public protocol MediaTranscoder: AnyObject, Sendable {
+    
+    func transcode(request: TranscodeRequest, sink: TranscodeSink)  -> TranscodeJob
+    
+    func poster(source: String)  -> Data?
+    
+}
+open class MediaTranscoderImpl: MediaTranscoder, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_mediatranscoder(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_mediatranscoder(handle, $0) }
+    }
+
+    
+
+    
+open func transcode(request: TranscodeRequest, sink: TranscodeSink) -> TranscodeJob  {
+    return try!  FfiConverterTypeTranscodeJob_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_mediatranscoder_transcode(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeTranscodeRequest_lower(request),
+        FfiConverterTypeTranscodeSink_lower(sink),uniffiCallStatus
+    )
+})
+}
+    
+open func poster(source: String) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_mediatranscoder_poster(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(source),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceMediaTranscoder {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceMediaTranscoder = UniffiVTableCallbackInterfaceMediaTranscoder(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeMediaTranscoder.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface MediaTranscoder: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeMediaTranscoder.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface MediaTranscoder: handle missing in uniffiClone")
+            }
+        },
+        transcode: { (
+            uniffiHandle: UInt64,
+            request: RustBuffer,
+            sink: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UInt64>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> TranscodeJob in
+                guard let uniffiObj = try? FfiConverterTypeMediaTranscoder.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.transcode(
+                     request: try FfiConverterTypeTranscodeRequest_lift(request),
+                     sink: try FfiConverterTypeTranscodeSink_lift(sink)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeTranscodeJob_lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        poster: { (
+            uniffiHandle: UInt64,
+            source: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data? in
+                guard let uniffiObj = try? FfiConverterTypeMediaTranscoder.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.poster(
+                     source: try FfiConverterString.lift(source)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceMediaTranscoder> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceMediaTranscoder>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitMediaTranscoder() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_mediatranscoder(UniffiCallbackInterfaceMediaTranscoder.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaTranscoder: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<MediaTranscoder>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = MediaTranscoder
+
+    public static func lift(_ handle: UInt64) throws -> MediaTranscoder {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return MediaTranscoderImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: MediaTranscoder) -> UInt64 {
+         if let rustImpl = value as? MediaTranscoderImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaTranscoder {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MediaTranscoder, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaTranscoder_lift(_ handle: UInt64) throws -> MediaTranscoder {
+    return try FfiConverterTypeMediaTranscoder.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaTranscoder_lower(_ value: MediaTranscoder) -> UInt64 {
+    return FfiConverterTypeMediaTranscoder.lower(value)
 }
 
 
@@ -12067,6 +12630,329 @@ public func FfiConverterTypeStreamSink_lower(_ value: StreamSink) -> UInt64 {
 
 
 
+public protocol TranscodeJob: AnyObject, Sendable {
+    
+    func cancel() 
+    
+}
+open class TranscodeJobImpl: TranscodeJob, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_transcodejob(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_transcodejob(handle, $0) }
+    }
+
+    
+
+    
+open func cancel()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_transcodejob_cancel(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceTranscodeJob {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceTranscodeJob = UniffiVTableCallbackInterfaceTranscodeJob(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeTranscodeJob.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface TranscodeJob: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeTranscodeJob.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface TranscodeJob: handle missing in uniffiClone")
+            }
+        },
+        cancel: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeTranscodeJob.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.cancel(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceTranscodeJob> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceTranscodeJob>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitTranscodeJob() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_transcodejob(UniffiCallbackInterfaceTranscodeJob.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscodeJob: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<TranscodeJob>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = TranscodeJob
+
+    public static func lift(_ handle: UInt64) throws -> TranscodeJob {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return TranscodeJobImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: TranscodeJob) -> UInt64 {
+         if let rustImpl = value as? TranscodeJobImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscodeJob {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TranscodeJob, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeJob_lift(_ handle: UInt64) throws -> TranscodeJob {
+    return try FfiConverterTypeTranscodeJob.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeJob_lower(_ value: TranscodeJob) -> UInt64 {
+    return FfiConverterTypeTranscodeJob.lower(value)
+}
+
+
+
+
+
+
+public protocol TranscodeSinkProtocol: AnyObject, Sendable {
+    
+    func complete(video: TranscodedVideo) 
+    
+    func fail(reason: String) 
+    
+}
+open class TranscodeSink: TranscodeSinkProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_transcodesink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_transcodesink(handle, $0) }
+    }
+
+    
+
+    
+open func complete(video: TranscodedVideo)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_transcodesink_complete(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeTranscodedVideo_lower(video),uniffiCallStatus
+    )
+}
+}
+    
+open func fail(reason: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_transcodesink_fail(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(reason),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscodeSink: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = TranscodeSink
+
+    public static func lift(_ handle: UInt64) throws -> TranscodeSink {
+        return TranscodeSink(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: TranscodeSink) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscodeSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TranscodeSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeSink_lift(_ handle: UInt64) throws -> TranscodeSink {
+    return try FfiConverterTypeTranscodeSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeSink_lower(_ value: TranscodeSink) -> UInt64 {
+    return FfiConverterTypeTranscodeSink.lower(value)
+}
+
+
+
+
+
+
 public protocol TranscriptionSinkProtocol: AnyObject, Sendable {
     
     func complete(transcription: Transcription) 
@@ -14419,6 +15305,7 @@ public struct CompanionBackends {
     public var nlu: NluModelRunner?
     public var appleMusic: AppleMusicBackend?
     public var image: ImageScaler?
+    public var transcoder: MediaTranscoder?
     public var modelValidator: ModelArtifactValidator?
     public var transferPolicy: TransferPolicy?
     public var connectivity: ConnectivityMonitor?
@@ -14427,7 +15314,7 @@ public struct CompanionBackends {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, stream: StreamBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
+    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, stream: StreamBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, transcoder: MediaTranscoder? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
         self.link = link
         self.host = host
         self.http = http
@@ -14445,6 +15332,7 @@ public struct CompanionBackends {
         self.nlu = nlu
         self.appleMusic = appleMusic
         self.image = image
+        self.transcoder = transcoder
         self.modelValidator = modelValidator
         self.transferPolicy = transferPolicy
         self.connectivity = connectivity
@@ -14485,6 +15373,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
                 nlu: FfiConverterOptionTypeNluModelRunner.read(from: &buf), 
                 appleMusic: FfiConverterOptionTypeAppleMusicBackend.read(from: &buf), 
                 image: FfiConverterOptionTypeImageScaler.read(from: &buf), 
+                transcoder: FfiConverterOptionTypeMediaTranscoder.read(from: &buf), 
                 modelValidator: FfiConverterOptionTypeModelArtifactValidator.read(from: &buf), 
                 transferPolicy: FfiConverterOptionTypeTransferPolicy.read(from: &buf), 
                 connectivity: FfiConverterOptionTypeConnectivityMonitor.read(from: &buf), 
@@ -14511,6 +15400,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
         FfiConverterOptionTypeNluModelRunner.write(value.nlu, into: &buf)
         FfiConverterOptionTypeAppleMusicBackend.write(value.appleMusic, into: &buf)
         FfiConverterOptionTypeImageScaler.write(value.image, into: &buf)
+        FfiConverterOptionTypeMediaTranscoder.write(value.transcoder, into: &buf)
         FfiConverterOptionTypeModelArtifactValidator.write(value.modelValidator, into: &buf)
         FfiConverterOptionTypeTransferPolicy.write(value.transferPolicy, into: &buf)
         FfiConverterOptionTypeConnectivityMonitor.write(value.connectivity, into: &buf)
@@ -14754,96 +15644,6 @@ public func FfiConverterTypeConfigEntry_lift(_ buf: RustBuffer) throws -> Config
 #endif
 public func FfiConverterTypeConfigEntry_lower(_ value: ConfigEntry) -> RustBuffer {
     return FfiConverterTypeConfigEntry.lower(value)
-}
-
-
-public struct ConfigField: Equatable, Hashable {
-    public var kind: ConfigKind
-    public var key: String
-    public var label: String
-    public var pattern: String?
-    public var minLength: UInt32?
-    public var maxLength: UInt32?
-    public var min: Double?
-    public var max: Double?
-    public var step: Double?
-    public var choices: [String]
-    public var defaultValue: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(kind: ConfigKind, key: String, label: String, pattern: String?, minLength: UInt32?, maxLength: UInt32?, min: Double?, max: Double?, step: Double?, choices: [String], defaultValue: String?) {
-        self.kind = kind
-        self.key = key
-        self.label = label
-        self.pattern = pattern
-        self.minLength = minLength
-        self.maxLength = maxLength
-        self.min = min
-        self.max = max
-        self.step = step
-        self.choices = choices
-        self.defaultValue = defaultValue
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension ConfigField: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeConfigField: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConfigField {
-        return
-            try ConfigField(
-                kind: FfiConverterTypeConfigKind.read(from: &buf), 
-                key: FfiConverterString.read(from: &buf), 
-                label: FfiConverterString.read(from: &buf), 
-                pattern: FfiConverterOptionString.read(from: &buf), 
-                minLength: FfiConverterOptionUInt32.read(from: &buf), 
-                maxLength: FfiConverterOptionUInt32.read(from: &buf), 
-                min: FfiConverterOptionDouble.read(from: &buf), 
-                max: FfiConverterOptionDouble.read(from: &buf), 
-                step: FfiConverterOptionDouble.read(from: &buf), 
-                choices: FfiConverterSequenceString.read(from: &buf), 
-                defaultValue: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: ConfigField, into buf: inout [UInt8]) {
-        FfiConverterTypeConfigKind.write(value.kind, into: &buf)
-        FfiConverterString.write(value.key, into: &buf)
-        FfiConverterString.write(value.label, into: &buf)
-        FfiConverterOptionString.write(value.pattern, into: &buf)
-        FfiConverterOptionUInt32.write(value.minLength, into: &buf)
-        FfiConverterOptionUInt32.write(value.maxLength, into: &buf)
-        FfiConverterOptionDouble.write(value.min, into: &buf)
-        FfiConverterOptionDouble.write(value.max, into: &buf)
-        FfiConverterOptionDouble.write(value.step, into: &buf)
-        FfiConverterSequenceString.write(value.choices, into: &buf)
-        FfiConverterOptionString.write(value.defaultValue, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeConfigField_lift(_ buf: RustBuffer) throws -> ConfigField {
-    return try FfiConverterTypeConfigField.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeConfigField_lower(_ value: ConfigField) -> RustBuffer {
-    return FfiConverterTypeConfigField.lower(value)
 }
 
 
@@ -15997,6 +16797,60 @@ public func FfiConverterTypeMediaArt_lower(_ value: MediaArt) -> RustBuffer {
 }
 
 
+public struct MediaCover: Equatable, Hashable {
+    public var width: UInt32
+    public var height: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(width: UInt32, height: UInt32) {
+        self.width = width
+        self.height = height
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension MediaCover: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaCover: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaCover {
+        return
+            try MediaCover(
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaCover, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaCover_lift(_ buf: RustBuffer) throws -> MediaCover {
+    return try FfiConverterTypeMediaCover.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaCover_lower(_ value: MediaCover) -> RustBuffer {
+    return FfiConverterTypeMediaCover.lower(value)
+}
+
+
 public struct MediaQueueEntry: Equatable, Hashable {
     public var queueId: Int64
     public var title: String?
@@ -16174,6 +17028,68 @@ public func FfiConverterTypeMediaSessionSnapshot_lift(_ buf: RustBuffer) throws 
 #endif
 public func FfiConverterTypeMediaSessionSnapshot_lower(_ value: MediaSessionSnapshot) -> RustBuffer {
     return FfiConverterTypeMediaSessionSnapshot.lower(value)
+}
+
+
+public struct MediaSniff: Equatable, Hashable {
+    public var format: MediaFormat
+    public var kind: MediaKind
+    public var animated: Bool
+    public var mime: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(format: MediaFormat, kind: MediaKind, animated: Bool, mime: String?) {
+        self.format = format
+        self.kind = kind
+        self.animated = animated
+        self.mime = mime
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension MediaSniff: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaSniff: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaSniff {
+        return
+            try MediaSniff(
+                format: FfiConverterTypeMediaFormat.read(from: &buf), 
+                kind: FfiConverterTypeMediaKind.read(from: &buf), 
+                animated: FfiConverterBool.read(from: &buf), 
+                mime: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MediaSniff, into buf: inout [UInt8]) {
+        FfiConverterTypeMediaFormat.write(value.format, into: &buf)
+        FfiConverterTypeMediaKind.write(value.kind, into: &buf)
+        FfiConverterBool.write(value.animated, into: &buf)
+        FfiConverterOptionString.write(value.mime, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaSniff_lift(_ buf: RustBuffer) throws -> MediaSniff {
+    return try FfiConverterTypeMediaSniff.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaSniff_lower(_ value: MediaSniff) -> RustBuffer {
+    return FfiConverterTypeMediaSniff.lower(value)
 }
 
 
@@ -18043,6 +18959,80 @@ public func FfiConverterTypePhoneState_lower(_ value: PhoneState) -> RustBuffer 
 }
 
 
+public struct PickedMedia: Equatable, Hashable {
+    public var handle: String
+    public var mime: String
+    public var size: UInt64
+    public var width: UInt32?
+    public var height: UInt32?
+    public var durationMs: UInt64?
+    public var preview: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(handle: String, mime: String, size: UInt64, width: UInt32?, height: UInt32?, durationMs: UInt64?, preview: String?) {
+        self.handle = handle
+        self.mime = mime
+        self.size = size
+        self.width = width
+        self.height = height
+        self.durationMs = durationMs
+        self.preview = preview
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PickedMedia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePickedMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PickedMedia {
+        return
+            try PickedMedia(
+                handle: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                size: FfiConverterUInt64.read(from: &buf), 
+                width: FfiConverterOptionUInt32.read(from: &buf), 
+                height: FfiConverterOptionUInt32.read(from: &buf), 
+                durationMs: FfiConverterOptionUInt64.read(from: &buf), 
+                preview: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PickedMedia, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.handle, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt64.write(value.size, into: &buf)
+        FfiConverterOptionUInt32.write(value.width, into: &buf)
+        FfiConverterOptionUInt32.write(value.height, into: &buf)
+        FfiConverterOptionUInt64.write(value.durationMs, into: &buf)
+        FfiConverterOptionString.write(value.preview, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePickedMedia_lift(_ buf: RustBuffer) throws -> PickedMedia {
+    return try FfiConverterTypePickedMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePickedMedia_lower(_ value: PickedMedia) -> RustBuffer {
+    return FfiConverterTypePickedMedia.lower(value)
+}
+
+
 public struct Position: Equatable, Hashable {
     public var lat: Double
     public var lon: Double
@@ -18188,6 +19178,68 @@ public func FfiConverterTypeProviderInfo_lift(_ buf: RustBuffer) throws -> Provi
 #endif
 public func FfiConverterTypeProviderInfo_lower(_ value: ProviderInfo) -> RustBuffer {
     return FfiConverterTypeProviderInfo.lower(value)
+}
+
+
+public struct ScaledImage: Equatable, Hashable {
+    public var bytes: Data
+    public var mime: String
+    public var width: UInt32
+    public var height: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(bytes: Data, mime: String, width: UInt32, height: UInt32) {
+        self.bytes = bytes
+        self.mime = mime
+        self.width = width
+        self.height = height
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ScaledImage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeScaledImage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ScaledImage {
+        return
+            try ScaledImage(
+                bytes: FfiConverterData.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ScaledImage, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeScaledImage_lift(_ buf: RustBuffer) throws -> ScaledImage {
+    return try FfiConverterTypeScaledImage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeScaledImage_lower(_ value: ScaledImage) -> RustBuffer {
+    return FfiConverterTypeScaledImage.lower(value)
 }
 
 
@@ -18851,6 +19903,130 @@ public func FfiConverterTypeStreamTiming_lower(_ value: StreamTiming) -> RustBuf
 }
 
 
+public struct TranscodeRequest: Equatable, Hashable {
+    public var source: String
+    public var destination: String
+    public var coverWidth: UInt32
+    public var coverHeight: UInt32
+    public var maxBitrate: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(source: String, destination: String, coverWidth: UInt32, coverHeight: UInt32, maxBitrate: UInt32?) {
+        self.source = source
+        self.destination = destination
+        self.coverWidth = coverWidth
+        self.coverHeight = coverHeight
+        self.maxBitrate = maxBitrate
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TranscodeRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscodeRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscodeRequest {
+        return
+            try TranscodeRequest(
+                source: FfiConverterString.read(from: &buf), 
+                destination: FfiConverterString.read(from: &buf), 
+                coverWidth: FfiConverterUInt32.read(from: &buf), 
+                coverHeight: FfiConverterUInt32.read(from: &buf), 
+                maxBitrate: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TranscodeRequest, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.source, into: &buf)
+        FfiConverterString.write(value.destination, into: &buf)
+        FfiConverterUInt32.write(value.coverWidth, into: &buf)
+        FfiConverterUInt32.write(value.coverHeight, into: &buf)
+        FfiConverterOptionUInt32.write(value.maxBitrate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeRequest_lift(_ buf: RustBuffer) throws -> TranscodeRequest {
+    return try FfiConverterTypeTranscodeRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodeRequest_lower(_ value: TranscodeRequest) -> RustBuffer {
+    return FfiConverterTypeTranscodeRequest.lower(value)
+}
+
+
+public struct TranscodedVideo: Equatable, Hashable {
+    public var width: UInt32
+    public var height: UInt32
+    public var durationMs: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(width: UInt32, height: UInt32, durationMs: UInt64) {
+        self.width = width
+        self.height = height
+        self.durationMs = durationMs
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TranscodedVideo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTranscodedVideo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TranscodedVideo {
+        return
+            try TranscodedVideo(
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf), 
+                durationMs: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TranscodedVideo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterUInt64.write(value.durationMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodedVideo_lift(_ buf: RustBuffer) throws -> TranscodedVideo {
+    return try FfiConverterTypeTranscodedVideo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTranscodedVideo_lower(_ value: TranscodedVideo) -> RustBuffer {
+    return FfiConverterTypeTranscodedVideo.lower(value)
+}
+
+
 public struct Transcription: Equatable, Hashable {
     public var text: String
     public var alternatives: [String]
@@ -18910,6 +20086,76 @@ public func FfiConverterTypeTranscription_lift(_ buf: RustBuffer) throws -> Tran
 #endif
 public func FfiConverterTypeTranscription_lower(_ value: Transcription) -> RustBuffer {
     return FfiConverterTypeTranscription.lower(value)
+}
+
+
+public struct VideoPlan: Equatable, Hashable {
+    public var width: UInt32
+    public var height: UInt32
+    public var maxFps: UInt32
+    public var bitrate: UInt32
+    public var fitted: Bool
+    public var keyframeSeconds: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(width: UInt32, height: UInt32, maxFps: UInt32, bitrate: UInt32, fitted: Bool, keyframeSeconds: UInt32) {
+        self.width = width
+        self.height = height
+        self.maxFps = maxFps
+        self.bitrate = bitrate
+        self.fitted = fitted
+        self.keyframeSeconds = keyframeSeconds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension VideoPlan: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVideoPlan: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VideoPlan {
+        return
+            try VideoPlan(
+                width: FfiConverterUInt32.read(from: &buf), 
+                height: FfiConverterUInt32.read(from: &buf), 
+                maxFps: FfiConverterUInt32.read(from: &buf), 
+                bitrate: FfiConverterUInt32.read(from: &buf), 
+                fitted: FfiConverterBool.read(from: &buf), 
+                keyframeSeconds: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: VideoPlan, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.width, into: &buf)
+        FfiConverterUInt32.write(value.height, into: &buf)
+        FfiConverterUInt32.write(value.maxFps, into: &buf)
+        FfiConverterUInt32.write(value.bitrate, into: &buf)
+        FfiConverterBool.write(value.fitted, into: &buf)
+        FfiConverterUInt32.write(value.keyframeSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVideoPlan_lift(_ buf: RustBuffer) throws -> VideoPlan {
+    return try FfiConverterTypeVideoPlan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVideoPlan_lower(_ value: VideoPlan) -> RustBuffer {
+    return FfiConverterTypeVideoPlan.lower(value)
 }
 
 
@@ -19219,6 +20465,68 @@ public func FfiConverterTypeVolumeLevel_lower(_ value: VolumeLevel) -> RustBuffe
 }
 
 
+public struct WebappBlob: Equatable, Hashable {
+    public var key: String
+    public var sha256: String
+    public var mime: String
+    public var size: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, sha256: String, mime: String, size: UInt64) {
+        self.key = key
+        self.sha256 = sha256
+        self.mime = mime
+        self.size = size
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WebappBlob: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWebappBlob: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WebappBlob {
+        return
+            try WebappBlob(
+                key: FfiConverterString.read(from: &buf), 
+                sha256: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf), 
+                size: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WebappBlob, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterString.write(value.sha256, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+        FfiConverterUInt64.write(value.size, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappBlob_lift(_ buf: RustBuffer) throws -> WebappBlob {
+    return try FfiConverterTypeWebappBlob.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWebappBlob_lower(_ value: WebappBlob) -> RustBuffer {
+    return FfiConverterTypeWebappBlob.lower(value)
+}
+
+
 public struct WebappInfo: Equatable, Hashable {
     public var id: String
     public var name: String
@@ -19230,13 +20538,13 @@ public struct WebappInfo: Equatable, Hashable {
     public var iconHash: String?
     public var settingsHash: String?
     public var overlayHash: String?
-    public var config: [ConfigField]
+    public var config: ConfigFields
     public var permissions: [String]
     public var `extension`: ExtensionInfo?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, name: String, source: WebappSource, role: WebappRole, version: String, provenance: String?, description: String?, iconHash: String?, settingsHash: String?, overlayHash: String?, config: [ConfigField], permissions: [String], `extension`: ExtensionInfo?) {
+    public init(id: String, name: String, source: WebappSource, role: WebappRole, version: String, provenance: String?, description: String?, iconHash: String?, settingsHash: String?, overlayHash: String?, config: ConfigFields, permissions: [String], `extension`: ExtensionInfo?) {
         self.id = id
         self.name = name
         self.source = source
@@ -19278,7 +20586,7 @@ public struct FfiConverterTypeWebappInfo: FfiConverterRustBuffer {
                 iconHash: FfiConverterOptionString.read(from: &buf), 
                 settingsHash: FfiConverterOptionString.read(from: &buf), 
                 overlayHash: FfiConverterOptionString.read(from: &buf), 
-                config: FfiConverterSequenceTypeConfigField.read(from: &buf), 
+                config: FfiConverterTypeConfigFields.read(from: &buf), 
                 permissions: FfiConverterSequenceString.read(from: &buf), 
                 extension: FfiConverterOptionTypeExtensionInfo.read(from: &buf)
         )
@@ -19295,7 +20603,7 @@ public struct FfiConverterTypeWebappInfo: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.iconHash, into: &buf)
         FfiConverterOptionString.write(value.settingsHash, into: &buf)
         FfiConverterOptionString.write(value.overlayHash, into: &buf)
-        FfiConverterSequenceTypeConfigField.write(value.config, into: &buf)
+        FfiConverterTypeConfigFields.write(value.config, into: &buf)
         FfiConverterSequenceString.write(value.permissions, into: &buf)
         FfiConverterOptionTypeExtensionInfo.write(value.`extension`, into: &buf)
     }
@@ -20572,13 +21880,11 @@ public func FfiConverterTypeCompanionError_lower(_ value: CompanionError) -> Rus
 
 
 
-public enum ConfigKind: Equatable, Hashable {
+public enum CoverPlan: Equatable, Hashable {
     
-    case string
-    case number
-    case boolean
-    case `enum`
-    case secret
+    case keep
+    case encode(width: UInt32, height: UInt32, format: StillFormat, mime: String, quality: Float
+    )
 
 
 
@@ -20587,56 +21893,44 @@ public enum ConfigKind: Equatable, Hashable {
 }
 
 #if compiler(>=6)
-extension ConfigKind: Sendable {}
+extension CoverPlan: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeConfigKind: FfiConverterRustBuffer {
-    typealias SwiftType = ConfigKind
+public struct FfiConverterTypeCoverPlan: FfiConverterRustBuffer {
+    typealias SwiftType = CoverPlan
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConfigKind {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CoverPlan {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .string
+        case 1: return .keep
         
-        case 2: return .number
-        
-        case 3: return .boolean
-        
-        case 4: return .`enum`
-        
-        case 5: return .secret
+        case 2: return .encode(width: try FfiConverterUInt32.read(from: &buf), height: try FfiConverterUInt32.read(from: &buf), format: try FfiConverterTypeStillFormat.read(from: &buf), mime: try FfiConverterString.read(from: &buf), quality: try FfiConverterFloat.read(from: &buf)
+        )
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
-    public static func write(_ value: ConfigKind, into buf: inout [UInt8]) {
+    public static func write(_ value: CoverPlan, into buf: inout [UInt8]) {
         switch value {
         
         
-        case .string:
+        case .keep:
             writeInt(&buf, Int32(1))
         
         
-        case .number:
+        case let .encode(width,height,format,mime,quality):
             writeInt(&buf, Int32(2))
-        
-        
-        case .boolean:
-            writeInt(&buf, Int32(3))
-        
-        
-        case .`enum`:
-            writeInt(&buf, Int32(4))
-        
-        
-        case .secret:
-            writeInt(&buf, Int32(5))
-        
+            FfiConverterUInt32.write(width, into: &buf)
+            FfiConverterUInt32.write(height, into: &buf)
+            FfiConverterTypeStillFormat.write(format, into: &buf)
+            FfiConverterString.write(mime, into: &buf)
+            FfiConverterFloat.write(quality, into: &buf)
+            
         }
     }
 }
@@ -20645,15 +21939,15 @@ public struct FfiConverterTypeConfigKind: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeConfigKind_lift(_ buf: RustBuffer) throws -> ConfigKind {
-    return try FfiConverterTypeConfigKind.lift(buf)
+public func FfiConverterTypeCoverPlan_lift(_ buf: RustBuffer) throws -> CoverPlan {
+    return try FfiConverterTypeCoverPlan.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeConfigKind_lower(_ value: ConfigKind) -> RustBuffer {
-    return FfiConverterTypeConfigKind.lower(value)
+public func FfiConverterTypeCoverPlan_lower(_ value: CoverPlan) -> RustBuffer {
+    return FfiConverterTypeCoverPlan.lower(value)
 }
 
 
@@ -21273,6 +22567,80 @@ public func FfiConverterTypeHttpMethod_lower(_ value: HttpMethod) -> RustBuffer 
 
 
 
+public enum ImageTarget: Equatable, Hashable {
+    
+    case thumbnail(maxEdge: UInt32, quality: Float
+    )
+    case cover(width: UInt32, height: UInt32
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ImageTarget: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeImageTarget: FfiConverterRustBuffer {
+    typealias SwiftType = ImageTarget
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ImageTarget {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .thumbnail(maxEdge: try FfiConverterUInt32.read(from: &buf), quality: try FfiConverterFloat.read(from: &buf)
+        )
+        
+        case 2: return .cover(width: try FfiConverterUInt32.read(from: &buf), height: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ImageTarget, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .thumbnail(maxEdge,quality):
+            writeInt(&buf, Int32(1))
+            FfiConverterUInt32.write(maxEdge, into: &buf)
+            FfiConverterFloat.write(quality, into: &buf)
+            
+        
+        case let .cover(width,height):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt32.write(width, into: &buf)
+            FfiConverterUInt32.write(height, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeImageTarget_lift(_ buf: RustBuffer) throws -> ImageTarget {
+    return try FfiConverterTypeImageTarget.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeImageTarget_lower(_ value: ImageTarget) -> RustBuffer {
+    return FfiConverterTypeImageTarget.lower(value)
+}
+
+
+
+
 public enum InitiateCallType: Equatable, Hashable {
     
     case destination
@@ -21801,6 +23169,288 @@ public func FfiConverterTypeMediaControl_lift(_ buf: RustBuffer) throws -> Media
 #endif
 public func FfiConverterTypeMediaControl_lower(_ value: MediaControl) -> RustBuffer {
     return FfiConverterTypeMediaControl.lower(value)
+}
+
+
+
+
+public enum MediaFormat: Equatable, Hashable {
+    
+    case jpeg
+    case png
+    case gif
+    case webp
+    case avif
+    case heif
+    case bmp
+    case tiff
+    case isoVideo
+    case matroska
+    case avi
+    case unknown
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MediaFormat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaFormat: FfiConverterRustBuffer {
+    typealias SwiftType = MediaFormat
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaFormat {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .jpeg
+        
+        case 2: return .png
+        
+        case 3: return .gif
+        
+        case 4: return .webp
+        
+        case 5: return .avif
+        
+        case 6: return .heif
+        
+        case 7: return .bmp
+        
+        case 8: return .tiff
+        
+        case 9: return .isoVideo
+        
+        case 10: return .matroska
+        
+        case 11: return .avi
+        
+        case 12: return .unknown
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MediaFormat, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .jpeg:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .png:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .gif:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .webp:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .avif:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .heif:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .bmp:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .tiff:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .isoVideo:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .matroska:
+            writeInt(&buf, Int32(10))
+        
+        
+        case .avi:
+            writeInt(&buf, Int32(11))
+        
+        
+        case .unknown:
+            writeInt(&buf, Int32(12))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaFormat_lift(_ buf: RustBuffer) throws -> MediaFormat {
+    return try FfiConverterTypeMediaFormat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaFormat_lower(_ value: MediaFormat) -> RustBuffer {
+    return FfiConverterTypeMediaFormat.lower(value)
+}
+
+
+
+
+public enum MediaKind: Equatable, Hashable {
+    
+    case image
+    case video
+    case other
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MediaKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaKind: FfiConverterRustBuffer {
+    typealias SwiftType = MediaKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .image
+        
+        case 2: return .video
+        
+        case 3: return .other
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MediaKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .image:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .video:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .other:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaKind_lift(_ buf: RustBuffer) throws -> MediaKind {
+    return try FfiConverterTypeMediaKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaKind_lower(_ value: MediaKind) -> RustBuffer {
+    return FfiConverterTypeMediaKind.lower(value)
+}
+
+
+
+
+public enum MediaPickKind: Equatable, Hashable {
+    
+    case image
+    case video
+    case any
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MediaPickKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMediaPickKind: FfiConverterRustBuffer {
+    typealias SwiftType = MediaPickKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MediaPickKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .image
+        
+        case 2: return .video
+        
+        case 3: return .any
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MediaPickKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .image:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .video:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .any:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaPickKind_lift(_ buf: RustBuffer) throws -> MediaPickKind {
+    return try FfiConverterTypeMediaPickKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMediaPickKind_lower(_ value: MediaPickKind) -> RustBuffer {
+    return FfiConverterTypeMediaPickKind.lower(value)
 }
 
 
@@ -25003,6 +26653,86 @@ public func FfiConverterTypeSignInMethod_lower(_ value: SignInMethod) -> RustBuf
 
 
 
+public enum StillFormat: Equatable, Hashable {
+    
+    case jpeg
+    case png
+    case gif
+    case webp
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension StillFormat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStillFormat: FfiConverterRustBuffer {
+    typealias SwiftType = StillFormat
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StillFormat {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .jpeg
+        
+        case 2: return .png
+        
+        case 3: return .gif
+        
+        case 4: return .webp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StillFormat, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .jpeg:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .png:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .gif:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .webp:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStillFormat_lift(_ buf: RustBuffer) throws -> StillFormat {
+    return try FfiConverterTypeStillFormat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStillFormat_lower(_ value: StillFormat) -> RustBuffer {
+    return FfiConverterTypeStillFormat.lower(value)
+}
+
+
+
+
 public enum StreamStatus: Equatable, Hashable {
     
     case buffering
@@ -26041,6 +27771,30 @@ fileprivate struct FfiConverterOptionTypeAudioBackend: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeBlobProgressSink: FfiConverterRustBuffer {
+    typealias SwiftType = BlobProgressSink?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBlobProgressSink.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBlobProgressSink.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeConnectivityMonitor: FfiConverterRustBuffer {
     typealias SwiftType = ConnectivityMonitor?
 
@@ -26201,6 +27955,30 @@ fileprivate struct FfiConverterOptionTypeMediaSessionBackend: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeMediaSessionBackend.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMediaTranscoder: FfiConverterRustBuffer {
+    typealias SwiftType = MediaTranscoder?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaTranscoder.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaTranscoder.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -26545,6 +28323,30 @@ fileprivate struct FfiConverterOptionTypeMediaArt: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeMediaCover: FfiConverterRustBuffer {
+    typealias SwiftType = MediaCover?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMediaCover.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMediaCover.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeNluFastPathHit: FfiConverterRustBuffer {
     typealias SwiftType = NluFastPathHit?
 
@@ -26753,6 +28555,30 @@ fileprivate struct FfiConverterOptionTypeOtaRunProgress: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeOtaRunProgress.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeScaledImage: FfiConverterRustBuffer {
+    typealias SwiftType = ScaledImage?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeScaledImage.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeScaledImage.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -27298,31 +29124,6 @@ fileprivate struct FfiConverterSequenceTypeConfigEntry: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeConfigField: FfiConverterRustBuffer {
-    typealias SwiftType = [ConfigField]
-
-    public static func write(_ value: [ConfigField], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeConfigField.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ConfigField] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [ConfigField]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeConfigField.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterSequenceTypeDeviceAutoResume: FfiConverterRustBuffer {
     typealias SwiftType = [DeviceAutoResume]
 
@@ -27823,6 +29624,31 @@ fileprivate struct FfiConverterSequenceTypeSpeechSegment: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeWebappBlob: FfiConverterRustBuffer {
+    typealias SwiftType = [WebappBlob]
+
+    public static func write(_ value: [WebappBlob], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWebappBlob.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WebappBlob] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WebappBlob]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWebappBlob.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeWebappInfo: FfiConverterRustBuffer {
     typealias SwiftType = [WebappInfo]
 
@@ -27865,6 +29691,31 @@ fileprivate struct FfiConverterSequenceTypeOtaStoreChange: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeOtaStoreChange.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeStillFormat: FfiConverterRustBuffer {
+    typealias SwiftType = [StillFormat]
+
+    public static func write(_ value: [StillFormat], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeStillFormat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [StillFormat] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [StillFormat]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeStillFormat.read(from: &buf))
         }
         return seq
     }
@@ -28024,6 +29875,46 @@ fileprivate struct FfiConverterDictionaryStringTypeOtaPatchDigest: FfiConverterR
         return dict
     }
 }
+
+
+public typealias ConfigFields = String
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeConfigFields: FfiConverter {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConfigFields {
+        return try FfiConverterString.read(from: &buf)
+    }
+
+    public static func write(_ value: ConfigFields, into buf: inout [UInt8]) {
+        return FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func lift(_ value: RustBuffer) throws -> ConfigFields {
+        return try FfiConverterString.lift(value)
+    }
+
+    public static func lower(_ value: ConfigFields) -> RustBuffer {
+        return FfiConverterString.lower(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConfigFields_lift(_ value: RustBuffer) throws -> ConfigFields {
+    return try FfiConverterTypeConfigFields.lift(value)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeConfigFields_lower(_ value: ConfigFields) -> RustBuffer {
+    return FfiConverterTypeConfigFields.lower(value)
+}
+
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
 
@@ -28188,6 +30079,32 @@ public func parseOtaDiscoverManifest(json: String)throws  -> OtaDiscoverManifest
     )
 })
 }
+public func planCover(format: MediaFormat, width: UInt32, height: UInt32, hasAlpha: Bool, coverWidth: UInt32, coverHeight: UInt32, encodable: [StillFormat]) -> CoverPlan  {
+    return try!  FfiConverterTypeCoverPlan_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_func_plan_cover(
+        FfiConverterTypeMediaFormat_lower(format),
+        FfiConverterUInt32.lower(width),
+        FfiConverterUInt32.lower(height),
+        FfiConverterBool.lower(hasAlpha),
+        FfiConverterUInt32.lower(coverWidth),
+        FfiConverterUInt32.lower(coverHeight),
+        FfiConverterSequenceTypeStillFormat.lower(encodable),uniffiCallStatus
+    )
+})
+}
+public func planVideo(width: UInt32, height: UInt32, coverWidth: UInt32, coverHeight: UInt32, maxBitrate: UInt32?) -> VideoPlan  {
+    return try!  FfiConverterTypeVideoPlan_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_func_plan_video(
+        FfiConverterUInt32.lower(width),
+        FfiConverterUInt32.lower(height),
+        FfiConverterUInt32.lower(coverWidth),
+        FfiConverterUInt32.lower(coverHeight),
+        FfiConverterOptionUInt32.lower(maxBitrate),uniffiCallStatus
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -28243,6 +30160,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_func_parse_ota_discover_manifest() != 65227) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_func_plan_cover() != 12676) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_func_plan_video() != 11548) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_blobprogresssink_progress() != 36137) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_append_blob_handle() != 14957) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_apply_ota_update() != 43986) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -28250,6 +30179,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_cancel_auth() != 2483) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import() != 14729) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update() != 64188) {
@@ -28267,10 +30199,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_connect_provider() != 25749) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_create_blob_handle() != 54640) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_current_webapp() != 44144) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_default_resume_target() != 39836) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_blob() != 43388) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_config_field() != 42200) {
@@ -28306,10 +30244,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_import_picked_media() != 21994) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_blobs() != 64623) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_list_webapp_config() != 1816) {
@@ -28324,7 +30268,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_log_inbox() != 46480) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_media_import_ticket() != 3957) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_ota_run_progress() != 5569) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_put_webapp_blob() != 6884) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_resumed() != 18676) {
@@ -28654,7 +30604,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_hostenvironment_clock() != 57610) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_imagescaler_downsample_jpeg() != 45721) {
+    if (uniffi_bridgething_companion_checksum_method_imagescaler_scale() != 41747) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_linkinbox_on_bytes() != 13274) {
@@ -28930,6 +30880,21 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_streamsink_on_timing() != 22810) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_mediatranscoder_transcode() != 18884) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_mediatranscoder_poster() != 29278) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_transcodejob_cancel() != 19353) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_transcodesink_complete() != 43921) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_transcodesink_fail() != 50571) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_devicewaker_wake_device() != 33554) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -28945,6 +30910,7 @@ private let initializationResult: InitializationResult = {
 
     uniffiCallbackInitAppleMusicBackend()
     uniffiCallbackInitAudioBackend()
+    uniffiCallbackInitBlobProgressSink()
     uniffiCallbackInitConnectivityMonitor()
     uniffiCallbackInitDeviceWaker()
     uniffiCallbackInitExtensionHost()
@@ -28955,6 +30921,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitLinkTransport()
     uniffiCallbackInitLogSink()
     uniffiCallbackInitMediaSessionBackend()
+    uniffiCallbackInitMediaTranscoder()
     uniffiCallbackInitModelArtifactValidator()
     uniffiCallbackInitNluModelRunner()
     uniffiCallbackInitNotificationBackend()
@@ -28963,6 +30930,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitSessionEventSink()
     uniffiCallbackInitSpeechRecognizer()
     uniffiCallbackInitStreamBackend()
+    uniffiCallbackInitTranscodeJob()
     uniffiCallbackInitTransferPolicy()
     uniffiCallbackInitVolumeBackend()
     uniffiCallbackInitWebappBundleSink()

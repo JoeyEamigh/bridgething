@@ -5,7 +5,10 @@ type Report = { deviceId: string | null; apps: { appId: string; sourceUrl: strin
 
 const sent: Report[] = [];
 
+const catalog = await import('@bridgething/catalog');
+
 mock.module('@bridgething/catalog', () => ({
+  ...catalog,
   reportInstalled: (report: Report) => {
     sent.push(report);
   },

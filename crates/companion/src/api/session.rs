@@ -217,33 +217,14 @@ pub enum WebappRole {
   Launcher,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "companion.ts")]
-pub enum ConfigKind {
-  String,
-  Number,
-  Boolean,
-  Enum,
-  Secret,
-}
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct ConfigFields(pub Vec<libbridgething::ConfigField>);
 
-#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
-#[serde(rename_all = "camelCase")]
-#[ts(export, export_to = "companion.ts")]
-pub struct ConfigField {
-  pub kind: ConfigKind,
-  pub key: String,
-  pub label: String,
-  pub pattern: Option<String>,
-  pub min_length: Option<u32>,
-  pub max_length: Option<u32>,
-  pub min: Option<f64>,
-  pub max: Option<f64>,
-  pub step: Option<f64>,
-  pub choices: Vec<String>,
-  pub default_value: Option<String>,
-}
+uniffi::custom_type!(ConfigFields, String, {
+  lower: |fields| serde_json::to_string(&fields.0).expect("config fields always serialize"),
+  try_lift: |json| Ok(ConfigFields(serde_json::from_str(&json)?)),
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
@@ -267,7 +248,8 @@ pub struct WebappInfo {
   pub icon_hash: Option<String>,
   pub settings_hash: Option<String>,
   pub overlay_hash: Option<String>,
-  pub config: Vec<ConfigField>,
+  #[ts(type = "Array<import('@bridgething/lib').ConfigField>")]
+  pub config: ConfigFields,
   pub permissions: Vec<String>,
   pub extension: Option<ExtensionInfo>,
 }
@@ -337,6 +319,57 @@ pub enum WebappResourceKind {
 pub struct WebappResourceFile {
   pub path: String,
   pub mime: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub enum MediaPickKind {
+  Image,
+  Video,
+  Any,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct MediaCover {
+  pub width: u32,
+  pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct PickedMedia {
+  pub handle: String,
+  pub mime: String,
+  pub size: u64,
+  pub width: Option<u32>,
+  pub height: Option<u32>,
+  pub duration_ms: Option<u64>,
+  pub preview: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct WebappBlob {
+  pub key: String,
+  pub sha256: String,
+  pub mime: String,
+  pub size: u64,
+}
+
+impl From<libbridgething::gateway::WebappBlobEntry> for WebappBlob {
+  fn from(entry: libbridgething::gateway::WebappBlobEntry) -> Self {
+    Self {
+      key: entry.key,
+      sha256: entry.sha256,
+      mime: entry.mime,
+      size: u64::from(entry.size),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
@@ -535,6 +568,21 @@ mod tests {
     assert_eq!(
       LauncherGesture::from(libbridgething::LauncherGesture::LongPress),
       LauncherGesture::LongPress
+    );
+  }
+
+  #[test]
+  fn config_fields_cross_the_ffi_as_wire_json() {
+    let wire = r#"[{"type":"number","data":{"key":"refresh","label":"Refresh","min":1.0,"default":15.0}},{"type":"secret","data":{"key":"token","label":"Token"}}]"#;
+    let fields = ConfigFields(serde_json::from_str(wire).unwrap());
+
+    let lowered = <ConfigFields as uniffi::Lower<crate::UniFfiTag>>::lower(fields.clone());
+    let lifted = <ConfigFields as uniffi::Lift<crate::UniFfiTag>>::try_lift(lowered).unwrap();
+    assert_eq!(lifted, fields);
+
+    assert_eq!(
+      serde_json::to_value(&fields).unwrap(),
+      serde_json::from_str::<serde_json::Value>(wire).unwrap()
     );
   }
 }

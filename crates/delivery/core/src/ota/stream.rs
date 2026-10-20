@@ -10,8 +10,7 @@ use bridgething_gateway::OutboundLink;
 use uuid::Uuid;
 
 use crate::{
-  blob::digest_of,
-  bundle::fetch::sha256_file,
+  bundle::fetch::{sha256_file, sha256_hex},
   ota::{event::OtaPhaseSnapshot, rate::RateTracker},
   seam::Clock,
   transfer::{AckWindow, BytesSource, FRAGMENT_BYTES, FragmentSource, LinkPush, SendError, SourceRange},
@@ -78,7 +77,7 @@ impl Artifact for BytesSource {
   }
 
   fn sha256(&self) -> Result<String, String> {
-    Ok(digest_of(self.bytes()))
+    Ok(sha256_hex(self.bytes()))
   }
 }
 

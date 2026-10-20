@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
+use crate::gateway::TransferRef;
+
 #[derive(Debug, Clone, Copy, Default, WireRequest)]
 #[wire_request(
   direction = GatewayToBridge,
@@ -279,6 +281,64 @@ pub struct WebappDocDelete {
 }
 
 #[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = Webapp,
+  request_variant = BlobPut,
+  response = crate::gateway::WebappBlobPutAck,
+  response_variant = BlobPutAck,
+  error = crate::WebappError,
+  error_variant = WebappError,
+)]
+pub struct WebappBlobPut {
+  #[ts(type = "string")]
+  pub id: Uuid,
+  pub key: String,
+  pub mime: String,
+  pub transfer: TransferRef,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = Webapp,
+  request_variant = BlobDelete,
+  response = crate::gateway::WebappBlobDeleteAck,
+  response_variant = BlobDeleteAck,
+  error = crate::WebappError,
+  error_variant = WebappError,
+)]
+pub struct WebappBlobDelete {
+  #[ts(type = "string")]
+  pub id: Uuid,
+  pub key: String,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = Webapp,
+  request_variant = BlobList,
+  response = crate::gateway::WebappBlobListReply,
+  response_variant = BlobList,
+  error = crate::WebappError,
+  error_variant = WebappError,
+)]
+pub struct WebappBlobList {
+  #[ts(type = "string")]
+  pub id: Uuid,
+}
+
+#[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
@@ -314,4 +374,10 @@ pub enum GatewayToBridgeWebappMsg {
   DocSet(WebappDocSet),
   #[bridge_request]
   DocDelete(WebappDocDelete),
+  #[bridge_request]
+  BlobPut(WebappBlobPut),
+  #[bridge_request]
+  BlobDelete(WebappBlobDelete),
+  #[bridge_request]
+  BlobList(WebappBlobList),
 }

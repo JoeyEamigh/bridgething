@@ -165,7 +165,7 @@ impl Beamformer {
   }
 
   pub fn process(&mut self, interleaved: &[i32], out: &mut Vec<f32>) {
-    for chunk in interleaved.chunks_exact(CHANNELS) {
+    for chunk in interleaved.as_chunks::<CHANNELS>().0 {
       for (position, &wire) in POSITION_TO_CHANNEL.iter().enumerate() {
         self.frames[position][self.filled] = chunk[wire] as f32 * SAMPLE_SCALE * self.gains[wire];
       }
@@ -236,8 +236,10 @@ pub fn to_pcm16<E: Extend<u8>>(samples: &[f32], out: &mut E) {
 pub fn from_pcm16(bytes: &[u8], out: &mut Vec<f32>) {
   out.extend(
     bytes
-      .chunks_exact(2)
-      .map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f32 / 32768.0),
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0),
   );
 }
 
@@ -350,7 +352,7 @@ mod tests {
   fn calibration_undoes_a_channel_that_reads_hot() {
     let clean = plane_wave(1000.0, 0.0, 2048, 0.2);
     let mut hot = clean.clone();
-    for frame in hot.chunks_exact_mut(CHANNELS) {
+    for frame in hot.as_chunks_mut::<CHANNELS>().0 {
       frame[3] = (frame[3] as f64 * 1.5) as i32;
     }
     let measured = crate::calibration::Measurement {
@@ -395,7 +397,7 @@ mod tests {
   fn pcm16_conversion_clamps_instead_of_wrapping() {
     let mut out = Vec::new();
     to_pcm16(&[0.0, 1.0, -1.0, 4.0, -4.0], &mut out);
-    let decoded: Vec<i16> = out.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+    let decoded: Vec<i16> = out.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b)).collect();
     assert_eq!(decoded, vec![0, 32767, -32767, 32767, -32768]);
   }
 }

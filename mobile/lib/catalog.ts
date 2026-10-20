@@ -475,25 +475,22 @@ export function startWebappAutoUpdate(): void {
   check();
 }
 
-export function useSettingsOrigin(
-  webapp: BridgethingWebappInfo | null,
+export function settingsOrigin(
+  webapp: BridgethingWebappInfo,
 ): BridgethingResourceOrigin | undefined {
-  const catalogs = useCatalogStore(state => state.catalogs);
-  const merged = useCatalogStore(state => state.merged);
-  const provenance = webapp?.provenance ?? null;
-  const settingsHash = webapp?.settingsHash ?? null;
-  const webappId = webapp?.id ?? null;
-
-  return useMemo(() => {
-    if (!provenance || !settingsHash || !webappId) return undefined;
-    const known = [...catalogs, ...merged];
-    const hosted = settingsOriginFor(known, provenance, webappId, settingsHash);
-    if (!hosted) return undefined;
-    return {
-      url: hosted.url,
-      sha256: hosted.sha256,
-      size: hosted.size,
-      mime: SETTINGS_PAGE_MIME,
-    };
-  }, [catalogs, merged, provenance, settingsHash, webappId]);
+  if (!webapp.provenance || !webapp.settingsHash) return undefined;
+  const { catalogs, merged } = useCatalogStore.getState();
+  const hosted = settingsOriginFor(
+    [...catalogs, ...merged],
+    webapp.provenance,
+    webapp.id,
+    webapp.settingsHash,
+  );
+  if (!hosted) return undefined;
+  return {
+    url: hosted.url,
+    sha256: hosted.sha256,
+    size: hosted.size,
+    mime: SETTINGS_PAGE_MIME,
+  };
 }

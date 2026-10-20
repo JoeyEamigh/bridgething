@@ -41,8 +41,12 @@ impl MsgHandle {
     }
   }
 
+  pub fn scope(&self) -> ClientScope {
+    self.state.client_man.scope_of(&self.from)
+  }
+
   pub async fn scoped_app_id(&self) -> Result<Uuid, crate::handler::HandlerError> {
-    let id = match self.state.client_man.scope_of(&self.from) {
+    let id = match self.scope() {
       ClientScope::Overlay => self.state.overlay_webapp().await?,
       ClientScope::ActiveWebapp => self.state.active_webapp().await?,
     };

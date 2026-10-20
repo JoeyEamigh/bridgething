@@ -9,11 +9,10 @@ use std::{
 
 use libbridgething::{RangePart, RangeSpec};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, watch};
 use tokio_util::bytes::Bytes;
 
-use crate::asset::AssetCache;
+use crate::{asset::AssetCache, digest::sha256_hex};
 
 const META_FILE: &str = "meta.json";
 const HEADER_LEN: u64 = 8;
@@ -132,8 +131,7 @@ pub(super) async fn note_write_failure(dir: &Path, update_id: &str) -> bool {
 }
 
 fn log_name(asset: &str) -> String {
-  let digest = Sha256::digest(asset.as_bytes());
-  format!("{}.log", hex::encode(&digest[..8]))
+  format!("{}.log", &sha256_hex(asset.as_bytes())[..16])
 }
 
 async fn read_meta(dir: &Path) -> Option<CacheMeta> {

@@ -257,6 +257,46 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         require().deleteWebappDoc(deviceId, id, key)
     }
 
+    override fun pickMedia(
+        kind: BridgethingPickKind,
+        coverWidth: Double?,
+        coverHeight: Double?,
+    ): Promise<Variant_NullType_BridgethingPickedMedia> = Promise.async {
+        val picked = require().pickMedia(kind, coverWidth, coverHeight)
+        if (picked != null) Variant_NullType_BridgethingPickedMedia.Second(picked)
+        else Variant_NullType_BridgethingPickedMedia.First(NullType.NULL)
+    }
+
+    override fun abandonPick() {
+        backend?.abandonPick()
+    }
+
+    override fun createBlobHandle(mime: String): Promise<String> = Promise.async {
+        require().createBlobHandle(mime)
+    }
+
+    override fun appendBlobHandle(handle: String, base64: String): Promise<Double> = Promise.async {
+        require().appendBlobHandle(handle, base64)
+    }
+
+    override fun putWebappBlob(
+        deviceId: String,
+        id: String,
+        key: String,
+        handle: String,
+        onProgress: (sent: Double, total: Double) -> Unit,
+    ): Promise<BridgethingWebappBlob> = Promise.async {
+        require().putWebappBlob(deviceId, id, key, handle, onProgress)
+    }
+
+    override fun deleteWebappBlob(deviceId: String, id: String, key: String): Promise<Unit> = Promise.async {
+        require().deleteWebappBlob(deviceId, id, key)
+    }
+
+    override fun listWebappBlobs(deviceId: String, id: String): Promise<Array<BridgethingWebappBlob>> = Promise.async {
+        require().listWebappBlobs(deviceId, id)
+    }
+
     override fun setCapabilityFlags(flags: BridgethingCapabilityFlags): Promise<Unit> = Promise.async {
         backend?.setCapabilityFlags(flags)
     }

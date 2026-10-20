@@ -22,6 +22,8 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingProviderCredentials
+import com.margelo.nitro.bridgething.session.BridgethingPickKind
+import com.margelo.nitro.bridgething.session.BridgethingPickedMedia
 import com.margelo.nitro.bridgething.session.BridgethingProviderInfo
 import com.margelo.nitro.bridgething.session.BridgethingResourceOrigin
 import com.margelo.nitro.bridgething.session.BridgethingResumeTarget
@@ -30,6 +32,7 @@ import com.margelo.nitro.bridgething.session.BridgethingSessionPeer
 import com.margelo.nitro.bridgething.session.BridgethingSessionSnapshot
 import com.margelo.nitro.bridgething.session.BridgethingVoiceModelState
 import com.margelo.nitro.bridgething.session.BridgethingVoiceTurn
+import com.margelo.nitro.bridgething.session.BridgethingWebappBlob
 import com.margelo.nitro.bridgething.session.BridgethingWebappIcon
 import com.margelo.nitro.bridgething.session.BridgethingWebappInfo
 import com.margelo.nitro.bridgething.session.BridgethingWebappSlot
@@ -81,6 +84,19 @@ public interface BridgethingSessionBackend {
     public suspend fun listWebappDoc(deviceId: String, id: String): Array<BridgethingDocEntry>
     public suspend fun setWebappDoc(deviceId: String, id: String, key: String, value: String)
     public suspend fun deleteWebappDoc(deviceId: String, id: String, key: String)
+    public suspend fun pickMedia(kind: BridgethingPickKind, coverWidth: Double?, coverHeight: Double?): BridgethingPickedMedia?
+    public fun abandonPick()
+    public suspend fun createBlobHandle(mime: String): String
+    public suspend fun appendBlobHandle(handle: String, base64: String): Double
+    public suspend fun putWebappBlob(
+        deviceId: String,
+        id: String,
+        key: String,
+        handle: String,
+        onProgress: (Double, Double) -> Unit,
+    ): BridgethingWebappBlob
+    public suspend fun deleteWebappBlob(deviceId: String, id: String, key: String)
+    public suspend fun listWebappBlobs(deviceId: String, id: String): Array<BridgethingWebappBlob>
 
     public suspend fun setCapabilityFlags(flags: BridgethingCapabilityFlags)
 

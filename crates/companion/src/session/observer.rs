@@ -15,10 +15,9 @@ use libbridgething::{
 use super::LOG_RING_CAPACITY;
 use crate::{
   api::{
-    ActiveWebapp, AncsAuthStatus, AncsAuthStatusEntry, ConfigField, ConfigKind, DeviceMeta, DeviceMetaEntry,
-    DeviceWebappsEntry, ExtensionInfo, LogOrigin, NowPlaying, NowPlayingPlayback, NowPlayingTrack, RepeatMode,
-    SessionEvent, SessionEventSink, SessionPeer, VoiceTurn, VoiceTurnPhase, VoiceTurnTrigger, WebappInfo, WebappRole,
-    WebappSource,
+    ActiveWebapp, AncsAuthStatus, AncsAuthStatusEntry, ConfigFields, DeviceMeta, DeviceMetaEntry, DeviceWebappsEntry,
+    ExtensionInfo, LogOrigin, NowPlaying, NowPlayingPlayback, NowPlayingTrack, RepeatMode, SessionEvent,
+    SessionEventSink, SessionPeer, VoiceTurn, VoiceTurnPhase, VoiceTurnTrigger, WebappInfo, WebappRole, WebappSource,
   },
   backend::{LogLevel, log::ring_level},
   dispatch::{system::DeviceLogSink, webapp::WebappObserver},
@@ -293,7 +292,7 @@ pub(crate) fn webapp(info: libbridgething::WebappInfo) -> WebappInfo {
     icon_hash: info.icon_hash,
     settings_hash: info.settings_hash,
     overlay_hash: info.overlay_hash,
-    config: info.config.into_iter().map(field).collect(),
+    config: ConfigFields(info.config),
     permissions: info.permissions,
     extension: info.extension.map(|extension| ExtensionInfo {
       permissions: extension.permissions.iter().map(ToString::to_string).collect(),
@@ -390,54 +389,6 @@ fn level(level: libbridgething::LogLevel) -> LogLevel {
     libbridgething::LogLevel::Info => LogLevel::Info,
     libbridgething::LogLevel::Warn => LogLevel::Warn,
     libbridgething::LogLevel::Error => LogLevel::Error,
-  }
-}
-
-fn field(field: libbridgething::ConfigField) -> ConfigField {
-  let bare = |kind, key: String, label: String| ConfigField {
-    kind,
-    key,
-    label,
-    pattern: None,
-    min_length: None,
-    max_length: None,
-    min: None,
-    max: None,
-    step: None,
-    choices: Vec::new(),
-    default_value: None,
-  };
-  match field {
-    libbridgething::ConfigField::String(text) => ConfigField {
-      pattern: text.pattern,
-      min_length: text.min_length,
-      max_length: text.max_length,
-      default_value: text.default,
-      ..bare(ConfigKind::String, text.key, text.label)
-    },
-    libbridgething::ConfigField::Secret(text) => ConfigField {
-      pattern: text.pattern,
-      min_length: text.min_length,
-      max_length: text.max_length,
-      default_value: text.default,
-      ..bare(ConfigKind::Secret, text.key, text.label)
-    },
-    libbridgething::ConfigField::Number(number) => ConfigField {
-      min: number.min,
-      max: number.max,
-      step: number.step,
-      default_value: number.default.map(|value| value.to_string()),
-      ..bare(ConfigKind::Number, number.key, number.label)
-    },
-    libbridgething::ConfigField::Boolean(flag) => ConfigField {
-      default_value: flag.default.map(|value| value.to_string()),
-      ..bare(ConfigKind::Boolean, flag.key, flag.label)
-    },
-    libbridgething::ConfigField::Enum(choice) => ConfigField {
-      choices: choice.choices,
-      default_value: choice.default,
-      ..bare(ConfigKind::Enum, choice.key, choice.label)
-    },
   }
 }
 

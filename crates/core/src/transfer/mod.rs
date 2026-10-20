@@ -5,12 +5,13 @@ pub mod sinks;
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use actor::{ChunkedTransferActor, Command};
-use sha2::{Digest, Sha256};
 use tokio::{
   sync::{mpsc, oneshot},
   task::JoinHandle,
 };
 use tokio_util::bytes::Bytes;
+
+use crate::digest::sha256_hex;
 
 pub const TRANSFER_DISK_BUDGET_BYTES: u64 = 1024 * 1024 * 1024;
 const STALE_TIMEOUT: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -40,10 +41,14 @@ struct Inner {
 }
 
 impl ChunkedTransfer {
-  pub async fn init(transfers_dir: PathBuf, sweep_dirs: Vec<PathBuf>) -> Result<ChunkedTransferPending, TransferError> {
+  pub async fn init(
+    transfers_dir: PathBuf,
+    budget: u64,
+    sweep_dirs: Vec<PathBuf>,
+  ) -> Result<ChunkedTransferPending, TransferError> {
     tokio::fs::create_dir_all(&transfers_dir).await?;
     let (cmd_tx, cmd_rx) = mpsc::channel(COMMAND_MAILBOX_CAPACITY);
-    let actor = ChunkedTransferActor::bootstrap(transfers_dir, sweep_dirs, cmd_rx, cmd_tx.clone()).await?;
+    let actor = ChunkedTransferActor::bootstrap(transfers_dir, budget, sweep_dirs, cmd_rx, cmd_tx.clone()).await?;
     Ok(ChunkedTransferPending {
       actor,
       handle: Self {
@@ -73,24 +78,12 @@ impl ChunkedTransfer {
     rx.await.map_err(|_| TransferError::ActorClosed)?
   }
 
-  pub async fn accept_chunk(
-    &self,
-    id: String,
-    offset: u64,
-    bytes: Bytes,
-    last: bool,
-  ) -> Result<ChunkOutcome, TransferError> {
+  pub async fn accept_chunk(&self, id: String, offset: u64, bytes: Bytes) -> Result<ChunkOutcome, TransferError> {
     let (ack, rx) = oneshot::channel();
     self
       .inner
       .cmd_tx
-      .send(Command::AcceptChunk {
-        id,
-        offset,
-        bytes,
-        last,
-        ack,
-      })
+      .send(Command::AcceptChunk { id, offset, bytes, ack })
       .await
       .map_err(|_| TransferError::ActorClosed)?;
     rx.await.map_err(|_| TransferError::ActorClosed)?
@@ -105,6 +98,17 @@ impl ChunkedTransfer {
       .await
       .map_err(|_| TransferError::ActorClosed)?;
     rx.await.map_err(|_| TransferError::ActorClosed)?
+  }
+
+  pub async fn abandon_matching(&self, prefix: String) -> Result<(), TransferError> {
+    let (ack, rx) = oneshot::channel();
+    self
+      .inner
+      .cmd_tx
+      .send(Command::AbandonMatching { prefix, ack })
+      .await
+      .map_err(|_| TransferError::ActorClosed)?;
+    rx.await.map_err(|_| TransferError::ActorClosed)
   }
 }
 
@@ -121,9 +125,7 @@ impl ChunkedTransferPending {
 }
 
 fn safe_filename(id: &str) -> String {
-  let mut h = Sha256::new();
-  h.update(id.as_bytes());
-  hex::encode(h.finalize())
+  sha256_hex(id.as_bytes())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -134,8 +136,8 @@ pub enum TransferError {
   Io(#[from] std::io::Error),
   #[error("meta sidecar serialize error: {0}")]
   MetaEncode(#[from] serde_json::Error),
-  #[error("transfer {id} would exceed disk budget ({} GiB)", TRANSFER_DISK_BUDGET_BYTES / (1024 * 1024 * 1024))]
-  BudgetExceeded { id: String },
+  #[error("transfer {id} would exceed the {budget} byte disk budget")]
+  BudgetExceeded { id: String, budget: u64 },
   #[error("transfer {id} expected_size {size} exceeds disk budget")]
   TooLarge { id: String, size: u64 },
   #[error("transfer {id} already in flight with mismatched expected_size or sha256; abandon first")]
@@ -151,12 +153,6 @@ pub enum TransferError {
     received: u64,
     chunk_len: u64,
   },
-  #[error("transfer {id} last chunk arrived but received {received} != expected_size {expected_size}")]
-  SizeMismatch {
-    id: String,
-    expected_size: u64,
-    received: u64,
-  },
   #[error("transfer {id} sha256 mismatch: expected {expected}, got {actual}")]
   HashMismatch {
     id: String,
@@ -167,8 +163,6 @@ pub enum TransferError {
 
 #[cfg(test)]
 mod tests {
-  use sha2::{Digest, Sha256};
-
   use super::*;
 
   fn temp_root() -> PathBuf {
@@ -179,15 +173,11 @@ mod tests {
 
   async fn fresh() -> (ChunkedTransfer, PathBuf, JoinHandle<()>) {
     let root = temp_root();
-    let pending = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap();
+    let pending = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap();
     let (handle, join) = pending.spawn();
     (handle, root, join)
-  }
-
-  fn sha256_hex(b: &[u8]) -> String {
-    let mut h = Sha256::new();
-    h.update(b);
-    hex::encode(h.finalize())
   }
 
   fn resume_of(outcome: BeginOutcome) -> u64 {
@@ -219,7 +209,7 @@ mod tests {
     assert_eq!(off, 0);
 
     let outcome = xfer
-      .accept_chunk("t/1".into(), 0, Bytes::from(body.clone()), true)
+      .accept_chunk("t/1".into(), 0, Bytes::from(body.clone()))
       .await
       .unwrap();
     match outcome {
@@ -251,7 +241,7 @@ mod tests {
       let end = (offset + chunk_size).min(body.len() as u64) as usize;
       let last = end as u64 == body.len() as u64;
       let chunk = Bytes::copy_from_slice(&body[offset as usize..end]);
-      let outcome = xfer.accept_chunk("t/2".into(), offset, chunk, last).await.unwrap();
+      let outcome = xfer.accept_chunk("t/2".into(), offset, chunk).await.unwrap();
       offset = end as u64;
       match (outcome, last) {
         (ChunkOutcome::Continue { received }, false) => assert_eq!(received, offset),
@@ -262,16 +252,48 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn the_fragment_that_reaches_the_declared_size_completes() {
+    let (xfer, _root, _join) = fresh().await;
+    let body: Vec<u8> = (0u8..=255).cycle().take(300).collect();
+    let sha = sha256_hex(&body);
+    xfer.begin("t/17".into(), body.len() as u64, Some(sha)).await.unwrap();
+
+    let short = xfer
+      .accept_chunk("t/17".into(), 0, Bytes::copy_from_slice(&body[..299]))
+      .await
+      .unwrap();
+    assert!(
+      matches!(short, ChunkOutcome::Continue { received: 299 }),
+      "one byte short of the declared size is still in flight, got {short:?}"
+    );
+
+    let empty = xfer.accept_chunk("t/17".into(), 299, Bytes::new()).await.unwrap();
+    assert!(
+      matches!(empty, ChunkOutcome::Continue { received: 299 }),
+      "an empty fragment moves nothing, got {empty:?}"
+    );
+
+    let whole = xfer
+      .accept_chunk("t/17".into(), 299, Bytes::copy_from_slice(&body[299..]))
+      .await
+      .unwrap();
+    match whole {
+      ChunkOutcome::Completed { path } => assert_eq!(tokio::fs::read(&path).await.unwrap(), body),
+      other => panic!("the declared size was reached, got {other:?}"),
+    }
+  }
+
+  #[tokio::test]
   async fn offset_mismatch_rejected() {
     let (xfer, _root, _join) = fresh().await;
     let body = [0u8; 100];
     xfer.begin("t/3".into(), body.len() as u64, None).await.unwrap();
     xfer
-      .accept_chunk("t/3".into(), 0, Bytes::copy_from_slice(&body[..50]), false)
+      .accept_chunk("t/3".into(), 0, Bytes::copy_from_slice(&body[..50]))
       .await
       .unwrap();
     let err = xfer
-      .accept_chunk("t/3".into(), 99, Bytes::copy_from_slice(&body[..50]), true)
+      .accept_chunk("t/3".into(), 99, Bytes::copy_from_slice(&body[..50]))
       .await
       .unwrap_err();
     assert!(matches!(
@@ -289,7 +311,7 @@ mod tests {
     let (xfer, _root, _join) = fresh().await;
     xfer.begin("t/4".into(), 100, None).await.unwrap();
     let err = xfer
-      .accept_chunk("t/4".into(), 0, Bytes::from(vec![0u8; 200]), true)
+      .accept_chunk("t/4".into(), 0, Bytes::from(vec![0u8; 200]))
       .await
       .unwrap_err();
     assert!(matches!(err, TransferError::SizeOverflow { .. }));
@@ -303,17 +325,16 @@ mod tests {
       .begin("t/5".into(), body.len() as u64, Some("0".repeat(64)))
       .await
       .unwrap();
-    let err = xfer
-      .accept_chunk("t/5".into(), 0, Bytes::from(body), true)
-      .await
-      .unwrap_err();
+    let err = xfer.accept_chunk("t/5".into(), 0, Bytes::from(body)).await.unwrap_err();
     assert!(matches!(err, TransferError::HashMismatch { .. }));
   }
 
   #[tokio::test]
   async fn resume_picks_up_where_left_off() {
     let root = temp_root();
-    let pending = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap();
+    let pending = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap();
     let (xfer, _join) = pending.spawn();
 
     let body: Vec<u8> = (0u8..=255).cycle().take(2048).collect();
@@ -323,12 +344,14 @@ mod tests {
       .await
       .unwrap();
     xfer
-      .accept_chunk("t/6".into(), 0, Bytes::copy_from_slice(&body[..1024]), false)
+      .accept_chunk("t/6".into(), 0, Bytes::copy_from_slice(&body[..1024]))
       .await
       .unwrap();
     drop(xfer);
 
-    let pending2 = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap();
+    let pending2 = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap();
     let (xfer2, _join2) = pending2.spawn();
     let off = resume_of(
       xfer2
@@ -339,7 +362,7 @@ mod tests {
     assert_eq!(off, 1024);
 
     let outcome = xfer2
-      .accept_chunk("t/6".into(), 1024, Bytes::copy_from_slice(&body[1024..]), true)
+      .accept_chunk("t/6".into(), 1024, Bytes::copy_from_slice(&body[1024..]))
       .await
       .unwrap();
     match outcome {
@@ -361,7 +384,7 @@ mod tests {
     let (xfer, root, _join) = fresh().await;
     xfer.begin("t/8".into(), 100, None).await.unwrap();
     xfer
-      .accept_chunk("t/8".into(), 0, Bytes::from(vec![0u8; 50]), false)
+      .accept_chunk("t/8".into(), 0, Bytes::from(vec![0u8; 50]))
       .await
       .unwrap();
     xfer.abandon("t/8".into()).await.unwrap();
@@ -374,7 +397,7 @@ mod tests {
   async fn unknown_chunk_rejected() {
     let (xfer, _root, _join) = fresh().await;
     let err = xfer
-      .accept_chunk("ghost".into(), 0, Bytes::from(vec![0u8; 1]), false)
+      .accept_chunk("ghost".into(), 0, Bytes::from(vec![0u8; 1]))
       .await
       .unwrap_err();
     assert!(matches!(err, TransferError::UnknownTransfer { .. }));
@@ -398,7 +421,7 @@ mod tests {
         .unwrap(),
     );
     match xfer
-      .accept_chunk(id.into(), 0, Bytes::copy_from_slice(body), true)
+      .accept_chunk(id.into(), 0, Bytes::copy_from_slice(body))
       .await
       .unwrap()
     {
@@ -428,13 +451,19 @@ mod tests {
   #[tokio::test]
   async fn completed_artifact_survives_a_restart() {
     let root = temp_root();
-    let (xfer, _join) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer, _join) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let body: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
     let sha = sha256_hex(&body);
     let path = complete_one(&xfer, "t/11", &body, &sha).await;
     drop(xfer);
 
-    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let outcome = xfer2
       .begin("t/11".into(), body.len() as u64, Some(sha.clone()))
       .await
@@ -445,7 +474,10 @@ mod tests {
   #[tokio::test]
   async fn truncated_retained_artifact_demotes_to_a_partial_resume() {
     let root = temp_root();
-    let (xfer, _join) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer, _join) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let body: Vec<u8> = (0u8..=255).cycle().take(4096).collect();
     let sha = sha256_hex(&body);
     let path = complete_one(&xfer, "t/12", &body, &sha).await;
@@ -455,7 +487,10 @@ mod tests {
     f.set_len(1000).unwrap();
     drop(f);
 
-    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let off = resume_of(
       xfer2
         .begin("t/12".into(), body.len() as u64, Some(sha.clone()))
@@ -465,7 +500,7 @@ mod tests {
     assert_eq!(off, 1000, "a torn tail resumes from the surviving length");
 
     let outcome = xfer2
-      .accept_chunk("t/12".into(), 1000, Bytes::copy_from_slice(&body[1000..]), true)
+      .accept_chunk("t/12".into(), 1000, Bytes::copy_from_slice(&body[1000..]))
       .await
       .unwrap();
     assert!(matches!(outcome, ChunkOutcome::Completed { .. }));
@@ -474,7 +509,10 @@ mod tests {
   #[tokio::test]
   async fn corrupted_retained_artifact_restarts_fresh() {
     let root = temp_root();
-    let (xfer, _join) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer, _join) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let body: Vec<u8> = (0u8..=255).cycle().take(2048).collect();
     let sha = sha256_hex(&body);
     let path = complete_one(&xfer, "t/13", &body, &sha).await;
@@ -484,7 +522,10 @@ mod tests {
     corrupted[100] ^= 0xff;
     std::fs::write(&path, &corrupted).unwrap();
 
-    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let off = resume_of(
       xfer2
         .begin("t/13".into(), body.len() as u64, Some(sha.clone()))
@@ -497,20 +538,25 @@ mod tests {
   #[tokio::test]
   async fn full_size_partial_without_complete_marker_verifies_at_begin() {
     let root = temp_root();
-    let (xfer, _join) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let (xfer, _join) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let body: Vec<u8> = (0u8..=255).cycle().take(2048).collect();
     let sha = sha256_hex(&body);
-    xfer
-      .begin("t/14".into(), body.len() as u64, Some(sha.clone()))
-      .await
-      .unwrap();
-    xfer
-      .accept_chunk("t/14".into(), 0, Bytes::copy_from_slice(&body), false)
-      .await
-      .unwrap();
+    complete_one(&xfer, "t/14", &body, &sha).await;
     drop(xfer);
 
-    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), Vec::new()).await.unwrap().spawn();
+    let meta_path = root.join(format!("{}.meta", safe_filename("t/14")));
+    let mut meta: serde_json::Value = serde_json::from_slice(&std::fs::read(&meta_path).unwrap()).unwrap();
+    assert_eq!(meta["complete"], true);
+    meta["complete"] = false.into();
+    std::fs::write(&meta_path, serde_json::to_vec(&meta).unwrap()).unwrap();
+
+    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, Vec::new())
+      .await
+      .unwrap()
+      .spawn();
     let outcome = xfer2
       .begin("t/14".into(), body.len() as u64, Some(sha.clone()))
       .await
@@ -533,6 +579,34 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn abandoning_by_prefix_drops_every_partial_it_names_and_keeps_the_rest() {
+    let (xfer, root, _join) = fresh().await;
+    let body = b"a whole artifact".to_vec();
+    let sha = sha256_hex(&body);
+    for id in ["owner:a:1", "owner:a:2", "owner:b:1"] {
+      xfer.begin(id.into(), 100, None).await.unwrap();
+      xfer
+        .accept_chunk(id.into(), 0, Bytes::from(vec![0u8; 40]))
+        .await
+        .unwrap();
+    }
+    let finished = complete_one(&xfer, "owner:a:3", &body, &sha).await;
+
+    xfer.abandon_matching("owner:a:".into()).await.unwrap();
+
+    for gone in ["owner:a:1", "owner:a:2"] {
+      assert!(!root.join(format!("{}.partial", safe_filename(gone))).exists());
+      assert_eq!(resume_of(xfer.begin(gone.into(), 100, None).await.unwrap()), 0);
+    }
+    assert!(!finished.exists(), "a retained complete artifact goes too");
+    assert_eq!(
+      resume_of(xfer.begin("owner:b:1".into(), 100, None).await.unwrap()),
+      40,
+      "a partial outside the prefix keeps its bytes"
+    );
+  }
+
+  #[tokio::test]
   async fn bootstrap_sweeps_unreferenced_files_in_sweep_dirs() {
     let root = temp_root();
     let side = temp_root();
@@ -540,7 +614,7 @@ mod tests {
     std::fs::write(side.join("leaked.stage"), b"junk").unwrap();
     std::fs::write(root.join("orphan.partial"), b"junk").unwrap();
 
-    let (xfer, _join) = ChunkedTransfer::init(root.clone(), vec![side.clone()])
+    let (xfer, _join) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, vec![side.clone()])
       .await
       .unwrap()
       .spawn();
@@ -553,7 +627,7 @@ mod tests {
     assert!(!root.join("orphan.partial").exists());
 
     drop(xfer);
-    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), vec![side.clone()])
+    let (xfer2, _join2) = ChunkedTransfer::init(root.clone(), TRANSFER_DISK_BUDGET_BYTES, vec![side.clone()])
       .await
       .unwrap()
       .spawn();

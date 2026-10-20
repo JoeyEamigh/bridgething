@@ -57,3 +57,13 @@ fn a_byte_link_takes_bytes_before_and_after_it_closes() {
   link.close();
   link.push(&[4, 5, 6]);
 }
+
+#[wasm_bindgen_test]
+fn the_system_clock_reads_wall_time_in_the_browser() {
+  use bridgething_delivery::seam::{Clock, SystemClock};
+
+  assert!(
+    SystemClock.unix_millis() > 1_767_225_600_000,
+    "a 2026 or later wall clock"
+  );
+}

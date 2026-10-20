@@ -4,6 +4,7 @@ export const PATHS = {
   devices: '/devices',
   apps: '/apps',
   app: (webappId: string) => `/apps/${encodeURIComponent(webappId)}`,
+  appSettings: (webappId: string) => `/apps/${encodeURIComponent(webappId)}/settings`,
   store: '/store',
   storeApp: (appId: string) => `/store/app/${encodeURIComponent(appId)}`,
   storeSource: (url: string) => `/store/source/${encodeURIComponent(url)}`,

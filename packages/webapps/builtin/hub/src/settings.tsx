@@ -8,9 +8,10 @@ import {
   type Diagnostics,
   type LauncherGesture,
   type TimeInfo,
-  type WireError,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
+import { factoryReset } from './power.ts';
+import { wireErrorText } from './wire-error.ts';
 
 type Section = 'bluetooth' | 'display' | 'controls' | 'system' | 'power';
 
@@ -463,6 +464,7 @@ function PowerPanel({ client }: { client: BridgethingClient }) {
         label="restart"
         hint="reboots the device"
         confirmLabel="tap again to restart"
+        busyLabel="restarting..."
         tone="neutral"
         onConfirm={() => client.system.reboot()}
       />
@@ -470,15 +472,17 @@ function PowerPanel({ client }: { client: BridgethingClient }) {
         label="power off"
         hint="shuts the device down"
         confirmLabel="tap again to power off"
+        busyLabel="powering off..."
         tone="neutral"
         onConfirm={() => client.system.powerOff()}
       />
       <ConfirmAction
         label="factory reset"
-        hint="erases all settings, paired devices, and installed apps, then reboots"
+        hint="erases all settings, pairings, installed apps and their data, then reboots"
         confirmLabel="tap again to erase everything"
+        busyLabel="erasing..."
         tone="danger"
-        onConfirm={() => client.system.factoryReset()}
+        onConfirm={() => factoryReset(client)}
       />
     </div>
   );
@@ -488,22 +492,38 @@ function ConfirmAction({
   label,
   hint,
   confirmLabel,
+  busyLabel,
   tone,
   onConfirm,
 }: {
   label: string;
   hint: string;
   confirmLabel: string;
+  busyLabel: string;
   tone: 'neutral' | 'danger';
-  onConfirm: () => void;
+  onConfirm: () => Promise<string | void>;
 }) {
   const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   useEffect(() => {
     if (!armed) return;
     const t = setTimeout(() => setArmed(false), 4000);
     return () => clearTimeout(t);
   }, [armed]);
+
+  const confirm = async () => {
+    setArmed(false);
+    setFailure(null);
+    setBusy(true);
+    try {
+      setFailure((await onConfirm()) ?? null);
+    } catch (err) {
+      setFailure(failureText(err));
+    }
+    setBusy(false);
+  };
 
   const danger = tone === 'danger';
 
@@ -515,10 +535,12 @@ function ConfirmAction({
         </span>
       </div>
       <div className="mb-3 text-hint text-soft">{hint}</div>
+      {failure && <div className="mb-3 font-mono text-hint text-err">{failure}</div>}
       <button
         type="button"
-        onClick={() => (armed ? onConfirm() : setArmed(true))}
-        className={`w-full border px-4 py-2.5 font-mono text-row transition ${
+        disabled={busy}
+        onClick={() => (armed ? confirm() : setArmed(true))}
+        className={`w-full border px-4 py-2.5 font-mono text-row transition disabled:opacity-60 ${
           armed
             ? danger
               ? 'border-err bg-err text-off-white'
@@ -527,7 +549,7 @@ function ConfirmAction({
               ? 'border-err/40 bg-err-soft text-err'
               : 'border-edge text-near active:bg-neutral-soft'
         }`}>
-        {armed ? confirmLabel : label}
+        {busy ? busyLabel : armed ? confirmLabel : label}
       </button>
     </div>
   );
@@ -600,17 +622,6 @@ function BackIcon() {
 
 function failureText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-function wireErrorText(error: WireError): string {
-  switch (error.type) {
-    case 'malformed':
-      return `rejected by the device: ${error.data.reason}`;
-    case 'handlerFailed':
-      return `failed: ${error.data.reason}`;
-    default:
-      return `failed: ${error.type}`;
-  }
 }
 
 function deviceLabel(d: Device): string {

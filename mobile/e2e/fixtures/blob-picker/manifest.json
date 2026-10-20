@@ -1,0 +1,7 @@
+{
+  "id": "019e8a10-6b2c-7c4e-9f31-5a0d2b7c1e44",
+  "name": "Blob Picker",
+  "version": "0.1.0",
+  "description": "Picks a file in the companion and stores it on the device.",
+  "settings": "settings.html"
+}

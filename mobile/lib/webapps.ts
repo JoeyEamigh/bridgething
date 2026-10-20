@@ -1,10 +1,12 @@
 import { listedWebapps, type WebappSlotName } from '@bridgething/catalog';
+import type { ConfigField } from '@bridgething/lib';
 import type {
   BridgethingActiveWebapp,
   BridgethingWebappInfo,
   BridgethingWebappSlots,
 } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
+import { hasSettings as hasDeviceSettings } from '@bridgething/ui/settings-host';
 import {
   errorCodes,
   isErrorWithCode,
@@ -141,6 +143,17 @@ export function useWebapps(deviceId: string | null): DeviceWebapps {
   return useWebappsStore(
     useShallow(s => (deviceId ? (s.byDevice[deviceId] ?? empty) : empty)),
   );
+}
+
+export function configFields(info: BridgethingWebappInfo): ConfigField[] {
+  return JSON.parse(info.configJson) as ConfigField[];
+}
+
+export function hasSettings(info: BridgethingWebappInfo): boolean {
+  return hasDeviceSettings({
+    config: configFields(info),
+    settingsHash: info.settingsHash,
+  });
 }
 
 export type AppTile = {

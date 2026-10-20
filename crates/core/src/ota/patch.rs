@@ -7,6 +7,8 @@ use libbridgething::gateway::{OtaPatch, OtaPatchAlgorithm};
 use sha2::{Digest, Sha256};
 use tokio::task;
 
+use crate::digest::sha256_hex;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PatchError {
   #[error("io error during {step}: {source}")]
@@ -85,9 +87,7 @@ fn reconstruct(
   };
 
   if let (Some(expected), Some(map)) = (expect_source, src_map.as_ref()) {
-    let mut hasher = Sha256::new();
-    hasher.update(map);
-    let got = hex::encode(hasher.finalize());
+    let got = sha256_hex(map);
     if !got.eq_ignore_ascii_case(expected) {
       return Err(PatchError::SourceMismatch {
         got,
@@ -161,12 +161,6 @@ impl<W: Write> Write for HashingWriter<W> {
 #[cfg(test)]
 mod tests {
   use super::*;
-
-  fn sha256_hex(b: &[u8]) -> String {
-    let mut h = Sha256::new();
-    h.update(b);
-    hex::encode(h.finalize())
-  }
 
   fn temp_root() -> PathBuf {
     let p = std::env::temp_dir().join(format!("bridgething-patch-test-{}", uuid::Uuid::now_v7()));

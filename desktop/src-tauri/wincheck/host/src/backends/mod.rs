@@ -1,3 +1,5 @@
+#[path = "../../../../src/backends/ffmpeg.rs"]
+pub mod ffmpeg;
 #[path = "../../../../src/backends/jpeg.rs"]
 pub mod jpeg;
 #[path = "../../../../src/backends/windows/media.rs"]

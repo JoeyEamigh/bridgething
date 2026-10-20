@@ -5,16 +5,18 @@ mod convert;
 use std::{collections::BTreeMap, sync::Arc};
 
 use bridgething_delivery::{
-  bundle::fetch::{HttpArtifactFetch, fetch_json},
+  blob::{MemoryBlobStore, MemorySlotIndex},
+  bundle::fetch::{ArtifactFetch, HttpArtifactFetch, fetch_json},
   ota::{
     event::{OtaPollEvent, parse_ota_kind},
     manifest::{OtaArtifactUrls, OtaCompositeVersion, OtaDiscoverManifest},
     service::{BandaidArtifact, IMAGE_SWU_ASSET},
     stream::Artifact,
   },
-  seam::SystemClock,
+  seam::{BlobStore, SystemClock},
   session::{DeliverySession, SessionDeps, gateway_info},
   transfer::BytesSource,
+  webapp::{ResourceOrigin, WebappResourceService, blob::BlobProgress},
 };
 use bridgething_gateway::{
   RequestFailure, TransportError,
@@ -22,11 +24,15 @@ use bridgething_gateway::{
 };
 use bridgething_io::{FetchTransport, HttpExecutor};
 use bytes::Bytes;
-use convert::{Phase, UpdateEvent, install_result, lagged, to_js};
+use convert::{DocChange, Phase, UpdateEvent, install_result, lagged, to_js};
 use futures::{StreamExt, channel::mpsc};
 use libbridgething::{
   OtaKind,
-  gateway::{DeviceSetNickname, LauncherGestureSet, WebappSetSlot, WebappSwitchTo, WebappUninstall},
+  gateway::{
+    DeviceSetNickname, LauncherGestureSet, WebappConfigDelete, WebappConfigList, WebappConfigSet, WebappDocChanged,
+    WebappDocDelete, WebappDocGet, WebappDocList, WebappDocSet, WebappResourceKind, WebappSetSlot, WebappSwitchTo,
+    WebappUninstall,
+  },
 };
 use tokio::sync::{Mutex, broadcast};
 use uuid::Uuid;
@@ -92,6 +98,34 @@ export interface InstalledWebapp {
   name: string;
   version: string;
   provenance?: string;
+}
+
+export type WebappResourceKind = "icon" | "settings" | "overlay";
+
+export interface ResourceOrigin {
+  url: string;
+  sha256: string;
+  size: number;
+  mime: string | null;
+}
+
+export interface WebappResourceBody {
+  digest: string;
+  mime: string | null;
+  bytes: Uint8Array;
+}
+
+export interface WebappDocChange {
+  id: string;
+  key: string;
+  value: string | null;
+}
+
+export interface WebappBlobEntry {
+  key: string;
+  sha256: string;
+  mime: string;
+  size: number;
 }
 
 export interface CompositeVersion {
@@ -239,17 +273,20 @@ impl WasmByteLink {
 pub struct WasmSession {
   session: Arc<DeliverySession>,
   events: Arc<Mutex<broadcast::Receiver<OtaPollEvent>>>,
+  docs: Arc<Mutex<broadcast::Receiver<WebappDocChanged>>>,
+  blobs: Arc<MemoryBlobStore>,
+  resources: Arc<WebappResourceService>,
 }
 
 #[wasm_bindgen(js_class = DeliverySession)]
 impl WasmSession {
   #[wasm_bindgen(js_name = connect)]
   pub async fn connect(url: String, device_id: Option<String>) -> Result<WasmSession, JsValue> {
-    let deps = deps(device_id);
-    let session = DeliverySession::connect(&url, deps)
+    let fetch = fetch();
+    let session = DeliverySession::connect(&url, deps(device_id, fetch.clone()))
       .await
       .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    Ok(WasmSession::hold(session))
+    Ok(WasmSession::hold(session, fetch))
   }
 
   #[wasm_bindgen(js_name = attach)]
@@ -258,10 +295,11 @@ impl WasmSession {
       .connector
       .take()
       .ok_or_else(|| JsValue::from_str("this ByteLink already carries a session"))?;
-    let session = DeliverySession::spawn(connector, deps(device_id))
+    let fetch = fetch();
+    let session = DeliverySession::spawn(connector, deps(device_id, fetch.clone()))
       .await
       .map_err(|e| JsValue::from_str(&e.to_string()))?;
-    Ok(WasmSession::hold(session))
+    Ok(WasmSession::hold(session, fetch))
   }
 
   #[wasm_bindgen(getter, js_name = deviceId)]
@@ -453,6 +491,219 @@ impl WasmSession {
     to_js(&reply)
   }
 
+  #[wasm_bindgen(js_name = webappResource, unchecked_return_type = "WebappResourceBody")]
+  pub async fn webapp_resource(
+    &self,
+    id: String,
+    #[wasm_bindgen(unchecked_param_type = "WebappResourceKind")] kind: String,
+    #[wasm_bindgen(unchecked_param_type = "ResourceOrigin | null | undefined")] origin: JsValue,
+  ) -> Result<JsValue, JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    let kind: WebappResourceKind = serde_json::from_value(serde_json::Value::String(kind.clone()))
+      .map_err(|_| JsValue::from_str(&format!("unknown webapp resource kind {kind}")))?;
+    let origin: Option<ResourceOrigin> = if origin.is_null() || origin.is_undefined() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(origin).map_err(|e| JsValue::from_str(&format!("resource origin: {e}")))?)
+    };
+    let resource = self
+      .resources
+      .fetch(&self.session.gateway, id, kind, origin.as_ref())
+      .await
+      .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    let bytes = self
+      .blobs
+      .get(&resource.digest)
+      .map_err(|error| JsValue::from_str(&error))?
+      .ok_or_else(|| JsValue::from_str(&format!("the resource cache lost {}", resource.digest)))?;
+
+    let body = js_sys::Object::new();
+    let mime = resource.mime.as_deref().map_or(JsValue::NULL, JsValue::from_str);
+    for (key, value) in [
+      ("digest", JsValue::from_str(&resource.digest)),
+      ("mime", mime),
+      ("bytes", js_sys::Uint8Array::from(bytes.as_slice()).into()),
+    ] {
+      js_sys::Reflect::set(&body, &JsValue::from_str(key), &value)?;
+    }
+    Ok(body.into())
+  }
+
+  #[wasm_bindgen(js_name = webappConfig)]
+  pub async fn webapp_config(&self, id: String) -> Result<JsValue, JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    let reply = self
+      .session
+      .gateway
+      .webapp()
+      .config_list(WebappConfigList { id })
+      .await
+      .map_err(failure)?;
+    to_js(&reply.entries)
+  }
+
+  #[wasm_bindgen(js_name = setWebappConfig)]
+  pub async fn set_webapp_config(&self, id: String, key: String, value: String) -> Result<(), JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    self
+      .session
+      .gateway
+      .webapp()
+      .config_set(WebappConfigSet { id, key, value })
+      .await
+      .map_err(failure)?;
+    Ok(())
+  }
+
+  #[wasm_bindgen(js_name = deleteWebappConfig)]
+  pub async fn delete_webapp_config(&self, id: String, key: String) -> Result<(), JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    self
+      .session
+      .gateway
+      .webapp()
+      .config_delete(WebappConfigDelete { id, key })
+      .await
+      .map_err(failure)?;
+    Ok(())
+  }
+
+  #[wasm_bindgen(js_name = webappDoc)]
+  pub async fn webapp_doc(&self, id: String) -> Result<JsValue, JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    let reply = self
+      .session
+      .gateway
+      .webapp()
+      .doc_list(WebappDocList { id })
+      .await
+      .map_err(failure)?;
+    to_js(&reply.entries)
+  }
+
+  #[wasm_bindgen(js_name = webappDocEntry)]
+  pub async fn webapp_doc_entry(&self, id: String, key: String) -> Result<Option<String>, JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    let reply = self
+      .session
+      .gateway
+      .webapp()
+      .doc_get(WebappDocGet { id, key })
+      .await
+      .map_err(failure)?;
+    Ok(reply.value)
+  }
+
+  #[wasm_bindgen(js_name = setWebappDoc)]
+  pub async fn set_webapp_doc(&self, id: String, key: String, value: String) -> Result<(), JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    self
+      .session
+      .gateway
+      .webapp()
+      .doc_set(WebappDocSet { id, key, value })
+      .await
+      .map_err(failure)?;
+    Ok(())
+  }
+
+  #[wasm_bindgen(js_name = deleteWebappDoc)]
+  pub async fn delete_webapp_doc(&self, id: String, key: String) -> Result<(), JsValue> {
+    let id = parse_id("webapp id", &id)?;
+    self
+      .session
+      .gateway
+      .webapp()
+      .doc_delete(WebappDocDelete { id, key })
+      .await
+      .map_err(failure)?;
+    Ok(())
+  }
+
+  #[wasm_bindgen(js_name = createBlobHandle)]
+  pub fn create_blob_handle(&self, mime: String) -> Result<String, JsValue> {
+    self.session.handles.create(mime).map_err(blob_failure)
+  }
+
+  #[wasm_bindgen(js_name = appendBlobHandle)]
+  pub fn append_blob_handle(&self, handle: String, base64: String) -> Result<f64, JsValue> {
+    self
+      .session
+      .handles
+      .append_base64(&handle, &base64)
+      .map(|size| size as f64)
+      .map_err(blob_failure)
+  }
+
+  #[wasm_bindgen(js_name = putWebappBlob, unchecked_return_type = "WebappBlobEntry")]
+  pub async fn put_webapp_blob(
+    &self,
+    id: String,
+    key: String,
+    handle: String,
+    #[wasm_bindgen(unchecked_param_type = "((sent: number, total: number) => void) | null | undefined")]
+    on_progress: Option<js_sys::Function>,
+  ) -> Result<JsValue, JsValue> {
+    let id = blob_webapp(&id)?;
+    let progress = on_progress.map(|listener| {
+      let (ticks, mut heard) = mpsc::unbounded::<(u64, u64)>();
+      spawn_local(async move {
+        while let Some((sent, total)) = heard.next().await {
+          let _ = listener.call2(
+            &JsValue::NULL,
+            &JsValue::from_f64(sent as f64),
+            &JsValue::from_f64(total as f64),
+          );
+        }
+      });
+      Arc::new(move |sent, total| {
+        let _ = ticks.unbounded_send((sent, total));
+      }) as BlobProgress
+    });
+    let stored = self
+      .session
+      .put_blob(id, key, &handle, progress)
+      .await
+      .map_err(blob_failure)?;
+    blob_js(&stored)
+  }
+
+  #[wasm_bindgen(js_name = deleteWebappBlob)]
+  pub async fn delete_webapp_blob(&self, id: String, key: String) -> Result<(), JsValue> {
+    let id = blob_webapp(&id)?;
+    self.session.delete_blob(id, key).await.map_err(blob_failure)
+  }
+
+  #[wasm_bindgen(js_name = webappBlobs, unchecked_return_type = "WebappBlobEntry[]")]
+  pub async fn webapp_blobs(&self, id: String) -> Result<JsValue, JsValue> {
+    let id = blob_webapp(&id)?;
+    blob_js(&self.session.list_blobs(id).await.map_err(blob_failure)?)
+  }
+
+  #[wasm_bindgen(js_name = nextDocChange, unchecked_return_type = "WebappDocChange | null")]
+  pub async fn next_doc_change(&self) -> Result<JsValue, JsValue> {
+    let mut docs = self.docs.lock().await;
+    let closed = self.session.closed();
+    futures::pin_mut!(closed);
+    loop {
+      let heard = {
+        let next = docs.recv();
+        futures::pin_mut!(next);
+        match futures::future::select(next, closed.as_mut()).await {
+          futures::future::Either::Left((heard, _)) => heard,
+          futures::future::Either::Right(((), _)) => return Ok(JsValue::NULL),
+        }
+      };
+      match heard {
+        Ok(change) => return to_js(&DocChange::from(change)),
+        Err(broadcast::error::RecvError::Lagged(dropped)) => {
+          web_sys::console::warn_1(&JsValue::from_str(&format!("{dropped} document changes were dropped")));
+        }
+        Err(broadcast::error::RecvError::Closed) => return Ok(JsValue::NULL),
+      }
+    }
+  }
+
   #[wasm_bindgen(js_name = nextEvent, unchecked_return_type = "UpdateEvent")]
   pub async fn next_event(&self) -> Result<JsValue, JsValue> {
     let mut events = self.events.lock().await;
@@ -470,21 +721,34 @@ impl WasmSession {
 }
 
 impl WasmSession {
-  fn hold(session: DeliverySession) -> Self {
+  fn hold(session: DeliverySession, fetch: Arc<dyn ArtifactFetch>) -> Self {
     let events = session.ota.events();
+    let docs = session.doc_changes();
+    let blobs = Arc::new(MemoryBlobStore::new());
+    let resources = WebappResourceService::new(
+      blobs.clone() as Arc<dyn BlobStore>,
+      Arc::new(MemorySlotIndex::new()),
+      session.receiver().clone(),
+    )
+    .with_fetch(fetch);
     WasmSession {
       session: Arc::new(session),
       events: Arc::new(Mutex::new(events)),
+      docs: Arc::new(Mutex::new(docs)),
+      blobs,
+      resources: Arc::new(resources),
     }
   }
 }
 
 #[wasm_bindgen(js_name = discoverManifest, unchecked_return_type = "OtaDiscoverManifest")]
 pub async fn discover_manifest(root_url: String) -> Result<JsValue, JsValue> {
-  let fetch = HttpArtifactFetch::new(HttpExecutor::new(Arc::new(FetchTransport::new())));
-  let manifest: OtaDiscoverManifest = fetch_json(&fetch, &format!("{}/discover.json", root_url.trim_end_matches('/')))
-    .await
-    .map_err(|e| JsValue::from_str(&format!("manifest fetch failed: {e}")))?;
+  let manifest: OtaDiscoverManifest = fetch_json(
+    fetch().as_ref(),
+    &format!("{}/discover.json", root_url.trim_end_matches('/')),
+  )
+  .await
+  .map_err(|e| JsValue::from_str(&format!("manifest fetch failed: {e}")))?;
   to_js(&manifest)
 }
 
@@ -513,13 +777,17 @@ pub fn artifact_urls(
   ))
 }
 
-fn deps(device_id: Option<String>) -> SessionDeps {
+fn fetch() -> Arc<dyn ArtifactFetch> {
+  Arc::new(HttpArtifactFetch::new(HttpExecutor::new(Arc::new(
+    FetchTransport::new(),
+  ))))
+}
+
+fn deps(device_id: Option<String>, fetch: Arc<dyn ArtifactFetch>) -> SessionDeps {
   let device_id = device_id.unwrap_or_else(|| DEFAULT_DEVICE_ID.to_owned());
   SessionDeps {
     clock: Arc::new(SystemClock),
-    fetch: Arc::new(HttpArtifactFetch::new(HttpExecutor::new(Arc::new(
-      FetchTransport::new(),
-    )))),
+    fetch,
     cache_dir: std::path::PathBuf::new(),
     data_dir: None,
     info: gateway_info(&device_id, "browser", env!("CARGO_PKG_VERSION")),
@@ -529,6 +797,18 @@ fn deps(device_id: Option<String>) -> SessionDeps {
 
 fn parse_id(what: &str, id: &str) -> Result<Uuid, JsValue> {
   Uuid::parse_str(id).map_err(|e| JsValue::from_str(&format!("{what}: {e}")))
+}
+
+fn blob_failure(error: impl std::fmt::Display) -> JsValue {
+  JsValue::from_str(&error.to_string())
+}
+
+fn blob_webapp(id: &str) -> Result<Uuid, JsValue> {
+  Uuid::parse_str(id).map_err(|e| JsValue::from_str(&format!("invalid: {id} is not a webapp id: {e}")))
+}
+
+fn blob_js<T: serde::Serialize>(value: &T) -> Result<JsValue, JsValue> {
+  to_js(value).map_err(|e| JsValue::from_str(&format!("protocol: {}", e.as_string().unwrap_or_default())))
 }
 
 fn failure<E: std::fmt::Debug>(error: RequestFailure<E>) -> JsValue {

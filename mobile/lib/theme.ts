@@ -3,8 +3,9 @@ import {
   DefaultTheme,
   type Theme as NavigationTheme,
 } from '@react-navigation/native';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, type ColorSchemeName } from 'react-native';
 
+import type { Theme } from '@bridgething/client/settings-protocol';
 import type { BoxSize, Tone } from '@bridgething/ui/tokens';
 
 export type { BoxSize, Tone };
@@ -98,6 +99,16 @@ export const TYPE = {
   screenTitle: 34,
 } as const;
 
+export const FONT = {
+  display: "'Outfit', system-ui, sans-serif",
+  body: "'Inter', system-ui, sans-serif",
+  mono: "'JetBrains Mono', ui-monospace, monospace",
+} as const;
+
+export function settingsTheme(scheme: Scheme): Theme {
+  return { scheme, colors: PALETTE[scheme], text: TYPE, fonts: FONT };
+}
+
 export const SPACE = {
   gutter: 16,
   rowX: 16,
@@ -158,8 +169,12 @@ export function toneSoftColor(palette: Palette, tone: Tone): string {
   return palette[TONE_SOFT_KEY[tone]];
 }
 
+export function schemeOf(name: ColorSchemeName | null | undefined): Scheme {
+  return name === 'dark' ? 'dark' : 'light';
+}
+
 export function useScheme(): Scheme {
-  return useColorScheme() === 'dark' ? 'dark' : 'light';
+  return schemeOf(useColorScheme());
 }
 
 export function usePalette(): Palette {

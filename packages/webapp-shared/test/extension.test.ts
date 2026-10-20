@@ -26,6 +26,7 @@ class FakeGateway {
     const gateway = this;
     this.server = Bun.serve<{ acc: FrameAccumulator }>({
       port: 0,
+      hostname: '127.0.0.1',
       fetch(req, server) {
         return server.upgrade(req, { data: { acc: new FrameAccumulator() } })
           ? undefined

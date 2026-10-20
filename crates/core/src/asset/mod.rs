@@ -156,17 +156,6 @@ impl AssetCache {
     rx.await.map_err(|_| AssetError::CacheClosed)
   }
 
-  pub async fn clear_all(&self) -> Result<(), AssetError> {
-    let (ack, rx) = oneshot::channel();
-    self
-      .inner
-      .cmd_tx
-      .send(actor::Command::ClearAll { ack })
-      .await
-      .map_err(|_| AssetError::CacheClosed)?;
-    rx.await.map_err(|_| AssetError::CacheClosed)?
-  }
-
   pub async fn clear(&self, id: &str) -> Result<(), AssetError> {
     let (ack, rx) = oneshot::channel();
     self

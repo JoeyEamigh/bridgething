@@ -1,4 +1,6 @@
+mod blobs;
 pub mod handlers;
+mod imports;
 pub mod link;
 pub mod models;
 pub mod observer;
@@ -17,7 +19,10 @@ use bridgething_delivery::{
   seam::{BlobStore, Clock, SlotIndex, SystemClock},
   serve::{net::NetDispatcher, tunnel::TunnelDispatcher},
   transfer::{AckSink, TransferReceiver},
-  webapp::WebappResourceService,
+  webapp::{
+    WebappResourceService,
+    handles::{BlobHandles, FsHandleStore},
+  },
 };
 pub use bridgething_gateway::GatewayProtocol;
 use bridgething_gateway::{
@@ -51,6 +56,7 @@ use crate::{
     phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
   hub::Hub,
+  media::MediaNormalizer,
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
     catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry, SubsonicEntry},
@@ -80,6 +86,7 @@ struct LogStream {
 
 const LOG_RING_CAPACITY: usize = 2000;
 const COMPANION_UPDATE_DIR: &str = "companion-update";
+const BLOB_HANDLES_DIR: &str = "blob-handles";
 const LOG_BACKFILL_LINES: u32 = 1000;
 const LOG_BACKFILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -156,6 +163,9 @@ pub struct Session {
   poll_config: Mutex<Option<OtaPollConfig>>,
   blobs: Arc<FsBlobStore>,
   resource_slots: Arc<FsSlotIndex>,
+  handles: Arc<BlobHandles<FsHandleStore>>,
+  normalizer: Arc<MediaNormalizer>,
+  imports: imports::MediaImports,
   hub: Arc<Hub>,
   broadcast: Arc<Broadcast>,
   extensions: Option<Arc<ExtensionDispatcher>>,
@@ -165,6 +175,7 @@ pub struct Session {
   volume_pump: Mutex<Option<JoinHandle<()>>>,
   arbitration: Mutex<Option<JoinHandle<()>>>,
   updates: Mutex<Option<JoinHandle<()>>>,
+  handle_sweep: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Session {
@@ -251,6 +262,12 @@ impl Session {
       backends.volume.is_some(),
     );
     let extensions = backends.extensions.clone().map(ExtensionDispatcher::new);
+    let handles = Arc::new(BlobHandles::new(FsHandleStore::new(cache_dir.join(BLOB_HANDLES_DIR))));
+    let normalizer = Arc::new(MediaNormalizer::new(
+      backends.image.clone(),
+      backends.transcoder.clone(),
+      handles.store().dir().to_owned(),
+    ));
     Arc::new(Self {
       caps: Arc::new(Mutex::new(config.capabilities)),
       config,
@@ -274,6 +291,9 @@ impl Session {
       poll_config: Mutex::new(None),
       blobs: Arc::new(FsBlobStore::new(cache_dir.join("blobs"))),
       resource_slots: Arc::new(FsSlotIndex::new(cache_dir.join("slots.json"))),
+      handles,
+      normalizer,
+      imports: imports::MediaImports::default(),
       hub,
       broadcast,
       extensions,
@@ -283,6 +303,7 @@ impl Session {
       volume_pump: Mutex::new(None),
       arbitration: Mutex::new(None),
       updates: Mutex::new(None),
+      handle_sweep: Mutex::new(None),
     })
   }
 
@@ -583,6 +604,14 @@ impl Session {
     if let Some(previous) = self.updates.lock().unwrap().replace(self.watch_updates()) {
       previous.abort();
     }
+    if let Some(previous) = self
+      .handle_sweep
+      .lock()
+      .unwrap()
+      .replace(tokio::spawn(self.handles.sweeper()))
+    {
+      previous.abort();
+    }
     self.restore_providers();
     self.prepare_speech();
     if let Some(models) = &self.models {
@@ -708,6 +737,7 @@ impl Session {
       &self.volume_pump,
       &self.arbitration,
       &self.updates,
+      &self.handle_sweep,
     ] {
       if let Some(task) = held.lock().unwrap().take() {
         task.abort();
@@ -1206,7 +1236,7 @@ impl Session {
         self.resource_slots.clone() as Arc<dyn SlotIndex>,
         peer.receiver().clone(),
       )
-      .with_fetch(self.fetch.clone(), self.cache_dir().join("webapp-resource")),
+      .with_fetch(self.fetch.clone()),
     )
   }
 

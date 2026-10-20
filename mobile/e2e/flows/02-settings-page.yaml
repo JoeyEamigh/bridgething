@@ -1,13 +1,21 @@
 appId: com.bridgething.gateway
-name: renders a webapp settings page and talks to it over the bridge
+name: renders a webapp settings page, talks to it over the bridge, and reopens it warm
 ---
 - runFlow: ../common/fresh-start.yaml
 - tapOn: ".*Home Assistant.*"
 - tapOn: "open Home Assistant settings"
 - extendedWaitUntil:
-    visible: "Long-Lived Access Token"
+    visible: "(?i).*long-lived access token.*"
     timeout: 180000
 - assertVisible: ".*selected on dev-gateway.*"
 - assertVisible: "connect"
+- tapOn: "Done"
+- assertVisible: "open Home Assistant settings"
+- assertNotVisible: "(?i).*long-lived access token.*"
+- tapOn: "open Home Assistant settings"
+- extendedWaitUntil:
+    visible: "(?i).*long-lived access token.*"
+    timeout: 3000
+- assertVisible: ".*selected on dev-gateway.*"
 - tapOn: "Done"
 - assertVisible: "open Home Assistant settings"

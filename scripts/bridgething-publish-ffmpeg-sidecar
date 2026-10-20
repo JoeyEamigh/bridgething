@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BINARIES="$REPO_ROOT/desktop/src-tauri/binaries"
+IMMUTABLE="public, max-age=31536000, immutable"
+
+log() { printf '\033[1;36m[publish-ffmpeg-sidecar]\033[0m %s\n' "$*" >&2; }
+die() { printf '\033[1;31m[publish-ffmpeg-sidecar] error:\033[0m %s\n' "$*" >&2; exit 1; }
+
+[ $# -ge 2 ] || die "usage: bridgething-publish-ffmpeg-sidecar <source tarball dir> <rust target triple>..."
+sources="$1"
+shift
+
+command -v rclone >/dev/null 2>&1 || die "rclone is not installed"
+: "${R2_BUCKET:?R2_BUCKET is required}"
+: "${PUBLIC_BASE:?PUBLIC_BASE is required}"
+if command -v sha256sum >/dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
+
+recipe="$("$REPO_ROOT/scripts/ffmpeg-sidecar-recipe")"
+prefix="ffmpeg-sidecar/${recipe}"
+
+published() { [ -n "$(rclone lsf "r2:${R2_BUCKET}/$1" 2>/dev/null)" ]; }
+put() { "$REPO_ROOT/scripts/r2-put" "$1" "$2" "$3" "$IMMUTABLE"; }
+put_once() {
+  if published "$2"; then log "already published: $2"; else put "$@"; fi
+}
+
+names=()
+for target in "$@"; do
+  name="bridgething-ffmpeg-${target}"
+  [[ "$target" == *windows* ]] && name+=.exe
+  [ -f "$BINARIES/$name" ] && [ -f "$BINARIES/$name.sha256" ] \
+    || die "${BINARIES} has no ${name}; build it with: just ffmpeg-sidecar ${target}"
+  built="$(cat "$BINARIES/$name.recipe" 2>/dev/null || true)"
+  [ "$built" = "$recipe" ] \
+    || die "${name} was built from recipe ${built:-unknown} but the scripts are recipe ${recipe}; rebuild with: just ffmpeg-sidecar ${target}"
+  (cd "$BINARIES" && "${sum[@]}" -c --status "$name.sha256") || die "${name} does not match its .sha256"
+  names+=("$name")
+done
+
+ls "$sources"/*.tar.* >/dev/null 2>&1 || die "no source tarballs in ${sources}"
+for tarball in "$sources"/*.tar.*; do
+  put_once "$tarball" "ffmpeg-sidecar/source/$(basename "$tarball")" application/octet-stream
+done
+put_once "$REPO_ROOT/scripts/ffmpeg-sidecar.sh" "$prefix/ffmpeg-sidecar.sh" "text/plain; charset=utf-8"
+put_once "$REPO_ROOT/scripts/ffmpeg-sidecar.Dockerfile" "$prefix/ffmpeg-sidecar.Dockerfile" "text/plain; charset=utf-8"
+put_once "$BINARIES/bridgething-ffmpeg-NOTICE.txt" "$prefix/bridgething-ffmpeg-NOTICE.txt" "text/plain; charset=utf-8"
+
+for name in "${names[@]}"; do
+  if published "$prefix/$name.sha256"; then
+    live="$(rclone cat "r2:${R2_BUCKET}/$prefix/$name.sha256" | cut -c1-12)"
+    log "already published: $prefix/$name (${live}), the mirror keeps its copy"
+    continue
+  fi
+  put "$BINARIES/$name" "$prefix/$name" application/octet-stream
+  put "$BINARIES/$name.sha256" "$prefix/$name.sha256" "text/plain; charset=utf-8"
+done
+
+log "recipe ${recipe} served from ${PUBLIC_BASE}/${prefix}/"

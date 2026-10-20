@@ -399,6 +399,51 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
   ));
 
   out.push(bridge_fixture(
+    "bridge_to_gateway/webapp-blob-put-ack-response",
+    "response to a BlobPut request - the offset the companion resumes streaming from",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Response(ResponseMeta { request_id: req_id() }),
+      data: BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobPutAck(WebappBlobPutAck {
+        resume_from_offset: 4096,
+      })),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/webapp-blob-stored-event",
+    "an uploaded blob landed under its key",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Event,
+      data: BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobStored(WebappBlobStored {
+        id: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        key: "background".into(),
+        sha256: "ab".repeat(32),
+        size: 8192,
+      })),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/webapp-blob-failed-event",
+    "an upload failed after its begin was acked",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Event,
+      data: BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobFailed(WebappBlobFailed {
+        id: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        key: "background".into(),
+        sha256: "ab".repeat(32),
+        error: WebappError::BlobTransferFailed {
+          key: "background".into(),
+          reason: "sha256 mismatch".into(),
+        },
+      })),
+    },
+  ));
+
+  out.push(bridge_fixture(
     "bridge_to_gateway/error-unsupported",
     "protocol error: bridge does not implement this request variant",
     BridgeToGatewayMsg {
@@ -605,6 +650,25 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
       id: id(),
       meta: GatewayMsgMeta::Request,
       data: GatewayToBridgeMsgData::Webapp(GatewayToBridgeWebappMsg::List),
+    },
+  ));
+
+  out.push(gateway_fixture(
+    "gateway_to_bridge/webapp-blob-put-request",
+    "gateway uploads a blob under a key; the bytes follow as transfer fragments",
+    GatewayToBridgeMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Request,
+      data: GatewayToBridgeMsgData::Webapp(GatewayToBridgeWebappMsg::BlobPut(WebappBlobPut {
+        id: FIXED_DEMO_WEBAPP.parse().unwrap(),
+        key: "background".into(),
+        mime: "image/gif".into(),
+        transfer: TransferRef {
+          id: req_id(),
+          total_size: 8192,
+          sha256: Some("ab".repeat(32)),
+        },
+      })),
     },
   ));
 

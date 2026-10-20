@@ -24,7 +24,7 @@ tracing = { workspace = true }
 futures = { workspace = true }
 flate2 = { workspace = true }
 librespot-protocol = "0.8.0"
-base64 = "0.22.1"
+base64 = "0.23.1"
 hex = "0.4.3"
 url = "2.5.8"
 rand = "0.10.1"

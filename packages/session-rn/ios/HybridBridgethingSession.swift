@@ -45,6 +45,17 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func listWebappDoc(deviceId: String, id: String) async throws -> [BridgethingDocEntry]
     func setWebappDoc(deviceId: String, id: String, key: String, value: String) async throws
     func deleteWebappDoc(deviceId: String, id: String, key: String) async throws
+    func pickMedia(kind: BridgethingPickKind, coverWidth: Double?, coverHeight: Double?) async throws
+        -> BridgethingPickedMedia?
+    func abandonPick()
+    func createBlobHandle(mime: String) async throws -> String
+    func appendBlobHandle(handle: String, base64: String) async throws -> Double
+    func putWebappBlob(
+        deviceId: String, id: String, key: String, handle: String,
+        onProgress: @escaping @Sendable (Double, Double) -> Void
+    ) async throws -> BridgethingWebappBlob
+    func deleteWebappBlob(deviceId: String, id: String, key: String) async throws
+    func listWebappBlobs(deviceId: String, id: String) async throws -> [BridgethingWebappBlob]
 
     func setCapabilityFlags(flags: BridgethingCapabilityFlags) async
 
@@ -445,6 +456,60 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     public func deleteWebappDoc(deviceId: String, id: String, key: String) throws -> Promise<Void> {
         Promise.async {
             try await Self.backend().deleteWebappDoc(deviceId: deviceId, id: id, key: key)
+        }
+    }
+
+    public func pickMedia(kind: BridgethingPickKind, coverWidth: Double?, coverHeight: Double?) throws
+        -> Promise<Variant_NullType_BridgethingPickedMedia>
+    {
+        Promise.async {
+            let picked = try await Self.backend().pickMedia(
+                kind: kind, coverWidth: coverWidth, coverHeight: coverHeight
+            )
+            return picked.map { .second($0) } ?? .first(NullType.null)
+        }
+    }
+
+    public func abandonPick() throws {
+        Self.stateLock.lock()
+        let backend = Self._backend
+        Self.stateLock.unlock()
+        backend?.abandonPick()
+    }
+
+    public func createBlobHandle(mime: String) throws -> Promise<String> {
+        Promise.async {
+            try await Self.backend().createBlobHandle(mime: mime)
+        }
+    }
+
+    public func appendBlobHandle(handle: String, base64: String) throws -> Promise<Double> {
+        Promise.async {
+            try await Self.backend().appendBlobHandle(handle: handle, base64: base64)
+        }
+    }
+
+    public func putWebappBlob(
+        deviceId: String, id: String, key: String, handle: String,
+        onProgress: @escaping (Double, Double) -> Void
+    ) throws -> Promise<BridgethingWebappBlob> {
+        let report: @Sendable (Double, Double) -> Void = { sent, total in onProgress(sent, total) }
+        return Promise.async {
+            try await Self.backend().putWebappBlob(
+                deviceId: deviceId, id: id, key: key, handle: handle, onProgress: report
+            )
+        }
+    }
+
+    public func deleteWebappBlob(deviceId: String, id: String, key: String) throws -> Promise<Void> {
+        Promise.async {
+            try await Self.backend().deleteWebappBlob(deviceId: deviceId, id: id, key: key)
+        }
+    }
+
+    public func listWebappBlobs(deviceId: String, id: String) throws -> Promise<[BridgethingWebappBlob]> {
+        Promise.async {
+            try await Self.backend().listWebappBlobs(deviceId: deviceId, id: id)
         }
     }
 

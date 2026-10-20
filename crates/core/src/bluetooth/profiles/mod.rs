@@ -29,9 +29,6 @@ pub enum ProfileCommand {
     mac: String,
     reply: Reply<()>,
   },
-  Reset {
-    reply: Reply<()>,
-  },
   UpsertPairedDevice {
     mac: Address,
     device_type: libbridgething::DeviceType,
@@ -54,10 +51,6 @@ impl ProfileCommand {
       }
       Self::Forget { mac, reply } => {
         tracing::debug!(%mac, "profile forget rejected: no radio attached");
-        let _ = reply.send(Err(BluetoothError::NoRadio));
-      }
-      Self::Reset { reply } => {
-        tracing::debug!("profile reset rejected: no radio attached");
         let _ = reply.send(Err(BluetoothError::NoRadio));
       }
       Self::UpsertPairedDevice {
@@ -142,15 +135,6 @@ impl ProfileManager {
     }
     self.peers.remove(address).await;
     self.devices.remove(address.to_string()).await?;
-
-    Ok(())
-  }
-
-  pub async fn reset(&self) -> BluetoothResult<()> {
-    tracing::debug!("forgetting all devices");
-    for mac in self.devices.list(libbridgething::LinkKind::Bluetooth).await?.keys() {
-      self.forget(mac).await?;
-    }
 
     Ok(())
   }
@@ -331,9 +315,6 @@ pub(crate) fn spawn_command_actor(profile_man: ProfileMan, mut rx: ProfileComman
         }
         ProfileCommand::Forget { mac, reply } => {
           let _ = reply.send(profile_man.forget(&mac).await);
-        }
-        ProfileCommand::Reset { reply } => {
-          let _ = reply.send(profile_man.reset().await);
         }
         ProfileCommand::UpsertPairedDevice {
           mac,

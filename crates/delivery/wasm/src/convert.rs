@@ -2,7 +2,7 @@ use bridgething_delivery::ota::{
   event::{OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, ota_kind_slug},
   service::WebappInstallResult,
 };
-use libbridgething::WebappInfo;
+use libbridgething::{WebappInfo, gateway::WebappDocChanged};
 use serde::Serialize;
 use wasm_bindgen::JsValue;
 
@@ -260,6 +260,23 @@ pub fn install_result(result: WebappInstallResult) -> Result<InstalledWebapp, Js
   match result {
     WebappInstallResult::Installed(info) => Ok(InstalledWebapp::from(info.as_ref())),
     WebappInstallResult::Failed { reason } => Err(JsValue::from_str(&format!("install failed: {reason}"))),
+  }
+}
+
+#[derive(Serialize)]
+pub struct DocChange {
+  pub id: String,
+  pub key: String,
+  pub value: Option<String>,
+}
+
+impl From<WebappDocChanged> for DocChange {
+  fn from(change: WebappDocChanged) -> Self {
+    DocChange {
+      id: change.id.to_string(),
+      key: change.key,
+      value: change.value,
+    }
   }
 }
 

@@ -3,27 +3,25 @@ use std::{
   time::Duration,
 };
 
-use bridgething_delivery::{
-  blob::{FsBlobStore, FsSlotIndex, digest_of},
-  bundle::fetch::{ArtifactFetch, DigestField, DownloadRequest, FetchError},
-  seam::{BlobStore, Clock, SlotIndex, SystemClock},
-  transfer::{AckSink, TransferReceiver},
-  webapp::{ResourceOrigin, WebappResourceError, WebappResourceService},
-};
 use bridgething_gateway::Gateway;
-use bytes::Bytes;
 use libbridgething::{
   WebappError,
   gateway::{
-    BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayTransferMsg, BridgeToGatewayWebappMsg,
-    GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgeWebappMsg, TransferAck, TransferBody, TransferFragment,
-    TransferRef, WebappResource, WebappResourceKind, WebappResourceReply,
+    BridgeToGatewayMsgData, BridgeToGatewayTransferMsg, TransferAck, TransferBody, TransferRef, WebappResourceKind,
+    WebappResourceReply,
   },
-  protocol::{BridgeEndec, DecodedFrame},
-  wire::{MsgMeta, ResponseMeta, WireError},
+  wire::WireError,
 };
-use tokio::sync::mpsc;
 use uuid::Uuid;
+
+use crate::{
+  blob::{FsBlobStore, FsSlotIndex},
+  bundle::fetch::{ArtifactFetch, DownloadRequest, FetchError, sha256_hex},
+  harness::{FakeDevice, linked_gateway},
+  seam::{BlobStore, Clock, SlotIndex, SystemClock},
+  transfer::{AckSink, MAX_TRANSFER_BYTES, TransferReceiver},
+  webapp::{ResourceOrigin, WebappResourceError, WebappResourceService},
+};
 
 const PATIENT: Duration = Duration::from_secs(3);
 
@@ -33,76 +31,9 @@ impl AckSink for DroppedAcks {
   fn ack(&self, _ack: TransferAck) {}
 }
 
-struct Device {
-  sent: mpsc::UnboundedReceiver<GatewayToBridgeMsg>,
-  replies: mpsc::UnboundedSender<BridgeToGatewayMsg>,
-}
-
-impl Device {
-  async fn next_resource_request(&mut self) -> (Uuid, WebappResource) {
-    loop {
-      let msg = tokio::time::timeout(PATIENT, self.sent.recv())
-        .await
-        .expect("the service asked for the resource")
-        .expect("the link is open");
-      if let GatewayToBridgeMsgData::Webapp(GatewayToBridgeWebappMsg::Resource(request)) = msg.data {
-        return (msg.id, request);
-      }
-    }
-  }
-
-  fn respond(&self, request_id: Uuid, reply: WebappResourceReply) {
-    self.send(
-      MsgMeta::Response(ResponseMeta { request_id }),
-      BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::Resource(reply)),
-    );
-  }
-
-  fn reject(&self, request_id: Uuid, error: WebappError) {
-    self.send(
-      MsgMeta::Response(ResponseMeta { request_id }),
-      BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::WebappError(error)),
-    );
-  }
-
-  fn refuse(&self, request_id: Uuid, error: WireError) {
-    self.send(
-      MsgMeta::Response(ResponseMeta { request_id }),
-      BridgeToGatewayMsgData::Error(error),
-    );
-  }
-
-  fn stream(&self, transfer_id: Uuid, payload: &[u8], fragment_bytes: usize) {
-    let mut offset = 0;
-    while offset < payload.len() {
-      let end = (offset + fragment_bytes).min(payload.len());
-      self.send(
-        MsgMeta::Event,
-        BridgeToGatewayMsgData::Transfer(BridgeToGatewayTransferMsg::Fragment(TransferFragment {
-          transfer_id,
-          offset: offset as u32,
-          bytes: Bytes::copy_from_slice(&payload[offset..end]),
-        })),
-      );
-      offset = end;
-    }
-  }
-
-  fn send(&self, meta: MsgMeta, data: BridgeToGatewayMsgData) {
-    self
-      .replies
-      .send(BridgeToGatewayMsg {
-        id: Uuid::now_v7(),
-        meta,
-        data,
-      })
-      .expect("the link is open");
-  }
-}
-
 struct Rig {
   gateway: Gateway,
-  device: Device,
+  device: FakeDevice,
   service: WebappResourceService,
   blobs: Arc<dyn BlobStore>,
   receiver: Arc<TransferReceiver>,
@@ -111,10 +42,6 @@ struct Rig {
 }
 
 impl Rig {
-  fn scratch(&self) -> std::path::PathBuf {
-    self._cache.path().join("downloads")
-  }
-
   fn reopened(&self) -> WebappResourceService {
     WebappResourceService::new(
       self.blobs.clone(),
@@ -129,29 +56,7 @@ fn rig() -> Rig {
 }
 
 fn rig_with_timeout(timeout: Duration) -> Rig {
-  let (companion_io, device_io) = tokio::io::duplex(256 * 1024);
-  let (sent_tx, sent) = mpsc::unbounded_channel();
-  let (replies, mut outgoing) = mpsc::unbounded_channel::<BridgeToGatewayMsg>();
-  tokio::spawn(async move {
-    use futures::{SinkExt, StreamExt};
-    use tokio_util::codec::Framed;
-
-    let mut framed = Framed::new(device_io, BridgeEndec::default());
-    loop {
-      tokio::select! {
-        outbound = outgoing.recv() => match outbound {
-          Some(msg) => if framed.send(msg).await.is_err() { return },
-          None => return,
-        },
-        inbound = framed.next() => match inbound {
-          Some(Ok(DecodedFrame::Frame(frame))) => if sent_tx.send(frame.msg).is_err() { return },
-          _ => return,
-        },
-      }
-    }
-  });
-
-  let gateway = Gateway::from_io(companion_io);
+  let (gateway, device) = linked_gateway();
   let receiver = TransferReceiver::new(Arc::new(DroppedAcks), Arc::new(SystemClock) as Arc<dyn Clock>);
 
   let mut inbound = gateway.events();
@@ -174,7 +79,7 @@ fn rig_with_timeout(timeout: Duration) -> Rig {
 
   Rig {
     gateway,
-    device: Device { sent, replies },
+    device,
     service,
     blobs,
     receiver,
@@ -198,7 +103,7 @@ async fn an_inline_body_lands_in_the_store_and_the_next_fetch_offers_its_digest(
   let mut rig = rig();
   let webapp_id = Uuid::now_v7();
   let body = ramp(2048);
-  let digest = digest_of(&body);
+  let digest = sha256_hex(&body);
 
   let fetching = rig
     .service
@@ -208,7 +113,7 @@ async fn an_inline_body_lands_in_the_store_and_the_next_fetch_offers_its_digest(
     assert_eq!(request.id, webapp_id);
     assert_eq!(request.kind, WebappResourceKind::Icon);
     assert_eq!(request.have, None, "a first fetch has nothing to offer");
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
@@ -240,7 +145,7 @@ async fn an_inline_body_lands_in_the_store_and_the_next_fetch_offers_its_digest(
       Some(digest.as_str()),
       "a second fetch offers what is cached"
     );
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
@@ -263,7 +168,7 @@ async fn a_streamed_body_reassembles_behind_the_reply_and_lands_in_the_store() {
   let mut rig = rig();
   let webapp_id = Uuid::now_v7();
   let body = ramp(24 * 1024);
-  let digest = digest_of(&body);
+  let digest = sha256_hex(&body);
   let transfer_id = Uuid::now_v7();
 
   let fetching = rig
@@ -272,7 +177,7 @@ async fn a_streamed_body_reassembles_behind_the_reply_and_lands_in_the_store() {
   let driving = async {
     let (id, request) = rig.device.next_resource_request().await;
     assert_eq!(request.kind, WebappResourceKind::Settings);
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
@@ -286,7 +191,7 @@ async fn a_streamed_body_reassembles_behind_the_reply_and_lands_in_the_store() {
         })),
       },
     );
-    rig.device.stream(transfer_id, &body, 4 * 1024);
+    rig.device.stream(transfer_id, &body, 0..body.len(), 4 * 1024);
   };
 
   let (resolved, ()) = tokio::join!(fetching, driving);
@@ -306,7 +211,7 @@ async fn a_domain_rejection_keeps_its_cause() {
     .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
-    rig.device.reject(id, not_available(webapp_id));
+    rig.device.refuse_webapp(id, not_available(webapp_id));
   };
 
   let (failed, ()) = tokio::join!(fetching, driving);
@@ -346,12 +251,12 @@ async fn a_body_less_reply_with_nothing_cached_is_a_stale_cache_failure() {
     .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
         kind: WebappResourceKind::Icon,
-        sha256: digest_of(b"nothing here"),
+        sha256: sha256_hex(b"nothing here"),
         mime: Some("image/png".into()),
         body: None,
       },
@@ -373,14 +278,14 @@ async fn a_body_that_does_not_match_the_replys_digest_fails_typed_and_stores_not
   let mut rig = rig();
   let webapp_id = Uuid::now_v7();
   let body = vec![1u8; 512];
-  let claimed = digest_of(&vec![2u8; 512]);
+  let claimed = sha256_hex(&vec![2u8; 512]);
 
   let fetching = rig
     .service
     .fetch(&rig.gateway, webapp_id, WebappResourceKind::Icon, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
@@ -397,11 +302,11 @@ async fn a_body_that_does_not_match_the_replys_digest_fails_typed_and_stores_not
     failed.expect_err("a mismatched body fails"),
     WebappResourceError::ShaMismatch {
       expected: claimed,
-      got: digest_of(&body),
+      got: sha256_hex(&body),
     }
   );
   assert!(
-    !rig.blobs.contains(&digest_of(&body)),
+    !rig.blobs.contains(&sha256_hex(&body)),
     "a body the daemon mis-described must not enter the store"
   );
   assert_eq!(
@@ -422,12 +327,12 @@ async fn a_stream_that_never_arrives_times_the_fetch_out_rather_than_hanging_it(
     .fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, None);
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
         kind: WebappResourceKind::Settings,
-        sha256: digest_of(b"never sent"),
+        sha256: sha256_hex(b"never sent"),
         mime: Some("text/html".into()),
         body: Some(TransferBody::Stream(TransferRef {
           id: transfer_id,
@@ -444,7 +349,7 @@ async fn a_stream_that_never_arrives_times_the_fetch_out_rather_than_hanging_it(
   assert!(
     matches!(
       failed.expect_err("a silent stream fails"),
-      WebappResourceError::Transfer(bridgething_delivery::transfer::TransferReceiveError::TimedOut { .. })
+      WebappResourceError::Transfer(crate::transfer::TransferReceiveError::TimedOut { .. })
     ),
     "the fetch surfaces the transfer timeout"
   );
@@ -456,7 +361,7 @@ async fn a_replaced_resource_drops_the_digest_it_displaced() {
   let webapp_id = Uuid::now_v7();
   let first = ramp(1024);
   let second = ramp(2048);
-  let (first_digest, second_digest) = (digest_of(&first), digest_of(&second));
+  let (first_digest, second_digest) = (sha256_hex(&first), sha256_hex(&second));
   let seen = Arc::new(Mutex::new(Vec::new()));
 
   for (body, digest) in [(&first, &first_digest), (&second, &second_digest)] {
@@ -467,7 +372,7 @@ async fn a_replaced_resource_drops_the_digest_it_displaced() {
     let driving = async {
       let (id, request) = rig.device.next_resource_request().await;
       seen.lock().unwrap().push(request.have.clone());
-      rig.device.respond(
+      rig.device.resource(
         id,
         WebappResourceReply {
           id: webapp_id,
@@ -495,7 +400,7 @@ async fn a_replaced_resource_drops_the_digest_it_displaced() {
 }
 
 async fn fetch_once(
-  device: &mut Device,
+  device: &mut FakeDevice,
   gateway: &Gateway,
   service: &WebappResourceService,
   webapp_id: Uuid,
@@ -503,14 +408,14 @@ async fn fetch_once(
   body: &[u8],
   mime: &str,
 ) -> (Option<String>, String) {
-  let digest = digest_of(body);
+  let digest = sha256_hex(body);
   let fetching = service.fetch(gateway, webapp_id, kind, None);
   let offered = Arc::new(Mutex::new(None));
   let seen = offered.clone();
   let driving = async {
     let (id, request) = device.next_resource_request().await;
     *seen.lock().unwrap() = request.have.clone();
-    device.respond(
+    device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
@@ -548,7 +453,7 @@ async fn a_service_built_over_a_written_index_offers_what_the_last_run_cached() 
   let cold = rig.reopened();
   assert_eq!(
     cold.cached(webapp_id, WebappResourceKind::Icon),
-    Some(bridgething_delivery::seam::CachedResource {
+    Some(crate::seam::CachedResource {
       digest: digest.clone(),
       mime: Some("image/png".into()),
     }),
@@ -575,7 +480,7 @@ async fn a_digest_two_slots_share_survives_one_of_them_being_displaced() {
   let webapp_id = Uuid::now_v7();
   let shared = ramp(1024);
   let replacement = ramp(2048);
-  let (shared_digest, replacement_digest) = (digest_of(&shared), digest_of(&replacement));
+  let (shared_digest, replacement_digest) = (sha256_hex(&shared), sha256_hex(&replacement));
 
   fetch_once(
     &mut rig.device,
@@ -682,43 +587,34 @@ struct HostedPage {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for HostedPage {
-  async fn text(&self, _url: &str) -> Result<String, FetchError> {
-    Err(FetchError::Transport("the rig only serves downloads".into()))
+  async fn bytes(&self, _url: &str, limit: usize) -> Result<Vec<u8>, FetchError> {
+    *self.hits.lock().unwrap() += 1;
+    if self.bytes.len() > limit {
+      return Err(FetchError::TooLarge { limit });
+    }
+    Ok(self.bytes.clone())
   }
 
-  async fn download(&self, request: DownloadRequest) -> Result<std::path::PathBuf, FetchError> {
-    *self.hits.lock().unwrap() += 1;
-    if let Some(expected) = &request.expected
-      && expected.size != self.bytes.len() as u64
-    {
-      return Err(FetchError::DigestMismatch {
-        asset: request.asset,
-        field: DigestField::Size,
-      });
-    }
-    std::fs::create_dir_all(&request.dir).map_err(|e| FetchError::Io(e.to_string()))?;
-    let path = request.dir.join(&request.filename);
-    std::fs::write(&path, &self.bytes).map_err(|e| FetchError::Io(e.to_string()))?;
-    Ok(path)
+  async fn download(&self, _request: DownloadRequest) -> Result<std::path::PathBuf, FetchError> {
+    Err(FetchError::Transport(
+      "a hosted resource is never spooled to disk".into(),
+    ))
   }
 }
 
 fn hosting(rig: &Rig, bytes: Vec<u8>) -> (WebappResourceService, Arc<Mutex<usize>>) {
   let hits = Arc::new(Mutex::new(0));
-  let service = rig.reopened().with_fetch(
-    Arc::new(HostedPage {
-      bytes,
-      hits: hits.clone(),
-    }),
-    rig.scratch(),
-  );
+  let service = rig.reopened().with_fetch(Arc::new(HostedPage {
+    bytes,
+    hits: hits.clone(),
+  }));
   (service, hits)
 }
 
 fn origin_for(bytes: &[u8]) -> ResourceOrigin {
   ResourceOrigin {
     url: "https://apps.example.com/s/page.html".into(),
-    sha256: digest_of(bytes),
+    sha256: sha256_hex(bytes),
     size: bytes.len() as u64,
     mime: Some("text/html".into()),
   }
@@ -741,7 +637,7 @@ async fn a_hosted_page_that_matches_the_declared_digest_is_served_without_asking
     .await
     .expect("bytes matching the declared digest are taken as the page");
 
-  assert_eq!(resource.digest, digest_of(&body));
+  assert_eq!(resource.digest, sha256_hex(&body));
   assert_eq!(*hits.lock().unwrap(), 1, "one download, no round trip to the device");
   assert_eq!(rig.blobs.get(&resource.digest).expect("stored").unwrap(), body);
 }
@@ -763,7 +659,7 @@ async fn a_second_open_reads_the_cache_without_the_network_or_the_device() {
     .await
     .expect("second open");
 
-  assert_eq!(again.digest, digest_of(&body));
+  assert_eq!(again.digest, sha256_hex(&body));
   assert_eq!(
     *hits.lock().unwrap(),
     1,
@@ -784,12 +680,12 @@ async fn an_overlay_ignores_a_hosted_origin_and_takes_the_bytes_off_the_device()
   let driving = async {
     let (id, request) = rig.device.next_resource_request().await;
     assert_eq!(request.kind, WebappResourceKind::Overlay);
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
         kind: WebappResourceKind::Overlay,
-        sha256: digest_of(&installed),
+        sha256: sha256_hex(&installed),
         mime: Some("text/javascript".into()),
         body: Some(TransferBody::Inline(installed.clone())),
       },
@@ -799,7 +695,7 @@ async fn an_overlay_ignores_a_hosted_origin_and_takes_the_bytes_off_the_device()
 
   assert_eq!(
     resource.expect("the overlay comes off the device").digest,
-    digest_of(&installed),
+    sha256_hex(&installed),
     "injected javascript is never taken from a catalog url"
   );
   assert_eq!(*hits.lock().unwrap(), 0, "and the hosted url was never opened");
@@ -819,10 +715,10 @@ async fn an_origin_the_device_never_vouched_for_is_still_served_to_the_caller_th
     .await
     .expect("the service trusts the digest it was handed");
 
-  assert_eq!(resource.digest, digest_of(&elsewhere));
+  assert_eq!(resource.digest, sha256_hex(&elsewhere));
   assert_ne!(
     resource.digest,
-    digest_of(&installed),
+    sha256_hex(&installed),
     "bytes the device never reported are served when a caller vouches for them"
   );
   assert_eq!(
@@ -845,12 +741,12 @@ async fn a_hosted_page_that_is_not_the_installed_one_falls_back_to_the_device() 
   let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin));
   let driving = async {
     let (id, _) = rig.device.next_resource_request().await;
-    rig.device.respond(
+    rig.device.resource(
       id,
       WebappResourceReply {
         id: webapp_id,
         kind: WebappResourceKind::Settings,
-        sha256: digest_of(&installed),
+        sha256: sha256_hex(&installed),
         mime: Some("text/html".into()),
         body: Some(TransferBody::Inline(installed.clone())),
       },
@@ -860,7 +756,125 @@ async fn a_hosted_page_that_is_not_the_installed_one_falls_back_to_the_device() 
 
   assert_eq!(
     resource.expect("the link still has the real page").digest,
-    digest_of(&installed)
+    sha256_hex(&installed)
   );
   assert_eq!(*hits.lock().unwrap(), 1, "the hosted copy was tried once and refused");
+}
+
+#[tokio::test]
+async fn a_hosted_page_shorter_than_the_catalog_declares_falls_back_to_the_device() {
+  let mut rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let truncated = installed[..1024].to_vec();
+  let origin = origin_for(&installed);
+  let (service, hits) = hosting(&rig, truncated);
+
+  let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin));
+  let driving = async {
+    let (id, _) = rig.device.next_resource_request().await;
+    rig.device.resource(
+      id,
+      WebappResourceReply {
+        id: webapp_id,
+        kind: WebappResourceKind::Settings,
+        sha256: sha256_hex(&installed),
+        mime: Some("text/html".into()),
+        body: Some(TransferBody::Inline(installed.clone())),
+      },
+    );
+  };
+  let (resource, ()) = tokio::join!(fetching, driving);
+
+  assert_eq!(
+    resource.expect("the link has the whole page").digest,
+    sha256_hex(&installed)
+  );
+  assert_eq!(*hits.lock().unwrap(), 1, "the short copy was read once and refused");
+}
+
+struct StuckOrigin;
+
+#[async_trait::async_trait]
+impl ArtifactFetch for StuckOrigin {
+  async fn bytes(&self, _url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
+    std::future::pending().await
+  }
+
+  async fn download(&self, _request: DownloadRequest) -> Result<std::path::PathBuf, FetchError> {
+    Err(FetchError::Transport(
+      "a hosted resource is never spooled to disk".into(),
+    ))
+  }
+}
+
+#[tokio::test]
+async fn a_hosted_page_that_never_answers_falls_back_to_the_device() {
+  let mut rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let origin = origin_for(&installed);
+  let service = WebappResourceService::with_timeout(
+    rig.blobs.clone(),
+    Arc::new(FsSlotIndex::new(&rig.index_path)) as Arc<dyn SlotIndex>,
+    rig.receiver.clone(),
+    Duration::from_millis(200),
+  )
+  .with_fetch(Arc::new(StuckOrigin));
+
+  let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin));
+  let driving = async {
+    let (id, _) = rig.device.next_resource_request().await;
+    rig.device.resource(
+      id,
+      WebappResourceReply {
+        id: webapp_id,
+        kind: WebappResourceKind::Settings,
+        sha256: sha256_hex(&installed),
+        mime: Some("text/html".into()),
+        body: Some(TransferBody::Inline(installed.clone())),
+      },
+    );
+  };
+  let (resource, ()) = tokio::time::timeout(PATIENT, async { tokio::join!(fetching, driving) })
+    .await
+    .expect("a hosted url that hangs must not hang the page");
+
+  assert_eq!(
+    resource.expect("the link still has the page").digest,
+    sha256_hex(&installed)
+  );
+}
+
+#[tokio::test]
+async fn a_hosted_page_declared_past_the_resource_cap_is_never_fetched() {
+  let mut rig = rig();
+  let webapp_id = Uuid::now_v7();
+  let installed = ramp(2048);
+  let mut origin = origin_for(&installed);
+  origin.size = MAX_TRANSFER_BYTES + 1;
+  let (service, hits) = hosting(&rig, installed.clone());
+
+  let fetching = service.fetch(&rig.gateway, webapp_id, WebappResourceKind::Settings, Some(&origin));
+  let driving = async {
+    let (id, _) = rig.device.next_resource_request().await;
+    rig.device.resource(
+      id,
+      WebappResourceReply {
+        id: webapp_id,
+        kind: WebappResourceKind::Settings,
+        sha256: sha256_hex(&installed),
+        mime: Some("text/html".into()),
+        body: Some(TransferBody::Inline(installed.clone())),
+      },
+    );
+  };
+  let (resource, ()) = tokio::join!(fetching, driving);
+
+  assert_eq!(resource.expect("the link has the page").digest, sha256_hex(&installed));
+  assert_eq!(
+    *hits.lock().unwrap(),
+    0,
+    "a size past the cap is refused before the url is opened"
+  );
 }

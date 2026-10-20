@@ -10,13 +10,17 @@ use iap2::Iap2Manager;
 use iap2::{Iap2EaGateway, Iap2EaGatewayHandle, Iap2EventsRx, Iap2Handles};
 use libbridgething::{
   Priority,
-  gateway::{BridgeToGatewayMsg, BridgeToGatewayMsgData, GatewayToBridgeMsg, GatewayToBridgeMsgData},
+  gateway::{
+    BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayTransferMsgEvent, GatewayToBridgeMsg,
+    GatewayToBridgeMsgData, TransferAck,
+  },
   protocol::{Compress, EnvelopeProbe},
   wire::{MsgMeta, RequestError, ResponseMeta, WireCommand, WireError, WireEvent, WireRequest},
 };
 #[cfg(target_os = "linux")]
 use profiles::ProfileManager;
 use tokio::{sync::oneshot, task::JoinHandle};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use uuid::Uuid;
 
 mod address;
@@ -355,10 +359,6 @@ impl ProfileManAccess {
     self.request(|reply| ProfileCommand::Forget { mac, reply }).await
   }
 
-  pub async fn reset(&self) -> BluetoothResult<()> {
-    self.request(|reply| ProfileCommand::Reset { reply }).await
-  }
-
   pub async fn upsert_paired_device(
     &self,
     mac: Address,
@@ -490,11 +490,32 @@ fn fail_pending_on_disconnect(pending: &PendingRequests, addr: Address, no_peers
   });
 }
 
+#[derive(Debug, Clone, Default)]
+pub(crate) struct OutboundDrain {
+  requested: CancellationToken,
+  forwarded: CancellationToken,
+  tasks: TaskTracker,
+}
+
+impl OutboundDrain {
+  pub(crate) fn spawn<F>(&self, task: F) -> JoinHandle<()>
+  where
+    F: std::future::Future<Output = ()> + Send + 'static,
+  {
+    self.tasks.spawn(task)
+  }
+
+  pub(crate) async fn forwarded(&self) {
+    self.forwarded.cancelled().await
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct GatewayMan {
   outbound_tx: GatewaySendTx,
   peer_owners: PeerOwners,
   pending: PendingRequests,
+  drain: OutboundDrain,
 }
 
 pub(crate) struct GatewayBootstrap {
@@ -524,6 +545,7 @@ impl GatewayMan {
       outbound_tx,
       peer_owners,
       pending,
+      drain: OutboundDrain::default(),
     };
     (me, GatewayBootstrap { outbound_rx })
   }
@@ -547,26 +569,24 @@ impl GatewayMan {
     let (rfcomm_recv_tx, rfcomm_recv_rx) = tokio::sync::mpsc::channel(16);
     let (rfcomm_send_tx, rfcomm_send_rx) = tokio::sync::mpsc::channel(16);
 
-    let _rfcomm_handle = RfcommGateway::init(
+    let rfcomm = RfcommGateway::init(
       source,
       deps.meta.clone(),
       deps.peers.clone(),
       rfcomm_recv_tx,
       rfcomm_send_rx,
       self.peer_owners.clone(),
-    )
-    .spawn();
-
-    let _rfcomm_listener = spawn_gateway_listener(GatewayType::Rfcomm, rfcomm_recv_rx, bluetooth_tx.clone());
+      self.drain.clone(),
+    );
 
     let (iap2_ea, iap2_ea_handle) = Iap2EaGateway::init(
       deps.meta.clone(),
       deps.peers.clone(),
       bluetooth_tx.clone(),
       self.peer_owners.clone(),
+      self.drain.clone(),
     );
     let iap2_ea_send_tx = iap2_ea.send_tx();
-    let _iap2_ea_handle_join = iap2_ea.spawn();
 
     let network = NetworkGateway::init(
       network_bind,
@@ -574,17 +594,24 @@ impl GatewayMan {
       deps.peers.clone(),
       bluetooth_tx.clone(),
       self.peer_owners.clone(),
+      self.drain.clone(),
     )
     .await?;
     let network_send_tx = network.send_tx();
-    let _network_handle = network.spawn();
 
+    let _rfcomm_handle = rfcomm.spawn();
+    let _rfcomm_listener = spawn_gateway_listener(GatewayType::Rfcomm, rfcomm_recv_rx, bluetooth_tx.clone());
+    let _iap2_ea_handle_join = iap2_ea.spawn();
+    let _network_handle = network.spawn();
     let _router_handle = spawn_outbound_router(
       bootstrap.outbound_rx,
       self.peer_owners.clone(),
-      rfcomm_send_tx,
-      iap2_ea_send_tx,
-      network_send_tx,
+      self.drain.clone(),
+      OutboundTransports {
+        rfcomm: rfcomm_send_tx,
+        iap2_ea: iap2_ea_send_tx,
+        network: network_send_tx,
+      },
     );
 
     Ok(GatewayRuntime {
@@ -595,6 +622,12 @@ impl GatewayMan {
       _network_handle,
       _router_handle,
     })
+  }
+
+  pub async fn drain(&self) {
+    self.drain.requested.cancel();
+    self.drain.tasks.close();
+    self.drain.tasks.wait().await;
   }
 
   pub async fn send_all(&self, data: OutboundGatewayMessage) {
@@ -625,6 +658,15 @@ impl GatewayMan {
           data: event.into(),
         })
         .with_priority(priority),
+      )
+      .await;
+  }
+
+  pub async fn send_transfer_ack(&self, address: Address, transfer_id: Uuid, received: u32) {
+    self
+      .send_event(
+        address,
+        BridgeToGatewayTransferMsgEvent::Ack(TransferAck { transfer_id, received }),
       )
       .await;
   }
@@ -813,29 +855,61 @@ fn spawn_gateway_listener(gateway_type: GatewayType, mut rx: GatewayRecvRx, tx: 
   })
 }
 
+struct OutboundTransports {
+  rfcomm: GatewaySendTx,
+  iap2_ea: GatewaySendTx,
+  network: GatewaySendTx,
+}
+
+impl OutboundTransports {
+  async fn route(&self, peer_owners: &PeerOwners, msg: OutboundGatewayMessage) {
+    let targets = resolve_targets(peer_owners, msg.address);
+    let Some((last, rest)) = targets.split_last() else {
+      tracing::trace!("outbound router: no targets for {:?}; dropping", msg.address);
+      return;
+    };
+    for kind in rest {
+      self.dispatch(*kind, msg.clone()).await;
+    }
+    self.dispatch(*last, msg).await;
+  }
+
+  async fn dispatch(&self, kind: GatewayType, msg: OutboundGatewayMessage) {
+    let tx = match kind {
+      GatewayType::Rfcomm => &self.rfcomm,
+      GatewayType::Iap2Ea => &self.iap2_ea,
+      GatewayType::Network => &self.network,
+    };
+    if let Err(err) = tx.send(msg).await {
+      tracing::error!(?err, ?kind, "outbound router: transport queue closed");
+    }
+  }
+}
+
 fn spawn_outbound_router(
   mut outbound_rx: GatewaySendRx,
   peer_owners: PeerOwners,
-  rfcomm_send_tx: GatewaySendTx,
-  iap2_ea_send_tx: GatewaySendTx,
-  network_send_tx: GatewaySendTx,
+  drain: OutboundDrain,
+  transports: OutboundTransports,
 ) -> JoinHandle<()> {
-  tokio::spawn(async move {
-    while let Some(msg) = outbound_rx.recv().await {
-      let targets = resolve_targets(&peer_owners, msg.address);
-      match targets.len() {
-        0 => tracing::trace!("outbound router: no targets for {:?}; dropping", msg.address),
-        1 => dispatch_to(targets[0], msg, &rfcomm_send_tx, &iap2_ea_send_tx, &network_send_tx).await,
-        _ => {
-          let last = *targets.last().expect("non-empty targets");
-          for kind in &targets[..targets.len() - 1] {
-            dispatch_to(*kind, msg.clone(), &rfcomm_send_tx, &iap2_ea_send_tx, &network_send_tx).await;
+  drain.clone().spawn(async move {
+    loop {
+      tokio::select! {
+        msg = outbound_rx.recv() => match msg {
+          Some(msg) => transports.route(&peer_owners, msg).await,
+          None => break,
+        },
+        _ = drain.requested.cancelled() => {
+          outbound_rx.close();
+          while let Some(msg) = outbound_rx.recv().await {
+            transports.route(&peer_owners, msg).await;
           }
-          dispatch_to(last, msg, &rfcomm_send_tx, &iap2_ea_send_tx, &network_send_tx).await;
+          break;
         }
       }
     }
-    tracing::debug!("outbound router: outbound channel closed; exiting");
+    tracing::debug!("outbound router: exiting");
+    drain.forwarded.cancel();
   })
 }
 
@@ -858,23 +932,6 @@ fn resolve_targets(peer_owners: &PeerOwners, address: Option<Address>) -> Vec<Ga
       }
       targets
     }
-  }
-}
-
-async fn dispatch_to(
-  kind: GatewayType,
-  msg: OutboundGatewayMessage,
-  rfcomm_send_tx: &GatewaySendTx,
-  iap2_ea_send_tx: &GatewaySendTx,
-  network_send_tx: &GatewaySendTx,
-) {
-  let tx = match kind {
-    GatewayType::Rfcomm => rfcomm_send_tx,
-    GatewayType::Iap2Ea => iap2_ea_send_tx,
-    GatewayType::Network => network_send_tx,
-  };
-  if let Err(err) = tx.send(msg).await {
-    tracing::error!(?err, ?kind, "outbound router: transport queue closed");
   }
 }
 

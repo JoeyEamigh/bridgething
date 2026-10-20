@@ -165,7 +165,7 @@ function webapp(
     source: 'installed',
     role: 'standard',
     version: '1.0.0',
-    config: [],
+    configJson: '[]',
     permissions: [],
     ...over,
   };

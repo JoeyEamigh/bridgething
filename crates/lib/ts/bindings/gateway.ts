@@ -242,6 +242,11 @@ export type BridgeToGatewayWebappMsg =
   | { event: 'docGet'; data: WebappDocGetReply }
   | { event: 'docList'; data: WebappDocListReply }
   | { event: 'docAck'; data: WebappDocAck }
+  | { event: 'blobPutAck'; data: WebappBlobPutAck }
+  | { event: 'blobDeleteAck'; data: WebappBlobDeleteAck }
+  | { event: 'blobList'; data: WebappBlobListReply }
+  | { event: 'blobStored'; data: WebappBlobStored }
+  | { event: 'blobFailed'; data: WebappBlobFailed }
   | { event: 'docChanged'; data: WebappDocChanged }
   | { event: 'configChanged'; data: WebappConfigChanged }
   | { event: 'webappInstalled'; data: WebappInfo }
@@ -439,7 +444,10 @@ export type GatewayToBridgeWebappMsg =
   | { event: 'docGet'; data: WebappDocGet }
   | { event: 'docList'; data: WebappDocList }
   | { event: 'docSet'; data: WebappDocSet }
-  | { event: 'docDelete'; data: WebappDocDelete };
+  | { event: 'docDelete'; data: WebappDocDelete }
+  | { event: 'blobPut'; data: WebappBlobPut }
+  | { event: 'blobDelete'; data: WebappBlobDelete }
+  | { event: 'blobList'; data: WebappBlobList };
 
 export type GeoErrorReply = { error: GeoError };
 
@@ -692,6 +700,24 @@ export type VolumeChanged = { level: number; muted: boolean };
 export type WebappActive = { id: string | null; name: string | null };
 
 export type WebappActiveChanged = { id: string | null; name: string | null; art: ArtProfile | null };
+
+export type WebappBlobDelete = { id: string; key: string };
+
+export type WebappBlobDeleteAck = { key: string };
+
+export type WebappBlobEntry = { key: string; sha256: string; mime: string; size: number };
+
+export type WebappBlobFailed = { id: string; key: string; sha256: string; error: WebappError };
+
+export type WebappBlobList = { id: string };
+
+export type WebappBlobListReply = { entries: Array<WebappBlobEntry> };
+
+export type WebappBlobPut = { id: string; key: string; mime: string; transfer: TransferRef };
+
+export type WebappBlobPutAck = { resumeFromOffset: number };
+
+export type WebappBlobStored = { id: string; key: string; sha256: string; size: number };
 
 export type WebappConfigAck = { key: string; value: string | null };
 

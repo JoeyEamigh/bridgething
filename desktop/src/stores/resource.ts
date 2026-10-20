@@ -1,5 +1,5 @@
 import { describeError } from '@bridgething/ui';
-import { signal, type Signal } from '@preact/signals';
+import { batch, effect, signal, type Signal } from '@preact/signals';
 
 export type Store<T> = {
   data: Signal<T>;
@@ -26,12 +26,17 @@ export function resource<T>(initial: T, pull: () => Promise<T>): Store<T> {
   const once = async (): Promise<void> => {
     pending.value = true;
     try {
-      data.value = await pull();
-      error.value = undefined;
-      settled.value = true;
+      const pulled = await pull();
+      batch(() => {
+        data.value = pulled;
+        error.value = undefined;
+        settled.value = true;
+      });
     } catch (reason) {
-      data.value = initial;
-      error.value = describeError(reason);
+      batch(() => {
+        data.value = initial;
+        error.value = describeError(reason);
+      });
     } finally {
       pending.value = false;
     }
@@ -53,6 +58,16 @@ export function resource<T>(initial: T, pull: () => Promise<T>): Store<T> {
   };
 
   return { data, error, pending, settled, refresh };
+}
+
+export function settled<T>(store: Store<T>): Promise<T> {
+  return new Promise(resolve => {
+    const stop = effect(() => {
+      if (store.pending.value) return;
+      resolve(store.data.value);
+      queueMicrotask(() => stop());
+    });
+  });
 }
 
 export function keyed<T>(initial: T): Keyed<T> {

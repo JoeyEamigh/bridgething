@@ -1,7 +1,14 @@
+import { THEME_DEFAULTS } from '@bridgething/client/theme';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { PALETTE, type Palette, type Scheme } from '../lib/theme';
+import {
+  PALETTE,
+  settingsTheme,
+  TYPE,
+  type Palette,
+  type Scheme,
+} from '../lib/theme';
 
 const CSS = readFileSync(join(__dirname, '..', 'global.css'), 'utf8');
 const DARK_AT = CSS.indexOf('@media (prefers-color-scheme: dark)');
@@ -68,4 +75,25 @@ describe('theme tokens', () => {
       });
     }
   });
+
+  test.each(SCHEMES)('%s settings form defaults match the palette', scheme => {
+    expect(THEME_DEFAULTS.colors[scheme]).toEqual(PALETTE[scheme]);
+  });
+
+  test('settings form type scale matches the app', () => {
+    expect(THEME_DEFAULTS.text).toEqual(TYPE);
+  });
+
+  test.each(SCHEMES)(
+    '%s settings theme carries every token the page sdk paints',
+    scheme => {
+      const theme = settingsTheme(scheme);
+      expect(theme.scheme).toBe(scheme);
+      expect(theme.colors).toEqual(THEME_DEFAULTS.colors[scheme]);
+      expect(theme.text).toEqual(THEME_DEFAULTS.text);
+      expect(Object.keys(theme.fonts).sort()).toEqual(
+        Object.keys(THEME_DEFAULTS.fonts).sort(),
+      );
+    },
+  );
 });

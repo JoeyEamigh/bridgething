@@ -14,14 +14,12 @@ use libbridgething::{
   BridgeThingMeta, OtaErrorCode, OtaKind, OtaPhase, Priority, RangeSpec, WebappInfo,
   gateway::{
     BridgeToGatewayMsgData, BridgeToGatewaySystemMsg, BridgeToGatewayTransferMsg, BridgeToGatewayWebappMsg,
-    GatewayToBridgeMsgData, GatewayToBridgeSystemMsg, GatewayToBridgeTransferMsg, GatewayToBridgeWebappMsg,
-    OtaAssetRange, OtaAssetRangeRejected, OtaAssetRangeReply, OtaBegin, OtaBeginAck, OtaBeginRejected, TransferAbandon,
-    TransferAck, TransferFragment, WebappList,
+    GatewayToBridgeMsgData, GatewayToBridgeSystemMsg, GatewayToBridgeWebappMsg, OtaAssetRange, OtaAssetRangeRejected,
+    OtaAssetRangeReply, OtaBegin, OtaBeginAck, OtaBeginRejected, WebappList,
   },
   protocol::Compress,
   wire::{MsgMeta, ResponseMeta},
 };
-use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -30,7 +28,7 @@ pub use crate::harness::{FakeDevice, WIRE_TIMEOUT, linked_gateway, pattern};
 use crate::{
   bundle::{
     ArtifactDigest,
-    fetch::{ArtifactFetch, DownloadRequest, FetchError},
+    fetch::{ArtifactFetch, DownloadRequest, FetchError, sha256_hex},
   },
   ota::{
     range::RangeServer,
@@ -44,15 +42,6 @@ use crate::{
 pub const DEVICE: &str = "AA:BB:CC:DD:EE:FF";
 pub const OTHER_DEVICE: &str = "11:22:33:44:55:66";
 pub const EPOCH_MS: u64 = 1_700_000_000_000;
-
-pub fn sha256_hex(bytes: &[u8]) -> String {
-  let mut hasher = Sha256::new();
-  hasher.update(bytes);
-  hasher.finalize().iter().fold(String::new(), |mut acc, byte| {
-    acc.push_str(&format!("{byte:02x}"));
-    acc
-  })
-}
 
 pub fn digest_of(bytes: &[u8]) -> ArtifactDigest {
   ArtifactDigest {
@@ -148,7 +137,7 @@ impl FakeFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for FakeFetch {
-  async fn text(&self, url: &str) -> Result<String, FetchError> {
+  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
     self.urls.lock().unwrap().push(url.to_owned());
     if let Some(reason) = self.failure.lock().unwrap().clone() {
       return Err(FetchError::Transport(reason));
@@ -158,7 +147,7 @@ impl ArtifactFetch for FakeFetch {
       .lock()
       .unwrap()
       .get(url)
-      .cloned()
+      .map(|body| body.clone().into_bytes())
       .ok_or_else(|| FetchError::Transport(format!("nothing published at {url}")))
   }
 
@@ -190,13 +179,6 @@ impl ArtifactFetch for FakeFetch {
 }
 
 impl FakeDevice {
-  pub fn fragment_lanes(&self) -> Vec<Priority> {
-    self.lanes_of(|data| match data {
-      GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment)) => Some(fragment.offset),
-      _ => None,
-    })
-  }
-
   pub async fn await_ota_begin(&mut self) -> (Uuid, OtaBegin) {
     self.await_ota_begin_within(WIRE_TIMEOUT).await
   }
@@ -235,55 +217,6 @@ impl FakeDevice {
         reason: reason.to_owned(),
       })),
     );
-  }
-
-  pub async fn next_fragment(&mut self, transfer_id: Uuid) -> TransferFragment {
-    self
-      .next_matching(|msg| match &msg.data {
-        GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment))
-          if fragment.transfer_id == transfer_id =>
-        {
-          Some(fragment.clone())
-        }
-        _ => None,
-      })
-      .await
-  }
-
-  pub async fn no_fragment(&mut self, transfer_id: Uuid, window: Duration) -> bool {
-    self
-      .nothing_matching(window, |msg| match &msg.data {
-        GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment))
-          if fragment.transfer_id == transfer_id =>
-        {
-          Some(fragment.offset)
-        }
-        _ => None,
-      })
-      .await
-  }
-
-  pub fn ack(&self, transfer_id: Uuid, received: u32) {
-    self.event(BridgeToGatewayMsgData::Transfer(BridgeToGatewayTransferMsg::Ack(
-      TransferAck { transfer_id, received },
-    )));
-  }
-
-  pub async fn await_abandon(&mut self, transfer_id: Uuid) -> TransferAbandon {
-    self.await_abandon_within(WIRE_TIMEOUT, transfer_id).await
-  }
-
-  pub async fn await_abandon_within(&mut self, window: Duration, transfer_id: Uuid) -> TransferAbandon {
-    self
-      .next_matching_within(window, |msg| match &msg.data {
-        GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Abandon(abandon))
-          if abandon.transfer_id == transfer_id =>
-        {
-          Some(abandon.clone())
-        }
-        _ => None,
-      })
-      .await
   }
 
   pub async fn await_activate(&mut self) -> Vec<String> {
@@ -572,6 +505,12 @@ pub fn route_into(gateway: &Gateway, service: &Arc<OtaService>, device_id: &str)
         }
         BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::WebappInstalled(info)) => {
           service.webapp_installed(&device_id, info)
+        }
+        BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobStored(stored)) => {
+          service.blob_stored(&device_id, stored)
+        }
+        BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::BlobFailed(failed)) => {
+          service.blob_failed(&device_id, failed)
         }
         BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::OtaProgress(tick)) => {
           service.progress(&device_id, tick)

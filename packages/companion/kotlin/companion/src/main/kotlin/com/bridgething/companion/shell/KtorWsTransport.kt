@@ -30,7 +30,7 @@ import uniffi.bridgething_companion.WsTransport
 
 private const val WS_ABNORMAL_CLOSURE: UShort = 1006u
 
-public class KtorWsTransport : WsTransport {
+public class KtorWsTransport : WsTransport, AutoCloseable {
     private val lock = Any()
     private var scope: CoroutineScope? = null
     private var client: HttpClient? = null
@@ -48,7 +48,7 @@ public class KtorWsTransport : WsTransport {
         }.also { client = it }
     }
 
-    public fun close() {
+    override fun close() {
         conns.keys.toList().forEach { conns.remove(it)?.shutdown() }
         val (deadScope, deadClient) = synchronized(lock) {
             val held = scope to client

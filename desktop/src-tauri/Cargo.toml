@@ -27,7 +27,10 @@ harness = false
 
 [build-dependencies]
 cc = "1.4.3"
+dirs = "7.0.0"
+sha2 = "0.11.0"
 tauri-build = { version = "2.6.3", features = [] }
+ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
 
 [dev-dependencies]
 mdns-sd = "0.20.3"
@@ -69,28 +72,34 @@ whisper-rs = { version = "0.16.0", features = ["tracing_backend"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "objc2-core-video"] }
+objc2-core-audio-types = "0.3.2"
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMBlockBuffer", "objc2-core-audio-types", "objc2-core-video"] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVPixelBufferPool", "CVReturn"] }
 ort = "2.0.0-rc.13"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
-objc2 = "0.6.4"
-objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "AVPlayer", "AVPlayerItem", "AVPlayerItemOutput", "AVPlayerItemTrack", "AVTimedMetadataGroup", "AVMetadataItem", "AVMetadataFormat", "AVMetadataIdentifiers", "AVAsset", "AVTime", "block2", "dispatch2", "objc2-core-media"] }
+objc2 = { version = "0.6.4", features = ["exception"] }
+objc2-av-foundation = { version = "0.3.2", default-features = false, features = ["std", "AVPlayer", "AVPlayerItem", "AVPlayerItemOutput", "AVPlayerItemTrack", "AVTimedMetadataGroup", "AVMetadataItem", "AVMetadataFormat", "AVMetadataIdentifiers", "AVAsset", "AVTime", "block2", "dispatch2", "objc2-core-media", "AVAssetTrack", "AVAssetReader", "AVAssetReaderOutput", "AVAssetWriter", "AVAssetWriterInput", "AVVideoComposition", "AVVideoCompositing", "AVMediaFormat", "AVVideoSettings", "objc2-core-foundation", "AVAssetImageGenerator", "objc2-core-graphics"] }
 objc2-avf-audio = "0.3.2"
 objc2-core-audio = { version = "0.3.2", default-features = false, features = ["AudioHardware", "std"] }
 objc2-core-foundation = "0.3.2"
 objc2-core-graphics = "0.3.2"
 objc2-core-location = "0.3.2"
-objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMBase", "CMTime"] }
+objc2-core-media = { version = "0.3.2", default-features = false, features = ["std", "CMBase", "CMTime", "CMSampleBuffer", "CMTimeRange", "CMFormatDescription"] }
 objc2-core-ml = "0.3.2"
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVPixelBuffer"] }
 objc2-foundation = "0.3.2"
 objc2-image-io = "0.3.2"
 objc2-uniform-type-identifiers = "0.3.2"
 whisper-rs = { version = "0.16.0", features = ["metal"] }
 
 [target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
-image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+image = { version = "0.25.10", default-features = false, features = ["bmp", "gif", "jpeg", "png", "pnm", "tiff", "webp"] }
 ort = "2.0.0-rc.13"
+thiserror.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 futures.workspace = true
@@ -100,22 +109,5 @@ symphonia = { version = "0.6.1", default-features = false, features = ["mp3", "a
 zbus = { version = "5.19.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.62.2", features = [
-  "Devices_Geolocation",
-  "Foundation",
-  "Foundation_Collections",
-  "Media_Control",
-  "Media_Core",
-  "Media_Playback",
-  "Media_SpeechSynthesis",
-  "Media_Streaming_Adaptive",
-  "Networking_Connectivity",
-  "Storage_Streams",
-  "Win32_Foundation",
-  "Win32_Media_Audio",
-  "Win32_Media_Audio_Endpoints",
-  "Win32_System_Com",
-  "Win32_System_Com_StructuredStorage",
-  "Win32_System_Variant",
-] }
+windows = { version = "0.62.2", features = ["Devices_Geolocation", "Foundation", "Foundation_Collections", "Media_Control", "Media_Core", "Media_Playback", "Media_SpeechSynthesis", "Media_Streaming_Adaptive", "Networking_Connectivity", "Storage_Streams", "Win32_Foundation", "Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_Security", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Variant"] }
 windows-core = "0.62.2"

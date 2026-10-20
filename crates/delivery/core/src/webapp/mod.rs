@@ -1,7 +1,12 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+pub mod blob;
+pub mod handles;
+#[cfg(test)]
+mod tests;
+
+use std::{sync::Arc, time::Duration};
 
 use bridgething_gateway::Gateway;
-use bridgething_sdk_runtime::RequestFailure;
+use bridgething_sdk_runtime::{RequestFailure, rt};
 use libbridgething::{
   WebappError,
   gateway::{TransferBody, WebappResource, WebappResourceKind},
@@ -11,13 +16,10 @@ use uuid::Uuid;
 
 pub use crate::seam::CachedResource;
 use crate::{
-  blob::{digest_of, is_digest},
-  bundle::{
-    ArtifactDigest,
-    fetch::{ArtifactFetch, DownloadRequest},
-  },
+  blob::is_digest,
+  bundle::fetch::{ArtifactFetch, sha256_hex},
   seam::{BlobStore, SlotIndex},
-  transfer::{TransferReceiveError, TransferReceiver},
+  transfer::{MAX_TRANSFER_BYTES, TransferReceiveError, TransferReceiver},
 };
 
 pub const RESOURCE_TRANSFER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -61,7 +63,7 @@ pub struct WebappResourceService {
   slots: Arc<dyn SlotIndex>,
   receiver: Arc<TransferReceiver>,
   timeout: Duration,
-  fetch: Option<(Arc<dyn ArtifactFetch>, PathBuf)>,
+  fetch: Option<Arc<dyn ArtifactFetch>>,
 }
 
 impl WebappResourceService {
@@ -84,8 +86,8 @@ impl WebappResourceService {
     }
   }
 
-  pub fn with_fetch(mut self, fetch: Arc<dyn ArtifactFetch>, scratch: PathBuf) -> Self {
-    self.fetch = Some((fetch, scratch));
+  pub fn with_fetch(mut self, fetch: Arc<dyn ArtifactFetch>) -> Self {
+    self.fetch = Some(fetch);
     self
   }
 
@@ -166,7 +168,7 @@ impl WebappResourceService {
       }
     };
 
-    let digest = digest_of(&bytes);
+    let digest = sha256_hex(&bytes);
     if !digest.eq_ignore_ascii_case(&reply.sha256) {
       return Err(WebappResourceError::ShaMismatch {
         expected: reply.sha256,
@@ -191,35 +193,28 @@ impl WebappResourceService {
     kind: WebappResourceKind,
     origin: &ResourceOrigin,
   ) -> Option<CachedResource> {
-    let (fetch, scratch) = self.fetch.as_ref()?;
+    let fetch = self.fetch.as_ref()?;
     let sha256 = origin.sha256.to_lowercase();
     if !is_digest(&sha256) {
       tracing::warn!(%webapp_id, "hosted resource digest is not a sha256, refusing to fetch it");
       return None;
     }
-    let path = fetch
-      .download(DownloadRequest {
-        url: origin.url.clone(),
-        dir: scratch.clone(),
-        filename: format!("{webapp_id}-{sha256}"),
-        asset: "webapp resource".into(),
-        expected: Some(ArtifactDigest {
-          size: origin.size,
-          sha256: sha256.clone(),
-        }),
-        progress: None,
-      })
+    if origin.size > MAX_TRANSFER_BYTES {
+      tracing::warn!(%webapp_id, size = origin.size, "hosted resource is past the resource cap, refusing to fetch it");
+      return None;
+    }
+    let bytes = rt::timeout(self.timeout, fetch.bytes(&origin.url, origin.size as usize))
       .await
+      .inspect_err(|_| tracing::debug!(%webapp_id, url = %origin.url, "hosted resource did not answer in time"))
+      .ok()?
       .inspect_err(|error| tracing::debug!(%webapp_id, url = %origin.url, %error, "hosted resource unusable"))
       .ok()?;
+    if bytes.len() as u64 != origin.size {
+      tracing::warn!(%webapp_id, got = bytes.len(), want = origin.size, "hosted resource is not the size the catalog declares");
+      return None;
+    }
 
-    let bytes = std::fs::read(&path)
-      .inspect_err(|error| tracing::warn!(%error, "could not read the downloaded resource"))
-      .ok();
-    let _ = std::fs::remove_file(&path);
-    let bytes = bytes?;
-
-    let digest = digest_of(&bytes);
+    let digest = sha256_hex(&bytes);
     if digest != sha256 {
       tracing::warn!(%webapp_id, "hosted resource hashed to {digest}, not the {sha256} the device reports");
       return None;

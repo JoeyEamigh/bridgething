@@ -54,22 +54,6 @@ export type CompanionDebug = {
 
 export type ConfigEntry = { key: string; value: string };
 
-export type ConfigField = {
-  kind: ConfigKind;
-  key: string;
-  label: string;
-  pattern: string | null;
-  minLength: number | null;
-  maxLength: number | null;
-  min: number | null;
-  max: number | null;
-  step: number | null;
-  choices: Array<string>;
-  defaultValue: string | null;
-};
-
-export type ConfigKind = 'string' | 'number' | 'boolean' | 'enum' | 'secret';
-
 export type DeviceAutoResume = { deviceId: string; enabled: boolean };
 
 export type DeviceLogLine = {
@@ -125,6 +109,10 @@ export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 export type LogOrigin = 'device' | 'host';
 
 export type LrcLine = { startMs: number; text: string };
+
+export type MediaCover = { width: number; height: number };
+
+export type MediaPickKind = 'image' | 'video' | 'any';
 
 export type ModelPlatform = 'ios' | 'android' | 'macos' | 'linux' | 'windows';
 
@@ -333,6 +321,16 @@ export type OtaStoreChange =
 
 export type PeerLinkStatus = 'connected' | 'linkFailed';
 
+export type PickedMedia = {
+  handle: string;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  preview: string | null;
+};
+
 export type ProviderCredentials =
   | { kind: 'oauthTokens'; accessToken: string; refreshToken: string }
   | { kind: 'serverLogin'; serverUrl: string; username: string; password: string };
@@ -441,6 +439,8 @@ export type VoiceTurnPhase = 'listening' | 'resolved' | 'cancelled';
 
 export type VoiceTurnTrigger = 'pushToTalk' | 'assistant' | 'wakeWord';
 
+export type WebappBlob = { key: string; sha256: string; mime: string; size: number };
+
 export type WebappInfo = {
   id: string;
   name: string;
@@ -452,7 +452,7 @@ export type WebappInfo = {
   iconHash: string | null;
   settingsHash: string | null;
   overlayHash: string | null;
-  config: Array<ConfigField>;
+  config: Array<import('@bridgething/lib').ConfigField>;
   permissions: Array<string>;
   extension: ExtensionInfo | null;
 };

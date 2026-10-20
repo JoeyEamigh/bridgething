@@ -342,6 +342,12 @@ impl WebappHandler for Routed {
   async fn active_changed(&self, _payload: WebappActiveChanged) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn blob_stored(&self, _payload: WebappBlobStored) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
+  async fn blob_failed(&self, _payload: WebappBlobFailed) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
 }
 
 impl ForwardHandler for Routed {

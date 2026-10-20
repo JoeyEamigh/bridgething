@@ -28,36 +28,14 @@ h1 {
   margin: 0 0 1.25rem;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 14px;
-}
-
-.field label {
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.field input,
-.field select {
-  padding: 8px 10px;
-  font-size: 1rem;
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-}
-
 .row {
   display: flex;
   gap: 10px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
-button {
+.row button {
   padding: 9px 16px;
   font-size: 0.95rem;
   font-weight: 600;
@@ -68,12 +46,12 @@ button {
   cursor: pointer;
 }
 
-button.secondary {
+.row button.secondary {
   background: color-mix(in srgb, currentColor 12%, transparent);
   color: inherit;
 }
 
-button:disabled {
+.row button:disabled {
   opacity: 0.5;
   cursor: default;
 }

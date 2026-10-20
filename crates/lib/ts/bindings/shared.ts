@@ -1126,6 +1126,13 @@ export type WebappError =
   | { type: 'unknownConfigKey'; data: { key: string } }
   | { type: 'invalidConfigValue'; data: { key: string; reason: string } }
   | { type: 'invalidDocValue'; data: { key: string; reason: string } }
+  | { type: 'reservedPath'; data: { path: string } }
+  | { type: 'invalidBlobKey'; data: { key: string; reason: string } }
+  | { type: 'invalidBlobPut'; data: { key: string; reason: string } }
+  | { type: 'blobTooLarge'; data: { key: string; max_bytes: number } }
+  | { type: 'blobQuotaExceeded'; data: { key: string; max_bytes: number } }
+  | { type: 'blobStorageFull'; data: { key: string; needed_bytes: number } }
+  | { type: 'blobTransferFailed'; data: { key: string; reason: string } }
   | { type: 'internal'; data: { reason: string } };
 
 export type WebappInfo = {

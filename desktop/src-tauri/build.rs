@@ -1,9 +1,13 @@
 use std::{fs, path::Path};
 
+#[path = "build/ffmpeg_sidecar.rs"]
+mod ffmpeg_sidecar;
+
 const PSK: &str = "BRIDGETHING_AUTH_PSK";
 const MEDIAREMOTE_SOURCE: &str = "macos/mediaremote-helper.m";
 const MEDIAREMOTE_HELPER: &str = "gen/macos/libbridgething-mediaremote.dylib";
 const LOCAL_ENV: &str = ".env.local";
+const PSK_FILE: &str = "auth_psk";
 
 const COMCTL32_V6_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
@@ -19,16 +23,22 @@ fn main() {
   println!("cargo:rerun-if-env-changed={PSK}");
   println!("cargo:rerun-if-changed={LOCAL_ENV}");
 
-  if std::env::var_os(PSK).is_none()
-    && let Some(psk) = from_local_env(Path::new(LOCAL_ENV), PSK)
-  {
-    println!("cargo:rustc-env={PSK}={psk}");
-  }
+  write_auth_psk();
 
   embed_test_manifest_on_windows();
   compile_mediaremote_helper_on_macos();
+  ffmpeg_sidecar::place_on_linux_and_windows();
 
   tauri_build::build();
+}
+
+fn write_auth_psk() {
+  let psk = std::env::var(PSK)
+    .ok()
+    .or_else(|| from_local_env(Path::new(LOCAL_ENV), PSK))
+    .unwrap_or_default();
+  let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR is set for build scripts");
+  fs::write(Path::new(&out_dir).join(PSK_FILE), psk).expect("the auth psk writes to OUT_DIR");
 }
 
 fn compile_mediaremote_helper_on_macos() {

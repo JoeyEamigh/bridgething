@@ -9,7 +9,9 @@ use std::{
 
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, SessionEvent},
-  backend::{ExtensionHost, HttpTransport, LinkDevice, LinkInbox, LinkTransport, VolumeBackend},
+  backend::{
+    ExtensionHost, HttpTransport, ImageScaler, LinkDevice, LinkInbox, LinkTransport, MediaTranscoder, VolumeBackend,
+  },
   session::Session,
 };
 use bridgething_gateway::Gateway;
@@ -20,10 +22,10 @@ use libbridgething::{
   gateway::{
     AssetRequest, BridgeToGatewayAssetMsg, BridgeToGatewayGeoMsg, BridgeToGatewayLibraryMsg, BridgeToGatewayLyricsMsg,
     BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayNetMsg, BridgeToGatewayPhoneMsg,
-    BridgeToGatewaySystemMsg, BridgeToGatewayTransferMsg, BridgeToGatewayTunnelMsg, GeoGetOnce, KeepalivePing,
-    LibraryBrowseRequest, LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibraryRecommendationsRequest,
-    LibraryResolveContextRequest, LibrarySearchRequest, LyricsRequest, NetFetchRequestMsg, NetWsOpen, OtaAssetRange,
-    TrackIdentity, TunnelOpen,
+    BridgeToGatewaySystemMsg, BridgeToGatewayTransferMsg, BridgeToGatewayTunnelMsg, GatewayToBridgeMsgData,
+    GatewayToBridgeTransferMsg, GeoGetOnce, KeepalivePing, LibraryBrowseRequest, LibraryFavoritesContainsRequest,
+    LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibraryResolveContextRequest, LibrarySearchRequest,
+    LyricsRequest, NetFetchRequestMsg, NetWsOpen, OtaAssetRange, TrackIdentity, TunnelOpen,
   },
   protocol::{BridgeEndec, DecodedFrame, GatewayEndec},
   wire::MsgMeta,
@@ -116,6 +118,7 @@ struct TapState {
   from_device_buf: BytesMut,
   ids: Vec<Uuid>,
   entries: Vec<WireEntry>,
+  fragment_offsets: Vec<u32>,
   said: DeviceSaid,
 }
 
@@ -136,6 +139,9 @@ impl Tap {
     loop {
       match state.from_host.decode(&mut state.from_host_buf) {
         Ok(Some(DecodedFrame::Frame(frame))) => {
+          if let GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment)) = &frame.msg.data {
+            state.fragment_offsets.push(fragment.offset);
+          }
           let entry = note(
             &mut state.ids,
             TO_DEVICE,
@@ -297,6 +303,8 @@ pub struct Setup {
   pub extensions: Option<Arc<dyn ExtensionHost>>,
   pub http: Option<Arc<dyn HttpTransport>>,
   pub volume: Option<Arc<dyn VolumeBackend>>,
+  pub image: Option<Arc<dyn ImageScaler>>,
+  pub transcoder: Option<Arc<dyn MediaTranscoder>>,
 }
 
 pub struct Rig {
@@ -347,7 +355,7 @@ impl Rig {
     .await
   }
 
-  async fn launch(setup: Setup) -> Self {
+  pub async fn launch(setup: Setup) -> Self {
     let harness = Harness::start().await.expect("the headless daemon boots");
     let io = harness.connect_android_io().await.expect("a link to the daemon");
     let spool = tempfile::tempdir().expect("a scratch directory");
@@ -372,7 +380,8 @@ impl Rig {
       speech: None,
       nlu: None,
       apple_music: None,
-      image: None,
+      image: setup.image,
+      transcoder: setup.transcoder,
       model_validator: None,
       transfer_policy: None,
       connectivity: None,
@@ -445,6 +454,10 @@ impl Rig {
 
   pub fn transcript(&self) -> Vec<WireEntry> {
     self.tap.state.lock().unwrap().entries.clone()
+  }
+
+  pub fn fragment_offsets(&self) -> Vec<u32> {
+    self.tap.state.lock().unwrap().fragment_offsets.clone()
   }
 
   pub async fn await_event(&self, within: Duration, mut matches: impl FnMut(&SessionEvent) -> bool) -> bool {

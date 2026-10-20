@@ -45,7 +45,7 @@ impl WsTransport for Offline {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for Offline {
-  async fn text(&self, url: &str) -> Result<String, FetchError> {
+  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
     Err(FetchError::Transport(format!("the rig has no network ({url})")))
   }
 

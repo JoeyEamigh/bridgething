@@ -15,7 +15,7 @@ const sdkSnippet = `import { settings } from '@bridgething/client/settings';
 
 const { webappId, name } = await settings.context();
 
-// the user's saved config values (and the manifest schema, for rendering a form)
+// the user's saved config values, and the manifest schema <ConfigForm/> renders
 const fields = await settings.config.fields();
 const values = await settings.config.list();
 await settings.config.set('base_url', url);
@@ -24,7 +24,58 @@ await settings.config.set('base_url', url);
 await settings.doc.set('selected_entities', ids.join(','));
 const off = settings.onDocChanged((key, value) => sync(key, value));
 
+// the companion's theme, already painted as --bt-* css variables; hear it flip
+settings.onThemeChanged(theme => redraw(theme.scheme, theme.colors));
+
 settings.done(); // closes the sheet`;
+
+const refreshSnippet = `// the page is on screen again, or the app behind it was updated: reread what you hold
+settings.onRefresh(async context => {
+  title.textContent = context.name;
+  showSelection((await settings.doc.get('selected_entities')).value);
+});`;
+
+const formSnippet = `import { ConfigForm, ConfigFormError, closeSettings, type ConfigFormHandle } from '@bridgething/client/form';
+import { useRef, useState } from 'react';
+
+export function Settings() {
+  const form = useRef<ConfigFormHandle>(null);
+  const [status, setStatus] = useState('');
+
+  async function connect() {
+    try {
+      const values = await form.current!.flush(); // what the device holds, half-typed fields included
+      await signIn(values.base_url, values.token);
+    } catch (err) {
+      if (!(err instanceof ConfigFormError)) throw err;
+      setStatus(err.message); // err.kind: 'refused' | 'unavailable' | 'replaced'
+    }
+  }
+
+  async function close() {
+    try {
+      await closeSettings(form.current); // flushes, then closes unless an edit was refused
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : String(err)); // the reason also shows under its field
+    }
+  }
+
+  return (
+    <main>
+      <ConfigForm ref={form} />
+      <button onClick={connect}>Connect</button>
+      <button onClick={close}>Done</button>
+      <p>{status}</p>
+    </main>
+  );
+}`;
+
+const themeSnippet = `:root {
+  --bt-color-bg: #1c2127;
+  --bt-color-fg: #e7ecf0;
+  --bt-color-accent: #03a9f4;
+  --bt-font-body: system-ui, sans-serif;
+}`;
 
 const deviceSnippet = `// on-device webapp: adopt what the settings page authored, live
 const saved = await client.doc.get({ key: 'selected_entities' });
@@ -115,6 +166,38 @@ const me = await settings
   .then(r => r.json());
 await settings.config.set('discord_user', me.username);`;
 
+const pickSnippet = `import { BlobError, settings } from '@bridgething/client/settings';
+
+// the photo picker on the phone, a file dialog on the desktop and the device page. null if the user backs out.
+const picked = await settings.pick({ kind: 'video' }); // 'image' | 'video' | 'any'
+if (picked) {
+  preview.src = picked.preview ?? ''; // small jpeg data url; a video's is its first frame
+  try {
+    await settings.blob.put('background', picked.handle, {
+      onProgress: (sent, total) => (bar.value = sent / total),
+    });
+  } catch (err) {
+    if (err instanceof BlobError && err.kind === 'too_large') showTooBig();
+  }
+}`;
+
+const pageBytesSnippet = `// bytes the page makes itself, like a cropped canvas
+const png = await new Promise<Blob>(done => canvas.toBlob(b => done(b!), 'image/png'));
+const handle = await settings.blob.create('image/png');
+await settings.blob.append(handle, png);
+await settings.blob.put('cropped', handle);
+
+const stored = await settings.blob.list(); // [{ key, sha256, mime, size }]
+await settings.blob.delete('cropped');`;
+
+const blobDeviceSnippet = `// on-device webapp: show it, and follow replacements live
+const res = await client.blob.list();
+const bg = res.ok ? res.response.entries.find(e => e.key === 'background') : undefined;
+client.blob.onChanged(c => c.key === 'background' && setBackground(c.url ?? null)); // url is null once deleted
+
+// bg.url is /.bridgething/blob/background?v=<sha256>, served by the daemon on the page's own origin
+<video src={bg.url} autoPlay loop muted playsInline />`;
+
 const authErrorSnippet = `import { AuthorizeError } from '@bridgething/client/settings';
 
 try {
@@ -128,14 +211,14 @@ try {
 
 <DocsLayout
   title="settings pages"
-  description="give your webapp a rich companion-side settings ui: one self-contained html page rendered in the phone or desktop app, with a native fetch and oauth."
+  description="give your webapp a rich companion-side settings ui: one self-contained html page rendered in the phone app, the desktop app, or the device page, with a native fetch and oauth."
   current="settings-pages">
   <header class="mb-12">
     <h1>settings pages</h1>
     <p class="text-white/60">
       typing a url or picking from many entities on the car screen is painful. a settings page moves that to the phone,
-      or to the desktop app. it is one self-contained html file in your bundle, rendered in a webview with a bridge to
-      your app's config, a native fetch, and oauth.
+      the desktop app, or the <a href="/device">device page</a> here. it is one self-contained html file in your bundle, rendered
+      in a webview with a bridge to your app's config, a native fetch, and oauth.
     </p>
   </header>
 
@@ -166,10 +249,88 @@ try {
       on the device side, your webapp reads the same doc namespace over the normal client:
     </p>
     <Snippet code={deviceSnippet} />
+    <p class="mt-3 text-white/60">
+      the companion keeps your page loaded after the user leaves it and shows the same document the next time they open
+      your settings. whatever the page read from the device can be stale by then, so reread it in
+      <code>onRefresh</code>.
+    </p>
+    <Snippet code={refreshSnippet} />
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80"><code>onRefresh</code> fires on every return.</strong> each time the page comes back
+        on screen, and whenever the app's name, version or config fields change. it carries the current context.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>done</code> only works on screen.</strong> a <code>done()</code> from a page the
+        user already left does nothing.
+      </li>
+      <li>
+        <strong class="text-white/80">a reload is a new page.</strong> if the page navigates or reloads itself, the host treats
+        what loads as a fresh document. calls the old one had in flight are never answered.
+      </li>
+      <li>
+        <strong class="text-white/80">a crashing page gets a retry.</strong> a page that crashes the webview before it finishes
+        loading, or twice in a row on screen, shows a failure with a retry instead of loading again.
+      </li>
+      <li>
+        <strong class="text-white/80">the phone blurs on hide.</strong> when the settings screen goes away, the phone app
+        takes focus off whatever field had it, which commits a form field still being typed.
+      </li>
+    </ul>
+  </section>
+
+  <section class="mb-14 scroll-mt-24" id="form">
+    <h2 class={refdes}>s3 - the config form</h2>
+    <p class="text-white/60">
+      every app that declares <code>config</code> gets a settings screen, page or no page. without one, the phone app, the
+      desktop app and the device page show a default page that is just <code>&lt;ConfigForm/&gt;</code> and a done button.
+      a custom page embeds the same form from <code>@bridgething/client/form</code> and adds whatever else it needs around
+      it.
+    </p>
+    <Snippet code={formSnippet} lang="tsx" />
+    <p class="mt-3 text-white/60">
+      it renders every field the manifest declares and writes each one to the device as the user commits it. a toggle or
+      a choice commits on tap. a text or number field commits when it loses focus, or on enter.
+    </p>
+    <p class="mt-3 text-white/60">
+      a touch webview does not always take focus off a field when a button is tapped. so a button that acts on the
+      values calls <code>flush()</code> first: it writes every field still being typed, waits for the device, and resolves
+      with the values the device holds. a done button calls <code>closeSettings(form.current)</code>, which flushes and
+      closes unless an edit was refused, and rejects with that error so the page can show it. <code>flush()</code>
+      rejects with a <code>ConfigFormError</code>:
+    </p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80"><code>refused</code>.</strong> a typed value broke its field's rules, or the device
+        refused the write. <code>fields</code> maps each config key to its message, and <code>message</code> reads
+        <code>&lt;label&gt;: &lt;reason&gt;</code>. the form shows the same message under the field.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>unavailable</code>.</strong> the form never loaded. <code>message</code> is the
+        load failure, and the form offers its own retry.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>replaced</code>.</strong> the host pointed the page at another app while
+        <code>flush()</code> waited. the edits still land on the app they were made for.
+      </li>
+    </ul>
+    <p class="mt-3 text-white/60">
+      <code>onChange</code> reports written values only, never text still being typed. it fires the moment a field commits,
+      and again with the device's value if the write is refused. the form rereads its fields and values on every refresh.
+      it styles off <code>--bt-*</code> css variables.
+    </p>
+    <p class="mt-3 text-white/60">
+      those variables come from the companion. <code>settings.context()</code> carries
+      <code>theme: &#123; scheme, colors, text, fonts &#125;</code>, and the sdk paints it as <code>--bt-*</code> plus
+      <code>--bt-scheme</code>, repainting when the phone or desktop flips between light and dark. use them in your own
+      css and the page matches the app. the painted values have zero specificity, so a <code>:root</code> rule of yours wins;
+      set them there to use your own palette instead.
+    </p>
+    <Snippet code={themeSnippet} lang="css" />
   </section>
 
   <section class="mb-14 scroll-mt-24" id="fetch">
-    <h2 class={refdes}>s3 - fetching from the page</h2>
+    <h2 class={refdes}>s4 - fetching from the page</h2>
     <p class="text-white/60">
       the page has real internet, but it renders from a null origin, so the webview's own <code>fetch</code> is blocked by
       cors against anything that does not send permissive headers. <code>settings.fetch</code> sidesteps that: the host makes
@@ -192,12 +353,17 @@ try {
       <li>
         <strong class="text-white/80">websockets still work</strong> from the page directly
       </li>
+      <li>
+        <strong class="text-white/80">the device page has no native fetch.</strong> a browser cannot make the request outside
+        the page, so <code>settings.fetch</code> rejects there with a plain <code>Error</code>, not a
+        <code>SettingsFetchError</code>. use a websocket, or ask the user to open the phone or desktop app.
+      </li>
     </ul>
     <Snippet code={fetchErrorSnippet} />
   </section>
 
   <section class="mb-14 scroll-mt-24" id="auth">
-    <h2 class={refdes}>s4 - connect an account</h2>
+    <h2 class={refdes}>s5 - connect an account</h2>
     <p class="text-white/60">
       oauth works from <code>settings.auth.authorize</code>. it opens the provider in the real browser and resolves with
       the callback url.
@@ -229,12 +395,128 @@ try {
       <li>
         <strong class="text-white/80">check <code>state</code> yourself.</strong> the host hands you the url unread.
       </li>
+      <li>
+        <strong class="text-white/80">the device page cannot authorize.</strong> it fails with <code>unsupported</code>,
+        and the token exchange needs <code>settings.fetch</code>, which it lacks too.
+      </li>
     </ul>
     <Snippet code={authErrorSnippet} />
   </section>
 
+  <section class="mb-14 scroll-mt-24" id="files">
+    <h2 class={refdes}>s6 - files and media</h2>
+    <p class="text-white/60">
+      a user can hand your app a file from the companion: a photo, a looping video, a gif for the background.
+      <code>settings.pick</code> opens the native picker and hands back a handle, never the bytes, and
+      <code>settings.blob.put</code> streams the file to the device under a key. your webapp then reads it by url.
+    </p>
+    <Snippet code={pickSnippet} />
+    <p class="mt-3 text-white/60">
+      the companion makes picks fit the device before they upload, and the only knob is <code>cover: [w, h]</code>, the
+      box the result must cover. it defaults to <code>[800, 800]</code> for stills and <code>[800, 480]</code> for video.
+      each edge is a whole number from 1 to 4294967295, and anything else rejects.
+    </p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80">animated images pass through.</strong> gif, apng and animated webp arrive byte for byte.
+        crop and placement are yours to do in the webapp.
+      </li>
+      <li>
+        <strong class="text-white/80">stills shrink, never grow.</strong> anything larger than the box scales down until it
+        just covers it, keeping its format. heic becomes jpeg.
+      </li>
+      <li>
+        <strong class="text-white/80">video becomes h.264.</strong> mp4, no audio, at most 30&nbsp;fps, scaled to cover the
+        box.
+      </li>
+      <li><strong class="text-white/80"><code>any</code> is untouched.</strong></li>
+      <li>
+        <strong class="text-white/80">one picker at a time.</strong> a <code>pick</code> while another is still open rejects
+        with <code>busy</code>.
+      </li>
+      <li>
+        <strong class="text-white/80">the device page uploads picks as picked.</strong> a browser has nothing to transcode
+        with, so a pick there skips all of the above and carries no preview.
+      </li>
+    </ul>
+    <p class="mt-4 text-white/60">bytes the page builds itself go through a handle too, in chunks:</p>
+    <Snippet code={pageBytesSnippet} />
+    <p class="mt-3 text-white/60">on the device, <code>client.blob</code> lists what the companion stored:</p>
+    <Snippet code={blobDeviceSnippet} lang="tsx" />
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80">32&nbsp;MiB per file, 64&nbsp;MiB per app.</strong> the device refuses past either and
+        never evicts to make room, so delete what you replace.
+      </li>
+      <li>
+        <strong class="text-white/80">keys are 1 to 256 bytes.</strong> no control characters, and not <code>.</code> or
+        <code>..</code>: a browser folds those out of the url, so the file never loads.
+      </li>
+      <li>
+        <strong class="text-white/80">gifs are expensive.</strong> the car thing decodes every gif frame on a cortex-a53 that
+        also runs everything else, and a big one starves now-playing. video decodes in hardware, so pick
+        <code>kind: 'video'</code> for animated backgrounds.
+      </li>
+      <li>
+        <strong class="text-white/80">uploads ride the slow lane.</strong>
+        <code>put</code> streams behind everything else so now-playing stays smooth, which means a large video over a car's
+        bluetooth link takes minutes, so show <code>onProgress</code>: it reports the bytes the device has confirmed a
+        few times a second and ends on the total. a put that picks up an interrupted upload starts at the bytes the
+        device already has, not at 0. <code>put</code> resolves when the device has the file, and bytes the device already
+        holds finish at once.
+      </li>
+      <li>
+        <strong class="text-white/80">handles are temporary.</strong> a handle lives in the companion, not on the device,
+        and a <code>put</code> the device stores uses it up, so pick or create again to store the same bytes under a second
+        key. a failed <code>put</code> keeps it, so the upload can be retried with it. a <code>put</code> keeps its handle
+        alive for as long as it streams. a handle nothing is uploading expires after 30&nbsp;minutes unused. the companion
+        also holds at most 128&nbsp;MiB of them, and a pick or append past that rejects with <code>busy</code> until a
+        <code>put</code> lands or a handle expires; nothing already held is dropped. a handle that expired or was used up
+        rejects with <code>unknown_handle</code>, so pick again.
+      </li>
+    </ul>
+    <p class="mt-4 text-white/60">
+      <code>pick</code> and every <code>blob</code> call reject with a <code>BlobError</code>. branch on its
+      <code>kind</code>:
+    </p>
+    <ul role="list" class="mt-4 space-y-1.5 text-sm text-white/60">
+      <li>
+        <strong class="text-white/80"><code>unsupported</code>.</strong> the companion or the car thing predates these calls,
+        or the host cannot do the work.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>disconnected</code>.</strong> no car thing is linked, or the link dropped mid-upload.
+      </li>
+      <li><strong class="text-white/80"><code>too_large</code>.</strong> the file is over 32&nbsp;MiB.</li>
+      <li>
+        <strong class="text-white/80"><code>quota_exceeded</code>.</strong> the put would take the app past 64&nbsp;MiB.
+      </li>
+      <li><strong class="text-white/80"><code>storage_full</code>.</strong> the car thing has no room left.</li>
+      <li>
+        <strong class="text-white/80"><code>not_media</code>.</strong> the picked file is not the kind you asked for.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>unknown_handle</code>.</strong> the handle is not live: never made, expired, or
+        used up by a stored <code>put</code>.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>busy</code>.</strong> a picker is already open, or held handles fill the companion's
+        whole handle budget.
+      </li>
+      <li>
+        <strong class="text-white/80"><code>no_gesture</code>.</strong> the pick did not start from a tap or click, so the
+        browser opened no picker. call <code>pick</code> from the tap handler itself.
+      </li>
+      <li><strong class="text-white/80"><code>failed</code>.</strong> anything else. read <code>message</code>.</li>
+    </ul>
+  </section>
+
   <section>
-    <h2 class={refdes}>s5 - a worked example</h2>
-    <p class="text-white/60">the home assistant example app ships a settings page</p>
+    <h2 class={refdes}>s7 - a worked example</h2>
+    <p class="text-white/60">
+      the home assistant example app ships a settings page: <code>&lt;ConfigForm/&gt;</code> for the server url and token,
+      a connect button that flushes the form and dials with what the device holds, then an entity picker that writes the selection
+      to the doc namespace and rereads it on refresh.
+    </p>
   </section>
 </DocsLayout>

@@ -18,8 +18,11 @@ use std::sync::{Arc, Mutex};
 use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
   api::{AuthKind, CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo, ProviderCredentials, SignInMethod},
-  backend::{ForeignHttp, ImageScaler, NativeHttp, SecretStore, StreamMetadata, StreamStatus},
+  backend::{
+    ForeignHttp, ImageScaler, ImageTarget, NativeHttp, ScaledImage, SecretStore, StreamMetadata, StreamStatus,
+  },
   hub::Hub,
+  media::MediaSniff,
   provider::{
     PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderRegistry,
     subsonic::{KEY_PASSWORD, KEY_SERVER_URL, KEY_USERNAME, SubsonicConfig, SubsonicProvider},
@@ -52,8 +55,16 @@ const TRACK_FIVE: &str = "subsonic:track:s5";
 struct TagScaler;
 
 impl ImageScaler for TagScaler {
-  fn downsample_jpeg(&self, bytes: Vec<u8>, max_edge: u32, _quality: f32) -> Option<Vec<u8>> {
-    Some(format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes())
+  fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, target: ImageTarget) -> Option<ScaledImage> {
+    let ImageTarget::Thumbnail { max_edge, .. } = target else {
+      return None;
+    };
+    Some(ScaledImage {
+      bytes: format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes(),
+      mime: "image/jpeg".into(),
+      width: max_edge,
+      height: max_edge,
+    })
   }
 }
 
@@ -816,6 +827,7 @@ fn boot_session(secrets: Arc<MemorySecrets>, stream: Option<Arc<FakeStreamBacken
     nlu: None,
     apple_music: None,
     image: None,
+    transcoder: None,
     model_validator: None,
     transfer_policy: None,
     connectivity: None,

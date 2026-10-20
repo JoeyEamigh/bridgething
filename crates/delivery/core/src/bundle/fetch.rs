@@ -57,13 +57,13 @@ pub struct DownloadRequest {
 
 #[async_trait::async_trait]
 pub trait ArtifactFetch: Send + Sync {
-  async fn text(&self, url: &str) -> Result<String, FetchError>;
+  async fn bytes(&self, url: &str, limit: usize) -> Result<Vec<u8>, FetchError>;
   async fn download(&self, request: DownloadRequest) -> Result<PathBuf, FetchError>;
 }
 
 pub async fn fetch_json<T: DeserializeOwned>(fetch: &dyn ArtifactFetch, url: &str) -> Result<T, FetchError> {
-  let body = fetch.text(url).await?;
-  serde_json::from_str(&body).map_err(|e| FetchError::Decode(e.to_string()))
+  let body = fetch.bytes(url, MEMORY_BODY_CAP).await?;
+  serde_json::from_slice(&body).map_err(|e| FetchError::Decode(e.to_string()))
 }
 
 pub struct HttpArtifactFetch {
@@ -78,18 +78,24 @@ impl HttpArtifactFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for HttpArtifactFetch {
-  async fn text(&self, url: &str) -> Result<String, FetchError> {
+  async fn bytes(&self, url: &str, limit: usize) -> Result<Vec<u8>, FetchError> {
     let buffer = Arc::new(Mutex::new(MemoryBody::default()));
     let outcome = self
       .http
-      .download(get(url), Box::new(MemoryWriter { shared: buffer.clone() }))
+      .download(
+        get(url),
+        Box::new(MemoryWriter {
+          shared: buffer.clone(),
+          limit,
+        }),
+      )
       .await;
 
-    let held = buffer.lock().unwrap();
+    let mut held = buffer.lock().unwrap();
     match outcome {
       Ok(outcome) if !outcome.ok() => Err(FetchError::HttpStatus(outcome.status)),
-      Ok(_) => Ok(String::from_utf8_lossy(&held.bytes).into_owned()),
-      Err(_) if held.overflowed => Err(FetchError::TooLarge { limit: MEMORY_BODY_CAP }),
+      Ok(_) => Ok(std::mem::take(&mut held.bytes)),
+      Err(_) if held.overflowed => Err(FetchError::TooLarge { limit }),
       Err(e) => Err(transport(e)),
     }
   }
@@ -217,6 +223,7 @@ struct MemoryBody {
 
 struct MemoryWriter {
   shared: Arc<Mutex<MemoryBody>>,
+  limit: usize,
 }
 
 impl DownloadBody for MemoryWriter {
@@ -226,9 +233,9 @@ impl DownloadBody for MemoryWriter {
 
   fn write(&mut self, chunk: &[u8]) -> Result<(), String> {
     let mut held = self.shared.lock().unwrap();
-    if held.bytes.len() + chunk.len() > MEMORY_BODY_CAP {
+    if held.bytes.len() + chunk.len() > self.limit {
       held.overflowed = true;
-      return Err(format!("response body exceeds the {MEMORY_BODY_CAP} byte memory cap"));
+      return Err(format!("response body exceeds the {} byte memory cap", self.limit));
     }
     held.bytes.extend_from_slice(chunk);
     Ok(())

@@ -15,7 +15,7 @@ use libbridgething::{
   BridgeThingMeta, OtaError, OtaFinished, OtaKind, OtaPhase, OtaProgress, WebappInfo,
   gateway::{
     OtaActivate, OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply, OtaBegin, OtaPatch,
-    OtaPatchAlgorithm, TransferAbandon, TransferRef,
+    OtaPatchAlgorithm, TransferAbandon, TransferRef, WebappBlobEntry, WebappBlobFailed, WebappBlobStored,
   },
 };
 use tokio::sync::{Notify, broadcast};
@@ -43,7 +43,10 @@ use crate::{
   },
   seam::Clock,
   transfer::{AckWindow, SourceRange},
-  webapp::BUILTIN_WEBAPPS,
+  webapp::{
+    BUILTIN_WEBAPPS,
+    blob::{self, BlobError, BlobLane, BlobProgress, BlobPuts, BlobUpload},
+  },
 };
 
 pub const IMAGE_SWU_ASSET: &str = "update.swu";
@@ -208,6 +211,8 @@ pub enum OtaSignal {
   Error(Box<OtaError>),
   Finished(OtaFinished),
   WebappInstalled(Box<WebappInfo>),
+  BlobStored(WebappBlobStored),
+  BlobFailed(Box<WebappBlobFailed>),
 }
 
 struct Link {
@@ -398,6 +403,7 @@ pub struct OtaService {
   image_targets: Mutex<BTreeMap<String, String>>,
   in_flight: Mutex<BTreeSet<String>>,
   install_turns: Mutex<BTreeMap<String, Arc<tokio::sync::Mutex<()>>>>,
+  blob_puts: Arc<BlobPuts>,
   idle: Notify,
   poll: Mutex<PollState>,
   wake: Notify,
@@ -422,6 +428,7 @@ impl OtaService {
       image_targets: Mutex::new(BTreeMap::new()),
       in_flight: Mutex::new(BTreeSet::new()),
       install_turns: Mutex::new(BTreeMap::new()),
+      blob_puts: Arc::default(),
       idle: Notify::new(),
       poll: Mutex::new(PollState::default()),
       wake: Notify::new(),
@@ -555,6 +562,14 @@ impl OtaService {
 
   pub fn webapp_installed(&self, device_id: &str, info: WebappInfo) {
     self.signal(device_id, OtaSignal::WebappInstalled(Box::new(info)));
+  }
+
+  pub fn blob_stored(&self, device_id: &str, stored: WebappBlobStored) {
+    self.signal(device_id, OtaSignal::BlobStored(stored));
+  }
+
+  pub fn blob_failed(&self, device_id: &str, failed: WebappBlobFailed) {
+    self.signal(device_id, OtaSignal::BlobFailed(Box::new(failed)));
   }
 
   pub fn transfer_ack(&self, device_id: &str, transfer_id: Uuid, received: u64) {
@@ -875,6 +890,36 @@ impl OtaService {
         reason: format!("install ended without a verdict (last phase: {other:?})"),
       },
     }
+  }
+
+  pub async fn put_blob(
+    &self,
+    device_id: &str,
+    upload: BlobUpload,
+    progress: Option<BlobProgress>,
+  ) -> Result<WebappBlobEntry, BlobError> {
+    let lane = self.blob_lane(device_id)?;
+    let claim = self
+      .blob_puts
+      .claim((device_id.to_owned(), upload.webapp, upload.key.clone()));
+    blob::upload(lane, upload, progress, claim).await
+  }
+
+  pub async fn delete_blob(&self, device_id: &str, webapp: Uuid, key: String) -> Result<(), BlobError> {
+    self.blob_lane(device_id)?.delete(webapp, key).await
+  }
+
+  pub async fn list_blobs(&self, device_id: &str, webapp: Uuid) -> Result<Vec<WebappBlobEntry>, BlobError> {
+    self.blob_lane(device_id)?.list(webapp).await
+  }
+
+  fn blob_lane(&self, device_id: &str) -> Result<BlobLane, BlobError> {
+    let link = self.link(device_id).ok_or(BlobError::NotConnected)?;
+    Ok(BlobLane {
+      gateway: link.gateway,
+      streamer: link.streamer,
+      signals: link.signals,
+    })
   }
 
   fn link(&self, device_id: &str) -> Option<LinkHandle> {
@@ -1763,7 +1808,7 @@ impl OtaService {
           match signal {
             OtaSignal::LinkLost => return (failed(LINK_LOST_REASON), None),
             OtaSignal::WebappInstalled(info) if mode == DriveMode::Install => return (success, Some(*info)),
-            OtaSignal::WebappInstalled(_) => continue,
+            OtaSignal::WebappInstalled(_) | OtaSignal::BlobStored(_) | OtaSignal::BlobFailed(_) => continue,
             OtaSignal::Finished(done) if mode == DriveMode::Apply(done.kind) => return (success, None),
             OtaSignal::Finished(_) => continue,
             OtaSignal::Progress(tick) => {
@@ -1823,12 +1868,12 @@ mod tests {
     WebappInstallResult, WebappLabel, bandaid_plan, daemon_piece, image_plan, route_step,
   };
   use crate::{
-    bundle::ArtifactDigest,
+    bundle::{ArtifactDigest, fetch::sha256_hex},
     ota::{
       event::{OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
       harness::{
         DEVICE, FakeDevice, FakeFetch, ManifestFixture, Spool, TestClock, digest_of, linked_gateway, meta, pattern,
-        route_into, sha256_hex,
+        route_into,
       },
       manifest::{OtaArtifactUrls, OtaPatchDigest, OtaReleaseArtifacts},
       run_store::RUNS_FILE,

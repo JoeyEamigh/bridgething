@@ -12,11 +12,11 @@ use uuid::Uuid;
 use super::{AckWindow, FragmentSource, FragmentStream, Pacer, SendError, SourceRange};
 use crate::seam::Clock;
 
-pub struct BytesSource(Vec<u8>);
+pub struct BytesSource(Arc<Vec<u8>>);
 
 impl BytesSource {
-  pub fn new(bytes: Vec<u8>) -> Self {
-    Self(bytes)
+  pub fn new(bytes: impl Into<Arc<Vec<u8>>>) -> Self {
+    Self(bytes.into())
   }
 
   pub fn len(&self) -> u64 {

@@ -1,21 +1,19 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   path::{Path, PathBuf},
   time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tokio::{
   fs::{File, OpenOptions},
-  io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+  io::AsyncWriteExt,
   sync::{mpsc, oneshot},
 };
 use tokio_util::bytes::Bytes;
 
-use super::{
-  BeginOutcome, ChunkOutcome, STALE_TIMEOUT, SWEEP_INTERVAL, TRANSFER_DISK_BUDGET_BYTES, TransferError, safe_filename,
-};
+use super::{BeginOutcome, ChunkOutcome, STALE_TIMEOUT, SWEEP_INTERVAL, TransferError, safe_filename};
+use crate::{digest::sha256_file, paths};
 
 #[derive(Debug)]
 pub(super) enum Command {
@@ -29,12 +27,15 @@ pub(super) enum Command {
     id: String,
     offset: u64,
     bytes: Bytes,
-    last: bool,
     ack: oneshot::Sender<Result<ChunkOutcome, TransferError>>,
   },
   Abandon {
     id: String,
     ack: oneshot::Sender<Result<(), TransferError>>,
+  },
+  AbandonMatching {
+    prefix: String,
+    ack: oneshot::Sender<()>,
   },
   HashCompleted {
     id: String,
@@ -86,6 +87,7 @@ struct Transfer {
 
 pub(super) struct ChunkedTransferActor {
   transfers_dir: PathBuf,
+  budget: u64,
   transfers: HashMap<String, Transfer>,
   total_disk_bytes: u64,
   cmd_rx: mpsc::Receiver<Command>,
@@ -97,6 +99,7 @@ pub(super) struct ChunkedTransferActor {
 impl ChunkedTransferActor {
   pub(super) async fn bootstrap(
     transfers_dir: PathBuf,
+    budget: u64,
     sweep_dirs: Vec<PathBuf>,
     cmd_rx: mpsc::Receiver<Command>,
     self_tx: mpsc::Sender<Command>,
@@ -146,6 +149,7 @@ impl ChunkedTransferActor {
 
     Ok(Self {
       transfers_dir,
+      budget,
       transfers,
       total_disk_bytes: total,
       cmd_rx,
@@ -181,16 +185,14 @@ impl ChunkedTransferActor {
         expected_sha256,
         ack,
       } => self.handle_begin(id, expected_size, expected_sha256, ack).await,
-      Command::AcceptChunk {
-        id,
-        offset,
-        bytes,
-        last,
-        ack,
-      } => self.handle_chunk(id, offset, bytes, last, ack).await,
+      Command::AcceptChunk { id, offset, bytes, ack } => self.handle_chunk(id, offset, bytes, ack).await,
       Command::Abandon { id, ack } => {
         let result = self.handle_abandon(id).await;
         let _ = ack.send(result);
+      }
+      Command::AbandonMatching { prefix, ack } => {
+        self.abandon_matching(&prefix).await;
+        let _ = ack.send(());
       }
       Command::HashCompleted { id, result } => self.handle_hash_completed(id, result).await,
       Command::BeginVerified { id, result } => self.handle_begin_verified(id, result).await,
@@ -215,7 +217,7 @@ impl ChunkedTransferActor {
         self.pending_begin_verifies.insert(id.clone(), ack);
         let self_tx = self.self_tx.clone();
         tokio::spawn(async move {
-          let result = hash_file(&partial_path).await;
+          let result = seal(&partial_path).await;
           let _ = self_tx.send(Command::BeginVerified { id, result }).await;
         });
       }
@@ -227,7 +229,7 @@ impl ChunkedTransferActor {
   }
 
   fn begin_fast_path(&mut self, id: &str, expected_size: u64, expected_sha256: &Option<String>) -> FastPath {
-    if expected_size > TRANSFER_DISK_BUDGET_BYTES {
+    if expected_size > self.budget {
       return FastPath::Reject(TransferError::TooLarge {
         id: id.to_string(),
         size: expected_size,
@@ -302,11 +304,14 @@ impl ChunkedTransferActor {
     expected_sha256: Option<String>,
   ) -> Result<u64, TransferError> {
     let projected = self.total_disk_bytes.saturating_add(expected_size);
-    if projected > TRANSFER_DISK_BUDGET_BYTES {
+    if projected > self.budget {
       self.evict_until_under(expected_size).await;
       let still_projected = self.total_disk_bytes.saturating_add(expected_size);
-      if still_projected > TRANSFER_DISK_BUDGET_BYTES {
-        return Err(TransferError::BudgetExceeded { id });
+      if still_projected > self.budget {
+        return Err(TransferError::BudgetExceeded {
+          id,
+          budget: self.budget,
+        });
       }
     }
 
@@ -342,10 +347,9 @@ impl ChunkedTransferActor {
     id: String,
     offset: u64,
     bytes: Bytes,
-    last: bool,
     ack: oneshot::Sender<Result<ChunkOutcome, TransferError>>,
   ) {
-    match self.handle_chunk_write(&id, offset, bytes, last).await {
+    match self.handle_chunk_write(&id, offset, bytes).await {
       Ok(WriteOutcome::Continue { received }) => {
         let _ = ack.send(Ok(ChunkOutcome::Continue { received }));
       }
@@ -353,7 +357,7 @@ impl ChunkedTransferActor {
         self.pending_completions.insert(id.clone(), ack);
         let self_tx = self.self_tx.clone();
         tokio::spawn(async move {
-          let result = hash_file(&partial_path).await;
+          let result = seal(&partial_path).await;
           let _ = self_tx.send(Command::HashCompleted { id, result }).await;
         });
       }
@@ -363,13 +367,7 @@ impl ChunkedTransferActor {
     }
   }
 
-  async fn handle_chunk_write(
-    &mut self,
-    id: &str,
-    offset: u64,
-    bytes: Bytes,
-    last: bool,
-  ) -> Result<WriteOutcome, TransferError> {
+  async fn handle_chunk_write(&mut self, id: &str, offset: u64, bytes: Bytes) -> Result<WriteOutcome, TransferError> {
     let transfer = self
       .transfers
       .get_mut(id)
@@ -401,16 +399,8 @@ impl ChunkedTransferActor {
     transfer.last_touched_unix = unix_now();
     self.total_disk_bytes = self.total_disk_bytes.saturating_add(chunk_len);
 
-    if !last {
+    if transfer.received < transfer.expected_size {
       return Ok(WriteOutcome::Continue {
-        received: transfer.received,
-      });
-    }
-
-    if transfer.received != transfer.expected_size {
-      return Err(TransferError::SizeMismatch {
-        id: id.to_string(),
-        expected_size: transfer.expected_size,
         received: transfer.received,
       });
     }
@@ -479,8 +469,23 @@ impl ChunkedTransferActor {
     Ok(())
   }
 
+  async fn abandon_matching(&mut self, prefix: &str) {
+    let matching: HashSet<String> = self
+      .transfers
+      .keys()
+      .chain(self.pending_completions.keys())
+      .chain(self.pending_begin_verifies.keys())
+      .filter(|id| id.starts_with(prefix))
+      .cloned()
+      .collect();
+    for id in matching {
+      tracing::debug!(%id, "transfer: abandoning a partial its owner no longer wants");
+      let _ = self.handle_abandon(id).await;
+    }
+  }
+
   async fn evict_until_under(&mut self, incoming_size: u64) {
-    while self.total_disk_bytes.saturating_add(incoming_size) > TRANSFER_DISK_BUDGET_BYTES {
+    while self.total_disk_bytes.saturating_add(incoming_size) > self.budget {
       let Some(victim_id) = self
         .transfers
         .iter()
@@ -581,19 +586,10 @@ async fn write_meta(meta_path: &Path, meta: &Meta) -> Result<(), TransferError> 
   Ok(())
 }
 
-async fn hash_file(path: &Path) -> Result<String, TransferError> {
-  let mut file = File::open(path).await?;
-  file.seek(std::io::SeekFrom::Start(0)).await?;
-  let mut hasher = Sha256::new();
-  let mut buf = vec![0u8; 64 * 1024];
-  loop {
-    let n = file.read(&mut buf).await?;
-    if n == 0 {
-      break;
-    }
-    hasher.update(&buf[..n]);
-  }
-  Ok(hex::encode(hasher.finalize()))
+async fn seal(path: &Path) -> Result<String, TransferError> {
+  let sha256 = sha256_file(path).await?;
+  paths::fsync_entry(path).await?;
+  Ok(sha256)
 }
 
 fn meta_from(t: &Transfer) -> Meta {
