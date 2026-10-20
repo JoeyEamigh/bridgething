@@ -286,12 +286,20 @@ impl FakeDevice {
   }
 
   pub async fn answer_webapp_list(&mut self, webapps: Vec<WebappInfo>) {
-    let request_id = self
+    let request_id = self.await_webapp_list().await;
+    self.list_webapps(request_id, webapps);
+  }
+
+  pub async fn await_webapp_list(&mut self) -> Uuid {
+    self
       .next_matching(|msg| match &msg.data {
         GatewayToBridgeMsgData::Webapp(GatewayToBridgeWebappMsg::List) => Some(msg.id),
         _ => None,
       })
-      .await;
+      .await
+  }
+
+  pub fn list_webapps(&self, request_id: Uuid, webapps: Vec<WebappInfo>) {
     self.respond(
       request_id,
       BridgeToGatewayMsgData::Webapp(BridgeToGatewayWebappMsg::Webapps(WebappList { webapps })),

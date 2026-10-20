@@ -652,6 +652,43 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
+  async fn a_device_that_announces_after_a_poll_took_its_snapshot_is_reconciled_without_waiting_out_the_interval() {
+    let mut rig = rig().await;
+    let mut fixture = serve_release(&rig.fetch, "prod");
+    fixture.builtin_webapps.insert("browser".into(), "0.5.0".into());
+    publish(&rig.fetch, &fixture);
+    rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
+    await_meta(&rig).await;
+    let (other_gateway, mut other_device) = linked_gateway();
+    rig.service.adopt(OTHER_DEVICE, other_gateway.clone()).await;
+    route_into(&other_gateway, &rig.service, OTHER_DEVICE);
+
+    rig.service.set_poll_config(Some(config(false))).await;
+    let listing = rig.device.await_webapp_list().await;
+    rig
+      .service
+      .device_meta(OTHER_DEVICE, meta("0.8.0", "2026.05.0", CHANNEL));
+    rig
+      .device
+      .list_webapps(listing, vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.5.0")]);
+    tokio::spawn(async move {
+      other_device
+        .answer_webapp_list(vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.5.0")])
+        .await;
+    });
+
+    assert!(
+      !no_event(&mut rig.events, Duration::from_secs(5), |event| matches!(
+        event,
+        OtaPollEvent::UpdateAvailable { device_id, .. } if device_id == OTHER_DEVICE
+      ))
+      .await,
+      "a device that announced while the poll was reconciling another is owed a reconcile, not a wait for the next \
+       link-stability deadline"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
   async fn a_manifest_that_could_not_be_read_is_retried_without_waiting_out_the_interval() {
     let mut rig = rig().await;
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));

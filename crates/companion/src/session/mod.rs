@@ -3,6 +3,7 @@ pub mod handlers;
 mod imports;
 pub mod link;
 pub mod models;
+mod network;
 pub mod observer;
 pub mod ota;
 
@@ -64,7 +65,10 @@ use crate::{
     stream::StreamProvider,
     system_media::SystemMediaProvider,
   },
-  session::{handlers::Peer, link::LinkConnector, models::VoiceModels, observer::SessionObserver, ota::OtaLink},
+  session::{
+    handlers::Peer, link::LinkConnector, models::VoiceModels, network::NetworkLink, observer::SessionObserver,
+    ota::OtaLink,
+  },
   voice::{
     controller::{ArmedModel, VoiceController, VoiceControllerConfig},
     dispatcher::{VoiceDispatcher, VoiceDispatcherDeps},
@@ -82,7 +86,12 @@ struct Link {
 #[derive(Default)]
 struct LogStream {
   enabled: bool,
-  tokens: HashMap<String, String>,
+  taps: HashMap<String, LogTap>,
+}
+
+enum LogTap {
+  Opening(Uuid),
+  Open(String),
 }
 
 const LOG_RING_CAPACITY: usize = 2000;
@@ -174,6 +183,7 @@ pub struct Session {
   extensions: Option<Arc<ExtensionDispatcher>>,
   links: Mutex<HashMap<String, Link>>,
   link_gate: tokio::sync::Mutex<()>,
+  networks: Mutex<HashMap<String, NetworkLink>>,
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
   volume_pump: Mutex<Option<JoinHandle<()>>>,
@@ -306,6 +316,7 @@ impl Session {
       extensions,
       links: Mutex::new(HashMap::new()),
       link_gate: tokio::sync::Mutex::new(()),
+      networks: Mutex::new(HashMap::new()),
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
       volume_pump: Mutex::new(None),
@@ -321,10 +332,6 @@ impl Session {
 
   pub fn observer(&self) -> &Arc<SessionObserver> {
     &self.observer
-  }
-
-  pub fn ws(&self) -> Arc<dyn crate::backend::WsTransport> {
-    self.backends.ws.clone()
   }
 
   pub fn log_ring(&self) -> &Arc<DeviceLogRing> {
@@ -741,6 +748,7 @@ impl Session {
   }
 
   pub async fn stop(&self) {
+    self.networks.lock().unwrap().clear();
     for held in [
       &self.models_watch,
       &self.inbox,
@@ -782,6 +790,7 @@ impl Session {
   }
 
   pub async fn direct_disconnected(&self, device_id: &str) {
+    self.networks.lock().unwrap().remove(device_id);
     if self.teardown(device_id).await {
       self.observer.peer_disconnected(device_id);
     }
@@ -847,8 +856,15 @@ impl Session {
   where
     C: Connector<GatewayProtocol> + Send + 'static,
   {
-    tracing::info!(device_id = %device.id, name = %device.name, "a peer link is coming up");
     let _gate = self.link_gate.lock().await;
+    self.raise(device, connector).await;
+  }
+
+  async fn raise<C>(self: &Arc<Self>, device: &LinkDevice, connector: C)
+  where
+    C: Connector<GatewayProtocol> + Send + 'static,
+  {
+    tracing::info!(device_id = %device.id, name = %device.name, "a peer link is coming up");
     self.detach(&device.id).await;
 
     let (gateway, inbound) = Gateway::spawn_subscribed(connector);
@@ -906,11 +922,13 @@ impl Session {
   }
 
   async fn sync_log_stream(&self, device_id: &str, gateway: &Gateway) {
+    let claim = Uuid::now_v7();
     {
-      let held = self.log_stream.lock().unwrap();
-      if !held.enabled || held.tokens.contains_key(device_id) {
+      let mut held = self.log_stream.lock().unwrap();
+      if !held.enabled || held.taps.contains_key(device_id) {
         return;
       }
+      held.taps.insert(device_id.to_owned(), LogTap::Opening(claim));
     }
     self.observer.hold_logs();
     let subscribed = gateway
@@ -921,22 +939,28 @@ impl Session {
         filter: None,
       })
       .await;
-    let Ok(reply) = subscribed else {
-      self.observer.backfill_logs(Vec::new());
-      return;
-    };
-    let orphaned = {
+    let token = subscribed.ok().map(|reply| reply.token);
+    let kept = {
       let mut held = self.log_stream.lock().unwrap();
-      if held.enabled && !held.tokens.contains_key(device_id) {
-        held.tokens.insert(device_id.to_owned(), reply.token);
-        None
-      } else {
-        Some(reply.token)
+      let claimed = matches!(held.taps.get(device_id), Some(LogTap::Opening(opening)) if *opening == claim);
+      match &token {
+        Some(token) if claimed => {
+          held.taps.insert(device_id.to_owned(), LogTap::Open(token.clone()));
+          true
+        }
+        _ => {
+          if claimed {
+            held.taps.remove(device_id);
+          }
+          false
+        }
       }
     };
-    if let Some(token) = orphaned {
+    if !kept {
       self.observer.backfill_logs(Vec::new());
-      release_log_tap(gateway, token).await;
+      if let Some(token) = token {
+        release_log_tap(gateway, token).await;
+      }
       return;
     }
     let tailed = tokio::time::timeout(
@@ -956,13 +980,13 @@ impl Session {
   }
 
   pub async fn set_device_log_streaming(&self, enabled: bool) {
-    let tokens = {
+    let taps = {
       let mut held = self.log_stream.lock().unwrap();
       if held.enabled == enabled {
         return;
       }
       held.enabled = enabled;
-      std::mem::take(&mut held.tokens)
+      std::mem::take(&mut held.taps)
     };
     if enabled {
       for (device_id, gateway) in self.live_gateways() {
@@ -970,7 +994,8 @@ impl Session {
       }
       return;
     }
-    for (device_id, token) in tokens {
+    for (device_id, tap) in taps {
+      let LogTap::Open(token) = tap else { continue };
       let Some(gateway) = self.gateway_for(&device_id) else {
         continue;
       };
@@ -1169,7 +1194,7 @@ impl Session {
     held
   }
 
-  async fn link_died(&self, device_id: &str, token: Uuid) {
+  async fn link_died(self: &Arc<Self>, device_id: &str, token: Uuid) {
     let _gate = self.link_gate.lock().await;
     let link = {
       let mut held = self.links.lock().unwrap();
@@ -1180,10 +1205,11 @@ impl Session {
     };
     self.release(device_id, link).await;
     self.observer.peer_disconnected(device_id);
+    self.redial(device_id);
   }
 
   async fn release(&self, device_id: &str, link: Option<Link>) {
-    self.log_stream.lock().unwrap().tokens.remove(device_id);
+    self.log_stream.lock().unwrap().taps.remove(device_id);
     self.broadcast.release(device_id);
     self.hub.peer_disconnected(device_id);
     let Some(link) = link else { return };

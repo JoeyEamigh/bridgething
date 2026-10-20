@@ -18,7 +18,7 @@ use libbridgething::{
     OtaPatchAlgorithm, TransferAbandon, TransferRef, WebappBlobEntry, WebappBlobFailed, WebappBlobStored,
   },
 };
-use tokio::sync::{Notify, broadcast};
+use tokio::sync::{Notify, broadcast, futures::Notified};
 use uuid::Uuid;
 
 use crate::{
@@ -655,18 +655,17 @@ impl OtaService {
   pub async fn poll_now(&self) {
     let config = self.poll.lock().unwrap().config.clone();
     if let Some(config) = config {
-      self.poll(&config).await;
+      drop(self.poll(&config).await);
     }
   }
 
   pub async fn check_now(&self, root_url: &str) {
-    self
-      .poll(&OtaPollConfig {
-        root_url: root_url.to_owned(),
-        auto_push: false,
-        ..Default::default()
-      })
-      .await;
+    let config = OtaPollConfig {
+      root_url: root_url.to_owned(),
+      auto_push: false,
+      ..Default::default()
+    };
+    drop(self.poll(&config).await);
   }
 
   pub async fn apply_version(&self, device_id: &str, channel: &str, version: &str, root_url: &str) {
@@ -1099,7 +1098,7 @@ impl OtaService {
 
   async fn run_poll_loop(self: Arc<Self>, generation: u64) {
     while let Some(config) = self.current_config(generation) {
-      self.poll(&config).await;
+      let woken = self.poll(&config).await;
       if self.current_config(generation).is_none() {
         return;
       }
@@ -1107,7 +1106,6 @@ impl OtaService {
       let now = self.deps.clock.unix_millis();
       let deadline = self.wake_deadline(now, config.interval_seconds);
       let sleeping = rt::sleep(Duration::from_millis(deadline.saturating_sub(now)));
-      let woken = self.wake.notified();
       pin_mut!(sleeping, woken);
       futures::future::select(sleeping, woken).await;
     }
@@ -1137,7 +1135,7 @@ impl OtaService {
     fetch_json(self.deps.fetch.as_ref(), &url).await
   }
 
-  async fn poll(&self, config: &OtaPollConfig) {
+  async fn poll(&self, config: &OtaPollConfig) -> Notified<'_> {
     let manifest = match self.discover_manifest(&config.root_url).await {
       Ok(manifest) => manifest,
       Err(e) => {
@@ -1145,13 +1143,14 @@ impl OtaService {
           .feed
           .emit(OtaPollEvent::ManifestPollFailed { reason: e.to_string() });
         self.recheck_soon.store(true, Ordering::SeqCst);
-        return;
+        return self.wake.notified();
       }
     };
     self.feed.emit(OtaPollEvent::ManifestPolled {
       updated_at: manifest.updated_at.clone(),
     });
 
+    let woken = self.wake.notified();
     let announced: Vec<(String, BridgeThingMeta)> = self
       .links
       .lock()
@@ -1166,6 +1165,7 @@ impl OtaService {
       };
       self.reconcile(&device_id, &meta, &latest, release, config).await;
     }
+    woken
   }
 
   async fn reconcile(

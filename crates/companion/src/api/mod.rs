@@ -12,8 +12,8 @@ pub use session::*;
 use crate::{
   api::ota::{ArtifactDigest, OtaAvailable, OtaPollStatus, OtaRun, OtaRunProgress},
   backend::{
-    AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, ForeignWs,
-    GeoProvider, HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
+    AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, GeoProvider,
+    HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
     MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend,
     SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
   },
@@ -259,11 +259,7 @@ impl CompanionSession {
   }
 
   pub async fn connect_network(&self, url: String, device: LinkDevice) -> Result<(), CompanionError> {
-    let connector = bridgething_gateway::connect_seam_ws(Arc::new(ForeignWs::new(self.session.ws())), &url)
-      .await
-      .map_err(|failure| CompanionError::Device(format!("{url}: {failure}")))?;
-    self.session.connect_direct(device, connector).await;
-    Ok(())
+    self.session.connect_network(url, device).await
   }
 
   pub async fn disconnect_network(&self, device_id: String) {

@@ -1,5 +1,5 @@
 appId: com.bridgething.gateway
-name: drops a stale update offer once the device turns out to be current
+name: drops a stale update offer once the device reconnects and turns out to be current
 ---
 - runScript:
       file: ../scripts/ota-bounce-root.js
@@ -19,12 +19,10 @@ name: drops a stale update offer once the device turns out to be current
           CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
           MODE: current
           DOWN_MS: "10000"
-- stopApp
-- launchApp
 - extendedWaitUntil:
       visible: ".*dev gateway, connected.*"
       timeout: 180000
 - extendedWaitUntil:
       notVisible: ".*\\+image\\..* available.*"
-      timeout: 180000
+      timeout: 60000
 - assertNotVisible: ".*install [0-9.]+\\+image.99.9.9.*"
