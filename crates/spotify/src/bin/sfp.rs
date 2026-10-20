@@ -440,7 +440,7 @@ async fn probe(spc: &SpClient, dealer: &Dealer, username: Option<&str>) -> Resul
       Ok(rl) => println!("  rootlist: {} items", rl.contents.items.len()),
       Err(e) => println!("  rootlist FAILED: {e}"),
     }
-    match spc.collection_paging(user, "collection", 50).await {
+    match spc.collection_paging(user, "collection").await {
       Ok(items) => println!("  liked collection: {} items", items.len()),
       Err(e) => println!("  collection FAILED: {e}"),
     }

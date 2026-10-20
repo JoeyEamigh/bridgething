@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-  client::{FlatItem, Release, SpotifyClient},
+  client::{FlatItem, LibraryPlaylist, Release, SpotifyClient},
   error::Error,
   model::BrowseItem,
 };
@@ -16,6 +16,61 @@ const DISCOGRAPHY_DEPTH: usize = 8;
 const DISCOGRAPHY_LOOKUP_DEPTH: usize = 24;
 const DISCOGRAPHY_FULL_DEPTH: usize = 60;
 const RECENT_POOL: usize = 40;
+
+const LIKED_SONGS: &[&str] = &[
+  "liked songs",
+  "liked song",
+  "liked tracks",
+  "liked music",
+  "favorite songs",
+  "favourite songs",
+  "favorite tracks",
+  "favourite tracks",
+  "favorite music",
+  "favourite music",
+  "saved songs",
+  "saved tracks",
+  "saved music",
+  "library songs",
+  "library s songs",
+  "songs in my library",
+  "songs i like",
+  "songs i liked",
+  "songs i ve liked",
+  "songs i have liked",
+  "songs i saved",
+  "tracks i like",
+  "tracks i liked",
+];
+
+const MY_LIKED_SONGS: &[&str] = &[
+  "likes",
+  "liked",
+  "favorites",
+  "favourites",
+  "favorite",
+  "favourite",
+  "faves",
+  "songs",
+  "tracks",
+  "music",
+  "library",
+  "saved",
+];
+
+const SAVED_ALBUMS: &[&str] = &[
+  "saved albums",
+  "library albums",
+  "liked albums",
+  "favorite albums",
+  "favourite albums",
+  "albums in my library",
+  "albums i saved",
+  "albums i ve saved",
+  "albums i like",
+];
+
+const MY_SAVED_ALBUMS: &[&str] = &["albums", "records"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VoiceTargetKind {
@@ -79,6 +134,9 @@ pub enum VoiceResolveError {
 }
 
 pub(crate) async fn resolve(client: &SpotifyClient, req: VoiceResolveRequest) -> VoiceResult<VoiceResolved> {
+  if let Some(collection) = collection_of(&req) {
+    return resolve_collection(client, collection, &req).await;
+  }
   let query = compose_query(&req);
   if req.target_type == Some(VoiceTargetKind::Station) && !query.is_empty() {
     if wants_personal_mix(&req)
@@ -166,7 +224,12 @@ async fn resolve_search(client: &SpotifyClient, req: &VoiceResolveRequest, query
   {
     return head_of(mixes, None);
   }
-  let items = client.search_flat(query, SEARCH_LIMIT).await?;
+  let (library, searched) = tokio::join!(library_hits(client, req), client.search_flat(query, SEARCH_LIMIT));
+  let items = match searched {
+    Ok(items) => items,
+    Err(_) if !library.is_empty() => Vec::new(),
+    Err(e) => return Err(e.into()),
+  };
   let mut ranked = ranked_search(&items, req);
   if let Some(want) = want_of(req, &items) {
     ranked = scored(ranked, &want);
@@ -174,7 +237,163 @@ async fn resolve_search(client: &SpotifyClient, req: &VoiceResolveRequest, query
       ranked = scored(with_discography(client, ranked, &want, &items).await, &want);
     }
   }
-  head_of(ranked, None)
+  head_of(library_first(library, ranked), None)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Collection {
+  LikedSongs,
+  SavedAlbums,
+}
+
+fn collection_of(req: &VoiceResolveRequest) -> Option<Collection> {
+  let target = req.target.as_deref()?;
+  let (mine, phrase) = collection_phrase(target);
+  let named =
+    |always: &[&str], owned: &[&str]| always.contains(&phrase.as_str()) || (mine && owned.contains(&phrase.as_str()));
+  let songs = matches!(
+    req.target_type,
+    None | Some(VoiceTargetKind::Playlist | VoiceTargetKind::Track)
+  );
+  let albums = matches!(req.target_type, None | Some(VoiceTargetKind::Album));
+  if songs && named(LIKED_SONGS, MY_LIKED_SONGS) {
+    return Some(Collection::LikedSongs);
+  }
+  if albums && named(SAVED_ALBUMS, MY_SAVED_ALBUMS) {
+    return Some(Collection::SavedAlbums);
+  }
+  None
+}
+
+fn collection_phrase(target: &str) -> (bool, String) {
+  let normalized = norm(target);
+  let mut words: Vec<&str> = normalized.split(' ').filter(|w| !w.is_empty()).collect();
+  let mut mine = false;
+  while let Some(first) = words.first().copied() {
+    match first {
+      "my" => mine = true,
+      "the" | "all" | "of" => {}
+      _ => break,
+    }
+    words.remove(0);
+  }
+  while matches!(words.last().copied(), Some("playlist" | "collection")) {
+    words.pop();
+  }
+  (mine, words.join(" "))
+}
+
+async fn resolve_collection(
+  client: &SpotifyClient,
+  collection: Collection,
+  req: &VoiceResolveRequest,
+) -> VoiceResult<VoiceResolved> {
+  let uris = match collection {
+    Collection::LikedSongs => vec![client.liked_songs_uri().await?],
+    Collection::SavedAlbums => client
+      .saved_album_uris()
+      .await?
+      .into_iter()
+      .take(1 + ALTERNATIVES)
+      .collect(),
+  };
+  let containers = candidates_of(client.hydrate_uris(&uris).await);
+  let head = containers.first().cloned().ok_or(VoiceResolveError::NoMatch)?;
+  match req.position {
+    Some(position) => {
+      let page = client
+        .browse_container(&head.uri, 1 + ALTERNATIVES as u32, offset_of(position))
+        .await?;
+      head_of(candidates_of(page.items), Some(head.uri))
+    }
+    None => head_of(containers, None),
+  }
+}
+
+async fn library_hits(client: &SpotifyClient, req: &VoiceResolveRequest) -> Vec<Candidate> {
+  if req.era.is_some() || req.mood.is_some() || req.genre.is_some() {
+    return Vec::new();
+  }
+  let Some(target) = req.target.as_deref().map(str::trim).filter(|t| !t.is_empty()) else {
+    return Vec::new();
+  };
+  let wants = library_names(target);
+  let allows = |kind: VoiceTargetKind| req.target_type.is_none_or(|k| k == kind);
+  let (playlists, albums, artists) = tokio::join!(
+    async {
+      if !allows(VoiceTargetKind::Playlist) {
+        return Vec::new();
+      }
+      client.library_playlists().await.unwrap_or_default()
+    },
+    async {
+      if !allows(VoiceTargetKind::Album) {
+        return Vec::new();
+      }
+      named_library(client, client.saved_album_uris().await.unwrap_or_default()).await
+    },
+    async {
+      if !allows(VoiceTargetKind::Artist) {
+        return Vec::new();
+      }
+      named_library(client, client.saved_artist_uris().await.unwrap_or_default()).await
+    },
+  );
+  let mut mine: Vec<LibraryPlaylist> = playlists
+    .into_iter()
+    .filter(|p| wants.contains(&norm(&p.name)))
+    .collect();
+  mine.sort_by_key(|p| !p.owned);
+  let titled = |c: &Candidate| wants.contains(&norm(&c.display));
+  let credited = |c: &Candidate| {
+    c.artist
+      .as_deref()
+      .is_some_and(|a| wants.contains(&format!("{} by {}", norm(&c.display), norm(a))))
+  };
+  mine
+    .into_iter()
+    .map(|p| Candidate {
+      uri: p.uri,
+      display: p.name,
+      kind: VoiceTargetKind::Playlist,
+      artist: None,
+      year: None,
+    })
+    .chain(albums.into_iter().filter(|c| titled(c) || credited(c)))
+    .chain(artists.into_iter().filter(titled))
+    .collect()
+}
+
+async fn named_library(client: &SpotifyClient, uris: Vec<String>) -> Vec<Candidate> {
+  candidates_of(client.hydrate_uris(&uris).await)
+}
+
+fn library_names(target: &str) -> HashSet<String> {
+  let whole = norm(target);
+  let bare = ["my ", "the "]
+    .iter()
+    .find_map(|p| whole.strip_prefix(p))
+    .unwrap_or(&whole)
+    .to_string();
+  let mut out = HashSet::new();
+  for name in [whole.clone(), bare] {
+    for suffix in [" playlist", " album"] {
+      if let Some(core) = name.strip_suffix(suffix) {
+        out.insert(core.to_string());
+      }
+    }
+    out.insert(name);
+  }
+  out.remove("");
+  out
+}
+
+fn library_first(library: Vec<Candidate>, catalog: Vec<Candidate>) -> Vec<Candidate> {
+  let held: HashSet<String> = library.iter().map(|c| c.uri.clone()).collect();
+  library
+    .into_iter()
+    .chain(catalog.into_iter().filter(|c| !held.contains(&c.uri)))
+    .collect()
 }
 
 async fn resolve_random(client: &SpotifyClient, req: &VoiceResolveRequest, query: &str) -> VoiceResult<VoiceResolved> {
@@ -424,7 +643,11 @@ async fn target_container(
     Some(_) => return Ok(None),
     None => Pick::Container,
   };
-  let items = client.search_flat(query, SEARCH_LIMIT).await?;
+  let (library, searched) = tokio::join!(library_hits(client, req), client.search_flat(query, SEARCH_LIMIT));
+  if let Some(mine) = library.into_iter().find(|c| pick.keeps(c.kind)) {
+    return Ok(Some(mine.uri));
+  }
+  let items = searched?;
   let mut ranked = rank(&items, pick);
   if let Some(want) = want_of(req, &items) {
     ranked = scored(ranked, &want);
@@ -847,8 +1070,13 @@ fn kind_of_uri(uri: &str) -> Option<VoiceTargetKind> {
     "show" => Some(VoiceTargetKind::Show),
     "episode" => Some(VoiceTargetKind::Episode),
     "station" => Some(VoiceTargetKind::Station),
+    "user" if is_liked_songs(uri) => Some(VoiceTargetKind::Playlist),
     _ => None,
   }
+}
+
+fn is_liked_songs(uri: &str) -> bool {
+  uri.starts_with("spotify:user:") && uri.ends_with(":collection")
 }
 
 fn is_station_seed(kind: VoiceTargetKind) -> bool {
@@ -907,7 +1135,7 @@ fn fresh_candidates(pool: &[String], excluded: &HashSet<String>) -> Vec<String> 
   let mut seen = HashSet::new();
   pool
     .iter()
-    .filter(|u| kind_of_uri(u).is_some_and(is_fresh_context))
+    .filter(|u| kind_of_uri(u).is_some_and(is_fresh_context) && !is_liked_songs(u))
     .filter(|u| !excluded.contains(*u))
     .filter(|u| seen.insert((*u).clone()))
     .cloned()
@@ -946,8 +1174,8 @@ mod tests {
   use crate::client::{
     flatten_search,
     tests::{
-      NullObserver, Playing, album_hit, named_hit, playing_client, search_response, searching_client,
-      searching_client_items, test_client, track_hit,
+      LibrarySeed, NullObserver, Playing, album_hit, library_client, named_hit, playing_client, search_response,
+      searching_client, searching_client_items, test_client, track_hit,
     },
   };
 
@@ -993,6 +1221,212 @@ mod tests {
     std::iter::once(out.uri.as_str())
       .chain(out.alternatives.iter().map(|a| a.uri.as_str()))
       .collect()
+  }
+
+  const LIKED: &str = "spotify:user:user-1:collection";
+
+  fn stranger_liked_songs() -> Vec<crate::proto::custom::searchview::SearchItem> {
+    vec![named_hit("spotify:playlist:stranger", "Liked Songs")]
+  }
+
+  fn shelf() -> LibrarySeed<'static> {
+    LibrarySeed {
+      playlists: &[
+        ("spotify:playlist:followed", "Road Trip", false),
+        ("spotify:playlist:mine", "Road Trip", true),
+        ("spotify:playlist:other", "Gym", true),
+      ],
+      saved: &[
+        ("spotify:track:t9", "Newest Song", "A"),
+        ("spotify:album:vessel", "Vessel", "Twenty One Pilots"),
+        ("spotify:track:t8", "Older Song", "B"),
+        ("spotify:album:trench", "Trench", "Twenty One Pilots"),
+      ],
+      artists: &[("spotify:artist:bastille-mine", "Bastille")],
+    }
+  }
+
+  #[tokio::test]
+  async fn liked_songs_phrases_resolve_to_the_users_collection_before_any_search() {
+    let (client, log) = library_client(stranger_liked_songs(), shelf()).await;
+    for target in [
+      "liked songs",
+      "Liked Songs",
+      "my liked songs",
+      "all my liked songs",
+      "liked songs playlist",
+      "my likes",
+      "my favorites",
+      "my favourites",
+      "favorite songs",
+      "my favorite songs",
+      "saved songs",
+      "my saved tracks",
+      "my library",
+      "my library's songs",
+      "my music",
+      "songs i've liked",
+    ] {
+      for kind in [None, Some(VoiceTargetKind::Playlist), Some(VoiceTargetKind::Track)] {
+        let out = resolve(&client, req(Some(target), kind)).await.unwrap();
+        assert_eq!(out.uri, LIKED, "{target:?} as {kind:?}");
+        assert_eq!(out.kind, VoiceTargetKind::Playlist);
+        assert_eq!(out.display, "Liked Songs");
+      }
+    }
+    assert!(
+      log.queries().is_empty(),
+      "the catalog is never asked, so a stranger's \"Liked Songs\" cannot win"
+    );
+  }
+
+  #[tokio::test]
+  async fn the_bare_words_need_my_to_name_the_collection() {
+    let (client, _log) = library_client(vec![named_hit("spotify:playlist:p", "Favorites")], shelf()).await;
+    let out = resolve(&client, req(Some("favorites"), None)).await.unwrap();
+    assert_eq!(
+      out.uri, "spotify:playlist:p",
+      "\"favorites\" alone is a title, not the collection"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_station_or_an_album_kind_never_reads_liked_songs() {
+    let (client, _log) = library_client(vec![album_hit("spotify:album:ls", "Liked Songs", "X", 2020)], shelf()).await;
+    let out = resolve(&client, req(Some("liked songs"), Some(VoiceTargetKind::Album)))
+      .await
+      .unwrap();
+    assert_eq!(out.uri, "spotify:album:ls");
+  }
+
+  #[tokio::test]
+  async fn a_position_counts_into_liked_songs_newest_first() {
+    let (client, _log) = library_client(Vec::new(), shelf()).await;
+    let out = resolve(
+      &client,
+      VoiceResolveRequest {
+        target: Some("my liked songs".into()),
+        position: Some(2),
+        ..Default::default()
+      },
+    )
+    .await
+    .unwrap();
+    assert_eq!(out.uri, "spotify:track:t8");
+    assert_eq!(out.context_uri.as_deref(), Some(LIKED));
+  }
+
+  #[tokio::test]
+  async fn saved_albums_play_newest_first() {
+    let (client, log) = library_client(stranger_liked_songs(), shelf()).await;
+    for target in ["my albums", "saved albums", "my saved albums"] {
+      for kind in [None, Some(VoiceTargetKind::Album)] {
+        let out = resolve(&client, req(Some(target), kind)).await.unwrap();
+        assert_eq!(
+          picked(&out),
+          ["spotify:album:vessel", "spotify:album:trench"],
+          "{target:?}"
+        );
+        assert_eq!(out.kind, VoiceTargetKind::Album);
+      }
+    }
+    assert!(log.queries().is_empty());
+  }
+
+  #[tokio::test]
+  async fn the_users_own_playlist_wins_by_name_over_the_catalog() {
+    let (client, _log) = library_client(vec![named_hit("spotify:playlist:public", "Road Trip")], shelf()).await;
+    for target in ["road trip", "my road trip playlist", "Road Trip"] {
+      for kind in [None, Some(VoiceTargetKind::Playlist)] {
+        let out = resolve(&client, req(Some(target), kind)).await.unwrap();
+        assert_eq!(
+          picked(&out),
+          [
+            "spotify:playlist:mine",
+            "spotify:playlist:followed",
+            "spotify:playlist:public"
+          ],
+          "{target:?}: owned, then followed, then the catalog"
+        );
+      }
+    }
+  }
+
+  #[tokio::test]
+  async fn a_saved_album_wins_by_title_or_by_phrase() {
+    let catalog = vec![album_hit("spotify:album:cover", "Vessel", "Someone Else", 2024)];
+    let (client, _log) = library_client(catalog, shelf()).await;
+    for target in ["vessel", "vessel by twenty one pilots", "my vessel album"] {
+      let out = resolve(&client, req(Some(target), Some(VoiceTargetKind::Album)))
+        .await
+        .unwrap();
+      assert_eq!(out.uri, "spotify:album:vessel", "{target:?}");
+    }
+    let untyped = resolve(&client, req(Some("vessel"), None)).await.unwrap();
+    assert_eq!(untyped.uri, "spotify:album:vessel");
+  }
+
+  #[tokio::test]
+  async fn a_followed_artist_wins_by_name() {
+    let catalog = vec![named_hit("spotify:artist:bastille-catalog", "Bastille")];
+    let (client, _log) = library_client(catalog, shelf()).await;
+    let out = resolve(&client, req(Some("bastille"), Some(VoiceTargetKind::Artist)))
+      .await
+      .unwrap();
+    assert_eq!(out.uri, "spotify:artist:bastille-mine");
+  }
+
+  #[tokio::test]
+  async fn the_library_only_answers_a_plain_name_of_a_kind_it_holds() {
+    let catalog = vec![
+      track_hit("spotify:track:vessel-song", "Vessel", "Band"),
+      album_hit("spotify:album:vessel-2013", "Vessel", "Twenty One Pilots", 2013),
+    ];
+    let (client, _log) = library_client(catalog, shelf()).await;
+    let track = resolve(&client, req(Some("vessel"), Some(VoiceTargetKind::Track)))
+      .await
+      .unwrap();
+    assert_eq!(
+      track.uri, "spotify:track:vessel-song",
+      "the library holds no tracks by name"
+    );
+    let qualified = resolve(
+      &client,
+      VoiceResolveRequest {
+        target: Some("vessel".into()),
+        target_type: Some(VoiceTargetKind::Album),
+        era: Some("2013".into()),
+        ..Default::default()
+      },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+      qualified.uri, "spotify:album:vessel-2013",
+      "a qualified request belongs to the catalog"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_position_counts_into_the_users_own_playlist() {
+    let (client, log) = library_client(vec![named_hit("spotify:playlist:public", "Road Trip")], shelf()).await;
+    let _ = resolve(
+      &client,
+      VoiceResolveRequest {
+        target: Some("road trip".into()),
+        position: Some(3),
+        ..Default::default()
+      },
+    )
+    .await;
+    assert!(log.fetched("/playlist/v2/playlist/mine"));
+    assert!(!log.fetched("/playlist/v2/playlist/public"));
+  }
+
+  #[test]
+  fn the_collection_uri_is_a_playable_playlist_kind() {
+    assert_eq!(kind_of_uri(LIKED), Some(VoiceTargetKind::Playlist));
+    assert_eq!(kind_of_uri("spotify:user:nobody"), None);
   }
 
   #[test]
@@ -2568,6 +3002,34 @@ mod live {
     assert!(
       !releases.is_empty(),
       "tagged hits must hydrate as real albums, not phantom uris"
+    );
+    client.disconnect().await;
+  }
+
+  #[tokio::test]
+  async fn live_liked_songs_phrases_resolve_to_the_users_collection() {
+    if !enabled() {
+      return;
+    }
+    let client = client().await;
+    for target in ["liked songs", "my favorites", "my library"] {
+      let out = resolve(
+        &client,
+        VoiceResolveRequest {
+          target: Some(target.into()),
+          ..Default::default()
+        },
+      )
+      .await
+      .unwrap_or_else(|e| panic!("{target:?}: {e:?}"));
+      show(target, &out);
+      assert!(is_liked_songs(&out.uri), "{target:?} landed on {}", out.uri);
+    }
+    let liked = client.favorites_list(1, 0).await.expect("liked songs page");
+    println!("liked songs total {:?}", liked.total);
+    assert!(
+      liked.total.is_some_and(|n| n > 0),
+      "the collection pages into real tracks"
     );
     client.disconnect().await;
   }

@@ -48,6 +48,8 @@ struct Expect {
   #[serde(default)]
   uri: Option<String>,
   #[serde(default)]
+  uri_suffix: Option<String>,
+  #[serde(default)]
   kind: Option<String>,
   #[serde(default)]
   title: Option<String>,
@@ -242,6 +244,11 @@ fn holds(expect: &Expect, out: &VoiceResolved) -> Result<(), String> {
     && out.uri != *uri
   {
     return Err(format!("uri != {uri}"));
+  }
+  if let Some(suffix) = &expect.uri_suffix
+    && !out.uri.ends_with(suffix.as_str())
+  {
+    return Err(format!("uri lacks suffix {suffix}"));
   }
   if let Some(kind) = &expect.kind
     && kind_name(out.kind) != kind.as_str()

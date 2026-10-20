@@ -592,21 +592,23 @@ fn is_phone(info: &DeviceInfo) -> bool {
   )
 }
 
-pub fn phone_device(cluster: &Cluster, me: &str) -> Option<String> {
-  if !cluster.active_device_id.is_empty()
-    && cluster.active_device_id != me
-    && cluster.device.get(&cluster.active_device_id).is_some_and(is_phone)
-  {
-    return Some(cluster.active_device_id.clone());
-  }
-  let mut ids: Vec<&String> = cluster
+pub fn phones(cluster: &Cluster, me: &str) -> Vec<String> {
+  let mut ids: Vec<String> = cluster
     .device
     .iter()
     .filter(|(id, info)| id.as_str() != me && is_phone(info))
-    .map(|(id, _)| id)
+    .map(|(id, _)| id.clone())
     .collect();
   ids.sort();
-  ids.first().map(|s| s.to_string())
+  ids
+}
+
+pub fn phone_device(cluster: &Cluster, me: &str) -> Option<String> {
+  let phones = phones(cluster, me);
+  if phones.contains(&cluster.active_device_id) {
+    return Some(cluster.active_device_id.clone());
+  }
+  phones.into_iter().next()
 }
 
 pub fn active_device(cluster: &Cluster, me: &str, last_active: Option<&str>) -> Option<String> {

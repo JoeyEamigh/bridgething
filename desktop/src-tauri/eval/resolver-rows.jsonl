@@ -20,3 +20,12 @@
 {"id":"playlist-editorial","family":"playlist","utterance":"play the playlist this is twenty one pilots","asr":"play the playlist this is 21 pilots","slots":{"target":"this is twenty one pilots","targetType":"playlist"},"expect":{"kind":"playlist","title":"this is twenty one pilots"}}
 {"id":"latest-album","family":"filter-new","utterance":"play the newest twenty one pilots album","asr":"play the newest 21 pilots album","slots":{"target":"twenty one pilots","targetType":"album","popularityFilter":"new"},"expect":{"kind":"album","artist":"twenty one pilots","title_lacks":"live"}}
 {"id":"era-genre-free","family":"vibe-free","utterance":"play 80s rock","asr":"play 80s rock","slots":{"genre":"rock","era":"80s"},"expect":{}}
+{"id":"liked-songs","family":"library-collection","utterance":"play my liked songs","asr":"play my liked songs","slots":{"target":"liked songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-songs-typed","family":"library-collection","utterance":"play the liked songs playlist","asr":"play the liked songs playlist","slots":{"target":"liked songs","targetType":"playlist"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-favorites","family":"library-collection","utterance":"play my favorites","asr":"play my favorites","slots":{"target":"liked songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-likes","family":"library-collection","utterance":"play my likes","asr":"play my likes","slots":{"target":"liked songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-saved-songs","family":"library-collection","utterance":"play my saved songs","asr":"play my saved songs","slots":{"target":"my saved songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-library","family":"library-collection","utterance":"play my library","asr":"play my library","slots":{"target":"liked songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"liked-library-songs","family":"library-collection","utterance":"play my library's songs","asr":"play my library's songs","slots":{"target":"my library's songs"},"expect":{"uri_suffix":":collection"}}
+{"id":"saved-albums","family":"library-collection","utterance":"play my saved albums","asr":"play my saved albums","slots":{"target":"saved albums"},"expect":{"kind":"album"}}
+{"id":"owned-playlist","family":"library-named","utterance":"play my summer 2024 playlist","asr":"play my summer 2024 playlist","slots":{"target":"summer 2024","targetType":"playlist"},"expect":{"uri":"spotify:playlist:4b4pINZpxAgzpUwkNnOCCR"}}

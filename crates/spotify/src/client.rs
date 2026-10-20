@@ -16,7 +16,9 @@ use tokio::{
 use crate::{
   aplogin,
   auth::{Auth, DeviceFlow},
-  dealer::{self, Dealer, DealerEvent, DealerWriter, active_device, cluster_playing, phone_device, start_device},
+  dealer::{
+    self, Dealer, DealerEvent, DealerWriter, active_device, cluster_playing, phone_device, phones, start_device,
+  },
   error::{Error, Result},
   http::SpHttp,
   model::{
@@ -33,6 +35,8 @@ const NODE_PLAYLISTS: &str = "playlists";
 const NODE_ALBUMS: &str = "albums";
 const NODE_ARTISTS: &str = "artists";
 const NODE_PODCASTS: &str = "podcasts";
+const SAVED_SET: &str = "collection";
+const ARTIST_SET: &str = "artist";
 const PREVIEW: u32 = 14;
 const RECENTS_CACHE_TTL: Duration = Duration::from_secs(60);
 const HYDRATE_CACHE_CAP: usize = 4096;
@@ -60,9 +64,8 @@ pub trait DeviceWaker: Send + Sync {
   fn wake_device(&self, reason: WakeReason, allow_play_tap: bool);
 }
 
-const DEVICE_WAKE_TIMEOUT: Duration = Duration::from_secs(8);
 const CONNECT_RESUME_CLUSTER_TIMEOUT: Duration = Duration::from_secs(10);
-const CONNECT_RESUME_WAKE_TIMEOUT: Duration = Duration::from_secs(20);
+const WAKE_TIMEOUT: Duration = Duration::from_secs(20);
 const CONNECT_RESUME_CONFIRM_TIMEOUT: Duration = Duration::from_secs(5);
 const PLAY_CONFIRM_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -97,7 +100,30 @@ async fn await_start_target_of(shared: &Shared, my_id: &str) -> String {
 }
 
 async fn allow_play_tap_of(shared: &Shared) -> bool {
-  shared.writer.lock().await.is_none()
+  if shared.writer.lock().await.is_none() {
+    return true;
+  }
+  let active = shared
+    .cluster
+    .lock()
+    .await
+    .as_ref()
+    .map(|c| c.active_device_id.clone())
+    .filter(|id| !id.is_empty());
+  let parked = match active {
+    Some(id) => Some(id),
+    None => shared.last_active.lock().await.clone(),
+  };
+  parked.is_some_and(|id| shared.phones.lock().unwrap().contains(&id))
+}
+
+async fn observe_cluster(shared: &Shared, cluster: Cluster, me: &str) {
+  shared.phones.lock().unwrap().extend(phones(&cluster, me));
+  if !cluster.active_device_id.is_empty() {
+    *shared.last_active.lock().await = Some(cluster.active_device_id.clone());
+  }
+  *shared.cluster.lock().await = Some(cluster);
+  shared.cluster_changed.notify_waiters();
 }
 
 async fn wake_fresh_target_of(shared: &Shared, my_id: &str) -> Result<String> {
@@ -109,13 +135,10 @@ async fn wake_fresh_target_of(shared: &Shared, my_id: &str) -> Result<String> {
     return Err(Error::other("target unreachable and no platform waker"));
   };
   waker.wake_device(WakeReason::UserPlay, allow_play_tap_of(shared).await);
-  if tokio::time::timeout(CONNECT_RESUME_WAKE_TIMEOUT, changed)
-    .await
-    .is_err()
-  {
+  if tokio::time::timeout(WAKE_TIMEOUT, changed).await.is_err() {
     return Err(Error::other("no cluster update after wake"));
   }
-  match tokio::time::timeout(DEVICE_WAKE_TIMEOUT, await_start_target_of(shared, my_id)).await {
+  match tokio::time::timeout(WAKE_TIMEOUT, await_start_target_of(shared, my_id)).await {
     Ok(t) => Ok(t),
     Err(_) => Err(Error::other("no device appeared after wake")),
   }
@@ -126,6 +149,7 @@ struct Shared {
   writer: Mutex<Option<DealerWriter>>,
   cluster: Mutex<Option<Cluster>>,
   last_active: Mutex<Option<String>>,
+  phones: std::sync::Mutex<HashSet<String>>,
   device_waker: std::sync::Mutex<Option<Arc<dyn DeviceWaker>>>,
   placement: std::sync::Mutex<Placement>,
   cluster_changed: Notify,
@@ -142,18 +166,30 @@ pub struct SpotifyClient {
   observer: Arc<dyn Observer>,
   shared: Arc<Shared>,
   username: Mutex<Option<String>>,
-  liked: Arc<Mutex<Option<Vec<String>>>>,
   browse_cache: Arc<Mutex<BrowseCache>>,
   loop_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 #[derive(Default)]
 struct BrowseCache {
-  rootlist: Option<Vec<String>>,
-  collections: HashMap<String, Vec<String>>,
+  rootlist: Option<Vec<LibraryPlaylist>>,
+  collections: HashMap<String, SavedSet>,
+  generation: u64,
   recents: Option<(tokio::time::Instant, Recents)>,
   hydrated: HashMap<String, (u64, BrowseItem)>,
   counter: u64,
+}
+
+#[derive(Clone)]
+pub(crate) struct LibraryPlaylist {
+  pub(crate) uri: String,
+  pub(crate) name: String,
+  pub(crate) owned: bool,
+}
+
+struct SavedSet {
+  uris: Vec<String>,
+  fresh: bool,
 }
 
 #[derive(Clone, Default)]
@@ -164,7 +200,51 @@ struct Recents {
 
 impl BrowseCache {
   fn note_saved_changed(&mut self) {
-    self.collections.clear();
+    self.generation += 1;
+    for set in self.collections.values_mut() {
+      set.fresh = false;
+    }
+  }
+
+  fn note_reconnected(&mut self) {
+    self.note_saved_changed();
+    self.rootlist = None;
+    self.recents = None;
+    self.hydrated.clear();
+  }
+
+  fn forget(&mut self) {
+    *self = BrowseCache {
+      generation: self.generation + 1,
+      ..Default::default()
+    };
+  }
+
+  fn fresh_collection(&self, set: &str) -> Option<Vec<String>> {
+    self.collections.get(set).filter(|s| s.fresh).map(|s| s.uris.clone())
+  }
+
+  fn store_collection(&mut self, set: &str, uris: Vec<String>, generation: u64) {
+    if generation == self.generation {
+      self.collections.insert(set.to_string(), SavedSet { uris, fresh: true });
+    }
+  }
+
+  fn saved(&self, uri: &str) -> Option<bool> {
+    self
+      .collections
+      .get(SAVED_SET)
+      .map(|set| set.uris.iter().any(|u| u == uri))
+  }
+
+  fn note_saved(&mut self, uri: &str, saved: bool) {
+    self.generation += 1;
+    if let Some(set) = self.collections.get_mut(SAVED_SET) {
+      set.uris.retain(|u| u != uri);
+      if saved {
+        set.uris.insert(0, uri.to_string());
+      }
+    }
   }
 
   fn note_playlists_changed(&mut self) {
@@ -204,6 +284,7 @@ impl SpotifyClient {
         writer: Mutex::new(None),
         cluster: Mutex::new(None),
         last_active: Mutex::new(None),
+        phones: std::sync::Mutex::new(HashSet::new()),
         device_waker: std::sync::Mutex::new(None),
         placement: std::sync::Mutex::new(Placement::default()),
         cluster_changed: Notify::new(),
@@ -211,20 +292,19 @@ impl SpotifyClient {
         play_recover: Mutex::new(()),
       }),
       username: Mutex::new(None),
-      liked: Arc::new(Mutex::new(None)),
       browse_cache: Arc::new(Mutex::new(BrowseCache::default())),
       loop_handle: Mutex::new(None),
     }
   }
 
-  fn spawn_events_loop(&self) -> JoinHandle<()> {
+  async fn spawn_events_loop(&self) -> JoinHandle<()> {
     tokio::spawn(events_loop(
       self.dealer.clone(),
       self.spc.clone(),
       self.observer.clone(),
       self.shared.clone(),
-      self.liked.clone(),
       self.browse_cache.clone(),
+      self.username.lock().await.clone(),
       self.dealer.device_id().to_string(),
     ))
   }
@@ -289,7 +369,7 @@ impl SpotifyClient {
     };
     tracing::info!("spotify play: no eligible start device; asking platform to wake the phone's spotify");
     waker.wake_device(WakeReason::UserPlay, allow_play_tap_of(&self.shared).await);
-    match tokio::time::timeout(DEVICE_WAKE_TIMEOUT, self.await_start_target()).await {
+    match tokio::time::timeout(WAKE_TIMEOUT, self.await_start_target()).await {
       Ok(res) => res,
       Err(_) => {
         tracing::warn!("spotify play: no eligible device registered within wake timeout");
@@ -459,23 +539,8 @@ impl SpotifyClient {
     }
   }
 
-  async fn liked_uris(&self, username: &str) -> Result<Vec<String>> {
-    if let Some(cached) = self.liked.lock().await.clone() {
-      return Ok(cached);
-    }
-    let uris = fetch_liked_uris(&self.spc, username).await?;
-    *self.liked.lock().await = Some(uris.clone());
-    Ok(uris)
-  }
-
-  fn spawn_liked_warm(&self, username: String) {
-    let spc = self.spc.clone();
-    let liked = self.liked.clone();
-    tokio::spawn(async move {
-      if let Ok(uris) = fetch_liked_uris(&spc, &username).await {
-        *liked.lock().await = Some(uris);
-      }
-    });
+  async fn liked_uris(&self) -> Result<Vec<String>> {
+    self.collection_uris(SAVED_SET, Some("track")).await
   }
 
   async fn recents(&self) -> Result<Recents> {
@@ -508,38 +573,57 @@ impl SpotifyClient {
     Ok(self.recents().await?.contexts)
   }
 
-  pub(crate) async fn playlist_uris(&self) -> Result<Vec<String>> {
+  pub(crate) async fn library_playlists(&self) -> Result<Vec<LibraryPlaylist>> {
     if let Some(cached) = self.browse_cache.lock().await.rootlist.clone() {
       return Ok(cached);
     }
     let user = self.username().await?;
     let rl = self.spc.rootlist(&user).await?;
-    let uris: Vec<String> = rl
+    let meta = &rl.contents.meta_items;
+    let playlists: Vec<LibraryPlaylist> = rl
       .contents
       .items
       .iter()
-      .map(|i| i.uri().to_string())
-      .filter(|u| u.starts_with("spotify:playlist:"))
+      .enumerate()
+      .filter(|(_, i)| i.uri().starts_with("spotify:playlist:"))
+      .map(|(at, i)| LibraryPlaylist {
+        uri: i.uri().to_string(),
+        name: meta
+          .get(at)
+          .map(|m| m.attributes.name().to_string())
+          .unwrap_or_default(),
+        owned: meta.get(at).is_some_and(|m| m.owner_username() == user),
+      })
       .collect();
-    self.browse_cache.lock().await.rootlist = Some(uris.clone());
-    Ok(uris)
+    self.browse_cache.lock().await.rootlist = Some(playlists.clone());
+    Ok(playlists)
+  }
+
+  pub(crate) async fn playlist_uris(&self) -> Result<Vec<String>> {
+    Ok(self.library_playlists().await?.into_iter().map(|p| p.uri).collect())
+  }
+
+  pub(crate) async fn liked_songs_uri(&self) -> Result<String> {
+    Ok(liked_songs_uri(&self.username().await?))
+  }
+
+  pub(crate) async fn saved_album_uris(&self) -> Result<Vec<String>> {
+    self.collection_uris(SAVED_SET, Some("album")).await
+  }
+
+  pub(crate) async fn saved_artist_uris(&self) -> Result<Vec<String>> {
+    self.collection_uris(ARTIST_SET, None).await
   }
 
   async fn collection_uris(&self, set: &str, kind: Option<&str>) -> Result<Vec<String>> {
-    let key = format!("{set}:{}", kind.unwrap_or(""));
-    if let Some(cached) = self.browse_cache.lock().await.collections.get(&key).cloned() {
-      return Ok(cached);
-    }
     let user = self.username().await?;
-    let mut items = self.spc.collection_paging(&user, set, 500).await?;
-    items.sort_by_key(|item| std::cmp::Reverse(item.added_at));
-    let uris: Vec<String> = items
-      .into_iter()
-      .map(|i| i.uri)
-      .filter(|u| kind.is_none_or(|k| u.split(':').nth(1) == Some(k)))
-      .collect();
-    self.browse_cache.lock().await.collections.insert(key, uris.clone());
-    Ok(uris)
+    let all = saved_set(&self.spc, &self.browse_cache, &user, set).await?;
+    Ok(
+      all
+        .into_iter()
+        .filter(|u| kind.is_none_or(|k| u.split(':').nth(1) == Some(k)))
+        .collect(),
+    )
   }
 
   async fn hydrate_map(&self, uris: &[String]) -> HashMap<String, BrowseItem> {
@@ -707,8 +791,7 @@ impl SpotifyClient {
         self.page_uris(&all, offset, limit).await
       }
       _ if uri.ends_with(":collection") => {
-        let user = self.username().await?;
-        let all = self.liked_uris(&user).await?;
+        let all = self.liked_uris().await?;
         self.page_uris(&all, offset, limit).await
       }
       _ => {
@@ -930,10 +1013,6 @@ impl SpotifyClient {
     if let Ok(p) = self.product().await {
       self.http.set_market(&p.country, &p.catalogue).await;
     }
-    if let Some(user) = &username {
-      self.spawn_liked_warm(user.clone());
-    }
-
     tracing::info!(
       has_username = username.is_some(),
       "spotify connect: logged in, spawning events loop"
@@ -942,7 +1021,7 @@ impl SpotifyClient {
       username: username.unwrap_or_default(),
     });
 
-    *self.loop_handle.lock().await = Some(self.spawn_events_loop());
+    *self.loop_handle.lock().await = Some(self.spawn_events_loop().await);
     Ok(())
   }
 
@@ -955,7 +1034,7 @@ impl SpotifyClient {
     if let Some(h) = guard.take() {
       h.abort();
     }
-    *guard = Some(self.spawn_events_loop());
+    *guard = Some(self.spawn_events_loop().await);
   }
 
   pub async fn disconnect(&self) {
@@ -965,7 +1044,8 @@ impl SpotifyClient {
     *self.shared.writer.lock().await = None;
     *self.shared.cluster.lock().await = None;
     *self.shared.last_active.lock().await = None;
-    *self.browse_cache.lock().await = BrowseCache::default();
+    self.shared.phones.lock().unwrap().clear();
+    self.browse_cache.lock().await.forget();
   }
 
   pub async fn current_position_ms(&self) -> Option<u32> {
@@ -1057,7 +1137,7 @@ impl SpotifyClient {
         if !self.fire_waker(WakeReason::ConnectResume, false) {
           return Ok(());
         }
-        match tokio::time::timeout(CONNECT_RESUME_WAKE_TIMEOUT, self.await_phone(&me)).await {
+        match tokio::time::timeout(WAKE_TIMEOUT, self.await_phone(&me)).await {
           Ok(p) => p,
           Err(_) => {
             tracing::warn!("connect resume: no phone registered after wake; standing down");
@@ -1113,10 +1193,7 @@ impl SpotifyClient {
     if !self.fire_waker(WakeReason::ConnectResume, false) {
       return Ok(());
     }
-    if tokio::time::timeout(CONNECT_RESUME_WAKE_TIMEOUT, changed)
-      .await
-      .is_err()
-    {
+    if tokio::time::timeout(WAKE_TIMEOUT, changed).await.is_err() {
       tracing::warn!("connect resume: no cluster update after wake; standing down");
       return Ok(());
     }
@@ -1287,8 +1364,8 @@ impl SpotifyClient {
     let (home, playlists, albums, artists, shows) = tokio::join!(
       self.spc.get_home("en"),
       self.playlist_uris(),
-      self.collection_uris("collection", Some("album")),
-      self.collection_uris("artist", None),
+      self.saved_album_uris(),
+      self.saved_artist_uris(),
       self.collection_uris("show", None),
     );
     let albums = albums.unwrap_or_default();
@@ -1296,7 +1373,7 @@ impl SpotifyClient {
     let shows = shows.unwrap_or_default();
     let mut playlists_all: Vec<String> = Vec::new();
     if let Some(u) = &user {
-      playlists_all.push(format!("spotify:user:{u}:collection"));
+      playlists_all.push(liked_songs_uri(u));
     }
     playlists_all.extend(playlists.unwrap_or_default());
 
@@ -1386,13 +1463,13 @@ impl SpotifyClient {
       NODE_PLAYLISTS => {
         let mut u = Vec::new();
         if let Ok(user) = self.username().await {
-          u.push(format!("spotify:user:{user}:collection"));
+          u.push(liked_songs_uri(&user));
         }
         u.extend(self.playlist_uris().await.unwrap_or_default());
         u
       }
-      NODE_ALBUMS => self.collection_uris("collection", Some("album")).await?,
-      NODE_ARTISTS => self.collection_uris("artist", None).await?,
+      NODE_ALBUMS => self.saved_album_uris().await?,
+      NODE_ARTISTS => self.saved_artist_uris().await?,
       NODE_PODCASTS => self.collection_uris("show", None).await?,
       _ => return self.browse_container(node_id, limit, offset).await,
     };
@@ -1411,8 +1488,7 @@ impl SpotifyClient {
   }
 
   pub async fn favorites_list(&self, limit: u32, offset: u32) -> Result<BrowsePage> {
-    let user = self.username().await?;
-    let all = self.liked_uris(&user).await?;
+    let all = self.liked_uris().await?;
     let mut page = self.page_uris(&all, offset, limit).await?;
     for it in page.items.iter_mut() {
       it.saved = true;
@@ -1423,9 +1499,8 @@ impl SpotifyClient {
   // ---- favorites ----------------------------------------------------------
 
   pub async fn favorites_contains(&self, uris: Vec<String>) -> Result<Vec<bool>> {
-    let user = self.username().await?;
-    let liked = self.liked_uris(&user).await?;
-    let set: std::collections::HashSet<&String> = liked.iter().collect();
+    let saved = self.collection_uris(SAVED_SET, None).await?;
+    let set: HashSet<&String> = saved.iter().collect();
     Ok(uris.iter().map(|u| set.contains(u)).collect())
   }
 
@@ -1433,19 +1508,11 @@ impl SpotifyClient {
     let user = self.username().await?;
     let one = [uri.to_string()];
     if liked {
-      self.spc.collection_write(&user, "collection", &one, &[]).await?;
+      self.spc.collection_write(&user, SAVED_SET, &one, &[]).await?;
     } else {
-      self.spc.collection_write(&user, "collection", &[], &one).await?;
+      self.spc.collection_write(&user, SAVED_SET, &[], &one).await?;
     }
-    let mut guard = self.liked.lock().await;
-    if let Some(cache) = guard.as_mut() {
-      cache.retain(|u| u != uri);
-      if liked {
-        cache.insert(0, uri.to_string());
-      }
-    }
-    drop(guard);
-    self.browse_cache.lock().await.note_saved_changed();
+    self.browse_cache.lock().await.note_saved(uri, liked);
     Ok(())
   }
 
@@ -1461,6 +1528,10 @@ impl SpotifyClient {
 }
 
 const LIKED_SONGS_ART_REF: &str = "builtin:liked-songs";
+
+fn liked_songs_uri(username: &str) -> String {
+  format!("spotify:user:{username}:collection")
+}
 
 fn liked_songs_item(uri: &str) -> BrowseItem {
   BrowseItem {
@@ -1585,15 +1656,32 @@ fn is_auth_terminal(e: &Error) -> bool {
   matches!(e, Error::InvalidGrant | Error::NotPaired)
 }
 
-async fn fetch_liked_uris(spc: &SpClient, username: &str) -> Result<Vec<String>> {
-  let items = spc.collection_paging(username, "collection", 1000).await?;
-  Ok(
-    items
-      .into_iter()
-      .map(|i| i.uri)
-      .filter(|u| u.starts_with("spotify:track:"))
-      .collect(),
-  )
+async fn saved_set(spc: &SpClient, cache: &Mutex<BrowseCache>, username: &str, set: &str) -> Result<Vec<String>> {
+  let generation = {
+    let held = cache.lock().await;
+    if let Some(uris) = held.fresh_collection(set) {
+      return Ok(uris);
+    }
+    held.generation
+  };
+  let mut items = spc.collection_paging(username, set).await?;
+  items.sort_by_key(|item| std::cmp::Reverse(item.added_at));
+  let uris: Vec<String> = items.into_iter().map(|i| i.uri).collect();
+  cache.lock().await.store_collection(set, uris.clone(), generation);
+  Ok(uris)
+}
+
+fn spawn_saved_refresh(spc: &SpClient, cache: &Arc<Mutex<BrowseCache>>, username: Option<&str>, done: &Arc<Notify>) {
+  let Some(username) = username.map(str::to_string) else {
+    return;
+  };
+  let (spc, cache, done) = (spc.clone(), cache.clone(), done.clone());
+  tokio::spawn(async move {
+    if let Err(e) = saved_set(&spc, &cache, &username, SAVED_SET).await {
+      tracing::warn!(error = %e, "spotify library: saved collection refresh failed");
+    }
+    done.notify_one();
+  });
 }
 
 async fn resolve_context_name(spc: &SpClient, uri: &str) -> Option<String> {
@@ -1634,11 +1722,12 @@ async fn events_loop(
   spc: SpClient,
   observer: Arc<dyn Observer>,
   shared: Arc<Shared>,
-  liked: Arc<Mutex<Option<Vec<String>>>>,
   browse_cache: Arc<Mutex<BrowseCache>>,
+  username: Option<String>,
   me: String,
 ) {
   let mut attempt: u32 = 0;
+  let saved_refreshed = Arc::new(Notify::new());
   loop {
     match dealer.open().await {
       Ok((mut stream, writer)) => match writer.cluster().await {
@@ -1649,12 +1738,13 @@ async fn events_loop(
             devices = cluster.device.len(),
             "dealer connected"
           );
-          *browse_cache.lock().await = BrowseCache::default();
+          browse_cache.lock().await.note_reconnected();
+          spawn_saved_refresh(&spc, &browse_cache, username.as_deref(), &saved_refreshed);
           *shared.writer.lock().await = Some(writer);
           let mut emitter = Emitter {
             spc: &spc,
             observer: &observer,
-            liked: &liked,
+            browse_cache: &browse_cache,
             me: &me,
             last_np: String::new(),
             last_q: String::new(),
@@ -1664,57 +1754,59 @@ async fn events_loop(
             ctx_names: HashMap::new(),
           };
           emitter.emit(&cluster, true).await;
-          if !cluster.active_device_id.is_empty() {
-            *shared.last_active.lock().await = Some(cluster.active_device_id.clone());
-          }
-          *shared.cluster.lock().await = Some(cluster);
-          shared.cluster_changed.notify_waiters();
+          observe_cluster(&shared, cluster, &me).await;
           let mut pending_saved = false;
+          let mut announce_saved = false;
           let mut pending_playlists = false;
           let debounce = tokio::time::sleep(LIBRARY_CHANGE_DEBOUNCE);
           tokio::pin!(debounce);
           loop {
             tokio::select! {
-                event = stream.next_event() => match event {
-                  Ok(Some(DealerEvent::Cluster(cluster))) => {
-                    emitter.emit(&cluster, false).await;
-                    if !cluster.active_device_id.is_empty() {
-                      *shared.last_active.lock().await = Some(cluster.active_device_id.clone());
+              event = stream.next_event() => match event {
+                Ok(Some(DealerEvent::Cluster(cluster))) => {
+                  emitter.emit(&cluster, false).await;
+                  observe_cluster(&shared, cluster, &me).await;
+                }
+                Ok(Some(DealerEvent::LibraryChanged(scope))) => {
+                  match scope {
+                    LibraryScope::Saved => {
+                      browse_cache.lock().await.note_saved_changed();
+                      pending_saved = true;
                     }
-                    *shared.cluster.lock().await = Some(cluster);
-            shared.cluster_changed.notify_waiters();
-                  }
-                  Ok(Some(DealerEvent::LibraryChanged(scope))) => {
-                    match scope {
-                      LibraryScope::Saved => {
-                        *liked.lock().await = None;
-                        browse_cache.lock().await.note_saved_changed();
-                        pending_saved = true;
-                      }
-                      LibraryScope::Playlists => {
-                        browse_cache.lock().await.note_playlists_changed();
-                        pending_playlists = true;
-                      }
+                    LibraryScope::Playlists => {
+                      browse_cache.lock().await.note_playlists_changed();
+                      pending_playlists = true;
                     }
-                    debounce.as_mut().reset(tokio::time::Instant::now() + LIBRARY_CHANGE_DEBOUNCE);
                   }
-                  Ok(None) => break,
-                  Err(e) => {
-                    tracing::warn!("dealer read error: {e}");
-                    break;
-                  }
-                },
-                _ = &mut debounce, if pending_saved || pending_playlists => {
-                  if std::mem::take(&mut pending_saved) {
-                    observer.on_library_changed(LibraryScope::Saved);
-                  }
-                  if std::mem::take(&mut pending_playlists) {
-                    observer.on_library_changed(LibraryScope::Playlists);
-                  }
+                  debounce.as_mut().reset(tokio::time::Instant::now() + LIBRARY_CHANGE_DEBOUNCE);
+                }
+                Ok(None) => break,
+                Err(e) => {
+                  tracing::warn!("dealer read error: {e}");
+                  break;
+                }
+              },
+              _ = &mut debounce, if pending_saved || pending_playlists => {
+                if std::mem::take(&mut pending_saved) {
+                  announce_saved = true;
+                  spawn_saved_refresh(&spc, &browse_cache, username.as_deref(), &saved_refreshed);
+                }
+                if std::mem::take(&mut pending_playlists) {
+                  observer.on_library_changed(LibraryScope::Playlists);
                 }
               }
+              _ = saved_refreshed.notified() => {
+                let current = shared.cluster.lock().await.clone();
+                if let Some(cluster) = current {
+                  emitter.emit(&cluster, false).await;
+                }
+                if std::mem::take(&mut announce_saved) {
+                  observer.on_library_changed(LibraryScope::Saved);
+                }
+              }
+            }
           }
-          if std::mem::take(&mut pending_saved) {
+          if pending_saved || announce_saved {
             observer.on_library_changed(LibraryScope::Saved);
           }
           if std::mem::take(&mut pending_playlists) {
@@ -1777,7 +1869,7 @@ async fn splice_queue(
 struct Emitter<'a> {
   spc: &'a SpClient,
   observer: &'a Arc<dyn Observer>,
-  liked: &'a Mutex<Option<Vec<String>>>,
+  browse_cache: &'a Mutex<BrowseCache>,
   me: &'a str,
   last_np: String,
   last_q: String,
@@ -1792,9 +1884,11 @@ impl Emitter<'_> {
     let ps = &cluster.player_state;
     let o = &ps.options;
     let r = &ps.restrictions;
+    let saved = self.browse_cache.lock().await.saved(&ps.track.uri);
     let np_sig = format!(
-      "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+      "{}|{:?}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
       ps.track.uri,
+      saved,
       ps.is_paused,
       ps.position_as_of_timestamp,
       cluster.active_device_id,
@@ -1827,7 +1921,9 @@ impl Emitter<'_> {
       let mut state = model::player_state(cluster);
       if let Some(track) = state.track.as_mut() {
         self.hydrate_track(track).await;
-        self.fill_saved(track).await;
+        if let Some(saved) = saved {
+          track.saved = saved;
+        }
         if state.duration_ms == 0 {
           state.duration_ms = track.duration_ms;
         }
@@ -1901,15 +1997,6 @@ impl Emitter<'_> {
     }
     let live: HashSet<&str> = q.next.iter().map(|t| t.uri.as_str()).collect();
     self.q_hydrate.retain(|k, _| live.contains(k.as_str()));
-  }
-
-  async fn fill_saved(&self, track: &mut Track) {
-    if track.saved {
-      return;
-    }
-    if let Some(cache) = self.liked.lock().await.as_ref() {
-      track.saved = cache.iter().any(|u| u == &track.uri);
-    }
   }
 
   async fn context_name(&mut self, uri: &str) -> Option<String> {
@@ -2002,6 +2089,8 @@ pub(crate) mod tests {
     player_404s: Arc<AtomicUsize>,
     cluster_bytes: Arc<StdMutex<Option<Vec<u8>>>>,
     search_bytes: Arc<StdMutex<Option<Vec<u8>>>>,
+    collection_pages: Arc<StdMutex<HashMap<String, Vec<u8>>>>,
+    collection_requests: Arc<StdMutex<Vec<crate::proto::custom::collection::PageRequest>>>,
   }
   impl HttpTransport for RouteTransport {
     fn execute(&self, request: HttpRequest, sink: Arc<HttpSink>) {
@@ -2041,16 +2130,10 @@ pub(crate) mod tests {
         return;
       }
       if resumed && let Some((shared, cluster)) = self.resume_flip.lock().unwrap().clone() {
-        tokio::spawn(async move {
-          *shared.cluster.lock().await = Some(cluster);
-          shared.cluster_changed.notify_waiters();
-        });
+        tokio::spawn(async move { observe_cluster(&shared, cluster, "me-device").await });
       }
       if played && let Some((shared, cluster)) = self.play_flip.lock().unwrap().clone() {
-        tokio::spawn(async move {
-          *shared.cluster.lock().await = Some(cluster);
-          shared.cluster_changed.notify_waiters();
-        });
+        tokio::spawn(async move { observe_cluster(&shared, cluster, "me-device").await });
       }
       if stale_queue {
         sink.complete(HttpResponse {
@@ -2062,6 +2145,16 @@ pub(crate) mod tests {
       }
       let canned = if url.contains("/connect-state/v1/devices/") {
         self.cluster_bytes.lock().unwrap().clone()
+      } else if url.contains("/collection/v2/paging") {
+        let page = crate::proto::custom::collection::PageRequest::parse_from_bytes(&request.body).unwrap();
+        let body = self
+          .collection_pages
+          .lock()
+          .unwrap()
+          .get(&page.pagination_token)
+          .cloned();
+        self.collection_requests.lock().unwrap().push(page);
+        body
       } else if url.contains("/searchview/v3/search") {
         self.search_bytes.lock().unwrap().clone()
       } else {
@@ -2121,15 +2214,17 @@ pub(crate) mod tests {
     calls: Arc<AtomicUsize>,
     wakes: Arc<StdMutex<Vec<(WakeReason, bool)>>>,
     inject: Option<(Arc<Shared>, Cluster)>,
+    inject_after: Duration,
   }
   impl DeviceWaker for FakeWaker {
     fn wake_device(&self, reason: WakeReason, allow_play_tap: bool) {
       self.calls.fetch_add(1, Ordering::SeqCst);
       self.wakes.lock().unwrap().push((reason, allow_play_tap));
       if let Some((shared, cluster)) = self.inject.clone() {
+        let after = self.inject_after;
         tokio::spawn(async move {
-          *shared.cluster.lock().await = Some(cluster);
-          shared.cluster_changed.notify_waiters();
+          tokio::time::sleep(after).await;
+          observe_cluster(&shared, cluster, "me-device").await;
         });
       }
     }
@@ -2208,7 +2303,7 @@ pub(crate) mod tests {
     let client = SpotifyClient::new(auth, "me-device".to_string(), exec, Arc::new(NullObserver));
     *client.shared.writer.lock().await = Some(DealerWriter::for_test(client.http.clone(), "me-device"));
     if let Some(c) = initial_cluster {
-      *client.shared.cluster.lock().await = Some(c);
+      observe_cluster(&client.shared, c, "me-device").await;
     }
     let wake_calls = Arc::new(AtomicUsize::new(0));
     let wakes = Arc::new(StdMutex::new(Vec::new()));
@@ -2216,6 +2311,7 @@ pub(crate) mod tests {
       calls: wake_calls.clone(),
       wakes: wakes.clone(),
       inject: wake_inject.map(|c| (client.shared.clone(), c)),
+      inject_after: Duration::ZERO,
     }));
     Rig {
       client,
@@ -2268,7 +2364,74 @@ pub(crate) mod tests {
 
   pub(crate) struct SearchLog(Hits);
 
+  #[derive(Default)]
+  pub(crate) struct LibrarySeed<'a> {
+    pub(crate) playlists: &'a [(&'a str, &'a str, bool)],
+    pub(crate) saved: &'a [(&'a str, &'a str, &'a str)],
+    pub(crate) artists: &'a [(&'a str, &'a str)],
+  }
+
+  pub(crate) async fn library_client(
+    items: Vec<crate::proto::custom::searchview::SearchItem>,
+    seed: LibrarySeed<'_>,
+  ) -> (SpotifyClient, SearchLog) {
+    let (client, log) = searching_client_items(Arc::new(NullObserver), items);
+    *client.username.lock().await = Some("user-1".to_string());
+    let mut cache = client.browse_cache.lock().await;
+    cache.rootlist = Some(
+      seed
+        .playlists
+        .iter()
+        .map(|(uri, name, owned)| LibraryPlaylist {
+          uri: uri.to_string(),
+          name: name.to_string(),
+          owned: *owned,
+        })
+        .collect(),
+    );
+    let generation = cache.generation;
+    cache.store_collection(
+      SAVED_SET,
+      seed.saved.iter().map(|(uri, _, _)| uri.to_string()).collect(),
+      generation,
+    );
+    cache.store_collection(
+      ARTIST_SET,
+      seed.artists.iter().map(|(uri, _)| uri.to_string()).collect(),
+      generation,
+    );
+    let named = seed
+      .saved
+      .iter()
+      .copied()
+      .chain(seed.artists.iter().map(|(uri, title)| (*uri, *title, "")));
+    for (uri, title, artist) in named {
+      let artists = match artist {
+        "" => Vec::new(),
+        name => vec![model::Artist {
+          uri: String::new(),
+          name: name.to_string(),
+        }],
+      };
+      cache.hydrated_put(
+        uri.to_string(),
+        BrowseItem {
+          uri: uri.to_string(),
+          title: title.to_string(),
+          artists,
+          ..Default::default()
+        },
+      );
+    }
+    drop(cache);
+    (client, log)
+  }
+
   impl SearchLog {
+    pub(crate) fn fetched(&self, fragment: &str) -> bool {
+      self.0.lock().unwrap().iter().any(|(url, _)| url.contains(fragment))
+    }
+
     pub(crate) fn queries(&self) -> Vec<String> {
       self
         .0
@@ -2305,7 +2468,11 @@ pub(crate) mod tests {
     rig.fail_player_commands(1);
     rig.client.play("spotify:album:x", None).await.unwrap();
     assert_eq!(rig.wake_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(rig.wakes.lock().unwrap()[0], (WakeReason::UserPlay, false));
+    assert_eq!(
+      rig.wakes.lock().unwrap()[0],
+      (WakeReason::UserPlay, true),
+      "the session is parked on the phone, so a tap can only resume it there"
+    );
     assert_eq!(play_targets(&rig.hits), vec!["dev1".to_string(), "dev2".to_string()]);
   }
 
@@ -2330,7 +2497,7 @@ pub(crate) mod tests {
       rig.wake_calls.load(Ordering::SeqCst) == 1 && play_targets(&rig.hits).len() == 2
     })
     .await;
-    assert_eq!(rig.wakes.lock().unwrap()[0], (WakeReason::UserPlay, false));
+    assert_eq!(rig.wakes.lock().unwrap()[0], (WakeReason::UserPlay, true));
   }
 
   #[tokio::test(start_paused = true)]
@@ -2340,7 +2507,7 @@ pub(crate) mod tests {
     confirmed.player_state.mut_or_insert_default().context_uri = "spotify:album:x".to_string();
     rig.flip_to_on_play(confirmed).await;
     rig.client.play("spotify:album:x", None).await.unwrap();
-    tokio::time::sleep(PLAY_CONFIRM_TIMEOUT + CONNECT_RESUME_WAKE_TIMEOUT).await;
+    tokio::time::sleep(PLAY_CONFIRM_TIMEOUT + WAKE_TIMEOUT).await;
     assert_eq!(rig.wake_calls.load(Ordering::SeqCst), 0);
     assert_eq!(play_targets(&rig.hits).len(), 1);
   }
@@ -2354,6 +2521,7 @@ pub(crate) mod tests {
       calls: calls.clone(),
       wakes: Arc::new(StdMutex::new(Vec::new())),
       inject: None,
+      inject_after: Duration::ZERO,
     }));
 
     let target = client.start_target_or_wake().await.unwrap();
@@ -2370,6 +2538,7 @@ pub(crate) mod tests {
       calls: calls.clone(),
       wakes: wakes.clone(),
       inject: Some((client.shared.clone(), active_cluster("dev1"))),
+      inject_after: Duration::ZERO,
     }));
 
     let target = client.start_target_or_wake().await.unwrap();
@@ -2778,6 +2947,447 @@ pub(crate) mod tests {
     .await;
     r.client.resume_on_connect().await.unwrap();
     assert_eq!(resume_targets(&r.hits), ["phone-1"]);
+  }
+
+  async fn rig_with_history(history: Vec<Cluster>, wake_inject: Option<Cluster>, inject_after: Duration) -> Rig {
+    let r = rig(None, None).await;
+    for c in history {
+      observe_cluster(&r.client.shared, c, "me-device").await;
+    }
+    r.client.set_device_waker(Arc::new(FakeWaker {
+      calls: r.wake_calls.clone(),
+      wakes: r.wakes.clone(),
+      inject: wake_inject.map(|c| (r.client.shared.clone(), c)),
+      inject_after,
+    }));
+    r
+  }
+
+  fn phone_playing_again() -> Cluster {
+    cluster(
+      "phone-1",
+      true,
+      &[("phone-1", DeviceType::SMARTPHONE), ("spk-1", DeviceType::SPEAKER)],
+    )
+  }
+
+  fn phone_parked_then_gone(active: &str) -> Vec<Cluster> {
+    vec![
+      cluster(
+        "phone-1",
+        true,
+        &[("phone-1", DeviceType::SMARTPHONE), ("spk-1", DeviceType::SPEAKER)],
+      ),
+      cluster(active, false, &[("spk-1", DeviceType::SPEAKER)]),
+    ]
+  }
+
+  #[tokio::test]
+  async fn a_resume_with_the_session_parked_on_the_backgrounded_phone_taps_play() {
+    for active in ["", "phone-1"] {
+      let r = rig_with_history(
+        phone_parked_then_gone(active),
+        Some(phone_playing_again()),
+        Duration::ZERO,
+      )
+      .await;
+      r.client.resume().await.unwrap();
+      assert_eq!(
+        *r.wakes.lock().unwrap(),
+        [(WakeReason::UserPlay, true)],
+        "parked on the phone (active {active:?}): the tap can only resume it there"
+      );
+      assert_eq!(resume_targets(&r.hits), ["phone-1"]);
+      assert!(
+        !command_hits(&r.hits).iter().any(|(url, _)| url.contains("spk-1")),
+        "the speaker is never commanded"
+      );
+    }
+  }
+
+  #[tokio::test]
+  async fn a_play_with_the_session_parked_on_the_backgrounded_phone_taps_play() {
+    let r = rig_with_history(phone_parked_then_gone(""), Some(phone_playing_again()), Duration::ZERO).await;
+    r.client.play("spotify:album:x", None).await.unwrap();
+    assert_eq!(*r.wakes.lock().unwrap(), [(WakeReason::UserPlay, true)]);
+    assert_eq!(play_targets(&r.hits), ["phone-1"]);
+  }
+
+  #[tokio::test]
+  async fn a_resume_never_taps_into_a_session_parked_on_a_speaker() {
+    let history = vec![
+      cluster(
+        "phone-1",
+        false,
+        &[("phone-1", DeviceType::SMARTPHONE), ("spk-1", DeviceType::SPEAKER)],
+      ),
+      cluster("spk-1", false, &[("spk-1", DeviceType::SPEAKER)]),
+    ];
+    let woken = cluster(
+      "spk-1",
+      false,
+      &[("phone-1", DeviceType::SMARTPHONE), ("spk-1", DeviceType::SPEAKER)],
+    );
+    let r = rig_with_history(history, Some(woken), Duration::ZERO).await;
+    r.client.resume().await.unwrap();
+    assert_eq!(
+      *r.wakes.lock().unwrap(),
+      [(WakeReason::UserPlay, false)],
+      "a tap would resume the house speaker"
+    );
+    assert_eq!(
+      transfer_targets(&r.hits),
+      ["phone-1"],
+      "the parked session moves to the phone"
+    );
+    assert_eq!(resume_targets(&r.hits), ["phone-1"]);
+  }
+
+  #[tokio::test]
+  async fn a_resume_with_no_known_parking_spot_wakes_launch_only() {
+    let r = rig_with_history(
+      vec![cluster("", false, &[("spk-1", DeviceType::SPEAKER)])],
+      Some(phone_playing_again()),
+      Duration::ZERO,
+    )
+    .await;
+    r.client.resume().await.unwrap();
+    assert_eq!(*r.wakes.lock().unwrap(), [(WakeReason::UserPlay, false)]);
+    assert_eq!(resume_targets(&r.hits), ["phone-1"]);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_cold_spotify_is_launched_awaited_and_then_resumed() {
+    let woken = cluster("", false, &[("phone-1", DeviceType::SMARTPHONE)]);
+    let r = rig_with_history(Vec::new(), Some(woken), Duration::from_secs(15)).await;
+    *r.client.shared.cluster.lock().await = Some(cluster("", false, &[]));
+    r.client.resume().await.unwrap();
+    assert_eq!(r.wake_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+      resume_targets(&r.hits),
+      ["phone-1"],
+      "a cold launch that registers slowly still gets the resume"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_play_gives_up_when_spotify_never_registers() {
+    let r = rig_with_history(vec![cluster("", false, &[])], None, Duration::ZERO).await;
+    assert!(r.client.play("spotify:album:x", None).await.is_err());
+    assert_eq!(r.wake_calls.load(Ordering::SeqCst), 1);
+    assert!(play_targets(&r.hits).is_empty());
+  }
+
+  #[tokio::test]
+  async fn disconnect_forgets_which_devices_were_phones() {
+    let r = rig_with_history(phone_parked_then_gone(""), None, Duration::ZERO).await;
+    assert!(allow_play_tap_of(&r.client.shared).await);
+    r.client.disconnect().await;
+    *r.client.shared.writer.lock().await = Some(DealerWriter::for_test(r.client.http.clone(), "me-device"));
+    *r.client.shared.last_active.lock().await = Some("phone-1".to_string());
+    assert!(
+      !allow_play_tap_of(&r.client.shared).await,
+      "another account's phone ids never license a tap"
+    );
+  }
+
+  fn collection_page(items: &[(&str, i64, bool)], next: &str) -> Vec<u8> {
+    let mut page = crate::proto::custom::collection::PageResponse::new();
+    for (uri, added_at, is_removed) in items {
+      let mut item = crate::proto::custom::collection::Item::new();
+      item.uri = uri.to_string();
+      item.added_at = *added_at;
+      item.is_removed = *is_removed;
+      page.items.push(item);
+    }
+    page.next_page_token = next.to_string();
+    page.write_to_bytes().unwrap()
+  }
+
+  struct Library {
+    client: SpotifyClient,
+    requests: Arc<StdMutex<Vec<crate::proto::custom::collection::PageRequest>>>,
+  }
+
+  impl Library {
+    fn tokens(&self) -> Vec<String> {
+      self
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|r| r.pagination_token.clone())
+        .collect()
+    }
+  }
+
+  async fn library(pages: Vec<(&str, Vec<u8>)>, observer: Arc<dyn Observer>) -> Library {
+    let transport = RouteTransport::default();
+    transport
+      .collection_pages
+      .lock()
+      .unwrap()
+      .extend(pages.into_iter().map(|(token, body)| (token.to_string(), body)));
+    let requests = transport.collection_requests.clone();
+    let client = client_over(transport, observer);
+    *client.username.lock().await = Some("user-1".to_string());
+    Library { client, requests }
+  }
+
+  fn shuffled_two_pages() -> Vec<(&'static str, Vec<u8>)> {
+    vec![
+      (
+        "",
+        collection_page(
+          &[
+            ("spotify:track:t2", 200, false),
+            ("spotify:album:a1", 500, false),
+            ("spotify:track:t5", 100, false),
+          ],
+          "page-2",
+        ),
+      ),
+      (
+        "page-2",
+        collection_page(
+          &[
+            ("spotify:track:t1", 400, false),
+            ("spotify:track:gone", 600, true),
+            ("spotify:album:a2", 50, false),
+            ("spotify:track:t3", 300, false),
+          ],
+          "",
+        ),
+      ),
+    ]
+  }
+
+  fn page_uris(page: &BrowsePage) -> Vec<&str> {
+    page.items.iter().map(|i| i.uri.as_str()).collect()
+  }
+
+  #[tokio::test]
+  async fn liked_songs_read_every_collection_page_newest_first() {
+    let lib = library(shuffled_two_pages(), Arc::new(NullObserver)).await;
+    let liked = lib.client.favorites_list(50, 0).await.unwrap();
+    assert_eq!(
+      page_uris(&liked),
+      [
+        "spotify:track:t1",
+        "spotify:track:t3",
+        "spotify:track:t2",
+        "spotify:track:t5"
+      ],
+      "every page, newest first across pages, removed rows dropped"
+    );
+    assert_eq!(liked.total, Some(4));
+    assert!(!liked.has_more);
+    assert_eq!(
+      lib.tokens(),
+      ["", "page-2"],
+      "the second request carries the first page's token"
+    );
+    let first = lib.requests.lock().unwrap()[0].clone();
+    assert_eq!((first.username.as_str(), first.set.as_str()), ("user-1", "collection"));
+    assert!(first.limit > 0);
+
+    let collection = lib
+      .client
+      .browse_container("spotify:user:user-1:collection", 2, 1)
+      .await
+      .unwrap();
+    assert_eq!(page_uris(&collection), ["spotify:track:t3", "spotify:track:t2"]);
+    assert_eq!(collection.total, Some(4));
+  }
+
+  #[tokio::test]
+  async fn saved_albums_filter_the_same_set_without_another_fetch() {
+    let lib = library(shuffled_two_pages(), Arc::new(NullObserver)).await;
+    lib.client.favorites_list(50, 0).await.unwrap();
+    let albums = lib.client.browse(NODE_ALBUMS, 50, 0).await.unwrap();
+    assert_eq!(page_uris(&albums), ["spotify:album:a1", "spotify:album:a2"]);
+    assert_eq!(
+      lib
+        .client
+        .favorites_contains(vec![
+          "spotify:track:t5".into(),
+          "spotify:album:a2".into(),
+          "spotify:track:gone".into()
+        ])
+        .await
+        .unwrap(),
+      [true, true, false]
+    );
+    assert_eq!(
+      lib.tokens().len(),
+      2,
+      "one paged fetch serves liked songs, albums and contains"
+    );
+  }
+
+  #[tokio::test]
+  async fn favorites_edits_update_the_saved_set_in_place() {
+    let lib = library(shuffled_two_pages(), Arc::new(NullObserver)).await;
+    lib.client.favorites_list(50, 0).await.unwrap();
+    lib.client.favorites_set("spotify:track:t9", true).await.unwrap();
+    lib.client.favorites_set("spotify:track:t3", false).await.unwrap();
+    let liked = lib.client.favorites_list(50, 0).await.unwrap();
+    assert_eq!(
+      page_uris(&liked),
+      [
+        "spotify:track:t9",
+        "spotify:track:t1",
+        "spotify:track:t2",
+        "spotify:track:t5"
+      ]
+    );
+    assert_eq!(lib.tokens().len(), 2, "a local edit never forces a refetch");
+  }
+
+  #[tokio::test]
+  async fn disconnect_forgets_the_saved_set() {
+    let lib = library(shuffled_two_pages(), Arc::new(NullObserver)).await;
+    lib.client.favorites_list(50, 0).await.unwrap();
+    let stale = lib.client.browse_cache.lock().await.generation;
+    lib.client.disconnect().await;
+    lib
+      .client
+      .browse_cache
+      .lock()
+      .await
+      .store_collection(SAVED_SET, vec!["spotify:track:old-account".into()], stale);
+    assert_eq!(
+      lib.client.browse_cache.lock().await.saved("spotify:track:t1"),
+      None,
+      "nothing of the old session survives, not even a fetch that lands late"
+    );
+    *lib.client.username.lock().await = Some("user-1".to_string());
+    lib.client.favorites_list(50, 0).await.unwrap();
+    assert_eq!(lib.tokens().len(), 4, "the next read pages the collection again");
+  }
+
+  #[test]
+  fn an_invalidated_set_keeps_answering_until_its_refetch_lands() {
+    let mut cache = BrowseCache::default();
+    let generation = cache.generation;
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t1".into()], generation);
+    let before = cache.generation;
+    cache.note_saved_changed();
+    assert_eq!(cache.fresh_collection(SAVED_SET), None, "readers refetch");
+    assert_eq!(
+      cache.saved("spotify:track:t1"),
+      Some(true),
+      "the heart keeps its last answer"
+    );
+    cache.store_collection(SAVED_SET, Vec::new(), before);
+    assert_eq!(
+      cache.saved("spotify:track:t1"),
+      Some(true),
+      "a fetch started before the change is discarded"
+    );
+    let current = cache.generation;
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t2".into()], current);
+    assert_eq!(cache.saved("spotify:track:t1"), Some(false));
+    assert_eq!(
+      cache.fresh_collection(SAVED_SET),
+      Some(vec!["spotify:track:t2".to_string()])
+    );
+  }
+
+  #[test]
+  fn a_reconnect_marks_the_set_stale_without_dropping_it() {
+    let mut cache = BrowseCache::default();
+    let generation = cache.generation;
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t1".into()], generation);
+    cache.note_reconnected();
+    assert_eq!(cache.fresh_collection(SAVED_SET), None);
+    assert_eq!(cache.saved("spotify:track:t1"), Some(true));
+  }
+
+  #[test]
+  fn a_local_edit_discards_a_refetch_that_started_before_it() {
+    let mut cache = BrowseCache::default();
+    let generation = cache.generation;
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t1".into()], generation);
+    let in_flight = cache.generation;
+    cache.note_saved("spotify:track:t2", true);
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t1".into()], in_flight);
+    assert_eq!(cache.saved("spotify:track:t2"), Some(true));
+  }
+
+  #[derive(Default)]
+  struct PlayerLog(StdMutex<Vec<PlayerState>>);
+  impl Observer for PlayerLog {
+    fn on_player(&self, state: PlayerState) {
+      self.0.lock().unwrap().push(state);
+    }
+    fn on_queue(&self, _queue: Queue) {}
+    fn on_devices(&self, _devices: Vec<Device>) {}
+    fn on_auth(&self, _state: AuthState) {}
+    fn on_library_changed(&self, _scope: LibraryScope) {}
+  }
+
+  #[tokio::test]
+  async fn the_current_tracks_heart_holds_through_an_invalidation_and_follows_the_refetch() {
+    let log = Arc::new(PlayerLog::default());
+    let observer: Arc<dyn Observer> = log.clone();
+    let client = client_over(RouteTransport::default(), observer.clone());
+    {
+      let mut cache = client.browse_cache.lock().await;
+      let generation = cache.generation;
+      cache.store_collection(SAVED_SET, vec!["spotify:track:t1".into()], generation);
+    }
+    let mut playing = cluster("dev1", true, &[]);
+    let track = playing
+      .player_state
+      .mut_or_insert_default()
+      .track
+      .mut_or_insert_default();
+    track.uri = "spotify:track:t1".into();
+    track.metadata.insert("title".into(), "T1".into());
+    track.metadata.insert("artist_name".into(), "A".into());
+    track.metadata.insert("duration".into(), "1000".into());
+    let mut emitter = Emitter {
+      spc: &client.spc,
+      observer: &observer,
+      browse_cache: &client.browse_cache,
+      me: "me-device",
+      last_np: String::new(),
+      last_q: String::new(),
+      last_dev: String::new(),
+      hydrated: None,
+      q_hydrate: HashMap::new(),
+      ctx_names: HashMap::new(),
+    };
+    let hearts = || {
+      log
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|s| s.track.as_ref().unwrap().saved)
+        .collect::<Vec<_>>()
+    };
+
+    emitter.emit(&playing, true).await;
+    client.browse_cache.lock().await.note_saved_changed();
+    emitter.emit(&playing, false).await;
+    let paused = playing.player_state.mut_or_insert_default();
+    paused.is_playing = false;
+    paused.is_paused = true;
+    emitter.emit(&playing, false).await;
+    assert_eq!(
+      hearts(),
+      [true, true],
+      "a re-render between the invalidation and the refetch keeps the heart"
+    );
+
+    let mut cache = client.browse_cache.lock().await;
+    let current = cache.generation;
+    cache.store_collection(SAVED_SET, vec!["spotify:track:t2".into()], current);
+    drop(cache);
+    emitter.emit(&playing, false).await;
+    assert_eq!(hearts(), [true, true, false], "the refetched set re-renders it");
   }
 
   // ---- search bucketing ----------------------------------------------------

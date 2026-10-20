@@ -22,14 +22,15 @@ use crate::{
   httpx::with_query,
   proto::custom::{
     casita_home::HomeResponse,
-    collection::{Item as CollectionWriteItem, WriteRequest},
+    collection::{Item as CollectionItem, PageRequest, PageResponse, WriteRequest},
     recently_played::RecentlyPlayed,
     searchview::SearchResponse,
   },
-  util::{self, CollectionItem},
+  util,
 };
 
 const COLLECTION_CT: &str = "application/vnd.collection-v2.spotify.proto";
+const COLLECTION_PAGE: i32 = 1000;
 const SEARCH_TYPES: &str = "album,artist,genre,playlist,user_profile,track,show,audio_episode,\
 audiobook,section,author,concert,venue,podcast_chapter";
 const SEARCH_FEATURES: &str = "abdesc,fullflatfilterlist,vidfilter,recsection,track_classification,\
@@ -277,8 +278,25 @@ impl SpClient {
       .await
   }
 
-  pub async fn collection_paging(&self, username: &str, set: &str, limit: u64) -> Result<Vec<CollectionItem>> {
-    let body = util::collection_paging_body(username, set, limit);
+  pub async fn collection_paging(&self, username: &str, set: &str) -> Result<Vec<CollectionItem>> {
+    let mut items = Vec::new();
+    let mut token = String::new();
+    loop {
+      let page = self.collection_page(username, set, &token).await?;
+      items.extend(page.items.into_iter().filter(|i| !i.is_removed));
+      if page.next_page_token.is_empty() || page.next_page_token == token {
+        return Ok(items);
+      }
+      token = page.next_page_token;
+    }
+  }
+
+  async fn collection_page(&self, username: &str, set: &str, token: &str) -> Result<PageResponse> {
+    let mut req = PageRequest::new();
+    req.username = username.to_string();
+    req.set = set.to_string();
+    req.pagination_token = token.to_string();
+    req.limit = COLLECTION_PAGE;
     let mut headers = self.http.headers(false).await?;
     headers.insert(CONTENT_TYPE, HeaderValue::from_static(COLLECTION_CT));
     headers.insert(ACCEPT, HeaderValue::from_static(COLLECTION_CT));
@@ -288,14 +306,14 @@ impl SpClient {
         HttpMethod::Post,
         format!("{SPCLIENT}/collection/v2/paging"),
         headers,
-        body,
+        req.write_to_bytes()?,
         0,
       )
       .await?;
     if !resp.ok() {
       return Err(Error::status("collection_paging", resp.status, resp.text()));
     }
-    Ok(util::parse_collection_page(&resp.body))
+    Ok(PageResponse::parse_from_bytes(&resp.body)?)
   }
 
   pub async fn collection_write(&self, username: &str, set: &str, add: &[String], remove: &[String]) -> Result<u16> {
@@ -304,13 +322,13 @@ impl SpClient {
     req.set = set.to_string();
     let now = now_secs();
     for u in add {
-      let mut it = CollectionWriteItem::new();
+      let mut it = CollectionItem::new();
       it.uri = normalize(std::slice::from_ref(u), "track").remove(0);
       it.added_at = now;
       req.items.push(it);
     }
     for u in remove {
-      let mut it = CollectionWriteItem::new();
+      let mut it = CollectionItem::new();
       it.uri = normalize(std::slice::from_ref(u), "track").remove(0);
       it.is_removed = true;
       req.items.push(it);

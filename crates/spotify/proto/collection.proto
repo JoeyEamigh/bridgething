@@ -9,6 +9,19 @@ message Item {
   string source = 4;
 }
 
+message PageRequest {
+  string username = 1;
+  string set = 2;
+  string pagination_token = 3;
+  int32 limit = 4;
+}
+
+message PageResponse {
+  repeated Item items = 1;
+  string next_page_token = 2;
+  string sync_token = 3;
+}
+
 message WriteRequest {
   string username = 1;
   string set = 2;
