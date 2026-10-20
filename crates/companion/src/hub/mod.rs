@@ -1,8 +1,10 @@
 mod arbiter;
+mod presence;
 
 use std::{
   collections::{HashMap, HashSet},
-  sync::{Arc, Mutex},
+  path::PathBuf,
+  sync::{Arc, Mutex, Weak},
   time::Duration,
 };
 
@@ -12,7 +14,7 @@ use libbridgething::{
   AudioCapabilities, GatewayCapabilities, GatewayInfo, MusicProvider, NetworkInfo, NluResolvedIntent,
   SurfaceAvailability, gateway::GatewayToBridgeCapabilitiesMsgEvent,
 };
-use tokio::time::Instant;
+use presence::PeerPresence;
 
 use crate::{
   api::{CapabilityFlags, HostInfo},
@@ -24,7 +26,8 @@ use crate::{
   voice::dispatcher::{CatalogError, VoiceCatalogResolver},
 };
 
-pub const AUTO_RESUME_COOLDOWN: Duration = Duration::from_secs(300);
+pub const AUTO_RESUME_ABSENCE: Duration = Duration::from_secs(180);
+const PRESENCE_STAMPS_PER_ABSENCE: u32 = 6;
 
 struct Attached {
   providers: HashMap<String, Arc<dyn Provider>>,
@@ -33,9 +36,10 @@ struct Attached {
 }
 
 struct ResumeGate {
-  cooldown: Duration,
+  absence: Duration,
   enabled: HashMap<String, bool>,
-  last_resume_at: HashMap<String, Instant>,
+  presence: PeerPresence,
+  resuming_for: Option<String>,
   targets: HashMap<String, ResumeTarget>,
   connected: HashSet<String>,
 }
@@ -51,7 +55,7 @@ pub struct Hub {
   now_playing: NowPlayingHub,
   attached: Mutex<Attached>,
   system: Mutex<Option<Arc<SystemMediaProvider>>>,
-  resume: Mutex<ResumeGate>,
+  resume: Arc<Mutex<ResumeGate>>,
   announced: Mutex<Announced>,
 }
 
@@ -66,13 +70,14 @@ impl Hub {
         last_played_from: None,
       }),
       system: Mutex::new(None),
-      resume: Mutex::new(ResumeGate {
-        cooldown: AUTO_RESUME_COOLDOWN,
+      resume: Arc::new(Mutex::new(ResumeGate {
+        absence: AUTO_RESUME_ABSENCE,
         enabled: HashMap::new(),
-        last_resume_at: HashMap::new(),
+        presence: PeerPresence::in_memory(),
+        resuming_for: None,
         targets: HashMap::new(),
         connected: HashSet::new(),
-      }),
+      })),
       announced: Mutex::new(Announced {
         host,
         flags,
@@ -83,6 +88,11 @@ impl Hub {
 
   pub fn start(&self) {
     self.now_playing.start();
+    tokio::spawn(stamp_presence(Arc::downgrade(&self.resume)));
+  }
+
+  pub fn persist_presence(&self, file: PathBuf) {
+    self.resume.lock().unwrap().presence = PeerPresence::persisted(file);
   }
 
   pub fn now_playing(&self) -> &NowPlayingHub {
@@ -312,8 +322,8 @@ impl Hub {
       .insert(device_id.to_owned(), enabled);
   }
 
-  pub fn set_auto_resume_cooldown(&self, cooldown: Duration) {
-    self.resume.lock().unwrap().cooldown = cooldown;
+  pub fn set_auto_resume_absence(&self, absence: Duration) {
+    self.resume.lock().unwrap().absence = absence;
   }
 
   pub fn auto_resume_prefs(&self) -> HashMap<String, bool> {
@@ -373,24 +383,47 @@ impl Hub {
   }
 
   pub fn peer_disconnected(&self, device_id: &str) {
-    self.resume.lock().unwrap().connected.remove(device_id);
+    let cancel_resume = {
+      let mut resume = self.resume.lock().unwrap();
+      resume.connected.remove(device_id);
+      resume.presence.stamp([&device_id.to_owned()]);
+      let cancel = resume.resuming_for.as_deref() == Some(device_id);
+      if cancel {
+        resume.resuming_for = None;
+      }
+      cancel
+    };
+    if cancel_resume {
+      tracing::info!(%device_id, "peer left before its connect resume finished; cancelling it");
+      for id in self.ordered_ids() {
+        if let Some(provider) = self.provider(&id) {
+          provider.cancel_connect_resume();
+        }
+      }
+    }
     self.push_resume_target();
   }
 
   fn allow_auto_resume(&self, device_id: &str) -> bool {
-    let mut resume = self.resume.lock().unwrap();
+    let resume = self.resume.lock().unwrap();
     if !resume.enabled.get(device_id).copied().unwrap_or(true) {
       tracing::info!(%device_id, "auto-resume off; skipping connect resume");
       return false;
     }
-    if let Some(at) = resume.last_resume_at.get(device_id)
-      && at.elapsed() < resume.cooldown
-    {
-      tracing::info!(%device_id, "auto-resumed recently; skipping connect resume");
-      return false;
+    match resume.presence.absent_for(device_id) {
+      Some(absent) if absent < resume.absence => {
+        tracing::info!(
+          %device_id,
+          absent_s = absent.as_secs(),
+          "peer was only briefly away; skipping connect resume"
+        );
+        false
+      }
+      absent => {
+        tracing::info!(%device_id, absent_s = ?absent.map(|a| a.as_secs()), "connect resume: peer was away");
+        true
+      }
     }
-    resume.last_resume_at.insert(device_id.to_owned(), Instant::now());
-    true
   }
 
   fn resume_winner(&self) -> Option<String> {
@@ -412,9 +445,16 @@ impl Hub {
   pub async fn peer_connected(&self, device_id: &str) {
     self.announce().await;
     self.now_playing.on_connect();
-    self.resume.lock().unwrap().connected.insert(device_id.to_owned());
-    self.push_resume_target();
     let allow = self.allow_auto_resume(device_id);
+    {
+      let mut resume = self.resume.lock().unwrap();
+      resume.connected.insert(device_id.to_owned());
+      resume.presence.stamp([&device_id.to_owned()]);
+      if allow {
+        resume.resuming_for = Some(device_id.to_owned());
+      }
+    }
+    self.push_resume_target();
     let winner = self.resume_winner();
     for id in self.ordered_ids() {
       if let Some(provider) = self.provider(&id) {
@@ -431,6 +471,24 @@ impl Hub {
         provider.resumed().await;
       }
     }
+  }
+}
+
+async fn stamp_presence(gate: Weak<Mutex<ResumeGate>>) {
+  loop {
+    let Some(every) = gate
+      .upgrade()
+      .map(|gate| gate.lock().unwrap().absence / PRESENCE_STAMPS_PER_ABSENCE)
+    else {
+      return;
+    };
+    tokio::time::sleep(every).await;
+    let Some(gate) = gate.upgrade() else { return };
+    let mut resume = gate.lock().unwrap();
+    let ResumeGate {
+      presence, connected, ..
+    } = &mut *resume;
+    presence.stamp(connected.iter());
   }
 }
 

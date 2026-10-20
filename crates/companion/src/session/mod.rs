@@ -87,6 +87,7 @@ struct LogStream {
 
 const LOG_RING_CAPACITY: usize = 2000;
 const COMPANION_UPDATE_DIR: &str = "companion-update";
+const PEER_PRESENCE_FILE: &str = "peer-presence.json";
 const BLOB_HANDLES_DIR: &str = "blob-handles";
 const LOG_BACKFILL_LINES: u32 = 1000;
 const LOG_BACKFILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
@@ -264,6 +265,7 @@ impl Session {
       config.capabilities,
       backends.volume.is_some(),
     );
+    hub.persist_presence(std::path::Path::new(&config.state_dir).join(PEER_PRESENCE_FILE));
     let extensions = backends.extensions.clone().map(ExtensionDispatcher::new);
     let handles = Arc::new(BlobHandles::new(FsHandleStore::new(cache_dir.join(BLOB_HANDLES_DIR))));
     let normalizer = Arc::new(MediaNormalizer::new(

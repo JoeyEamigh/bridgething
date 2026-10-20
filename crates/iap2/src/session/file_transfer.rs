@@ -110,7 +110,7 @@ impl FileTransferFlow {
     };
     let file_type = rest.get_u16();
 
-    tracing::debug!(transfer_id = id, declared_size, file_type, "file-transfer: Setup");
+    tracing::info!(transfer_id = id, declared_size, file_type, "file-transfer: Setup");
     self.in_flight.insert(
       id,
       InFlight {

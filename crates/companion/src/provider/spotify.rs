@@ -113,12 +113,16 @@ struct Session {
   emit_task: JoinHandle<()>,
   emit_tx: mpsc::UnboundedSender<EmitJob>,
   resolver: Arc<SpotifyVoiceResolver>,
+  connect_resume: Option<JoinHandle<()>>,
 }
 
 impl Drop for Session {
   fn drop(&mut self) {
     self.connect_task.abort();
     self.emit_task.abort();
+    if let Some(resume) = &self.connect_resume {
+      resume.abort();
+    }
   }
 }
 
@@ -1209,6 +1213,7 @@ impl Provider for SpotifyProvider {
       emit_task,
       emit_tx,
       resolver,
+      connect_resume: None,
     });
     Ok(())
   }
@@ -1240,15 +1245,33 @@ impl Provider for SpotifyProvider {
     }
   }
 
+  fn cancel_connect_resume(&self) {
+    let resume = self
+      .core
+      .session
+      .lock()
+      .unwrap()
+      .as_mut()
+      .and_then(|session| session.connect_resume.take());
+    if let Some(resume) = resume {
+      resume.abort();
+    }
+  }
+
   async fn handle_peer_connected(&self, allow_auto_resume: bool) {
     let Some(client) = self.core.client() else { return };
     if allow_auto_resume {
       let resume_client = client.clone();
-      tokio::spawn(async move {
+      let resume = tokio::spawn(async move {
         if let Err(error) = resume_client.resume_on_connect().await {
           tracing::info!(%error, "connect auto-resume did not complete");
         }
       });
+      if let Some(session) = self.core.session.lock().unwrap().as_mut()
+        && let Some(stale) = session.connect_resume.replace(resume)
+      {
+        stale.abort();
+      }
     }
     self.core.reset_queue_dedup();
     let pending = self

@@ -140,6 +140,7 @@ impl AuthorityRegistry {
     let state = NowPlayingAuthorityState {
       companion_metadata: primary.is_some_and(|c| c.holds(CompanionAuthorityScope::NowPlayingMetadata)),
       companion_playback: primary.is_some_and(|c| c.holds(CompanionAuthorityScope::NowPlayingPlayback)),
+      app_bundle: primary.and_then(|c| c.app_bundle.clone()),
     };
     self.inner.now_playing.send_if_modified(|cur| {
       let changed = *cur != state;
@@ -157,6 +158,7 @@ impl AuthorityRegistry {
     if let Some(bundle) = bundle {
       let mut guard = self.inner.companions.write().expect("authority lock poisoned");
       guard.entry(addr).or_default().app_bundle = Some(bundle);
+      self.publish(&guard);
     }
   }
 
@@ -275,6 +277,7 @@ mod tests {
       NowPlayingAuthorityState {
         companion_metadata: true,
         companion_playback: false,
+        app_bundle: None,
       }
     );
 
@@ -300,8 +303,32 @@ mod tests {
       NowPlayingAuthorityState {
         companion_metadata: true,
         companion_playback: true,
+        app_bundle: None,
       }
     );
+  }
+
+  #[test]
+  fn now_playing_subscription_carries_the_bundle_the_primary_claims() {
+    let r = AuthorityRegistry::new();
+    let rx = r.now_playing_subscription_rx();
+    r.set_companion_app_bundle(addr(1), Some("com.apple.Music".into()));
+    r.claim(addr(1), CompanionAuthorityScope::NowPlayingMetadata);
+    assert_eq!(
+      rx.borrow().app_bundle.as_deref(),
+      Some("com.apple.Music"),
+      "the claim publishes with its bundle, never a bundle-less interim state"
+    );
+
+    r.set_companion_app_bundle(addr(1), Some("com.spotify.client".into()));
+    assert_eq!(
+      rx.borrow().app_bundle.as_deref(),
+      Some("com.spotify.client"),
+      "a handover to another provider re-publishes"
+    );
+
+    r.drop_for(addr(1));
+    assert_eq!(rx.borrow().app_bundle, None, "no companion, no claimed bundle");
   }
 
   #[test]

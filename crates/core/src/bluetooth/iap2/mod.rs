@@ -593,7 +593,6 @@ impl Iap2Manager {
     let session = Iap2Session::with_app_launch(
       self.identification.clone(),
       Some(COMPANION_BUNDLE_ID.to_string()),
-      vec![SPOTIFY_BUNDLE_ID.to_string()],
       app_launch_rx,
       session_shutdown_rx,
       mfi,

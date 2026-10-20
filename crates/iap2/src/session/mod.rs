@@ -41,7 +41,7 @@ use crate::{
   },
   error::{Error, Result},
   frame::Lsp,
-  link::{Iap2Command, Iap2Event},
+  link::{Iap2Command, Iap2Event, sleep_until_or_pending},
 };
 
 pub type MfiResult<T> = std::result::Result<T, MfiError>;
@@ -129,7 +129,6 @@ impl<M: MfiAccess> Iap2Session<M> {
     Self::with_app_launch(
       identification,
       None,
-      Vec::new(),
       app_launch_command_rx,
       shutdown_rx,
       mfi,
@@ -147,7 +146,6 @@ impl<M: MfiAccess> Iap2Session<M> {
   pub fn with_app_launch(
     identification: IdentificationConfig,
     app_launch_bundle_id: Option<String>,
-    artwork_suppress_bundles: Vec<String>,
     app_launch_command_rx: mpsc::Receiver<String>,
     shutdown_rx: mpsc::Receiver<oneshot::Sender<()>>,
     mfi: M,
@@ -162,7 +160,7 @@ impl<M: MfiAccess> Iap2Session<M> {
     Self {
       auth: AuthFlow::new(),
       ident: IdentificationFlow::new(),
-      now_playing: NowPlayingFlow::new(now_playing_command_rx, artwork_suppress_bundles),
+      now_playing: NowPlayingFlow::new(now_playing_command_rx),
       now_playing_authority,
       ea: None,
       file_transfer: FileTransferFlow::new(link_command_tx.clone()),
@@ -219,14 +217,15 @@ impl<M: MfiAccess> Iap2Session<M> {
         }
       }
 
-      let np_authority = *self.now_playing_authority.borrow_and_update();
+      let np_authority = self.now_playing_authority.borrow_and_update().clone();
       if np_authority != np_authority_last {
-        np_authority_last = np_authority;
         self
           .now_playing
-          .reconcile_companion(np_authority, &self.link_command_tx)
+          .reconcile_companion(&np_authority, &self.link_command_tx)
           .await?;
+        np_authority_last = np_authority;
       }
+      let np_wakeup = self.now_playing.next_wakeup();
 
       tokio::select! {
         biased;
@@ -341,6 +340,12 @@ impl<M: MfiAccess> Iap2Session<M> {
             np_authority_closed = true;
           }
         }
+        _ = sleep_until_or_pending(np_wakeup) => {
+          self
+            .now_playing
+            .reconcile_companion(&np_authority_last, &self.link_command_tx)
+            .await?;
+        }
       }
     }
   }
@@ -368,10 +373,10 @@ impl<M: MfiAccess> Iap2Session<M> {
         .await;
     }
     if NowPlayingFlow::handles(msg_id) {
-      let authority = *self.now_playing_authority.borrow();
+      let authority = self.now_playing_authority.borrow().clone();
       return self
         .now_playing
-        .handle(frame, authority, &self.link_command_tx, &self.session_events_tx)
+        .handle(frame, &authority, &self.link_command_tx, &self.session_events_tx)
         .await;
     }
     if EaFlow::handles(msg_id) {

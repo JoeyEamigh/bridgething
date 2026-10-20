@@ -134,18 +134,34 @@ pub fn bandaid_transfers_dir() -> PathBuf {
   PathBuf::from("/opt/bridgething/.transfers")
 }
 
-pub fn partition_free_bytes(path: &Path) -> u64 {
+#[derive(Debug, Clone, Copy)]
+pub struct PartitionBytes {
+  pub total: u64,
+  pub free: u64,
+}
+
+pub fn partition_bytes(path: &Path) -> Option<PartitionBytes> {
   use std::os::unix::ffi::OsStrExt;
-  let Ok(c_path) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
-    return u64::MAX;
-  };
+  let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
   // SAFETY: statvfs takes a NUL-terminated path and writes a POSIX struct into our stack allocation; both pointers are valid for the duration of the call
   let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
   let rc = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
   if rc != 0 {
-    return u64::MAX;
+    return None;
   }
-  (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64)
+  let block = widen(stat.f_frsize);
+  Some(PartitionBytes {
+    total: widen(stat.f_blocks).saturating_mul(block),
+    free: widen(stat.f_bavail).saturating_mul(block),
+  })
+}
+
+pub fn partition_free_bytes(path: &Path) -> u64 {
+  partition_bytes(path).map_or(u64::MAX, |bytes| bytes.free)
+}
+
+fn widen<T: Into<u64>>(value: T) -> u64 {
+  value.into()
 }
 
 pub async fn fsync(path: &Path) -> io::Result<()> {

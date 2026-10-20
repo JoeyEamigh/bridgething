@@ -247,6 +247,10 @@ impl Provider for HubProvider {
     self.peer_connects.lock().unwrap().push(allow_auto_resume);
   }
 
+  fn cancel_connect_resume(&self) {
+    self.calls.lock().unwrap().push("cancel_connect_resume".into());
+  }
+
   async fn asset(&self, id: &str) -> Result<Option<AssetBytes>, ProviderError> {
     if id.starts_with(&format!("{}/", self.name)) {
       return Ok(Some(AssetBytes {
@@ -1053,26 +1057,148 @@ async fn the_last_played_from_provider_wins_the_resume() {
 }
 
 #[tokio::test]
-async fn a_reconnect_after_the_cooldown_resumes_again() {
+async fn a_reconnect_after_a_real_absence_resumes_again() {
   let (gateway, _peer) = Peer::link();
   let hub = hub(gateway);
-  hub.set_auto_resume_cooldown(Duration::from_millis(50));
+  hub.set_auto_resume_absence(Duration::from_millis(50));
   let provider = HubProvider::new("spotify", &["spotify"]);
   hub.attach(provider.clone()).await.unwrap();
 
   hub.peer_connected("carthing-1").await;
+  hub.peer_disconnected("carthing-1");
   tokio::time::sleep(Duration::from_millis(80)).await;
   hub.peer_connected("carthing-1").await;
 
   assert_eq!(
     provider.peer_connects(),
     vec![true, true],
-    "the drop is recent but the last resume is not, so this connect must resume"
+    "the car was gone longer than the absence threshold, so this connect is a new drive"
   );
 }
 
 #[tokio::test]
-async fn a_second_connect_inside_the_cooldown_does_not_resume_again() {
+async fn a_link_flap_after_a_long_connection_does_not_resume() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  hub.set_auto_resume_absence(Duration::from_millis(60));
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+
+  hub.peer_connected("carthing-1").await;
+  tokio::time::sleep(Duration::from_millis(150)).await;
+  hub.peer_disconnected("carthing-1");
+  hub.peer_connected("carthing-1").await;
+
+  assert_eq!(
+    provider.peer_connects(),
+    vec![true, false],
+    "the drop is seconds old even though the last resume is not; a link storm is not a new drive"
+  );
+}
+
+#[tokio::test]
+async fn a_relaunch_moments_after_the_app_died_does_not_resume() {
+  let state = tempfile::tempdir().unwrap();
+  let file = state.path().join("peer-presence.json");
+  let first = HubProvider::new("spotify", &["spotify"]);
+  {
+    let (gateway, _peer) = Peer::link();
+    let hub = hub(gateway);
+    hub.persist_presence(file.clone());
+    hub.attach(first.clone()).await.unwrap();
+    hub.peer_connected("carthing-1").await;
+  }
+
+  let (gateway, _peer) = Peer::link();
+  let relaunched = hub(gateway);
+  relaunched.persist_presence(file);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  relaunched.attach(provider.clone()).await.unwrap();
+  relaunched.peer_connected("carthing-1").await;
+
+  assert_eq!(first.peer_connects(), vec![true]);
+  assert_eq!(
+    provider.peer_connects(),
+    vec![false],
+    "the app dying and coming back mid-drive must not resume again"
+  );
+}
+
+#[tokio::test]
+async fn a_long_connection_stays_present_across_an_app_death() {
+  let state = tempfile::tempdir().unwrap();
+  let file = state.path().join("peer-presence.json");
+  {
+    let (gateway, _peer) = Peer::link();
+    let hub = hub(gateway);
+    hub.set_auto_resume_absence(Duration::from_millis(300));
+    hub.persist_presence(file.clone());
+    hub.peer_connected("carthing-1").await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+  }
+
+  let (gateway, _peer) = Peer::link();
+  let relaunched = hub(gateway);
+  relaunched.set_auto_resume_absence(Duration::from_millis(300));
+  relaunched.persist_presence(file);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  relaunched.attach(provider.clone()).await.unwrap();
+  relaunched.peer_connected("carthing-1").await;
+
+  assert_eq!(
+    provider.peer_connects(),
+    vec![false],
+    "the peer was connected until the app died, not since the connect stamp"
+  );
+}
+
+#[tokio::test]
+async fn a_relaunch_after_a_real_absence_resumes() {
+  let state = tempfile::tempdir().unwrap();
+  let file = state.path().join("peer-presence.json");
+  {
+    let (gateway, _peer) = Peer::link();
+    let hub = hub(gateway);
+    hub.persist_presence(file.clone());
+    hub.peer_connected("carthing-1").await;
+    hub.peer_disconnected("carthing-1");
+  }
+  tokio::time::sleep(Duration::from_millis(80)).await;
+
+  let (gateway, _peer) = Peer::link();
+  let relaunched = hub(gateway);
+  relaunched.set_auto_resume_absence(Duration::from_millis(50));
+  relaunched.persist_presence(file);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  relaunched.attach(provider.clone()).await.unwrap();
+  relaunched.peer_connected("carthing-1").await;
+
+  assert_eq!(provider.peer_connects(), vec![true]);
+}
+
+#[tokio::test]
+async fn a_peer_leaving_cancels_the_resume_its_connect_started() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+
+  hub.peer_connected("carthing-1").await;
+  hub.peer_disconnected("carthing-2");
+  assert!(
+    !provider.saw("cancel_connect_resume"),
+    "another peer leaving does not cancel this peer's resume"
+  );
+
+  hub.peer_disconnected("carthing-1");
+  assert!(
+    provider.saw("cancel_connect_resume"),
+    "a resume must not outlive the link that asked for it"
+  );
+}
+
+#[tokio::test]
+async fn a_second_connect_with_no_absence_does_not_resume_again() {
   let (gateway, _peer) = Peer::link();
   let hub = hub(gateway);
   let provider = HubProvider::new("spotify", &["spotify"]);
@@ -1084,7 +1210,7 @@ async fn a_second_connect_inside_the_cooldown_does_not_resume_again() {
   assert_eq!(
     provider.peer_connects(),
     vec![true, false],
-    "a re-dial inside the cooldown must not resume a second time"
+    "a re-dial with no absence must not resume a second time"
   );
 }
 

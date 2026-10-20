@@ -1125,3 +1125,27 @@ fn constructing_a_session_outside_a_runtime_does_not_panic() {
   let session = catalog_session(MemorySecrets::paired());
   assert_eq!(session.provider_infos().len(), 1);
 }
+
+#[tokio::test]
+async fn a_connect_resume_cancelled_before_the_cluster_lands_never_resumes() {
+  let rig = boot(cluster(ClusterSpec {
+    track: Some(provided_track("spotify:track:1", "Song", false)),
+    playing: false,
+    active: "phone-1",
+    devices: vec![("phone-1", "Phone", DeviceType::SMARTPHONE, 0)],
+    ..ClusterSpec::default()
+  }))
+  .await;
+
+  rig.provider.handle_peer_connected(true).await;
+  rig.provider.cancel_connect_resume();
+  rig.ws.wait_connected(1).await;
+  rig.ws.open_session();
+  rig.peer.wait("the snapshot", snapshot_of).await;
+  tokio::time::sleep(Duration::from_millis(300)).await;
+
+  assert!(
+    rig.http.hits_matching("player/command").is_empty(),
+    "the peer that asked for the resume is gone; resuming now plays to nobody"
+  );
+}

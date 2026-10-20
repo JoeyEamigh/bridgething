@@ -137,7 +137,6 @@ where
   let session = Iap2Session::with_app_launch(
     ident,
     app_launch_bundle,
-    Vec::new(),
     app_launch_rx,
     session_shutdown_rx,
     FakeMfi,

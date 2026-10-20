@@ -16,7 +16,7 @@ mod reset;
 mod seam;
 use anyhow::Result;
 use bridgething::{
-  Address, DaemonConfig, HeadlessInject, Iap2Event, Iap2TransportCommand, ServerAddrs, State, TappedFrame,
+  Address, DaemonConfig, HeadlessInject, Iap2Event, Iap2TransportCommand, LeCommand, ServerAddrs, State, TappedFrame,
 };
 use bridgething_client::Client as CommandClient;
 use bridgething_gateway::Gateway;
@@ -218,8 +218,14 @@ impl Harness {
   }
 
   pub fn observe_iap2_outbound(&self) -> Iap2OutboundObserver {
-    Iap2OutboundObserver {
+    TapObserver {
       rx: self.inject.iap2_outbound.subscribe(),
+    }
+  }
+
+  pub fn observe_le(&self) -> LeObserver {
+    TapObserver {
+      rx: self.inject.le.subscribe(),
     }
   }
 
@@ -307,14 +313,18 @@ pub fn extract_substring_starting_with(haystack: &str, prefix: &str) -> Option<S
   Some(tail[..end].to_string())
 }
 
-pub struct Iap2OutboundObserver {
-  rx: broadcast::Receiver<Iap2TransportCommand>,
+pub type Iap2OutboundObserver = TapObserver<Iap2TransportCommand>;
+
+pub type LeObserver = TapObserver<LeCommand>;
+
+pub struct TapObserver<T> {
+  rx: broadcast::Receiver<T>,
 }
 
-impl Iap2OutboundObserver {
-  pub async fn wait_for<F>(&mut self, timeout: Duration, pred: F) -> Option<Iap2TransportCommand>
+impl<T: Clone> TapObserver<T> {
+  pub async fn wait_for<F>(&mut self, timeout: Duration, pred: F) -> Option<T>
   where
-    F: Fn(&Iap2TransportCommand) -> bool,
+    F: Fn(&T) -> bool,
   {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
@@ -331,7 +341,7 @@ impl Iap2OutboundObserver {
     }
   }
 
-  pub async fn collect_for(&mut self, window: Duration) -> Vec<Iap2TransportCommand> {
+  pub async fn collect_for(&mut self, window: Duration) -> Vec<T> {
     let mut cmds = Vec::new();
     let deadline = tokio::time::Instant::now() + window;
     loop {

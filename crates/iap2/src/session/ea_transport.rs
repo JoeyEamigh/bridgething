@@ -54,14 +54,20 @@ impl EaStreamSender {
 
 pub(crate) struct EaChunker {
   lanes: OutboundLanes<EaFrame>,
-  _handle: JoinHandle<()>,
+  task: JoinHandle<()>,
+}
+
+impl Drop for EaChunker {
+  fn drop(&mut self) {
+    self.task.abort();
+  }
 }
 
 impl EaChunker {
   pub(crate) fn new(link_command_tx: mpsc::Sender<Iap2Command>, peer_max_len: u16) -> Self {
     let (lanes, feed) = lanes(EA_LANE_BYTES, EA_BATCH_BYTES);
-    let _handle = tokio::spawn(chunker_task(feed, link_command_tx, max_chunk_payload(peer_max_len)));
-    Self { lanes, _handle }
+    let task = tokio::spawn(chunker_task(feed, link_command_tx, max_chunk_payload(peer_max_len)));
+    Self { lanes, task }
   }
 
   pub(crate) fn sender(&self, stream_id: u16) -> EaStreamSender {

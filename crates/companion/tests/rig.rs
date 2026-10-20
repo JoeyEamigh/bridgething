@@ -630,6 +630,15 @@ async fn a_host_send_reaches_the_webapp_that_is_active_on_the_device() {
   let (rig, host) = rig_with_host().await;
   let app = plant_webapp(&rig, "extended").await;
   activate(&rig, app).await;
+  assert!(
+    host
+      .await_call(SETTLE, |call| matches!(
+        call,
+        HostCall::DeviceActive { webapp, active: true, .. } if *webapp == app.to_string()
+      ))
+      .await,
+    "the companion learns the webapp is active before an unaddressed send can find it"
+  );
 
   let client = rig
     .harness
@@ -637,6 +646,13 @@ async fn a_host_send_reaches_the_webapp_that_is_active_on_the_device() {
     .await
     .expect("a webapp connects to the daemon");
   let mut inbound = client.events();
+  assert!(
+    rig
+      .harness
+      .wait_for(|state| state.client_man.client_count() >= 1, SETTLE)
+      .await,
+    "the daemon registers the webapp's connection before a forward can reach it"
+  );
 
   host.inbox(SETTLE).await.send_to_device(
     None,

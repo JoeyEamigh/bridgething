@@ -195,10 +195,12 @@ test-shipping:
     {{just_executable()}} --justfile {{justfile()}} build-image
     {{container_run}} bash -c "scripts/libswupdate-stub.sh {{container_vendor}} cc /usr/lib \
       && cargo test -p bridgething --locked --no-default-features --features {{device_features}} -j 2 -- --test-threads 2 \
+      && cargo clippy -p bridgething --locked --no-default-features --features {{device_features}} --all-targets -j 2 -- -D warnings \
       && cargo test -p bridgething-mic-debug --locked -j 2 -- --test-threads 2"
   else
     scripts/libswupdate-stub.sh {{swupdate_vendor}} cc {{swupdate_libdir}}
     RUSTFLAGS='-L {{swupdate_libdir}}' LD_LIBRARY_PATH={{swupdate_libdir}} cargo test -p bridgething --locked --no-default-features --features {{device_features}}
+    RUSTFLAGS='-L {{swupdate_libdir}}' cargo clippy -p bridgething --locked --no-default-features --features {{device_features}} --all-targets -- -D warnings
   fi
 
 # The workspace suite against the device target inside the build image

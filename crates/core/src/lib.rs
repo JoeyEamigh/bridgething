@@ -35,7 +35,7 @@ use std::{future::Future, net::SocketAddr, path::PathBuf, pin::Pin, time::Durati
 use als::{AlsConfig, AlsManager};
 use asset::AssetCache;
 use authority::AuthorityRegistry;
-pub use bluetooth::{Address, Iap2Event, Iap2InjectTx, Iap2OutboundTapTx, Iap2TransportCommand};
+pub use bluetooth::{Address, Iap2Event, Iap2InjectTx, Iap2OutboundTapTx, Iap2TransportCommand, LeCommand, LeTapTx};
 use bluetooth::{BluetoothBringup, BluetoothDeps, BluetoothManager};
 use capabilities::CapabilitiesRegistry;
 #[cfg(feature = "test-tap")]
@@ -449,6 +449,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
         rfcomm: inject_tx,
         iap2: bluetooth_bootstrap.iap2_inject_tx(),
         iap2_outbound: bluetooth_bootstrap.iap2_outbound_tap(),
+        le: bluetooth_bootstrap.le_tap(),
       };
       (BluetoothBringup::Headless(inject_rx), Some(inject))
     }
@@ -542,6 +543,7 @@ pub struct HeadlessInject {
   pub rfcomm: bluetooth::InjectConnectionTx,
   pub iap2: bluetooth::Iap2InjectTx,
   pub iap2_outbound: bluetooth::Iap2OutboundTapTx,
+  pub le: bluetooth::LeTapTx,
 }
 
 pub enum BluetoothMode {

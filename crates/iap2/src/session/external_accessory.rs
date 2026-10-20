@@ -367,6 +367,56 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn a_torn_down_flow_stops_feeding_the_link() {
+    let (link_tx, mut link_rx) = mpsc::channel(2);
+    let (events_tx, mut events_rx) = mpsc::channel(64);
+    let mut flow = EaFlow::new(link_tx.clone(), 64, None);
+
+    let start_frame: CsmFrame = StartExternalAccessoryProtocolSession {
+      protocol_id: 1,
+      session_id: 0x0100,
+    }
+    .into();
+    flow.handle(start_frame, &link_tx, &events_tx).await.unwrap();
+    let outbound = match events_rx.recv().await.unwrap() {
+      SessionEvent::EaStreamOpened { outbound, .. } => outbound,
+      other => panic!("unexpected event: {other:?}"),
+    };
+    assert!(matches!(
+      link_rx.recv().await.unwrap(),
+      Iap2Command::Send { session_id: 1, .. }
+    ));
+
+    outbound
+      .send(libbridgething::Priority::Bulk, Bytes::from(vec![0xAB; 4096]))
+      .await
+      .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+    flow.teardown(None, &events_tx).await;
+    drop(flow);
+    tokio::task::yield_now().await;
+
+    let mut backlog = 0;
+    while link_rx.try_recv().is_ok() {
+      backlog += 1;
+    }
+    assert!(backlog <= 2, "only what already sat in the link queue may remain");
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    assert!(
+      link_rx.try_recv().is_err(),
+      "a dead flow's chunker kept pushing queued EA bytes onto the link"
+    );
+    assert!(
+      outbound
+        .send(libbridgething::Priority::Normal, Bytes::from_static(&[1]))
+        .await
+        .is_err(),
+      "a sender for a torn-down flow must fail instead of queueing into the void"
+    );
+  }
+
+  #[tokio::test]
   async fn dispatch_routes_inbound_payload_into_stream_channel() {
     let (link_tx, _link_rx) = mpsc::channel(64);
     let (events_tx, mut events_rx) = mpsc::channel(64);

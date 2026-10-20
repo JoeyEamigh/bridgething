@@ -63,12 +63,16 @@ pub const ACTION_POSITIVE: u8 = 0x00;
 pub const ACTION_NEGATIVE: u8 = 0x01;
 pub const ANCS_ID_PREFIX: &str = "ancs:";
 
-#[derive(Debug)]
-enum LeCommand {
+const LE_TAP_CAPACITY: usize = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeCommand {
   Attach { address: Address },
   Detach { address: Address },
   Invoke { uid: u32, action: u8 },
 }
+
+pub type LeTapTx = tokio::sync::broadcast::Sender<LeCommand>;
 
 #[derive(Debug, Clone)]
 pub struct LeManager {
@@ -78,6 +82,7 @@ pub struct LeManager {
 
 pub(crate) struct LeBootstrap {
   rx: mpsc::Receiver<LeCommand>,
+  tap: LeTapTx,
   #[cfg(target_os = "linux")]
   ancs_auth: Arc<std::sync::Mutex<AncsAuthState>>,
   #[cfg(target_os = "linux")]
@@ -85,18 +90,68 @@ pub(crate) struct LeBootstrap {
 }
 
 impl LeBootstrap {
+  pub(crate) fn tap(&self) -> LeTapTx {
+    self.tap.clone()
+  }
+
   pub(crate) fn spawn_no_radio(mut self) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
       while let Some(command) = self.rx.recv().await {
-        match command {
-          LeCommand::Attach { address } => tracing::debug!(%address, "LE attach dropped: no radio attached"),
-          LeCommand::Detach { address } => tracing::debug!(%address, "LE detach dropped: no radio attached"),
-          LeCommand::Invoke { uid, action } => {
-            tracing::debug!(uid, action, "LE invoke dropped: no radio attached")
-          }
-        }
+        tracing::debug!(?command, "LE command dropped: no radio attached");
+        let _ = self.tap.send(command);
       }
     })
+  }
+}
+
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug, PartialEq, Eq)]
+enum Attached<S> {
+  Kept,
+  Started { replaced: Option<S> },
+}
+
+#[cfg(any(target_os = "linux", test))]
+#[derive(Debug)]
+struct SessionSlot<S> {
+  active: Option<(Address, S)>,
+}
+
+#[cfg(any(target_os = "linux", test))]
+impl<S> SessionSlot<S> {
+  fn new() -> Self {
+    Self { active: None }
+  }
+
+  fn attach(&mut self, address: Address, start: impl FnOnce() -> S) -> Attached<S> {
+    if self.address() == Some(address) {
+      return Attached::Kept;
+    }
+    let replaced = self.active.replace((address, start())).map(|(_, session)| session);
+    Attached::Started { replaced }
+  }
+
+  fn detach(&mut self, address: Address) -> Option<S> {
+    self
+      .active
+      .take_if(|(held, _)| *held == address)
+      .map(|(_, session)| session)
+  }
+
+  fn evict_if(&mut self, dead: impl FnOnce(&S) -> bool) -> Option<S> {
+    self
+      .active
+      .take_if(|(_, session)| dead(session))
+      .map(|(_, session)| session)
+  }
+
+  fn address(&self) -> Option<Address> {
+    self.active.as_ref().map(|(address, _)| *address)
+  }
+
+  #[cfg(target_os = "linux")]
+  fn session(&self) -> Option<&S> {
+    self.active.as_ref().map(|(_, session)| session)
   }
 }
 
@@ -105,6 +160,7 @@ impl LeManager {
     #[cfg_attr(not(target_os = "linux"), expect(unused_variables))] serial_suffix: [char; 4],
   ) -> (Self, LeBootstrap) {
     let (tx, rx) = mpsc::channel(COMMAND_MAILBOX_CAP);
+    let (tap, _) = tokio::sync::broadcast::channel(LE_TAP_CAPACITY);
     let ancs_auth = Arc::new(std::sync::Mutex::new(AncsAuthState::Unknown));
     (
       Self {
@@ -113,6 +169,7 @@ impl LeManager {
       },
       LeBootstrap {
         rx,
+        tap,
         #[cfg(target_os = "linux")]
         ancs_auth,
         #[cfg(target_os = "linux")]
@@ -199,7 +256,7 @@ impl LeBootstrap {
       adapter_dbus_path,
       bus,
       audio,
-      session: None,
+      sessions: SessionSlot::new(),
       auth_reporter: AuthStateReporter::new(bluetooth, self.ancs_auth),
       advertisement,
       acl_down_since: None,
@@ -216,7 +273,7 @@ struct LeDispatcher {
   adapter_dbus_path: String,
   bus: WireEventBus,
   audio: AudioManager,
-  session: Option<ActiveSession>,
+  sessions: SessionSlot<ActiveSession>,
   auth_reporter: AuthStateReporter,
   advertisement: Option<LeAdvertisement>,
   acl_down_since: Option<time::Instant>,
@@ -226,10 +283,9 @@ struct LeDispatcher {
 
 #[cfg(target_os = "linux")]
 struct ActiveSession {
-  address: Address,
   invoke_tx: mpsc::Sender<(u32, u8)>,
   cancel: CancellationToken,
-  _handle: JoinHandle<()>,
+  handle: JoinHandle<()>,
 }
 
 #[cfg(target_os = "linux")]
@@ -251,11 +307,11 @@ impl LeDispatcher {
   }
 
   async fn reassert_advertisement_if_stalled(&mut self) {
-    let Some(session) = &self.session else {
+    let Some(address) = self.sessions.address() else {
       self.acl_down_since = None;
       return;
     };
-    if le_acl_up(&self.adapter, session.address) {
+    if le_acl_up(&self.adapter, address) {
       self.acl_down_since = None;
       return;
     }
@@ -264,7 +320,7 @@ impl LeDispatcher {
       return;
     }
     self.acl_down_since = None;
-    tracing::info!(address = %session.address, "LE ACL down with a phone attached; re-registering advertisement");
+    tracing::info!(%address, "LE ACL down with a phone attached; re-registering advertisement");
     if let Some(old) = self.advertisement.take() {
       old.unregister().await;
     }
@@ -275,34 +331,43 @@ impl LeDispatcher {
   }
 
   async fn handle_attach(&mut self, address: Address) {
-    if let Some(existing) = self.session.take() {
-      tracing::debug!(prev = %existing.address, new = %address, "LE replacing active session");
-      existing.cancel.cancel();
+    if self.sessions.evict_if(|session| session.handle.is_finished()).is_some() {
+      tracing::info!(%address, "LE session had exited; starting a fresh one");
     }
-    self.auth_reporter.report(AncsAuthState::Probing).await;
-    let cancel = CancellationToken::new();
-    let (invoke_tx, invoke_rx) = mpsc::channel(COMMAND_MAILBOX_CAP);
-    let session = LeSession {
-      address,
-      adapter: self.adapter.clone(),
-      bus: self.bus.clone(),
-      audio: self.audio.clone(),
-      auth_reporter: self.auth_reporter.clone(),
-      invoke_rx,
-      cancel: cancel.clone(),
-    };
-    let handle = tokio::spawn(session.run());
-    self.session = Some(ActiveSession {
-      address,
-      invoke_tx,
-      cancel,
-      _handle: handle,
+    let previous = self.sessions.address();
+    let attached = self.sessions.attach(address, || {
+      let cancel = CancellationToken::new();
+      let (invoke_tx, invoke_rx) = mpsc::channel(COMMAND_MAILBOX_CAP);
+      let session = LeSession {
+        address,
+        adapter: self.adapter.clone(),
+        bus: self.bus.clone(),
+        audio: self.audio.clone(),
+        auth_reporter: self.auth_reporter.clone(),
+        invoke_rx,
+        cancel: cancel.clone(),
+      };
+      ActiveSession {
+        invoke_tx,
+        cancel,
+        handle: tokio::spawn(session.run()),
+      }
     });
+    match attached {
+      Attached::Kept => tracing::debug!(%address, "LE session already serving this phone; keeping it"),
+      Attached::Started { replaced } => {
+        if let Some(replaced) = replaced {
+          tracing::info!(prev = ?previous, new = %address, "LE replacing active session");
+          replaced.cancel.cancel();
+        }
+        self.auth_reporter.report(AncsAuthState::Probing).await;
+      }
+    }
   }
 
   async fn handle_detach(&mut self, address: Address) {
-    if let Some(session) = self.session.take_if(|s| s.address == address) {
-      tracing::debug!(%address, "LE detaching session");
+    if let Some(session) = self.sessions.detach(address) {
+      tracing::info!(%address, "LE session released; the LE link stays with the phone");
       session.cancel.cancel();
       self.auth_reporter.report(AncsAuthState::Probing).await;
     } else {
@@ -311,7 +376,7 @@ impl LeDispatcher {
   }
 
   async fn handle_invoke(&self, uid: u32, action: u8) {
-    let Some(session) = &self.session else {
+    let Some(session) = self.sessions.session() else {
       tracing::trace!(uid, "ANCS invoke: no active session");
       return;
     };
@@ -611,7 +676,6 @@ async fn attempt(
 
   loop {
     if cancel.is_cancelled() {
-      let _ = device.disconnect().await;
       return Ok(LoopExit::Cancelled);
     }
     if let Some(a) = &mut ancs
@@ -624,10 +688,7 @@ async fn attempt(
     }
 
     tokio::select! {
-      _ = cancel.cancelled() => {
-        let _ = device.disconnect().await;
-        return Ok(LoopExit::Cancelled);
-      }
+      _ = cancel.cancelled() => return Ok(LoopExit::Cancelled),
       ns_item = ns.next() => match ns_item {
         Some(v) => { if let Some(a) = &mut ancs { a.on_notification_source(&v, bus).await; } }
         None => return Ok(LoopExit::ConnectionLost),
@@ -675,5 +736,63 @@ async fn attempt(
         probe.as_mut().reset(time::Instant::now() + LE_PROBE_INTERVAL);
       }
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn phone(last: u8) -> Address {
+    Address::new([0xAA, 0, 0, 0, 0, last])
+  }
+
+  #[test]
+  fn reattaching_the_serving_phone_keeps_its_session() {
+    let mut slot = SessionSlot::new();
+    let mut starts = 0;
+    assert_eq!(
+      slot.attach(phone(1), || {
+        starts += 1;
+        starts
+      }),
+      Attached::Started { replaced: None }
+    );
+    assert_eq!(
+      slot.attach(phone(1), || {
+        starts += 1;
+        starts
+      }),
+      Attached::Kept,
+      "an iAP2 generation coming back up must not churn the LE session it never owned"
+    );
+    assert_eq!(starts, 1);
+  }
+
+  #[test]
+  fn a_different_phone_replaces_the_session() {
+    let mut slot = SessionSlot::new();
+    slot.attach(phone(1), || 1);
+    assert_eq!(slot.attach(phone(2), || 2), Attached::Started { replaced: Some(1) });
+    assert_eq!(slot.address(), Some(phone(2)));
+  }
+
+  #[test]
+  fn a_dead_session_is_evicted_so_the_next_attach_restarts_it() {
+    let mut slot = SessionSlot::new();
+    slot.attach(phone(1), || false);
+    assert_eq!(slot.evict_if(|finished| *finished), None, "a live session stays");
+    slot.attach(phone(2), || true);
+    assert_eq!(slot.evict_if(|finished| *finished), Some(true));
+    assert_eq!(slot.attach(phone(2), || false), Attached::Started { replaced: None });
+  }
+
+  #[test]
+  fn detach_only_releases_the_matching_phone() {
+    let mut slot = SessionSlot::new();
+    slot.attach(phone(1), || 1);
+    assert_eq!(slot.detach(phone(2)), None);
+    assert_eq!(slot.detach(phone(1)), Some(1));
+    assert_eq!(slot.address(), None);
   }
 }

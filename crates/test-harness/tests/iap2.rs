@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use bridgething::ClientMode;
+use bridgething::{ClientMode, LeCommand};
 use bridgething_iap2::{
-  SessionEvent,
+  Lsp, SessionEvent,
   csm::now_playing::{MediaItemAttributes, NowPlayingUpdate, PlaybackAttributes, PlaybackState},
 };
 use bridgething_test_harness::{Harness, extract_substring_starting_with};
@@ -372,4 +372,51 @@ async fn iap2_playback_only_deltas_reach_webapp_without_companion() {
     })
     .await;
   assert!(paused.is_some(), "iAP2 pause delta never reached the webapp");
+}
+
+#[tokio::test]
+async fn an_iap2_restart_in_place_leaves_the_le_link_alone() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = harness.iap2_peer();
+  let mut le = harness.observe_le();
+
+  harness
+    .inject_iap2(phone, SessionEvent::LinkEstablished(Lsp::accessory_default()))
+    .await
+    .expect("inject link established");
+  assert!(
+    le.wait_for(CONVERGE, |cmd| *cmd == LeCommand::Attach { address: phone })
+      .await
+      .is_some(),
+    "an established link attaches the LE session"
+  );
+
+  for _ in 0..3 {
+    harness
+      .inject_iap2(phone, SessionEvent::LinkRestarting("peer RST".into()))
+      .await
+      .expect("inject link restarting");
+    harness
+      .inject_iap2(phone, SessionEvent::LinkEstablished(Lsp::accessory_default()))
+      .await
+      .expect("inject link established");
+  }
+  let during_restarts = le.collect_for(Duration::from_millis(500)).await;
+  assert!(
+    !during_restarts
+      .iter()
+      .any(|cmd| matches!(cmd, LeCommand::Detach { .. })),
+    "an in-place iAP2 restart must never release the LE session: {during_restarts:?}"
+  );
+
+  harness
+    .inject_iap2(phone, SessionEvent::LinkDown("restart failed".into()))
+    .await
+    .expect("inject link down");
+  assert!(
+    le.wait_for(CONVERGE, |cmd| *cmd == LeCommand::Detach { address: phone })
+      .await
+      .is_some(),
+    "a real link down releases the LE session"
+  );
 }

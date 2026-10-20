@@ -171,7 +171,6 @@ impl Iap2EventRouter {
         tracing::info!(%address, %reason, "iAP2 link restarting in place");
         self.stop_ea_keepalive(address).await;
         let _ = self.state.peers.set_iap2(address, PeerIap2Status::None).await;
-        self.bluetooth.le.detach(address).await;
         self.np_checkpoint.lock().await.remove(&address);
         self.pending_art.clear(address).await;
       }

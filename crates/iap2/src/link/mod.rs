@@ -95,6 +95,23 @@ impl Link {
         }
       };
 
+      let mut state = EstablishedState::new(
+        config.initial_psn,
+        peer_initial_psn,
+        &peer_lsp,
+        config.retransmit_give_up,
+      );
+      match discard_stale_commands(&mut commands_rx) {
+        StaleCommands::Disconnect => {
+          local_disconnect(&mut writer, &mut codec, &state, &events_tx).await;
+          return Ok(());
+        }
+        StaleCommands::Discarded(0) => {}
+        StaleCommands::Discarded(sends) => {
+          tracing::info!(sends, "iap2 link discarded sends queued before Established");
+        }
+      }
+
       if events_tx.send(Iap2Event::Established(peer_lsp.clone())).await.is_err() {
         tracing::debug!("iap2 events receiver dropped before Established could be delivered");
       }
@@ -107,12 +124,6 @@ impl Link {
         "iap2 link Established"
       );
 
-      let mut state = EstablishedState::new(
-        config.initial_psn,
-        peer_initial_psn,
-        &peer_lsp,
-        config.retransmit_give_up,
-      );
       let established_at = Instant::now();
       let result = Self::established_phase(
         &mut reader,
@@ -417,11 +428,7 @@ impl Link {
         cmd = commands_rx.recv() => {
           match cmd {
             Some(Iap2Command::Disconnect) | None => {
-              let rst = LinkPacket::header_only(ControlBits::RST, state.last_sent_psn(), 0);
-              if let Err(err) = write_packet(writer, codec, rst).await {
-                tracing::warn!("iap2 failed to send RST on disconnect: {:?}", err);
-              }
-              let _ = events_tx.send(Iap2Event::LinkDown("local disconnect".into())).await;
+              local_disconnect(writer, codec, state, events_tx).await;
               return Ok(());
             }
             Some(Iap2Command::Send { session_id, payload }) => {
@@ -439,7 +446,36 @@ impl Link {
   }
 }
 
-async fn sleep_until_or_pending(deadline: Option<Instant>) {
+enum StaleCommands {
+  Discarded(usize),
+  Disconnect,
+}
+
+fn discard_stale_commands(commands_rx: &mut mpsc::Receiver<Iap2Command>) -> StaleCommands {
+  let mut sends = 0;
+  loop {
+    match commands_rx.try_recv() {
+      Ok(Iap2Command::Send { .. }) => sends += 1,
+      Ok(Iap2Command::Disconnect) | Err(mpsc::error::TryRecvError::Disconnected) => return StaleCommands::Disconnect,
+      Err(mpsc::error::TryRecvError::Empty) => return StaleCommands::Discarded(sends),
+    }
+  }
+}
+
+async fn local_disconnect<W: AsyncWrite + Unpin>(
+  writer: &mut W,
+  codec: &mut LinkCodec,
+  state: &EstablishedState,
+  events_tx: &mpsc::Sender<Iap2Event>,
+) {
+  let rst = LinkPacket::header_only(ControlBits::RST, state.last_sent_psn(), 0);
+  if let Err(err) = write_packet(writer, codec, rst).await {
+    tracing::warn!("iap2 failed to send RST on disconnect: {:?}", err);
+  }
+  let _ = events_tx.send(Iap2Event::LinkDown("local disconnect".into())).await;
+}
+
+pub(crate) async fn sleep_until_or_pending(deadline: Option<Instant>) {
   match deadline {
     Some(d) => tokio::time::sleep_until(d).await,
     None => std::future::pending::<()>().await,

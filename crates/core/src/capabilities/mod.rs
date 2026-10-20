@@ -137,8 +137,8 @@ impl CapabilitiesRegistry {
     scope: CompanionAuthorityScope,
     app_bundle: Option<String>,
   ) -> WSResult<()> {
-    self.inner.authority.claim(addr, scope);
     self.inner.authority.set_companion_app_bundle(addr, app_bundle);
+    self.inner.authority.claim(addr, scope);
     self.rebuild_and_broadcast().await
   }
 

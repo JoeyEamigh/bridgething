@@ -305,7 +305,7 @@ fn translate(msg: &sys::progress_msg) -> ProgressTick {
     step: msg.cur_step.min(u8::MAX as c_uint) as u8,
     nsteps: msg.nsteps.min(u8::MAX as c_uint) as u8,
     dwl_percent: msg.dwl_percent.min(100) as u8,
-    dwl_bytes: (msg.dwl_bytes as u64).min(u32::MAX as u64) as u32,
+    dwl_bytes: u32::try_from(msg.dwl_bytes).unwrap_or(u32::MAX),
     eta_ms: None,
   }
 }
@@ -313,7 +313,11 @@ fn translate(msg: &sys::progress_msg) -> ProgressTick {
 fn info_str(msg: &sys::progress_msg) -> String {
   let bytes = &msg.info[..msg.infolen.min(msg.info.len() as c_uint) as usize];
   let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-  String::from_utf8_lossy(&bytes[..end].iter().map(|&b| b as u8).collect::<Vec<u8>>()).into_owned()
+  let utf8: Vec<u8> = bytes[..end]
+    .iter()
+    .map(|b| u8::from_ne_bytes(b.to_ne_bytes()))
+    .collect();
+  String::from_utf8_lossy(&utf8).into_owned()
 }
 
 #[cfg(test)]

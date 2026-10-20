@@ -240,20 +240,11 @@ fn read_soc_temp_c() -> Option<f32> {
 }
 
 fn read_disk_usage() -> Option<(u32, u32)> {
-  let path = std::ffi::CString::new("/var").ok()?;
-  // SAFETY: statvfs takes a NUL-terminated path and writes a stable POSIX struct; both pointers are local stack allocations
-  let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
-  let rc = unsafe { libc::statvfs(path.as_ptr(), &mut stat) };
-  if rc != 0 {
-    return None;
-  }
-  let block = stat.f_frsize as u64;
-  let total = stat.f_blocks as u64 * block;
-  let free = stat.f_bavail as u64 * block;
-  let used = total.saturating_sub(free);
+  let bytes = crate::paths::partition_bytes(std::path::Path::new("/var"))?;
+  let used = bytes.total.saturating_sub(bytes.free);
   Some((
     u32::try_from(used).unwrap_or(u32::MAX),
-    u32::try_from(free).unwrap_or(u32::MAX),
+    u32::try_from(bytes.free).unwrap_or(u32::MAX),
   ))
 }
 

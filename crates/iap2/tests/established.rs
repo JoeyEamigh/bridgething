@@ -327,6 +327,92 @@ async fn peer_rst_restarts_detection_in_place_and_reestablishes() {
   assert!(!e.link.is_finished(), "link task must survive the reset");
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn sends_queued_while_restarting_never_reach_the_next_generation() {
+  let mut e = establish(PeerProposal::default()).await;
+
+  let rst = LinkPacket::header_only(ControlBits::RST, PEER_INITIAL_PSN, 0);
+  write_link(&mut e.peer, &mut e.peer_codec, rst).await;
+  let event = recv_with_timeout(&mut e.events_rx, Duration::from_secs(2))
+    .await
+    .unwrap();
+  assert!(matches!(event, Iap2Event::LinkRestarting { .. }), "got {:?}", event);
+
+  for stale in [&b"stale ea chunk"[..], b"stale csm"] {
+    e.cmd_tx
+      .send(Iap2Command::Send {
+        session_id: SESSION_ID,
+        payload: Bytes::copy_from_slice(stale),
+      })
+      .await
+      .unwrap();
+  }
+
+  let (peer_buf, peer_codec, our_psn) = drive_peer_handshake(&mut e.peer, PeerProposal::default().into_lsp()).await;
+  e.peer_buf = peer_buf;
+  e.peer_codec = peer_codec;
+  let event = recv_with_timeout(&mut e.events_rx, Duration::from_secs(2))
+    .await
+    .unwrap();
+  assert!(matches!(event, Iap2Event::Established(_)));
+
+  e.cmd_tx
+    .send(Iap2Command::Send {
+      session_id: SESSION_ID,
+      payload: Bytes::from_static(b"fresh"),
+    })
+    .await
+    .unwrap();
+  let pkt = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
+  assert_eq!(
+    pkt.payload.as_ref(),
+    b"fresh",
+    "the first data on a new generation is the new generation's, not the dead one's backlog"
+  );
+  assert_eq!(pkt.header.seq, our_psn.wrapping_add(1));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_disconnect_queued_while_restarting_still_takes_the_link_down() {
+  let mut e = establish(PeerProposal::default()).await;
+
+  let rst = LinkPacket::header_only(ControlBits::RST, PEER_INITIAL_PSN, 0);
+  write_link(&mut e.peer, &mut e.peer_codec, rst).await;
+  let event = recv_with_timeout(&mut e.events_rx, Duration::from_secs(2))
+    .await
+    .unwrap();
+  assert!(matches!(event, Iap2Event::LinkRestarting { .. }), "got {:?}", event);
+
+  e.cmd_tx
+    .send(Iap2Command::Send {
+      session_id: SESSION_ID,
+      payload: Bytes::from_static(b"stale"),
+    })
+    .await
+    .unwrap();
+  e.cmd_tx.send(Iap2Command::Disconnect).await.unwrap();
+
+  let (peer_buf, peer_codec, _psn) = drive_peer_handshake(&mut e.peer, PeerProposal::default().into_lsp()).await;
+  e.peer_buf = peer_buf;
+  e.peer_codec = peer_codec;
+
+  let mut events = Vec::new();
+  while let Some(event) = recv_with_timeout(&mut e.events_rx, Duration::from_secs(2)).await {
+    events.push(event);
+  }
+  assert!(
+    events.iter().any(|event| matches!(event, Iap2Event::LinkDown(_))),
+    "a disconnect asked for mid-handshake must not be swallowed with the stale sends: {events:?}"
+  );
+  let pkt = read_link(&mut e.peer, &mut e.peer_buf, &mut e.peer_codec).await;
+  assert!(pkt.header.control.contains(ControlBits::RST), "got {:?}", pkt.header);
+  let result = tokio::time::timeout(Duration::from_secs(2), e.link)
+    .await
+    .expect("link task exits")
+    .expect("link task must not panic");
+  assert!(result.is_ok(), "a local disconnect is a clean exit: {result:?}");
+}
+
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn sustained_rst_flood_exhausts_the_restart_budget() {
   let mut e = establish(PeerProposal::default()).await;

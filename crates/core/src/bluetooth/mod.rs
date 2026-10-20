@@ -45,6 +45,7 @@ mod scan;
 pub use address::Address;
 pub use iap2::{Iap2Event, Iap2InjectTx, Iap2OutboundTapTx, Iap2TransportCommand};
 use le::{LeBootstrap, LeManager};
+pub use le::{LeCommand, LeTapTx};
 use network::NetworkGateway;
 use peer_owners::PeerOwners;
 use profiles::{ProfileCommand, ProfileCommandRx, ProfileCommandTx};
@@ -111,6 +112,10 @@ impl BluetoothBootstrap {
 
   pub(crate) fn iap2_outbound_tap(&self) -> Iap2OutboundTapTx {
     self.iap2_bootstrap.outbound_tap_tx()
+  }
+
+  pub(crate) fn le_tap(&self) -> LeTapTx {
+    self.le.tap()
   }
 }
 
