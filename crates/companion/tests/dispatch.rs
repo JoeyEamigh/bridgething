@@ -20,6 +20,8 @@ mod phone;
 mod poll;
 #[path = "dispatch/quiet.rs"]
 mod quiet;
+#[path = "dispatch/responses.rs"]
+mod responses;
 #[path = "dispatch/routing.rs"]
 mod routing;
 #[path = "dispatch/settled.rs"]

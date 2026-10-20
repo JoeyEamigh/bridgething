@@ -114,28 +114,9 @@ export type AssetReady = { id: string };
 
 export type AudioErrorReply = { error: AudioError };
 
-export type BlobChanged = {
-  key: string;
-  /**
-   * Null when the key was deleted.
-   */
-  sha256: string | null;
-  /**
-   * Null when the key was deleted.
-   */
-  url: string | null;
-};
+export type BlobChanged = { key: string; sha256: string | null; url: string | null };
 
-export type BlobEntry = {
-  key: string;
-  sha256: string;
-  mime: string;
-  size: number;
-  /**
-   * Same-origin path the daemon serves the bytes at. `?v=` names the content, so it never goes stale.
-   */
-  url: string;
-};
+export type BlobEntry = { key: string; sha256: string; mime: string; size: number; url: string };
 
 export type BlobListReply = { entries: Array<BlobEntry> };
 
@@ -177,10 +158,6 @@ export type BridgeToClientAudioMsg =
   | { event: 'volumeChanged'; data: VolumeChanged }
   | { event: 'errorEvent'; data: AudioErrorReply };
 
-/**
- * Files the companion app uploaded for the active webapp, such as a picked image or video. `list` returns
- * them, and `onChanged` reports each upload and delete.
- */
 export type BridgeToClientBlobMsg = { event: 'list'; data: BlobListReply } | { event: 'changed'; data: BlobChanged };
 
 /**
@@ -255,6 +232,7 @@ export type BridgeToClientLibraryMsg =
   | { event: 'favoritesContainsReply'; data: LibraryFavoritesContainsReply }
   | { event: 'errorReply'; data: LibraryErrorReply }
   | { event: 'favoriteChanged'; data: FavoriteChanged }
+  | { event: 'browseChanged'; data: BrowseChanged }
   | { event: 'errorEvent'; data: LibraryErrorReply };
 
 /**
@@ -416,6 +394,12 @@ export type BridgeToClientWebappMsg =
   | { event: 'activeChanged'; data: WebappActiveChanged }
   | { event: 'webappInstalled'; data: WebappInfo }
   | { event: 'webappUninstalled'; data: WebappUninstalled };
+
+/**
+ * Browse `nodeId` again (null is the root) and replace what you hold for it: the phone answered an
+ * earlier browse from its cache and the live result has since come back different.
+ */
+export type BrowseChanged = { nodeId: string | null };
 
 export type CapabilitiesSnapshot = { capabilities: Capabilities };
 

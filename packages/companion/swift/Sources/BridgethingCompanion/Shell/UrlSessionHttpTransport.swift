@@ -14,6 +14,8 @@ public final class UrlSessionHttpTransport: NSObject, HttpTransport, @unchecked 
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 60
         cfg.timeoutIntervalForResource = 120
+        cfg.urlCache = nil
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         #if canImport(Darwin)
             cfg.networkServiceType = .responsiveData
             cfg.shouldUseExtendedBackgroundIdleMode = true
@@ -23,6 +25,8 @@ public final class UrlSessionHttpTransport: NSObject, HttpTransport, @unchecked 
         let dlCfg = URLSessionConfiguration.default
         dlCfg.timeoutIntervalForRequest = 60
         dlCfg.timeoutIntervalForResource = TimeInterval(Int32.max)
+        dlCfg.urlCache = nil
+        dlCfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         #if canImport(Darwin)
             dlCfg.shouldUseExtendedBackgroundIdleMode = true
         #endif

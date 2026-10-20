@@ -305,6 +305,7 @@ pub struct Setup {
   pub volume: Option<Arc<dyn VolumeBackend>>,
   pub image: Option<Arc<dyn ImageScaler>>,
   pub transcoder: Option<Arc<dyn MediaTranscoder>>,
+  pub cache_dir: Option<PathBuf>,
 }
 
 pub struct Rig {
@@ -407,7 +408,11 @@ impl Rig {
           voice_model: false,
         },
         state_dir: spool.path().to_string_lossy().into_owned(),
-        cache_dir: spool.path().to_string_lossy().into_owned(),
+        cache_dir: setup
+          .cache_dir
+          .unwrap_or_else(|| spool.path().to_path_buf())
+          .to_string_lossy()
+          .into_owned(),
         model_platform: None,
         spotify: None,
       },

@@ -27,7 +27,7 @@ use std::{
 use bridgething_companion::{
   api::{PeerLinkStatus, SessionEvent, WebappInstallRequest},
   backend::{ExtensionHost, ExtensionMessage, VolumeBackend, VolumeInbox, VolumeLevel},
-  provider::Provider,
+  provider::{Provider, ProviderError},
 };
 use bridgething_delivery::ota::{event::OtaPhaseSnapshot, stream::FileSource};
 use bridgething_gateway::route;
@@ -38,7 +38,7 @@ use crate::{
   extension_host::{FakeExtensionHost, HostCall},
   fakes::FakeSource,
   install::{BlockingSink, RecordingSink, Serving},
-  support::{Rig, WireEntry},
+  support::{Rig, Setup, WireEntry},
 };
 
 #[derive(Default)]
@@ -981,4 +981,66 @@ async fn a_host_that_owns_its_volume_takes_the_scope_and_pushes_its_level_to_the
     );
     tokio::time::sleep(Duration::from_millis(20)).await;
   }
+}
+
+async fn browse_root(rig: &Rig) -> Option<u32> {
+  let client = rig
+    .harness
+    .connect_command_client()
+    .await
+    .expect("a webapp connects to the daemon");
+  client
+    .request(libbridgething::client::LibraryBrowse {
+      node_id: None,
+      limit: 10,
+      offset: 0,
+      sections: None,
+      preview: None,
+    })
+    .await
+    .ok()
+    .and_then(|reply| reply.result.total)
+}
+
+async fn rig_with_library(cache_dir: &Path, answer: Result<libbridgething::BrowseResult, ProviderError>) -> Rig {
+  let rig = Rig::launch(Setup {
+    cache_dir: Some(cache_dir.to_path_buf()),
+    ..Setup::default()
+  })
+  .await;
+  let source = FakeSource::new("rig");
+  *source.library.lock().unwrap() = Some(answer);
+  rig
+    .session
+    .add_provider(source as Arc<dyn Provider>)
+    .await
+    .expect("the provider attaches");
+  rig.settle().await;
+  rig
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_restarted_phone_with_no_network_still_shows_the_car_its_last_library() {
+  let phone_cache = tempfile::tempdir().expect("a cache dir");
+  let seen = libbridgething::BrowseResult {
+    entries: Vec::new(),
+    total: Some(7),
+    has_more: false,
+  };
+  {
+    let online = rig_with_library(phone_cache.path(), Ok(seen)).await;
+    assert_eq!(browse_root(&online).await, Some(7));
+  }
+
+  let airplane = rig_with_library(
+    phone_cache.path(),
+    Err(ProviderError::Failed("the network is unreachable".into())),
+  )
+  .await;
+
+  assert_eq!(
+    browse_root(&airplane).await,
+    Some(7),
+    "a fresh daemon and a fresh companion still render the page the phone kept on disk"
+  );
 }

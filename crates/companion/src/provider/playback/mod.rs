@@ -329,7 +329,7 @@ impl Core {
       presentation.artwork = match held {
         Some((known, bytes)) if known == source => bytes,
         _ => {
-          let bytes = self.art.master(&source).await;
+          let bytes = self.art.master(&self.http, &source).await;
           self.presenter.lock().unwrap().art = Some((source, bytes.clone()));
           bytes
         }

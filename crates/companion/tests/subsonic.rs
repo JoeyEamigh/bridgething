@@ -1,3 +1,5 @@
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "rig/backends.rs"]
 mod backends;
 #[path = "rig/log_sink.rs"]
@@ -97,6 +99,7 @@ struct Rig {
   backend: Arc<FakeStreamBackend>,
   stub: SubsonicStub,
   auth: Arc<Mutex<Vec<ProviderAuthState>>>,
+  _art: art_store::Art,
 }
 
 impl Rig {
@@ -188,6 +191,7 @@ async fn boot_with(stub: SubsonicStub, password: &str) -> Rig {
   );
   hub.start();
   let backend = FakeStreamBackend::new();
+  let art = art_store::Art::new(Some(Arc::new(TagScaler)));
   let provider = SubsonicProvider::new(
     SubsonicConfig {
       server_url: stub.url.clone(),
@@ -196,7 +200,7 @@ async fn boot_with(stub: SubsonicStub, password: &str) -> Rig {
     },
     backend.clone(),
     Arc::new(ForeignHttp::new(Arc::new(NativeHttp::default()))),
-    Some(Arc::new(TagScaler)),
+    art.cache(),
   );
   let auth = Arc::new(Mutex::new(Vec::new()));
   let seen = auth.clone();
@@ -212,6 +216,7 @@ async fn boot_with(stub: SubsonicStub, password: &str) -> Rig {
     backend,
     stub,
     auth,
+    _art: art,
   }
 }
 

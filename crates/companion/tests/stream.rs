@@ -1,3 +1,5 @@
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "rig/backends.rs"]
 mod backends;
 #[path = "rig/icecast.rs"]
@@ -107,6 +109,7 @@ struct Rig {
   peer: Peer,
   provider: Arc<StreamProvider>,
   backend: Arc<FakeStreamBackend>,
+  _art: art_store::Art,
 }
 
 impl Rig {
@@ -183,7 +186,8 @@ async fn boot_with_scaler(http: Arc<dyn HttpTransport>, scaler: Option<Arc<dyn I
   );
   hub.start();
   let backend = FakeStreamBackend::new();
-  let provider = StreamProvider::new(backend.clone(), Arc::new(ForeignHttp::new(http)), scaler);
+  let art = art_store::Art::new(scaler);
+  let provider = StreamProvider::new(backend.clone(), Arc::new(ForeignHttp::new(http)), art.cache());
   hub
     .attach(provider.clone())
     .await
@@ -193,6 +197,7 @@ async fn boot_with_scaler(http: Arc<dyn HttpTransport>, scaler: Option<Arc<dyn I
     peer,
     provider,
     backend,
+    _art: art,
   }
 }
 

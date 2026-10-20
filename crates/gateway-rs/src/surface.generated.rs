@@ -132,6 +132,12 @@ impl<'a> LibrarySurface<'a> {
       .event(GatewayToBridgeLibraryMsgEvent::LibraryChanged(payload))
       .await
   }
+  pub async fn browse_changed(&self, payload: BrowseChanged) -> Result<(), SdkError> {
+    self
+      .0
+      .event(GatewayToBridgeLibraryMsgEvent::BrowseChanged(payload))
+      .await
+  }
   pub async fn error_event(&self, payload: LibraryErrorReply) -> Result<(), SdkError> {
     self.0.event(GatewayToBridgeLibraryMsgEvent::ErrorEvent(payload)).await
   }

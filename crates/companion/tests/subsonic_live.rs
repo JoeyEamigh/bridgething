@@ -1,3 +1,5 @@
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "support/poll.rs"]
 mod poll;
 #[path = "rig/stream.rs"]
@@ -87,11 +89,12 @@ async fn a_real_server_signs_in_browses_searches_and_hands_the_phone_a_stream() 
   );
   hub.start();
   let backend = FakeStreamBackend::new();
+  let art = art_store::Art::new(Some(Arc::new(KeepBytes)));
   let provider = SubsonicProvider::new(
     config.clone(),
     backend.clone(),
     Arc::new(ForeignHttp::new(Arc::new(NativeHttp::default()))),
-    Some(Arc::new(KeepBytes)),
+    art.cache(),
   );
   let auth = Arc::new(Mutex::new(Vec::new()));
   let seen = auth.clone();

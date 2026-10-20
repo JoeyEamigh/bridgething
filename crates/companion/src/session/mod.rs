@@ -49,6 +49,7 @@ use crate::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
     LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
+  cache::PhoneCache,
   dayparting::Dayparting,
   dispatch::{
     asset::AssetDispatcher, audio::AudioDispatcher, extension::ExtensionDispatcher, geo::GeoDispatcher,
@@ -158,6 +159,7 @@ pub struct Session {
   connected: Mutex<HashSet<String>>,
   auth: Arc<Mutex<HashMap<String, ProviderAuthState>>>,
   priority: Mutex<Vec<String>>,
+  cache: Arc<PhoneCache>,
   caps: Arc<Mutex<CapabilityFlags>>,
   log_stream: Mutex<LogStream>,
   poll_config: Mutex<Option<OtaPollConfig>>,
@@ -219,6 +221,7 @@ impl Session {
         )
       });
     let cache_dir = std::path::PathBuf::from(&config.cache_dir);
+    let cache = PhoneCache::open(&cache_dir, backends.image.clone());
     let _ = std::fs::remove_dir_all(std::path::Path::new(&config.state_dir).join(COMPANION_UPDATE_DIR));
     let log_ring = Arc::new(DeviceLogRing::new(LOG_RING_CAPACITY, clock.clone()));
     let catalog = ProviderCatalog::new(
@@ -231,7 +234,7 @@ impl Session {
             backends.http.clone(),
             backends.ws.clone(),
             backends.secrets.clone(),
-            backends.image.clone(),
+            cache.art().clone(),
             backends.device_waker.clone(),
           ) as Arc<dyn crate::provider::catalog::CatalogEntry>
         })
@@ -241,7 +244,7 @@ impl Session {
             backend,
             backends.http.clone(),
             backends.secrets.clone(),
-            backends.image.clone(),
+            cache.art().clone(),
           ) as Arc<dyn crate::provider::catalog::CatalogEntry>
         }))
         .chain(backends.stream.clone().map(|stream| {
@@ -249,7 +252,7 @@ impl Session {
             stream,
             backends.http.clone(),
             backends.secrets.clone(),
-            backends.image.clone(),
+            cache.art().clone(),
           ) as Arc<dyn crate::provider::catalog::CatalogEntry>
         }))
         .collect(),
@@ -269,6 +272,7 @@ impl Session {
       handles.store().dir().to_owned(),
     ));
     Arc::new(Self {
+      cache,
       caps: Arc::new(Mutex::new(config.capabilities)),
       config,
       backends,
@@ -442,6 +446,7 @@ impl Session {
       .get(id)
       .ok_or_else(|| CompanionError::Device(format!("unknown provider {id}")))?;
     entry.adopt_credentials(credentials).map_err(CompanionError::Device)?;
+    self.cache.responses().purge(id);
     self.connect_provider(id).await
   }
 
@@ -455,6 +460,7 @@ impl Session {
     if let Some(entry) = self.catalog.get(id) {
       entry.clear_credentials();
     }
+    self.cache.responses().purge(id);
     self.providers_changed();
   }
 
@@ -671,9 +677,9 @@ impl Session {
     };
     let hub = self.hub.clone();
     let http = self.backends.http.clone();
-    let scaler = self.backends.image.clone();
+    let art = self.cache.art().clone();
     tokio::spawn(async move {
-      let provider = StreamProvider::new(backend, Arc::new(ForeignHttp::new(http)), scaler);
+      let provider = StreamProvider::new(backend, Arc::new(ForeignHttp::new(http)), art);
       if let Err(error) = hub.attach(provider).await {
         tracing::warn!(%error, "the stream provider did not attach");
       }
@@ -719,6 +725,7 @@ impl Session {
 
   async fn pump_connectivity(self: Arc<Self>, mut edges: mpsc::UnboundedReceiver<bool>) {
     while let Some(online) = edges.recv().await {
+      self.cache.set_online(online);
       let providers = self.providers.lock().unwrap().clone();
       for provider in providers {
         provider.connectivity_changed(online).await;
@@ -1033,7 +1040,8 @@ impl Session {
 
   fn assemble(self: &Arc<Self>, outbound: &Arc<dyn OutboundLink>, device_id: &str) -> Arc<Peer> {
     let registry = self.hub.clone() as Arc<dyn ProviderRegistry>;
-    let http = HttpExecutor::new(Arc::new(ForeignHttp::new(self.backends.http.clone())));
+    let foreign: Arc<dyn bridgething_io::HttpTransport> = Arc::new(ForeignHttp::new(self.backends.http.clone()));
+    let http = HttpExecutor::new(foreign.clone());
 
     let audio = (self.backends.audio.is_some() || self.backends.volume.is_some()).then(|| {
       let dispatcher = AudioDispatcher::new(
@@ -1083,14 +1091,15 @@ impl Session {
       asset: AssetDispatcher::new(registry.clone(), outbound.clone(), self.clock.clone()),
       audio,
       geo,
-      library: LibraryDispatcher::new(registry.clone(), outbound.clone()),
+      library: LibraryDispatcher::new(registry.clone(), outbound.clone(), self.cache.responses().clone()),
       lyrics: LyricsDispatcher::new(
         registry.clone(),
-        crate::lyrics::lrclib::LrclibResolver::new(http.clone()),
+        crate::lyrics::lrclib::LrclibResolver::new(http),
+        self.cache.responses().clone(),
       ),
       net: NetDispatcher::new(
         outbound.clone(),
-        http,
+        HttpExecutor::new(self.cache.net(foreign)),
         Arc::new(ForeignWs::new(self.backends.ws.clone())),
       ),
       notifications,

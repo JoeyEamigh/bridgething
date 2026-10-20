@@ -252,6 +252,12 @@ export type BridgeToGatewayWebappMsg =
   | { event: 'webappInstalled'; data: WebappInfo }
   | { event: 'activeChanged'; data: WebappActiveChanged };
 
+/**
+ * A browse page the companion answered from its own cache came back different once the network caught
+ * up. `page` is the request exactly as the daemon sent it.
+ */
+export type BrowseChanged = { page: LibraryBrowseRequest };
+
 export type BrowseReply = { result: BrowseResult };
 
 export type ChromeNavigate = { url: string };
@@ -324,6 +330,7 @@ export type GatewayToBridgeLibraryMsg =
   | { event: 'errorReply'; data: LibraryErrorReply }
   | { event: 'favoriteChanged'; data: FavoriteChanged }
   | { event: 'libraryChanged'; data: LibraryChanged }
+  | { event: 'browseChanged'; data: BrowseChanged }
   | { event: 'errorEvent'; data: LibraryErrorReply };
 
 export type GatewayToBridgeLyricsMsg =

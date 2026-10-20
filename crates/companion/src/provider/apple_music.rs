@@ -21,7 +21,7 @@ use crate::{
   backend::{
     AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmEntry, AmFavoritesSink, AmFlagSink, AmItem, AmItemSink,
     AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode,
-    AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend, ImageScaler,
+    AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
   },
   dispatch::tell,
   provider::{
@@ -78,7 +78,8 @@ struct Shared {
 
 struct Core {
   backend: Arc<dyn AppleMusicBackend>,
-  art_cache: ArtCache,
+  art_cache: Arc<ArtCache>,
+  art_origin: HttpExecutor,
   link: Mutex<Option<ProviderLink>>,
   shared: Mutex<Shared>,
   np_observer: Mutex<Option<NowPlayingObserver>>,
@@ -105,12 +106,13 @@ impl AppleMusicProvider {
   pub fn new(
     backend: Arc<dyn AppleMusicBackend>,
     http: Arc<dyn IoHttpTransport>,
-    scaler: Option<Arc<dyn ImageScaler>>,
+    art_cache: Arc<ArtCache>,
   ) -> Arc<Self> {
     Arc::new(Self {
       core: Arc::new(Core {
         backend,
-        art_cache: ArtCache::new(HttpExecutor::new(http), scaler),
+        art_cache,
+        art_origin: HttpExecutor::new(http),
         link: Mutex::new(None),
         shared: Mutex::new(Shared {
           hero_edge: DEFAULT_HERO_EDGE,
@@ -804,7 +806,7 @@ impl Provider for AppleMusicProvider {
     let Some((url, max_edge)) = IMAGE_CODEC.parse(id) else {
       return Ok(None);
     };
-    let scaled = self.core.art_cache.scaled(&url, max_edge).await;
+    let scaled = self.core.art_cache.scaled(&self.core.art_origin, &url, max_edge).await;
     Ok(scaled.map(|bytes| AssetBytes {
       bytes,
       mime: Some("image/jpeg".into()),

@@ -108,7 +108,6 @@
     {
       "name": "blob",
       "title": "Blob",
-      "description": "Files the companion app uploaded for the active webapp, such as a picked image or video. `list` returns\nthem, and `onChanged` reports each upload and delete.",
       "events": [
         {
           "method": "onChanged",
@@ -379,6 +378,11 @@
           "method": "onFavoriteChanged",
           "payload": "FavoriteChanged",
           "payload_ref": "FavoriteChanged"
+        },
+        {
+          "method": "onBrowseChanged",
+          "payload": "BrowseChanged",
+          "payload_ref": "BrowseChanged"
         },
         {
           "method": "onErrorEvent",
@@ -885,7 +889,7 @@
         },
         {
           "method": "factoryReset",
-          "description": "Arms a wipe of the data partition and restarts the device. `factoryResetStarted` answers once the restart is\nunderway and the link drops soon after; `factoryResetRefused` says why nothing was erased.",
+          "description": "Arms a wipe of the data partition and restarts the device.",
           "response": "FactoryResetStarted",
           "error": "FactoryResetRefused",
           "response_event": "onFactoryResetStarted"
@@ -1319,14 +1323,12 @@
         {
           "name": "sha256",
           "type": "string",
-          "optional": true,
-          "description": "Null when the key was deleted."
+          "optional": true
         },
         {
           "name": "url",
           "type": "string",
-          "optional": true,
-          "description": "Null when the key was deleted."
+          "optional": true
         }
       ]
     },
@@ -1351,8 +1353,7 @@
         },
         {
           "name": "url",
-          "type": "string",
-          "description": "Same-origin path the daemon serves the bytes at. `?v=` names the content, so it never goes stale."
+          "type": "string"
         }
       ]
     },
@@ -1579,6 +1580,17 @@
           "name": "effectiveLevel",
           "type": "number",
           "description": "0.0 to 1.0. Follows `level` in `manual` mode and the light sensor in `auto`."
+        }
+      ]
+    },
+    "BrowseChanged": {
+      "kind": "struct",
+      "description": "A browse page the companion answered from its own cache came back different once the network caught\nup. `page` is the request exactly as the daemon sent it.",
+      "fields": [
+        {
+          "name": "page",
+          "type": "LibraryBrowseRequest",
+          "type_ref": "LibraryBrowseRequest"
         }
       ]
     },
@@ -2745,6 +2757,34 @@
           "name": "result",
           "type": "BrowseResult",
           "type_ref": "BrowseResult"
+        }
+      ]
+    },
+    "LibraryBrowseRequest": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "nodeId",
+          "type": "string",
+          "optional": true
+        },
+        {
+          "name": "limit",
+          "type": "number"
+        },
+        {
+          "name": "offset",
+          "type": "number"
+        },
+        {
+          "name": "sections",
+          "type": "number",
+          "optional": true
+        },
+        {
+          "name": "preview",
+          "type": "number",
+          "optional": true
         }
       ]
     },

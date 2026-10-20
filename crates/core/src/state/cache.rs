@@ -31,6 +31,10 @@ impl<K: Hash + Eq, V: Clone> GenerationCache<K, V> {
     }
   }
 
+  pub async fn forget(&self, key: &K) {
+    self.inner.lock().await.pop(key);
+  }
+
   pub async fn get_or_fetch<F, Fut, E>(
     &self,
     key: K,

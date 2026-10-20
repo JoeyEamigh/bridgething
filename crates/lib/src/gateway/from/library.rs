@@ -3,7 +3,9 @@ use derive_more::derive::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{BrowseResult, FavoritesPage, LibraryError, RecommendationsResult, SearchResult};
+use crate::{
+  BrowseResult, FavoritesPage, LibraryError, RecommendationsResult, SearchResult, gateway::LibraryBrowseRequest,
+};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -88,6 +90,16 @@ pub struct LibraryChanged {
   pub scope: LibraryScope,
 }
 
+/// A browse page the companion answered from its own cache came back different once the network caught
+/// up. `page` is the request exactly as the daemon sent it.
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct BrowseChanged {
+  pub page: LibraryBrowseRequest,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
@@ -112,6 +124,8 @@ pub enum GatewayToBridgeLibraryMsg {
   FavoriteChanged(FavoriteChanged),
   #[bridge_event]
   LibraryChanged(LibraryChanged),
+  #[bridge_event]
+  BrowseChanged(BrowseChanged),
   #[bridge_event]
   ErrorEvent(LibraryErrorReply),
 }

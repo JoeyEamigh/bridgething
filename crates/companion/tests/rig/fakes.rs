@@ -39,6 +39,7 @@ pub struct FakeSource {
   pub auth: Mutex<Option<AuthObserver>>,
   pub connectivity: Mutex<Vec<bool>>,
   pub catalog: Option<Arc<SourceCatalog>>,
+  pub library: Mutex<Option<Result<BrowseResult, ProviderError>>>,
 }
 
 impl FakeSource {
@@ -53,6 +54,7 @@ impl FakeSource {
       auth: Mutex::new(None),
       connectivity: Mutex::new(Vec::new()),
       catalog,
+      library: Mutex::new(None),
     })
   }
 
@@ -115,7 +117,12 @@ impl Provider for FakeSource {
     Ok(None)
   }
   async fn browse(&self, _request: LibraryBrowseRequest) -> Result<BrowseResult, ProviderError> {
-    Err(ProviderError::NotImplemented)
+    self
+      .library
+      .lock()
+      .unwrap()
+      .clone()
+      .unwrap_or(Err(ProviderError::NotImplemented))
   }
   async fn resolve_context(&self, _uri: &str) -> Result<ContextResolveReply, ProviderError> {
     Err(ProviderError::NotImplemented)

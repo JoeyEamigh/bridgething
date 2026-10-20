@@ -1,5 +1,6 @@
 pub mod api;
 pub mod backend;
+pub mod cache;
 pub mod dayparting;
 pub mod dispatch;
 pub mod hub;

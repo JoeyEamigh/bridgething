@@ -1,5 +1,7 @@
 #[path = "rig/art.rs"]
 mod art;
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "dispatch/support.rs"]
 mod support;
 
@@ -257,6 +259,7 @@ struct Rig {
   provider: Arc<AppleMusicProvider>,
   backend: Arc<FakeAm>,
   auth_states: Arc<Mutex<Vec<ProviderAuthState>>>,
+  _art: art_store::Art,
 }
 
 async fn boot(backend: Arc<FakeAm>) -> Rig {
@@ -281,7 +284,8 @@ async fn boot(backend: Arc<FakeAm>) -> Rig {
     false,
   );
   hub.start();
-  let provider = AppleMusicProvider::new(backend.clone(), Arc::new(NoHttp), None);
+  let art = art_store::Art::new(None);
+  let provider = AppleMusicProvider::new(backend.clone(), Arc::new(NoHttp), art.cache());
   let auth_states: Arc<Mutex<Vec<ProviderAuthState>>> = Arc::new(Mutex::new(Vec::new()));
   let sink = auth_states.clone();
   provider.set_auth_observer(Some(Arc::new(move |state| {
@@ -294,6 +298,7 @@ async fn boot(backend: Arc<FakeAm>) -> Rig {
     provider,
     backend,
     auth_states,
+    _art: art,
   }
 }
 
@@ -573,7 +578,8 @@ async fn peer_connect_holds_off_when_the_audio_query_does_not_answer() {
 async fn a_backend_that_never_answers_fails_the_request_instead_of_hanging() {
   let backend = FakeAm::new();
   *backend.mute.lock().unwrap() = true;
-  let provider = AppleMusicProvider::new(backend, Arc::new(NoHttp), None);
+  let art = art_store::Art::new(None);
+  let provider = AppleMusicProvider::new(backend, Arc::new(NoHttp), art.cache());
 
   let outcome = tokio::time::timeout(
     Duration::from_secs(300),
@@ -592,7 +598,8 @@ async fn a_backend_that_never_answers_fails_the_request_instead_of_hanging() {
 async fn repeat_artwork_requests_fetch_and_scale_once() {
   let probe = ArtProbe::new();
   let scaler = TagScaler::new();
-  let provider = AppleMusicProvider::new(FakeAm::new(), probe.clone(), Some(scaler.clone()));
+  let art = art_store::Art::new(Some(scaler.clone()));
+  let provider = AppleMusicProvider::new(FakeAm::new(), probe.clone(), art.cache());
 
   let id = provider
     .resolve_context("applemusic:playlist:1")

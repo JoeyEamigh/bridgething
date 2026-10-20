@@ -1,9 +1,11 @@
 use libbridgething::{
   client::{
-    BridgeToClientLibraryMsgEvent, FavoriteChanged as ClientFavoriteChanged,
+    BridgeToClientLibraryMsgEvent, BrowseChanged as ClientBrowseChanged, FavoriteChanged as ClientFavoriteChanged,
     LibraryErrorReply as ClientLibraryErrorReply,
   },
-  gateway::{FavoriteChanged, GatewayToBridgeLibraryMsgEventDispatch, LibraryChanged, LibraryErrorReply},
+  gateway::{
+    BrowseChanged, FavoriteChanged, GatewayToBridgeLibraryMsgEventDispatch, LibraryChanged, LibraryErrorReply,
+  },
 };
 
 use super::{HandlerResult, MsgHandle};
@@ -37,6 +39,38 @@ impl GatewayToBridgeLibraryMsgEventDispatch for LibraryHandler {
   async fn library_changed(&self, params: LibraryChanged) -> HandlerResult {
     tracing::debug!(scope = ?params.scope, "gateway reported a library change; invalidating cached home");
     self.handle.state.player.note_library_changed().await?;
+    Ok(())
+  }
+
+  async fn browse_changed(&self, params: BrowseChanged) -> HandlerResult {
+    let page = params.page;
+    tracing::debug!(node = ?page.node_id, offset = page.offset, limit = page.limit, "phone refreshed a browse page");
+    match page.node_id.as_deref() {
+      None => {
+        self
+          .handle
+          .state
+          .root_browse
+          .forget((page.sections, page.preview))
+          .await
+      }
+      Some(node_id) => {
+        self
+          .handle
+          .state
+          .browse_content
+          .forget(node_id, page.offset, page.limit)
+          .await
+      }
+    }
+    self
+      .handle
+      .state
+      .bus
+      .broadcast_event(BridgeToClientLibraryMsgEvent::BrowseChanged(ClientBrowseChanged {
+        node_id: page.node_id,
+      }))
+      .await?;
     Ok(())
   }
 

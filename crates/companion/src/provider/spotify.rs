@@ -31,7 +31,7 @@ use spotify::{
 use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::{
-  backend::{DeviceWaker as PlatformWaker, ImageScaler, SecretStore, WakeReason as PlatformWakeReason},
+  backend::{DeviceWaker as PlatformWaker, SecretStore, WakeReason as PlatformWakeReason},
   provider::{
     AssetBytes, AuthObserver, NowPlayingObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError,
     ProviderLink, ProviderNowPlaying, ResumeTarget,
@@ -147,7 +147,7 @@ struct Core {
   exec: HttpExecutor,
   session: Mutex<Option<Session>>,
   shared: Mutex<Shared>,
-  art_cache: ArtCache,
+  art_cache: Arc<ArtCache>,
   np_observer: Mutex<Option<NowPlayingObserver>>,
   auth_observer: Mutex<Option<AuthObserver>>,
   resume_target: Mutex<ResumeTarget>,
@@ -170,7 +170,7 @@ impl SpotifyProvider {
     http: Arc<dyn IoHttpTransport>,
     ws: Arc<dyn IoWsTransport>,
     secrets: Arc<dyn SecretStore>,
-    scaler: Option<Arc<dyn ImageScaler>>,
+    art_cache: Arc<ArtCache>,
     waker: Option<Arc<dyn PlatformWaker>>,
   ) -> Arc<Self> {
     let exec = HttpExecutor::new(http);
@@ -186,7 +186,7 @@ impl SpotifyProvider {
         ws,
         auth,
         waker,
-        art_cache: ArtCache::new(exec.clone(), scaler),
+        art_cache,
         exec,
         session: Mutex::new(None),
         shared: Mutex::new(Shared {
@@ -604,21 +604,6 @@ impl Core {
       .iter()
       .find(|device| device.id == state.remote_device_id)
       .map(playback_target)
-  }
-
-  fn warm_art(self: &Arc<Self>, result: &BrowseResult) {
-    let mut ids = collect_art_ids(&result.entries);
-    ids.sort();
-    ids.dedup();
-    for id in ids {
-      let Some((url, _)) = IMAGE_CODEC.parse(&id) else {
-        continue;
-      };
-      let core = self.clone();
-      tokio::spawn(async move {
-        let _ = core.art_cache.master(&url).await;
-      });
-    }
   }
 }
 
@@ -1038,40 +1023,6 @@ fn forward_slide_runway(last: &[String], new: &[String]) -> Option<usize> {
   None
 }
 
-fn collect_art_ids(entries: &[BrowseEntry]) -> Vec<String> {
-  let mut out = Vec::new();
-  for entry in entries {
-    match entry {
-      BrowseEntry::Folder(folder) => {
-        if let Some(id) = &folder.artwork_id {
-          out.push(id.clone());
-        }
-        if let Some(children) = &folder.preview_children {
-          out.extend(collect_art_ids(children));
-        }
-      }
-      BrowseEntry::Item(item) => {
-        if let Some(id) = library_item_artwork_id(item) {
-          out.push(id);
-        }
-      }
-    }
-  }
-  out
-}
-
-fn library_item_artwork_id(item: &LibraryItem) -> Option<String> {
-  match item {
-    LibraryItem::Track(track) => none_if_empty(&track.image_id),
-    LibraryItem::Playlist(playlist) => playlist.artwork_id.clone(),
-    LibraryItem::PodcastEpisode(episode) => episode.artwork_id.clone(),
-    LibraryItem::Show(show) => show.artwork_id.clone(),
-    LibraryItem::Station(station) => station.artwork_id.clone(),
-    LibraryItem::Album(album) => album.artwork_id.clone(),
-    LibraryItem::Artist(artist) => artist.artwork_id.clone(),
-  }
-}
-
 fn failed(error: spotify::Error) -> ProviderError {
   ProviderError::Failed(error.to_string())
 }
@@ -1395,7 +1346,7 @@ impl Provider for SpotifyProvider {
     let Some((url, max_edge)) = IMAGE_CODEC.parse(id) else {
       return Ok(None);
     };
-    let scaled = self.core.art_cache.scaled(&url, max_edge).await;
+    let scaled = self.core.art_cache.scaled(&self.core.exec, &url, max_edge).await;
     Ok(scaled.map(|bytes| AssetBytes {
       bytes,
       mime: Some("image/jpeg".into()),
@@ -1432,7 +1383,6 @@ impl Provider for SpotifyProvider {
         has_more: page.has_more,
       }
     };
-    self.core.warm_art(&result);
     Ok(result)
   }
 

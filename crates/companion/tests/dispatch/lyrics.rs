@@ -13,7 +13,10 @@ use libbridgething::{
   gateway::{LyricsRequest, TrackIdentity},
 };
 
-use crate::fakes::{FakeProvider, FakeRegistry};
+use crate::{
+  fakes::{FakeProvider, FakeRegistry},
+  responses::Responses,
+};
 
 #[derive(Default)]
 struct CannedResolver {
@@ -52,7 +55,12 @@ async fn lyrics_fall_through_to_the_resolver_when_no_provider_has_them() {
     }),
     hits: AtomicUsize::new(0),
   });
-  let dispatch = LyricsDispatcher::new(FakeRegistry::with(FakeProvider::bare("spotify")), resolver.clone());
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(
+    FakeRegistry::with(FakeProvider::bare("spotify")),
+    resolver.clone(),
+    responses.cache(),
+  );
 
   let reply = dispatch
     .get(LyricsRequest { track: track() })
@@ -78,7 +86,8 @@ async fn a_provider_that_has_lyrics_wins_over_the_resolver() {
     ..FakeProvider::named("spotify")
   });
   let resolver = Arc::new(CannedResolver::default());
-  let dispatch = LyricsDispatcher::new(FakeRegistry::with(provider), resolver.clone());
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(FakeRegistry::with(provider), resolver.clone(), responses.cache());
 
   let reply = dispatch
     .get(LyricsRequest { track: track() })
@@ -95,9 +104,11 @@ async fn a_provider_that_has_lyrics_wins_over_the_resolver() {
 
 #[tokio::test]
 async fn no_hit_anywhere_is_an_empty_reply_rather_than_an_error() {
+  let responses = Responses::new();
   let dispatch = LyricsDispatcher::new(
     FakeRegistry::with(FakeProvider::bare("spotify")),
     Arc::new(CannedResolver::default()),
+    responses.cache(),
   );
 
   let reply = dispatch
@@ -113,7 +124,12 @@ async fn a_provider_lyrics_failure_answers_a_typed_error() {
     on_lyrics: Some(Box::new(|_| Err(ProviderError::Failed("lrclib down".into())))),
     ..FakeProvider::named("spotify")
   });
-  let dispatch = LyricsDispatcher::new(FakeRegistry::with(provider), Arc::new(CannedResolver::default()));
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(
+    FakeRegistry::with(provider),
+    Arc::new(CannedResolver::default()),
+    responses.cache(),
+  );
 
   let refused = dispatch
     .get(LyricsRequest { track: track() })
@@ -140,7 +156,8 @@ async fn a_provider_that_does_not_do_lyrics_falls_through_rather_than_failing() 
     }),
     hits: AtomicUsize::new(0),
   });
-  let dispatch = LyricsDispatcher::new(FakeRegistry::with(provider), resolver.clone());
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(FakeRegistry::with(provider), resolver.clone(), responses.cache());
 
   let reply = dispatch
     .get(LyricsRequest { track: track() })
@@ -234,4 +251,45 @@ mod lrclib {
 
     assert!(resolver.lyrics(&track()).await.is_none());
   }
+}
+
+#[tokio::test]
+async fn lyrics_found_once_are_served_from_the_phone_after_that() {
+  let resolver = Arc::new(CannedResolver {
+    lyrics: Some(Lyrics {
+      synced: None,
+      plain: Some("one more time".into()),
+      source: "fake-resolver".into(),
+    }),
+    hits: AtomicUsize::new(0),
+  });
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(
+    FakeRegistry::with(FakeProvider::bare("spotify")),
+    resolver.clone(),
+    responses.cache(),
+  );
+
+  for _ in 0..3 {
+    let reply = dispatch.get(LyricsRequest { track: track() }).await.unwrap();
+    assert_eq!(reply.response.lyrics.unwrap().plain.as_deref(), Some("one more time"));
+  }
+
+  assert_eq!(resolver.hits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn a_lyrics_miss_is_asked_again_next_time() {
+  let resolver = Arc::new(CannedResolver::default());
+  let responses = Responses::new();
+  let dispatch = LyricsDispatcher::new(
+    FakeRegistry::with(FakeProvider::bare("spotify")),
+    resolver.clone(),
+    responses.cache(),
+  );
+
+  dispatch.get(LyricsRequest { track: track() }).await.unwrap();
+  dispatch.get(LyricsRequest { track: track() }).await.unwrap();
+
+  assert_eq!(resolver.hits.load(Ordering::SeqCst), 2);
 }

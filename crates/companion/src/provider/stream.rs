@@ -10,7 +10,7 @@ use libbridgething::{
 };
 
 use crate::{
-  backend::{ImageScaler, StreamBackend},
+  backend::StreamBackend,
   provider::{
     AssetBytes, PlayerTransport, Provider, ProviderError, ProviderLink,
     art::{ArtCache, ImageAssetCodec},
@@ -27,16 +27,13 @@ const IMAGE_CODEC: ImageAssetCodec = ImageAssetCodec {
 pub struct StreamProvider {
   playback: StreamPlayback,
   art: Arc<ArtCache>,
+  art_origin: HttpExecutor,
 }
 
 impl StreamProvider {
-  pub fn new(
-    backend: Arc<dyn StreamBackend>,
-    http: Arc<dyn IoHttpTransport>,
-    scaler: Option<Arc<dyn ImageScaler>>,
-  ) -> Arc<Self> {
-    let art = Arc::new(ArtCache::new(HttpExecutor::new(http.clone()), scaler));
+  pub fn new(backend: Arc<dyn StreamBackend>, http: Arc<dyn IoHttpTransport>, art: Arc<ArtCache>) -> Arc<Self> {
     Arc::new(Self {
+      art_origin: HttpExecutor::new(http.clone()),
       playback: StreamPlayback::new(backend, http, art.clone(), SOURCE_ID, Arc::new(IMAGE_CODEC)),
       art,
     })
@@ -103,7 +100,7 @@ impl Provider for StreamProvider {
     let Some((url, max_edge)) = IMAGE_CODEC.parse(id) else {
       return Ok(None);
     };
-    let scaled = self.art.scaled(&url, max_edge).await;
+    let scaled = self.art.scaled(&self.art_origin, &url, max_edge).await;
     Ok(scaled.map(|bytes| AssetBytes {
       bytes,
       mime: Some("image/jpeg".into()),

@@ -35,6 +35,7 @@ import type {
   BluetoothPairingResult,
   BluetoothPin,
   BluetoothStatus,
+  BrowseChanged,
   CapabilitiesSnapshot,
   ClientToBridgeMsg,
   ConfigChanged,
@@ -239,6 +240,7 @@ export type LibraryInboundHandlers = {
   favoritesContainsReply: (msg: LibraryFavoritesContainsReply) => void;
   errorReply: (msg: LibraryErrorReply) => void;
   favoriteChanged: (msg: FavoriteChanged) => void;
+  browseChanged: (msg: BrowseChanged) => void;
   errorEvent: (msg: LibraryErrorReply) => void;
 };
 
@@ -1600,6 +1602,18 @@ export class LibrarySurface {
     });
   }
 
+  /** Subscribe to `Library::BrowseChanged` from the daemon. */
+  onBrowseChanged(handler: (msg: BrowseChanged) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'library') return;
+      const inner = data.data;
+      if (inner.event !== 'browseChanged') return;
+      handler(inner.data);
+    });
+  }
+
   /** Subscribe to `Library::ErrorEvent` from the daemon. */
   onErrorEvent(handler: (msg: LibraryErrorReply) => void): () => void {
     return this._client.on(event => {
@@ -1659,6 +1673,10 @@ export class LibrarySurface {
         }
         case 'favoriteChanged': {
           handlers.favoriteChanged?.(inner.data);
+          return;
+        }
+        case 'browseChanged': {
+          handlers.browseChanged?.(inner.data);
           return;
         }
         case 'errorEvent': {
@@ -4457,6 +4475,10 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           case 'favoriteChanged': {
             innerHandlers.favoriteChanged?.(inner.data);
+            return;
+          }
+          case 'browseChanged': {
+            innerHandlers.browseChanged?.(inner.data);
             return;
           }
           case 'errorEvent': {

@@ -96,6 +96,19 @@ private final class RecordingDownloadSink: HttpDownloadSink, @unchecked Sendable
     }
 }
 
+private final class HitCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var hits = 0
+
+    func bump() {
+        lock.withLock { hits += 1 }
+    }
+
+    var count: Int {
+        lock.withLock { hits }
+    }
+}
+
 final class UrlSessionHttpTransportTests: XCTestCase {
     private func request(
         _ url: String, method: HttpMethod = .get, body: Data = Data(), timeoutMs: UInt32 = 5000
@@ -115,6 +128,24 @@ final class UrlSessionHttpTransportTests: XCTestCase {
         XCTAssertEqual(response.status, 200)
         XCTAssertEqual(String(data: response.body, encoding: .utf8), "hi there")
         XCTAssertEqual(response.headers.first { $0.name.lowercased() == "x-thing" }?.value, "yes")
+    }
+
+    func testEveryExecuteReachesTheOriginBecauseTheCoreOwnsCaching() throws {
+        let hits = HitCounter()
+        let server = try XCTUnwrap(MiniHttpServer { _, _, _ in
+            hits.bump()
+            return (200, [("cache-control", "public, max-age=600")], Data("art".utf8))
+        })
+        defer { server.stop() }
+
+        let transport = UrlSessionHttpTransport()
+        for _ in 0 ..< 2 {
+            let sink = RecordingHttpSink()
+            transport.execute(request: request("http://127.0.0.1:\(server.port)/art.jpg"), sink: sink)
+            XCTAssertEqual(try XCTUnwrap(sink.wait()).get().status, 200)
+        }
+
+        XCTAssertEqual(hits.count, 2)
     }
 
     func testExecuteSendsTheBodyAndFailsOnlyThroughTheSink() throws {

@@ -73,6 +73,16 @@ pub struct FavoriteChanged {
   pub liked: bool,
 }
 
+/// Browse `nodeId` again (null is the root) and replace what you hold for it: the phone answered an
+/// earlier browse from its cache and the live result has since come back different.
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct BrowseChanged {
+  pub node_id: Option<String>,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
@@ -97,6 +107,8 @@ pub enum BridgeToClientLibraryMsg {
   ErrorReply(LibraryErrorReply),
   #[bridge_event]
   FavoriteChanged(FavoriteChanged),
+  #[bridge_event]
+  BrowseChanged(BrowseChanged),
   #[bridge_event]
   /// A `favoritesToggle`, `favoritesSet`, or `favoritesSetMany` command failed.
   ErrorEvent(LibraryErrorReply),

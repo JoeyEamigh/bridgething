@@ -766,6 +766,24 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
   ));
 
   out.push(gateway_fixture(
+    "gateway_to_bridge/library-browse-changed-event",
+    "companion reporting that a browse page it answered from its cache came back different, naming the exact request",
+    GatewayToBridgeMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Event,
+      data: GatewayToBridgeMsgData::Library(GatewayToBridgeLibraryMsg::BrowseChanged(BrowseChanged {
+        page: LibraryBrowseRequest {
+          node_id: Some("spotify:playlist:golden".into()),
+          limit: 50,
+          offset: 50,
+          sections: None,
+          preview: None,
+        },
+      })),
+    },
+  ));
+
+  out.push(gateway_fixture(
     "gateway_to_bridge/error-malformed",
     "protocol error: gateway could not decode the request the daemon sent",
     GatewayToBridgeMsg {

@@ -1,5 +1,7 @@
 #[path = "rig/art.rs"]
 mod art;
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "rig/backends.rs"]
 mod backends;
 #[path = "dispatch/flow.rs"]
@@ -331,6 +333,7 @@ struct Rig {
   http: Arc<FakeHttp>,
   ws: Arc<FakeWs>,
   auth_states: Arc<Mutex<Vec<ProviderAuthState>>>,
+  _art: art_store::Art,
 }
 
 async fn boot(initial: Cluster) -> Rig {
@@ -369,6 +372,7 @@ async fn boot_full(initial: Cluster, secrets: Arc<MemorySecrets>, product: Optio
     *http.product.lock().unwrap() = product;
   }
   let ws = FakeWs::new();
+  let art = art_store::Art::new(None);
   let provider = SpotifyProvider::new(
     SpotifyConfig {
       worker_base: "https://worker.test/auth".into(),
@@ -378,7 +382,7 @@ async fn boot_full(initial: Cluster, secrets: Arc<MemorySecrets>, product: Optio
     http.clone(),
     ws.clone(),
     secrets,
-    None,
+    art.cache(),
     None,
   );
   let auth_states: Arc<Mutex<Vec<ProviderAuthState>>> = Arc::new(Mutex::new(Vec::new()));
@@ -394,6 +398,7 @@ async fn boot_full(initial: Cluster, secrets: Arc<MemorySecrets>, product: Optio
     http,
     ws,
     auth_states,
+    _art: art,
   }
 }
 
@@ -978,6 +983,7 @@ async fn detach_clears_the_source_and_the_capabilities_shrink() {
 async fn repeat_asset_requests_fetch_and_scale_once() {
   let probe = ArtProbe::new();
   let scaler = TagScaler::new();
+  let art = art_store::Art::new(Some(scaler.clone()));
   let provider = SpotifyProvider::new(
     SpotifyConfig {
       worker_base: "https://worker.test/auth".into(),
@@ -987,7 +993,7 @@ async fn repeat_asset_requests_fetch_and_scale_once() {
     probe.clone(),
     FakeWs::new(),
     MemorySecrets::paired(),
-    Some(scaler.clone()),
+    art.cache(),
     None,
   );
 

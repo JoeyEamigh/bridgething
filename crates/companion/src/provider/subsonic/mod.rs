@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use self::client::{Album, AlbumList, Artist, Playlist, SearchCounts, Song, StarTarget};
 pub use self::client::{SubsonicClient, SubsonicError, normalize_server_url};
 use crate::{
-  backend::{ImageScaler, StreamBackend},
+  backend::StreamBackend,
   provider::{
     AssetBytes, AuthObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderLink,
     art::{ArtCache, ArtResolver, ImageAssetCodec},
@@ -130,6 +130,7 @@ fn page<T: Clone>(items: &[T], limit: u32, offset: u32) -> (Vec<T>, bool) {
 struct Core {
   client: Arc<SubsonicClient>,
   art: Arc<ArtCache>,
+  art_origin: HttpExecutor,
   resolver: Arc<Art>,
   playback: StreamPlayback,
   edges: Mutex<(u32, u32)>,
@@ -447,7 +448,7 @@ impl SubsonicProvider {
     config: SubsonicConfig,
     backend: Arc<dyn StreamBackend>,
     http: Arc<dyn IoHttpTransport>,
-    scaler: Option<Arc<dyn ImageScaler>>,
+    art: Arc<ArtCache>,
   ) -> Arc<Self> {
     let client = Arc::new(SubsonicClient::new(
       &config.server_url,
@@ -455,13 +456,13 @@ impl SubsonicProvider {
       &config.password,
       HttpExecutor::new(http.clone()),
     ));
-    let art = Arc::new(ArtCache::new(HttpExecutor::new(http.clone()), scaler));
     let resolver = Arc::new(Art { client: client.clone() });
     Arc::new(Self {
       core: Arc::new(Core {
-        playback: StreamPlayback::new(backend, http, art.clone(), PROVIDER_NAME, resolver.clone()),
+        playback: StreamPlayback::new(backend, http.clone(), art.clone(), PROVIDER_NAME, resolver.clone()),
         client,
         art,
+        art_origin: HttpExecutor::new(http),
         resolver,
         edges: Mutex::new((DEFAULT_HERO_EDGE, DEFAULT_THUMB_EDGE)),
         link: Mutex::new(None),
@@ -620,7 +621,11 @@ impl Provider for SubsonicProvider {
     let Some((source, max_edge)) = IMAGE_CODEC.parse(id) else {
       return Ok(None);
     };
-    let scaled = self.core.art.scaled(&self.core.resolver.url(&source), max_edge).await;
+    let scaled = self
+      .core
+      .art
+      .scaled(&self.core.art_origin, &self.core.resolver.url(&source), max_edge)
+      .await;
     Ok(scaled.map(|bytes| AssetBytes {
       bytes,
       mime: Some("image/jpeg".into()),

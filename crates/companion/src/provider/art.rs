@@ -1,16 +1,20 @@
 use std::{
   collections::HashMap,
-  hash::{DefaultHasher, Hash, Hasher},
   sync::{Arc, Mutex},
 };
 
 use bridgething_io::{HttpExecutor, HttpMethod, HttpRequest};
+use sha2::{Digest, Sha256};
 
-use crate::backend::{ImageScaler, ImageTarget, sniff_and_scale};
+use crate::{
+  backend::{ImageScaler, ImageTarget, sniff_and_scale},
+  cache::disk::DiskCache,
+};
 
 const JPEG_QUALITY: f32 = 0.6;
 const FETCH_TIMEOUT_MS: u32 = 6_000;
-const CACHE_BYTES: usize = 16 << 20;
+const MASTERS: &str = "master";
+const SCALED: &str = "scaled";
 
 async fn downsample(scaler: Option<Arc<dyn ImageScaler>>, data: Vec<u8>, max_edge: u32) -> Option<Vec<u8>> {
   let scaler = scaler?;
@@ -25,79 +29,15 @@ async fn downsample(scaler: Option<Arc<dyn ImageScaler>>, data: Vec<u8>, max_edg
     .map(|scaled| scaled.bytes)
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-struct ArtKey {
-  url: String,
-  max_edge: Option<u32>,
+#[async_trait::async_trait]
+pub trait ArtOrigin: Send + Sync {
+  async fn fetch(&self, url: &str) -> Option<Vec<u8>>;
 }
 
-#[derive(Default)]
-struct Store {
-  entries: HashMap<ArtKey, Vec<u8>>,
-  order: Vec<ArtKey>,
-  held: usize,
-}
-
-impl Store {
-  fn get(&self, key: &ArtKey) -> Option<Vec<u8>> {
-    self.entries.get(key).cloned()
-  }
-
-  fn put(&mut self, key: ArtKey, bytes: Vec<u8>) {
-    if self.entries.contains_key(&key) {
-      return;
-    }
-    self.held += bytes.len();
-    self.entries.insert(key.clone(), bytes);
-    self.order.push(key);
-    while self.held > CACHE_BYTES && !self.order.is_empty() {
-      let evicted = self.order.remove(0);
-      if let Some(bytes) = self.entries.remove(&evicted) {
-        self.held -= bytes.len();
-      }
-    }
-  }
-}
-
-pub struct ArtCache {
-  exec: HttpExecutor,
-  scaler: Option<Arc<dyn ImageScaler>>,
-  store: Mutex<Store>,
-}
-
-impl ArtCache {
-  pub fn new(exec: HttpExecutor, scaler: Option<Arc<dyn ImageScaler>>) -> Self {
-    Self {
-      exec,
-      scaler,
-      store: Mutex::new(Store::default()),
-    }
-  }
-
-  pub fn adopt(&self, bytes: Vec<u8>) -> String {
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    let key = format!("embedded:{:016x}", hasher.finish());
-    self.store.lock().unwrap().put(
-      ArtKey {
-        url: key.clone(),
-        max_edge: None,
-      },
-      bytes,
-    );
-    key
-  }
-
-  pub async fn master(&self, url: &str) -> Option<Vec<u8>> {
-    let key = ArtKey {
-      url: url.to_owned(),
-      max_edge: None,
-    };
-    if let Some(hit) = self.store.lock().unwrap().get(&key) {
-      return Some(hit);
-    }
+#[async_trait::async_trait]
+impl ArtOrigin for HttpExecutor {
+  async fn fetch(&self, url: &str) -> Option<Vec<u8>> {
     let response = self
-      .exec
       .execute(HttpRequest {
         method: HttpMethod::Get,
         url: url.to_owned(),
@@ -107,25 +47,88 @@ impl ArtCache {
       })
       .await
       .ok()?;
-    if !response.ok() {
-      return None;
+    response.ok().then_some(response.body)
+  }
+}
+
+pub struct ArtCache {
+  store: DiskCache,
+  scaler: Option<Arc<dyn ImageScaler>>,
+  turns: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+}
+
+impl ArtCache {
+  pub fn new(store: DiskCache, scaler: Option<Arc<dyn ImageScaler>>) -> Self {
+    Self {
+      store,
+      scaler,
+      turns: Mutex::new(HashMap::new()),
     }
-    self.store.lock().unwrap().put(key, response.body.clone());
-    Some(response.body)
   }
 
-  pub async fn scaled(&self, url: &str, max_edge: u32) -> Option<Vec<u8>> {
-    let key = ArtKey {
-      url: url.to_owned(),
-      max_edge: Some(max_edge),
+  pub fn adopt(&self, bytes: Vec<u8>) -> String {
+    let digest = Sha256::digest(&bytes);
+    let mut key = String::from("embedded:");
+    for byte in &digest[..12] {
+      key.push_str(&format!("{byte:02x}"));
+    }
+    self.store.store(MASTERS, &key, &bytes);
+    key
+  }
+
+  fn turn(&self, key: &str) -> Arc<tokio::sync::Mutex<()>> {
+    self.turns.lock().unwrap().entry(key.to_owned()).or_default().clone()
+  }
+
+  fn release(&self, key: &str, turn: Arc<tokio::sync::Mutex<()>>) {
+    let mut turns = self.turns.lock().unwrap();
+    drop(turn);
+    if turns.get(key).is_some_and(|held| Arc::strong_count(held) == 1) {
+      turns.remove(key);
+    }
+  }
+
+  pub async fn master(&self, origin: &dyn ArtOrigin, url: &str) -> Option<Vec<u8>> {
+    let turn = self.turn(url);
+    let found = {
+      let _held = turn.lock().await;
+      self.master_held(origin, url).await
     };
-    if let Some(hit) = self.store.lock().unwrap().get(&key) {
+    self.release(url, turn);
+    found
+  }
+
+  async fn master_held(&self, origin: &dyn ArtOrigin, url: &str) -> Option<Vec<u8>> {
+    if let Some(hit) = self.store.get(MASTERS, url).await {
       return Some(hit);
     }
-    let master = self.master(url).await?;
-    let scaled = downsample(self.scaler.clone(), master, max_edge).await?;
-    self.store.lock().unwrap().put(key, scaled.clone());
-    Some(scaled)
+    let body = origin.fetch(url).await?;
+    self.store.put(MASTERS, url, body.clone()).await;
+    Some(body)
+  }
+
+  pub async fn scaled(&self, origin: &dyn ArtOrigin, url: &str, max_edge: u32) -> Option<Vec<u8>> {
+    let key = format!("{max_edge} {url}");
+    if let Some(hit) = self.store.get(SCALED, &key).await {
+      return Some(hit);
+    }
+    let master = self.master(origin, url).await?;
+    let turn = self.turn(&key);
+    let found = {
+      let _held = turn.lock().await;
+      match self.store.get(SCALED, &key).await {
+        Some(hit) => Some(hit),
+        None => {
+          let scaled = downsample(self.scaler.clone(), master, max_edge).await;
+          if let Some(bytes) = &scaled {
+            self.store.put(SCALED, &key, bytes.clone()).await;
+          }
+          scaled
+        }
+      }
+    };
+    self.release(&key, turn);
+    found
   }
 }
 
@@ -272,77 +275,195 @@ mod tests {
     }
   }
 
-  fn cache(origin: Arc<Origin>, scaler: Arc<Scaler>) -> ArtCache {
-    ArtCache::new(HttpExecutor::new(origin), Some(scaler))
+  struct Rig {
+    dir: tempfile::TempDir,
+    origin: Arc<Origin>,
+    exec: HttpExecutor,
+    scaler: Arc<Scaler>,
+    cache: ArtCache,
+  }
+
+  impl Rig {
+    fn new() -> Self {
+      Self::with_budget(1 << 20)
+    }
+
+    fn with_budget(budget: u64) -> Self {
+      let dir = tempfile::tempdir().unwrap();
+      let origin = Origin::serving();
+      let scaler = Arc::new(Scaler::default());
+      let cache = ArtCache::new(DiskCache::open(dir.path().join("art"), budget), Some(scaler.clone()));
+      Self {
+        exec: HttpExecutor::new(origin.clone()),
+        dir,
+        origin,
+        scaler,
+        cache,
+      }
+    }
+
+    fn reopen(&self) -> ArtCache {
+      ArtCache::new(
+        DiskCache::open(self.dir.path().join("art"), 1 << 20),
+        Some(self.scaler.clone()),
+      )
+    }
+
+    fn fetches(&self) -> usize {
+      self.origin.fetches.load(Ordering::SeqCst)
+    }
+
+    fn scales(&self) -> usize {
+      self.scaler.scales.load(Ordering::SeqCst)
+    }
   }
 
   #[tokio::test]
   async fn a_repeated_scale_reuses_the_fetch_and_the_downsample() {
-    let origin = Origin::serving();
-    let scaler = Arc::new(Scaler::default());
-    let cache = cache(origin.clone(), scaler.clone());
+    let rig = Rig::new();
 
-    let first = cache.scaled("https://art.test/one", 96).await.unwrap();
-    let second = cache.scaled("https://art.test/one", 96).await.unwrap();
+    let first = rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap();
+    let second = rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap();
 
     assert_eq!(first, second);
-    assert_eq!(origin.fetches.load(Ordering::SeqCst), 1);
-    assert_eq!(scaler.scales.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.fetches(), 1);
+    assert_eq!(rig.scales(), 1);
   }
 
   #[tokio::test]
   async fn a_second_edge_reuses_the_master_and_earns_its_own_downsample() {
-    let origin = Origin::serving();
-    let scaler = Arc::new(Scaler::default());
-    let cache = cache(origin.clone(), scaler.clone());
+    let rig = Rig::new();
 
-    let thumb = cache.scaled("https://art.test/one", 96).await.unwrap();
-    let hero = cache.scaled("https://art.test/one", 248).await.unwrap();
+    let thumb = rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap();
+    let hero = rig.cache.scaled(&rig.exec, "https://art.test/one", 248).await.unwrap();
 
     assert_ne!(thumb, hero);
-    assert_eq!(origin.fetches.load(Ordering::SeqCst), 1);
-    assert_eq!(scaler.scales.load(Ordering::SeqCst), 2);
+    assert_eq!(rig.fetches(), 1);
+    assert_eq!(rig.scales(), 2);
   }
 
   #[tokio::test]
   async fn a_warmed_master_spares_the_scaler_a_second_fetch() {
-    let origin = Origin::serving();
-    let scaler = Arc::new(Scaler::default());
-    let cache = cache(origin.clone(), scaler.clone());
+    let rig = Rig::new();
 
-    assert_eq!(cache.master("https://art.test/one").await.unwrap(), b"master");
-    cache.scaled("https://art.test/one", 96).await.unwrap();
+    assert_eq!(
+      rig.cache.master(&rig.exec, "https://art.test/one").await.unwrap(),
+      b"master"
+    );
+    rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap();
 
-    assert_eq!(origin.fetches.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.fetches(), 1);
   }
 
   #[tokio::test]
   async fn a_non_success_status_yields_nothing_and_is_not_cached() {
-    let origin = Origin::serving();
-    *origin.status.lock().unwrap() = 404;
-    let scaler = Arc::new(Scaler::default());
-    let cache = cache(origin.clone(), scaler.clone());
+    let rig = Rig::new();
+    *rig.origin.status.lock().unwrap() = 404;
 
-    assert!(cache.scaled("https://art.test/gone", 96).await.is_none());
-    assert!(cache.master("https://art.test/gone").await.is_none());
+    assert!(rig.cache.scaled(&rig.exec, "https://art.test/gone", 96).await.is_none());
+    assert!(rig.cache.master(&rig.exec, "https://art.test/gone").await.is_none());
 
-    assert_eq!(origin.fetches.load(Ordering::SeqCst), 2);
-    assert_eq!(scaler.scales.load(Ordering::SeqCst), 0);
+    assert_eq!(rig.fetches(), 2);
+    assert_eq!(rig.scales(), 0);
   }
 
   #[tokio::test]
   async fn adopted_bytes_scale_without_ever_touching_the_origin() {
-    let origin = Origin::serving();
-    let scaler = Arc::new(Scaler::default());
-    let cache = cache(origin.clone(), scaler.clone());
+    let rig = Rig::new();
 
-    let key = cache.adopt(b"embedded".to_vec());
-    assert_eq!(key, cache.adopt(b"embedded".to_vec()), "the same bytes share a key");
-    assert_ne!(key, cache.adopt(b"other".to_vec()));
-    assert_eq!(cache.scaled(&key, 96).await.unwrap(), b"embedded@96");
+    let key = rig.cache.adopt(b"embedded".to_vec());
+    assert_eq!(key, rig.cache.adopt(b"embedded".to_vec()), "the same bytes share a key");
+    assert_ne!(key, rig.cache.adopt(b"other".to_vec()));
+    assert_eq!(rig.cache.scaled(&rig.exec, &key, 96).await.unwrap(), b"embedded@96");
 
-    assert_eq!(origin.fetches.load(Ordering::SeqCst), 0);
-    assert_eq!(scaler.scales.load(Ordering::SeqCst), 1);
+    assert_eq!(rig.fetches(), 0);
+    assert_eq!(rig.scales(), 1);
+  }
+
+  #[tokio::test]
+  async fn art_survives_a_restart_without_a_refetch_or_a_rescale() {
+    let rig = Rig::new();
+    rig
+      .cache
+      .scaled(&rig.exec, "https://i.scdn.co/image/ab", 96)
+      .await
+      .unwrap();
+    let embedded = rig.cache.adopt(b"embedded".to_vec());
+
+    let reopened = rig.reopen();
+
+    assert_eq!(
+      reopened
+        .scaled(&rig.exec, "https://i.scdn.co/image/ab", 96)
+        .await
+        .unwrap(),
+      b"master@96"
+    );
+    assert_eq!(
+      reopened.master(&rig.exec, "https://i.scdn.co/image/ab").await.unwrap(),
+      b"master"
+    );
+    assert_eq!(
+      reopened.adopt(b"embedded".to_vec()),
+      embedded,
+      "embedded keys are stable across runs"
+    );
+    assert_eq!(rig.fetches(), 1);
+    assert_eq!(rig.scales(), 1);
+  }
+
+  #[tokio::test]
+  async fn content_addressed_art_never_expires_and_only_leaves_by_size() {
+    let entry = 4 + b"master".len() as u64;
+    let rig = Rig::with_budget(2 * entry);
+    rig.cache.master(&rig.exec, "https://art.test/a").await.unwrap();
+    rig.cache.master(&rig.exec, "https://art.test/b").await.unwrap();
+    for _ in 0..5 {
+      rig.cache.master(&rig.exec, "https://art.test/a").await.unwrap();
+    }
+    assert_eq!(rig.fetches(), 2);
+
+    rig.cache.master(&rig.exec, "https://art.test/c").await.unwrap();
+    rig.cache.master(&rig.exec, "https://art.test/a").await.unwrap();
+    assert_eq!(rig.fetches(), 3, "a was hot, so b paid for c");
+
+    rig.cache.master(&rig.exec, "https://art.test/b").await.unwrap();
+    assert_eq!(rig.fetches(), 4);
+  }
+
+  #[tokio::test]
+  async fn art_the_os_purged_is_refetched_not_an_error() {
+    let rig = Rig::new();
+    rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap();
+    std::fs::remove_dir_all(rig.dir.path().join("art")).unwrap();
+
+    assert_eq!(
+      rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap(),
+      b"master@96"
+    );
+    assert_eq!(rig.fetches(), 2);
+    assert_eq!(
+      rig.cache.scaled(&rig.exec, "https://art.test/one", 96).await.unwrap(),
+      b"master@96"
+    );
+    assert_eq!(rig.fetches(), 2);
+  }
+
+  #[tokio::test]
+  async fn concurrent_asks_for_one_image_share_a_fetch_and_a_downsample() {
+    let rig = Rig::new();
+
+    let asks = (0..8).map(|_| rig.cache.scaled(&rig.exec, "https://art.test/one", 96));
+    let served = futures::future::join_all(asks).await;
+
+    assert!(
+      served
+        .iter()
+        .all(|bytes| bytes.as_deref() == Some(b"master@96".as_slice()))
+    );
+    assert_eq!(rig.fetches(), 1);
+    assert_eq!(rig.scales(), 1);
+    assert!(rig.cache.turns.lock().unwrap().is_empty());
   }
 
   #[test]

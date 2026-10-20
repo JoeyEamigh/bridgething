@@ -5,12 +5,12 @@ use bridgething_io::{HttpTransport as IoHttpTransport, WsTransport as IoWsTransp
 use crate::{
   api::{ProviderCredentials, SignInMethod, SpotifyProviderConfig},
   backend::{
-    AppleMusicBackend, DeviceWaker, ForeignHttp, ForeignWs, HttpTransport, ImageScaler, SecretStore, StreamBackend,
-    WsTransport,
+    AppleMusicBackend, DeviceWaker, ForeignHttp, ForeignWs, HttpTransport, SecretStore, StreamBackend, WsTransport,
   },
   provider::{
     Provider,
     apple_music::{self, AppleMusicProvider},
+    art::ArtCache,
     spotify::{self, SpotifyConfig, SpotifyProvider},
     subsonic::{self, SubsonicConfig, SubsonicProvider, normalize_server_url},
   },
@@ -52,7 +52,7 @@ pub struct AppleMusicEntry {
   backend: Arc<dyn AppleMusicBackend>,
   http: Arc<dyn HttpTransport>,
   secrets: Arc<dyn SecretStore>,
-  image: Option<Arc<dyn ImageScaler>>,
+  art: Arc<ArtCache>,
 }
 
 impl AppleMusicEntry {
@@ -60,13 +60,13 @@ impl AppleMusicEntry {
     backend: Arc<dyn AppleMusicBackend>,
     http: Arc<dyn HttpTransport>,
     secrets: Arc<dyn SecretStore>,
-    image: Option<Arc<dyn ImageScaler>>,
+    art: Arc<ArtCache>,
   ) -> Arc<Self> {
     Arc::new(Self {
       backend,
       http,
       secrets,
-      image,
+      art,
     })
   }
 }
@@ -84,7 +84,7 @@ impl CatalogEntry for AppleMusicEntry {
     AppleMusicProvider::new(
       self.backend.clone(),
       Arc::new(ForeignHttp::new(self.http.clone())) as Arc<dyn IoHttpTransport>,
-      self.image.clone(),
+      self.art.clone(),
     )
   }
 
@@ -110,7 +110,7 @@ pub struct SpotifyEntry {
   http: Arc<dyn HttpTransport>,
   ws: Arc<dyn WsTransport>,
   secrets: Arc<dyn SecretStore>,
-  image: Option<Arc<dyn ImageScaler>>,
+  art: Arc<ArtCache>,
   waker: Option<Arc<dyn DeviceWaker>>,
 }
 
@@ -120,7 +120,7 @@ impl SpotifyEntry {
     http: Arc<dyn HttpTransport>,
     ws: Arc<dyn WsTransport>,
     secrets: Arc<dyn SecretStore>,
-    image: Option<Arc<dyn ImageScaler>>,
+    art: Arc<ArtCache>,
     waker: Option<Arc<dyn DeviceWaker>>,
   ) -> Arc<Self> {
     Arc::new(Self {
@@ -128,7 +128,7 @@ impl SpotifyEntry {
       http,
       ws,
       secrets,
-      image,
+      art,
       waker,
     })
   }
@@ -162,7 +162,7 @@ impl CatalogEntry for SpotifyEntry {
       Arc::new(ForeignHttp::new(self.http.clone())) as Arc<dyn IoHttpTransport>,
       Arc::new(ForeignWs::new(self.ws.clone())) as Arc<dyn IoWsTransport>,
       self.secrets.clone(),
-      self.image.clone(),
+      self.art.clone(),
       self.waker.clone(),
     )
   }
@@ -193,7 +193,7 @@ pub struct SubsonicEntry {
   stream: Arc<dyn StreamBackend>,
   http: Arc<dyn HttpTransport>,
   secrets: Arc<dyn SecretStore>,
-  image: Option<Arc<dyn ImageScaler>>,
+  art: Arc<ArtCache>,
 }
 
 impl SubsonicEntry {
@@ -201,13 +201,13 @@ impl SubsonicEntry {
     stream: Arc<dyn StreamBackend>,
     http: Arc<dyn HttpTransport>,
     secrets: Arc<dyn SecretStore>,
-    image: Option<Arc<dyn ImageScaler>>,
+    art: Arc<ArtCache>,
   ) -> Arc<Self> {
     Arc::new(Self {
       stream,
       http,
       secrets,
-      image,
+      art,
     })
   }
 
@@ -238,7 +238,7 @@ impl CatalogEntry for SubsonicEntry {
       },
       self.stream.clone(),
       Arc::new(ForeignHttp::new(self.http.clone())) as Arc<dyn IoHttpTransport>,
-      self.image.clone(),
+      self.art.clone(),
     )
   }
 

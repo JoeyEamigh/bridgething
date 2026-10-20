@@ -23,9 +23,14 @@ against the service, no native code.
      `BrowseFolder`, and friends from `libbridgething`. Node ids are your own strings; container uris
      double as node ids so a webapp can descend into an album it found in search.
    - Artwork is an asset id, never a url. Build one `ImageAssetCodec` with your own namespace
-     (`subsonic/img/`), mint ids from it, and serve them from `asset()` through an `ArtCache`. Keep
-     credentials out of the id: Subsonic ids carry a cover id and the provider turns it into an
-     authenticated url only when the bytes are fetched.
+     (`subsonic/img/`), mint ids from it, and serve them from `asset()` through the session's shared
+     `ArtCache`, which your constructor takes and which keeps art on the phone's disk across
+     restarts. Pass your `HttpExecutor` as the `ArtOrigin` that fetches a miss. Keep credentials out
+     of the id: Subsonic ids carry a cover id and the provider turns it into an authenticated url
+     only when the bytes are fetched.
+   - Library answers are cached for you: the dispatcher keeps every browse, search,
+     recommendations, favorites list, and context resolve on disk under your provider name, serves
+     it when the phone is offline or slow, and warms the art ids it lists.
 3. **Playback through `StreamPlayback`** (`provider/playback/`). Build one with your stream backend,
    http transport, art cache, source id, and an `ArtResolver` that turns your artwork sources into
    fetchable urls. Then:

@@ -36,6 +36,10 @@ impl RootBrowseCache {
   {
     self.inner.get_or_fetch(shape, Some(generation), Some(ttl), fetch).await
   }
+
+  pub async fn forget(&self, shape: RootBrowseShape) {
+    self.inner.forget(&shape).await;
+  }
 }
 
 #[cfg(test)]
@@ -72,6 +76,30 @@ mod tests {
       calls.load(Ordering::SeqCst),
       1,
       "second call at the same generation within ttl reuses the cache"
+    );
+  }
+
+  #[tokio::test]
+  async fn forgetting_a_shape_refetches_only_that_shape() {
+    let cache = RootBrowseCache::default();
+    let calls = AtomicU32::new(0);
+    let fetch = |shape| {
+      cache.get_or_fetch(shape, 0, LONG_TTL, || async {
+        calls.fetch_add(1, Ordering::SeqCst);
+        Ok::<_, ()>(result())
+      })
+    };
+    fetch(FULL).await.unwrap();
+    fetch(SLIM).await.unwrap();
+
+    cache.forget(SLIM).await;
+    fetch(FULL).await.unwrap();
+    fetch(SLIM).await.unwrap();
+
+    assert_eq!(
+      calls.load(Ordering::SeqCst),
+      3,
+      "only the forgotten shape went back to the phone"
     );
   }
 

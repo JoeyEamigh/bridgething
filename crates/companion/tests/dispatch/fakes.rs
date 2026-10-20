@@ -28,6 +28,7 @@ pub struct FakeProvider {
   pub calls: Mutex<Vec<String>>,
   pub art_profile: Mutex<Option<(u32, u32)>>,
   pub delay: Option<Duration>,
+  pub browse_delay: Mutex<Option<Duration>>,
   pub on_asset: Option<AssetAnswer>,
   pub on_lyrics: Option<LyricsAnswer>,
   pub on_browse: Option<BrowseAnswer>,
@@ -104,6 +105,10 @@ impl Provider for FakeProvider {
 
   async fn browse(&self, request: LibraryBrowseRequest) -> Result<BrowseResult, ProviderError> {
     self.called("browse");
+    let delay = *self.browse_delay.lock().unwrap();
+    if let Some(delay) = delay {
+      tokio::time::sleep(delay).await;
+    }
     match &self.on_browse {
       Some(answer) => answer(request),
       None => Err(ProviderError::NotImplemented),

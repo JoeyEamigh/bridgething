@@ -85,6 +85,17 @@ impl BrowseContentCache {
       .get_or_fetch(key, kind.gen_keyed().then_some(generation), Some(kind.ttl()), fetch)
       .await
   }
+
+  pub async fn forget(&self, node_id: &str, offset: u32, limit: u32) {
+    self
+      .inner
+      .forget(&Key {
+        node_id: node_id.to_string(),
+        offset,
+        limit,
+      })
+      .await;
+  }
 }
 
 #[cfg(test)]
@@ -132,6 +143,39 @@ mod tests {
     ));
     assert!(matches!(BrowseKind::classify("playlists"), BrowseKind::Mutable));
     assert!(matches!(BrowseKind::classify("recently-played"), BrowseKind::Mutable));
+  }
+
+  #[tokio::test]
+  async fn forgetting_a_page_refetches_exactly_that_page() {
+    let cache = BrowseContentCache::default();
+    let calls = AtomicU32::new(0);
+    let fetch = |node_id: &'static str, offset: u32| {
+      let calls = &calls;
+      let cache = &cache;
+      async move {
+        cache
+          .get_or_fetch(node_id, offset, 50, 0, || async {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Ok::<_, ()>(result(7))
+          })
+          .await
+          .unwrap()
+      }
+    };
+    fetch("spotify:album:a", 0).await;
+    fetch("spotify:album:a", 50).await;
+    fetch("spotify:playlist:b", 0).await;
+
+    cache.forget("spotify:album:a", 50, 50).await;
+    fetch("spotify:album:a", 0).await;
+    fetch("spotify:album:a", 50).await;
+    fetch("spotify:playlist:b", 0).await;
+
+    assert_eq!(
+      calls.load(Ordering::SeqCst),
+      4,
+      "even an immutable album page refetches once the phone says it changed, and nothing else does"
+    );
   }
 
   #[tokio::test]
