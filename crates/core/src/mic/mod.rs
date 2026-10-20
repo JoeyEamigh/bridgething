@@ -38,7 +38,7 @@ const RESOLVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 struct CapturedFrame {
   pcm: bytes::Bytes,
   #[cfg(feature = "mic")]
-  on_target: Option<f32>,
+  on_target: Option<bridgething_dsp::scene::TargetEvidence>,
 }
 
 #[cfg(feature = "mic")]
@@ -727,6 +727,17 @@ impl Endpointer {
     bridgething_dsp::pipeline::from_pcm16(&frame.pcm, &mut self.samples);
     let end = self.vad.observe(&self.samples, frame.on_target)?;
     tracing::debug!(?end, "the endpointer ended the turn");
+    if end == bridgething_dsp::vad::TurnEnd::NoOnset {
+      let trace = self.vad.onset_trace();
+      tracing::debug!(
+        peak_acoustic_run = trace.peak_acoustic_run,
+        peak_gated_run = trace.peak_gated_run,
+        vetoed_frames = trace.vetoed_frames,
+        abstained_frames = trace.abstained_frames,
+        max_score = trace.max_score,
+        "no speech onset in the window"
+      );
+    }
     Some(close_for(end))
   }
 }

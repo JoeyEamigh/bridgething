@@ -5,7 +5,7 @@ use crate::{
   beamformer::{Design, Field, weights},
   calibration::Calibration,
   geometry::{CHANNELS, POSITION_TO_CHANNEL},
-  scene::{self, SceneEstimator},
+  scene::{self, SceneEstimator, TargetEvidence},
   stft::{Analyzer, BINS, FFT_SIZE, HOP, Synthesizer, bin_frequencies},
 };
 
@@ -107,8 +107,8 @@ impl Beamformer {
     self.scene.as_ref().and_then(SceneEstimator::bearing_deg)
   }
 
-  pub fn target_agreement(&self) -> Option<f32> {
-    self.scene.as_ref().and_then(SceneEstimator::target_agreement)
+  pub fn target_evidence(&self) -> Option<TargetEvidence> {
+    self.scene.as_ref().and_then(SceneEstimator::target_evidence)
   }
 
   pub fn hold_noise(&mut self, holding: bool) {

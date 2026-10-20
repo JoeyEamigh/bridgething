@@ -8,9 +8,16 @@ use crate::{
 
 const WIDEST: (usize, usize) = (0, CHANNELS - 1);
 const GATE_BAND_HZ: (f64, f64) = (1800.0, 2600.0);
+const BROADBAND_FLOOR_HZ: f64 = 100.0;
 const POWER_ITERATIONS: usize = 12;
 const MIN_POOLED_BINS: usize = 4;
 const RIDGE: f64 = 1e-3;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TargetEvidence {
+  pub agreement: f32,
+  pub band_share: f32,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
@@ -84,6 +91,8 @@ pub struct SceneEstimator {
   target: Box<[Covariance; BINS]>,
   gate: Box<[Coherence; BINS]>,
   gate_bins: (usize, usize),
+  broadband: f64,
+  broadband_from: usize,
   noise_alpha: f64,
   recent_alpha: f64,
   gate_alpha: f64,
@@ -116,6 +125,8 @@ impl SceneEstimator {
       target: Box::new([[[Complex64::new(0.0, 0.0); CHANNELS]; CHANNELS]; BINS]),
       gate: Box::new([Coherence::ZERO; BINS]),
       gate_bins: (lower, upper),
+      broadband: 0.0,
+      broadband_from: frequencies.iter().position(|f| *f >= BROADBAND_FLOOR_HZ).unwrap_or(0),
       noise_alpha: decay(config.noise_tau_s, hop_s),
       recent_alpha: decay(config.recent_tau_s, hop_s),
       gate_alpha: decay(config.gate_tau_s, hop_s),
@@ -159,6 +170,12 @@ impl SceneEstimator {
       gate.observe(a, b, self.gate_alpha);
       gate_total += gate.magnitude_squared();
     }
+    let frame_broadband: f64 = spectra[WIDEST.0][self.broadband_from..]
+      .iter()
+      .zip(spectra[WIDEST.1][self.broadband_from..].iter())
+      .map(|(a, b)| 0.5 * (a.norm_sqr() as f64 + b.norm_sqr() as f64))
+      .sum();
+    self.broadband = self.broadband * self.gate_alpha + frame_broadband * (1.0 - self.gate_alpha);
     let bins = (self.gate_bins.1 - self.gate_bins.0 + 1) as f64;
     self.point_like = gate_total / bins >= self.config.gate_threshold;
     self.frozen_for = if self.point_like { self.frozen_for + 1 } else { 0 };
@@ -208,19 +225,24 @@ impl SceneEstimator {
       .collect()
   }
 
-  pub fn target_agreement(&self) -> Option<f32> {
+  pub fn target_evidence(&self) -> Option<TargetEvidence> {
     if self.gate_reference.is_empty() {
       return None;
     }
     let (lower, _) = self.gate_bins;
     let mut aligned = 0.0;
     let mut power = 0.0;
+    let mut band = 0.0;
     for (offset, expected) in self.gate_reference.iter().enumerate() {
       let gate = &self.gate[lower + offset];
       aligned += (gate.cross * expected.conj()).re;
       power += (gate.auto[0] * gate.auto[1]).sqrt();
+      band += 0.5 * (gate.auto[0] + gate.auto[1]);
     }
-    (power > 1e-30).then(|| (aligned / power).clamp(0.0, 1.0) as f32)
+    (power > 1e-30).then(|| TargetEvidence {
+      agreement: (aligned / power).clamp(0.0, 1.0) as f32,
+      band_share: (band / self.broadband.max(band)) as f32,
+    })
   }
 
   fn pool_bearing(&self) -> Option<f64> {
@@ -257,6 +279,7 @@ impl SceneEstimator {
       self.target[bin] = [[Complex64::new(0.0, 0.0); CHANNELS]; CHANNELS];
       self.gate[bin] = Coherence::ZERO;
     }
+    self.broadband = 0.0;
     self.noise_frames = 0;
     self.pooled_bearing = None;
     self.gate_reference.clear();
@@ -810,16 +833,13 @@ mod tests {
   fn spatial_evidence_needs_a_bearing_before_it_reports_anything() {
     let mut estimator = estimator();
     let mut seed = 41;
-    assert!(
-      estimator.target_agreement().is_none(),
-      "evidence before any observation"
-    );
+    assert!(estimator.target_evidence().is_none(), "evidence before any observation");
     for _ in 0..300 {
       estimator.observe(&frame(&diffuse_angles(64), 0.05, &mut seed));
     }
     estimator.mark_target();
     assert!(
-      estimator.target_agreement().is_none(),
+      estimator.target_evidence().is_none(),
       "diffuse noise resolves no bearing, so there is nothing to gate on"
     );
   }
@@ -834,15 +854,17 @@ mod tests {
       estimator.observe(&frame(&[(-42.0, 80.0, 0.0)], 0.001, &mut seed));
     }
     let on_target = estimator
-      .target_agreement()
-      .expect("a resolved bearing reports evidence");
+      .target_evidence()
+      .expect("a resolved bearing reports evidence")
+      .agreement;
 
     for _ in 0..100 {
       estimator.observe(&frame(&[(45.0, 80.0, 0.0)], 0.001, &mut seed));
     }
     let off_target = estimator
-      .target_agreement()
-      .expect("evidence survives the source moving");
+      .target_evidence()
+      .expect("evidence survives the source moving")
+      .agreement;
 
     assert!(on_target > 0.6, "the marked bearing only scored {on_target:.3}");
     assert!(
@@ -858,10 +880,58 @@ mod tests {
     for _ in 0..200 {
       estimator.observe(&frame(&diffuse_angles(64), 0.2, &mut seed));
     }
-    let evidence = estimator.target_agreement().expect("a marked bearing still reports");
+    let evidence = estimator
+      .target_evidence()
+      .expect("a marked bearing still reports")
+      .agreement;
     assert!(
       evidence < 0.4,
       "a diffuse wash scored {evidence:.3}, which a gate would read as the talker"
+    );
+  }
+
+  fn below(cutoff_hz: f64, mut spectra: [Box<[Complex32; BINS]>; CHANNELS]) -> [Box<[Complex32; BINS]>; CHANNELS] {
+    let frequencies = bin_frequencies(RATE);
+    for channel in &mut spectra {
+      for (bin, value) in channel.iter_mut().enumerate() {
+        if frequencies[bin] > cutoff_hz {
+          *value = Complex32::new(0.0, 0.0);
+        }
+      }
+    }
+    spectra
+  }
+
+  #[test]
+  fn evidence_reports_how_much_of_the_field_reaches_the_gate_band() {
+    let mut seed = 59;
+    let mut estimator = steered_to(-30.0, seed);
+    for _ in 0..100 {
+      estimator.observe(&frame(&[(-30.0, 80.0, 0.0)], 0.001, &mut seed));
+    }
+    let broadband = estimator
+      .target_evidence()
+      .expect("a marked bearing reports")
+      .band_share;
+
+    for _ in 0..100 {
+      estimator.observe(&below(1200.0, frame(&[(-30.0, 80.0, 0.0)], 0.001, &mut seed)));
+    }
+    let dark = estimator
+      .target_evidence()
+      .expect("a marked bearing reports")
+      .band_share;
+
+    let frequencies = bin_frequencies(RATE);
+    let (lower, upper) = estimator.gate_bins;
+    let flat = (upper - lower + 1) as f32 / frequencies.iter().filter(|f| **f >= BROADBAND_FLOOR_HZ).count() as f32;
+    assert!(
+      (broadband - flat).abs() < flat * 0.25,
+      "a flat source put {broadband:.3} of its power in the band, expected about {flat:.3}"
+    );
+    assert!(
+      dark < 0.01,
+      "a source with nothing above 1200 Hz still showed {dark:.4} in the band"
     );
   }
 

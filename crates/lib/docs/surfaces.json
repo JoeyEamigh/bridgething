@@ -5935,6 +5935,11 @@
           "optional": true
         },
         {
+          "name": "asrConfidence",
+          "type": "number",
+          "optional": true
+        },
+        {
           "name": "intent",
           "type": "string",
           "optional": true

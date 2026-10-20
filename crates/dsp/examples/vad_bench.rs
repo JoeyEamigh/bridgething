@@ -9,7 +9,7 @@ use bridgething_dsp::{
   bench::{Scene, read_scene},
   geometry::CHANNELS,
   pipeline::{Beamformer, Config, to_pcm16},
-  scene,
+  scene::{self, TargetEvidence},
   vad::{Config as VadConfig, FRAME_SAMPLES, TurnEnd, VoiceEndpointer},
 };
 
@@ -26,6 +26,7 @@ enum Kind {
   Turns,
   Pause,
   Silent,
+  Command,
 }
 
 struct Turn {
@@ -77,23 +78,24 @@ impl Outcome {
 
 struct FrontEnd {
   mono: Vec<f32>,
-  evidence: Vec<Option<f32>>,
+  evidence: Vec<Option<TargetEvidence>>,
 }
 
 impl FrontEnd {
-  fn at(&self, frame: usize) -> Option<f32> {
+  fn at(&self, frame: usize) -> Option<TargetEvidence> {
     self.evidence.get(frame).copied().flatten()
   }
 }
 
-fn front_end(interleaved: &[i32], marks: &[usize]) -> FrontEnd {
+fn front_end(interleaved: &[i32], marks: &[usize], streaming: bool) -> FrontEnd {
   let mut beamformer = Beamformer::new(Config {
     adaptation: Some(scene::Config::default()),
     ..Config::default()
   });
+  let (replayed, live) = if streaming { (&[][..], marks) } else { (marks, &[][..]) };
 
   let mut cursor = 0usize;
-  for mark in marks {
+  for mark in replayed {
     let end = (mark * CHANNELS).min(interleaved.len());
     if end <= cursor {
       continue;
@@ -104,15 +106,20 @@ fn front_end(interleaved: &[i32], marks: &[usize]) -> FrontEnd {
     beamformer.hold_noise(true);
     cursor = end;
   }
-  if !marks.is_empty() {
+  if !replayed.is_empty() {
     beamformer.reset_frames();
   }
 
   let mut out = Vec::with_capacity(interleaved.len() / CHANNELS);
   let mut evidence = Vec::with_capacity(out.capacity() / FRAME_SAMPLES);
+  let mut pending = live.iter().peekable();
   for chunk in interleaved.chunks(FRAME_SAMPLES * CHANNELS) {
+    if pending.next_if(|mark| out.len() >= **mark).is_some() {
+      beamformer.mark_target();
+      beamformer.hold_noise(true);
+    }
     beamformer.process(chunk, &mut out);
-    let agreement = beamformer.target_agreement();
+    let agreement = beamformer.target_evidence();
     while evidence.len() < out.len() / FRAME_SAMPLES {
       evidence.push(agreement);
     }
@@ -122,8 +129,10 @@ fn front_end(interleaved: &[i32], marks: &[usize]) -> FrontEnd {
   to_pcm16(&out, &mut encoded);
   FrontEnd {
     mono: encoded
-      .chunks_exact(2)
-      .map(|pair| i16::from_le_bytes([pair[0], pair[1]]) as f32 / 32768.0)
+      .as_chunks::<2>()
+      .0
+      .iter()
+      .map(|pair| i16::from_le_bytes(*pair) as f32 / 32768.0)
       .collect(),
     evidence,
   }
@@ -154,6 +163,12 @@ fn turns_of(meta: &Scene, kind: Kind, total: usize) -> Vec<Turn> {
         )
       })
       .collect(),
+    Kind::Command => match spans.as_slice() {
+      [(wake_start, wake_len), (start, len)] => {
+        vec![turn(wake_start + wake_len, start + len, start + len + PATIENCE, None)]
+      }
+      _ => Vec::new(),
+    },
     Kind::Pause => {
       let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
         return Vec::new();
@@ -188,7 +203,7 @@ fn run_turn(front: &FrontEnd, turn: &Turn, config: VadConfig, cost: &mut Cost) -
   let window = &mono[from..turn.limit.min(mono.len())];
   let started = Instant::now();
   let mut closed = None;
-  for (index, frame) in window.chunks_exact(FRAME_SAMPLES).enumerate() {
+  for (index, frame) in window.as_chunks::<FRAME_SAMPLES>().0.iter().enumerate() {
     cost.frames += 1;
     if let Some(end) = endpointer.observe(frame, front.at((from + index * FRAME_SAMPLES) / FRAME_SAMPLES)) {
       closed = Some((turn.arm_at + (index + 1) * FRAME_SAMPLES, end));
@@ -230,6 +245,7 @@ fn main() {
       "turns" => Kind::Turns,
       "pause" => Kind::Pause,
       "silent" => Kind::Silent,
+      "command" => Kind::Command,
       other => panic!("unknown scene kind {other}"),
     };
     sets.push((kind, dir.to_string()));
@@ -249,6 +265,7 @@ fn main() {
   let mut by_archetype: BTreeMap<(Kind, u64, u32, u32, String), Outcome> = BTreeMap::new();
   let mut by_pause: BTreeMap<(u64, u32, u32, &'static str), Outcome> = BTreeMap::new();
   let mut unmarked_silent: BTreeMap<(u64, u32, u32), Outcome> = BTreeMap::new();
+  let mut by_command: BTreeMap<(String, u64, u32, u32), Outcome> = BTreeMap::new();
   let mut cost = Cost {
     elapsed: Duration::ZERO,
     frames: 0,
@@ -270,19 +287,27 @@ fn main() {
       };
       scenes_read += 1;
       let spans = meta.spans();
-      let marks: Vec<usize> = if spans.is_empty() {
-        vec![meta.speech_start.saturating_sub(LEAD)]
-      } else {
-        spans.iter().map(|(start, len)| start + len).collect()
+      let marks: Vec<usize> = match (*kind, spans.first()) {
+        (Kind::Command, Some((start, len))) => vec![start + len],
+        (_, None) => vec![meta.speech_start.saturating_sub(LEAD)],
+        _ => spans.iter().map(|(start, len)| start + len).collect(),
       };
-      let front = front_end(&interleaved, &marks);
-      let unmarked = (*kind == Kind::Silent).then(|| front_end(&interleaved, &[]));
+      let front = front_end(&interleaved, &marks, *kind == Kind::Command);
+      let unmarked = (*kind == Kind::Silent).then(|| front_end(&interleaved, &[], false));
+      let label = dir
+        .file_name()
+        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
       let turns = turns_of(meta, *kind, front.mono.len());
 
       resolved.1 += 1;
       resolved.0 += usize::from(front.evidence.iter().any(Option::is_some));
       for (index, evidence) in front.evidence.iter().enumerate() {
-        let Some(evidence) = evidence else { continue };
+        let Some(TargetEvidence {
+          agreement: evidence, ..
+        }) = evidence
+        else {
+          continue;
+        };
         let at = index * FRAME_SAMPLES;
         let talking = spans.iter().any(|(start, len)| at >= *start && at < start + len);
         let bucket = match (*kind, talking) {
@@ -311,6 +336,12 @@ fn main() {
           if let Some(pause) = turn.pause {
             by_pause
               .entry((*hangover, threshold.to_bits(), floor.to_bits(), pause_bucket(pause)))
+              .or_default()
+              .absorb(&outcome);
+          }
+          if *kind == Kind::Command {
+            by_command
+              .entry((label.clone(), *hangover, threshold.to_bits(), floor.to_bits()))
               .or_default()
               .absorb(&outcome);
           }
@@ -376,6 +407,30 @@ fn main() {
         f32::from_bits(*floor),
         outcome.percentile(0.5),
         outcome.percentile(0.9),
+        outcome.rate(outcome.cuts),
+        outcome.rate(outcome.onset_missed),
+        outcome.rate(outcome.never_closed),
+        outcome.turns
+      );
+    }
+  }
+
+  if !by_command.is_empty() {
+    let hangover = HANGOVERS_MS[HANGOVERS_MS.len() - 1];
+    println!("\nwake word then a short command, armed where the wake word ends (hangover {hangover} ms)");
+    println!(
+      "{:>28} {:>10} {:>6} {:>9} {:>10} {:>11} {:>12} {:>7}",
+      "set", "threshold", "floor", "p50 ms", "false cut", "onset miss", "never closed", "turns"
+    );
+    for ((label, at_hangover, threshold, floor), outcome) in &by_command {
+      if *at_hangover != hangover {
+        continue;
+      }
+      println!(
+        "{label:>28} {:>10.2} {:>6.2} {:>9.0} {:>10.4} {:>11.4} {:>12.4} {:>7}",
+        f32::from_bits(*threshold),
+        f32::from_bits(*floor),
+        outcome.percentile(0.5),
         outcome.rate(outcome.cuts),
         outcome.rate(outcome.onset_missed),
         outcome.rate(outcome.never_closed),

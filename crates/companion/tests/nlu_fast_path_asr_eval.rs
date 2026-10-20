@@ -104,11 +104,19 @@ fn amount_name(amount: NluAmount) -> &'static str {
   }
 }
 
+fn library_collection(value: &Value) -> bool {
+  value
+    .as_str()
+    .is_some_and(|target| [fast_path::LIKED_SONGS, fast_path::SAVED_ALBUMS].contains(&target))
+}
+
 fn expressible(gold: &Gold) -> bool {
   let Some((_, allowed)) = EXPRESSIBLE_SLOTS.iter().find(|(intent, _)| *intent == gold.intent) else {
     return false;
   };
-  if !gold.slots.keys().all(|key| allowed.contains(&key.as_str())) {
+  if !gold.slots.iter().all(|(key, value)| {
+    allowed.contains(&key.as_str()) || (gold.intent == "PLAY" && key == "target" && library_collection(value))
+  }) {
     return false;
   }
   if gold.intent == "SHOW_VIEW" {
@@ -130,6 +138,7 @@ fn slots_agree(intent: &str, slots: &NluSlots, gold: &Gold) -> bool {
     ("amount", Value::String(want)) => slots.amount.map(amount_name) == Some(want.as_str()),
     ("view", Value::String(want)) if want == "now_playing" => slots.view == Some(NluView::NowPlaying),
     ("target_type", Value::String(_)) => intent == "PLAY",
+    ("target", Value::String(want)) => slots.target.as_deref() == Some(want.as_str()),
     _ => false,
   })
 }

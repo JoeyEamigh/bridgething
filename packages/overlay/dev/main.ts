@@ -117,6 +117,7 @@ function voice(partial: Partial<VoiceActivity> & Pick<VoiceActivity, 'phase'>): 
     reason: null,
     score: null,
     transcript: null,
+    asrConfidence: null,
     intent: null,
     slots: {},
     stage: null,

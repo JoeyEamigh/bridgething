@@ -128,6 +128,11 @@ export default function App() {
                     <Chip tone={STAGE_TONE[turn.activity.stage] ?? NEUTRAL_TONE}>{turn.activity.stage}</Chip>
                   )}
                   <span className="font-mono text-near">{turn.activity.intent ?? '-'}</span>
+                  {turn.activity.asrConfidence != null && (
+                    <span className="font-mono tabular-nums text-dim">
+                      asr {turn.activity.asrConfidence.toFixed(2)}
+                    </span>
+                  )}
                   {turn.activity.target && <span className="font-mono text-dim">to {turn.activity.target}</span>}
                   {turn.display && (
                     <Chip tone="border-accent/30 bg-accent-soft text-accent">rendered {turn.display.intent}</Chip>
@@ -158,6 +163,7 @@ function Detail({ activity }: { activity: VoiceActivity }) {
         <Chip tone={PHASE_TONE[activity.phase] ?? PHASE_TONE.idle}>{activity.phase}</Chip>
         {activity.reason && <Chip tone={NEUTRAL_TONE}>{activity.reason}</Chip>}
         {activity.score != null && <Chip tone={NEUTRAL_TONE}>score {activity.score.toFixed(3)}</Chip>}
+        {activity.asrConfidence != null && <Chip tone={NEUTRAL_TONE}>asr {activity.asrConfidence.toFixed(3)}</Chip>}
         {activity.stage && <Chip tone={STAGE_TONE[activity.stage] ?? NEUTRAL_TONE}>{activity.stage}</Chip>}
         {activity.target && <Chip tone={NEUTRAL_TONE}>{activity.target}</Chip>}
       </div>

@@ -70,6 +70,7 @@ pub struct VoiceActivity {
   pub reason: Option<VoiceCaptureReason>,
   pub score: Option<f32>,
   pub transcript: Option<String>,
+  pub asr_confidence: Option<f32>,
   pub intent: Option<String>,
   #[serde(default)]
   pub slots: NluSlots,
@@ -86,6 +87,7 @@ impl VoiceActivity {
       reason: None,
       score: None,
       transcript: None,
+      asr_confidence: None,
       intent: None,
       slots: NluSlots::default(),
       stage: None,

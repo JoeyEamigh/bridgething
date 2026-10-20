@@ -110,7 +110,7 @@ fn run(
         mono.clear();
         beamformer.process(&samples[..read * CHANNELS], &mut mono);
         to_pcm16(&mono, &mut pending);
-        let on_target = beamformer.target_agreement();
+        let on_target = beamformer.target_evidence();
         while pending.len() >= frame_byte_len {
           let frame = CapturedFrame {
             pcm: pending.split_to(frame_byte_len).freeze(),

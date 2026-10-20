@@ -1,6 +1,8 @@
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
 use earshot::Detector;
+
+use crate::scene::TargetEvidence;
 
 pub const FRAME_SAMPLES: usize = 256;
 pub const SAMPLE_RATE_HZ: f64 = 16_000.0;
@@ -20,6 +22,8 @@ pub struct Config {
   pub min_speech: Duration,
   pub hangover: Duration,
   pub spatial_floor: f32,
+  pub onset_floor: f32,
+  pub min_band_share: f32,
 }
 
 impl Default for Config {
@@ -30,8 +34,19 @@ impl Default for Config {
       min_speech: Duration::from_millis(160),
       hangover: Duration::from_millis(1200),
       spatial_floor: 0.10,
+      onset_floor: 0.275,
+      min_band_share: 0.03,
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct OnsetTrace {
+  pub peak_acoustic_run: usize,
+  pub peak_gated_run: usize,
+  pub vetoed_frames: usize,
+  pub abstained_frames: usize,
+  pub max_score: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +65,9 @@ pub struct VoiceEndpointer {
   speech_seen: bool,
   armed_frames: usize,
   voiced_run: usize,
+  gated_run: usize,
+  run_evidence: VecDeque<Option<f32>>,
+  trace: OnsetTrace,
   quiet_run: usize,
   onset_frames: usize,
   min_speech_frames: usize,
@@ -66,6 +84,9 @@ impl VoiceEndpointer {
       speech_seen: false,
       armed_frames: 0,
       voiced_run: 0,
+      gated_run: 0,
+      run_evidence: VecDeque::with_capacity(frames_in(config.min_speech).max(1)),
+      trace: OnsetTrace::default(),
       quiet_run: 0,
       onset_frames: frames_in(config.onset),
       min_speech_frames: frames_in(config.min_speech).max(1),
@@ -78,11 +99,14 @@ impl VoiceEndpointer {
     self.speech_seen
   }
 
-  pub fn observe(&mut self, samples: &[f32], on_target: Option<f32>) -> Option<TurnEnd> {
+  pub fn onset_trace(&self) -> OnsetTrace {
+    self.trace
+  }
+
+  pub fn observe(&mut self, samples: &[f32], evidence: Option<TargetEvidence>) -> Option<TurnEnd> {
     if self.phase == Phase::Closed {
       return None;
     }
-    let spatial = on_target.is_none_or(|evidence| evidence >= self.config.spatial_floor);
     let mut verdict = None;
     self.pending.extend_from_slice(samples);
     let mut consumed = 0;
@@ -91,8 +115,8 @@ impl VoiceEndpointer {
         .scratch
         .copy_from_slice(&self.pending[consumed..consumed + FRAME_SAMPLES]);
       consumed += FRAME_SAMPLES;
-      let voiced = self.score_frame() >= self.config.threshold && spatial;
-      verdict = self.advance(voiced);
+      let score = self.score_frame();
+      verdict = self.advance(score, evidence);
     }
     self.pending.drain(..consumed);
     verdict
@@ -105,24 +129,62 @@ impl VoiceEndpointer {
     self.detector.predict_f32(&self.scratch)
   }
 
-  fn advance(&mut self, voiced: bool) -> Option<TurnEnd> {
+  fn run_on_target(&self) -> bool {
+    let (sum, count) = self
+      .run_evidence
+      .iter()
+      .flatten()
+      .fold((0.0f32, 0usize), |(sum, count), agreement| (sum + agreement, count + 1));
+    count == 0 || sum / count as f32 >= self.config.onset_floor
+  }
+
+  fn advance(&mut self, score: f32, evidence: Option<TargetEvidence>) -> Option<TurnEnd> {
+    let acoustic = score >= self.config.threshold;
+    let on_target = evidence.is_none_or(|evidence| evidence.agreement >= self.config.spatial_floor);
     match self.phase {
       Phase::Armed => {
         self.armed_frames += 1;
-        self.voiced_run = if voiced { self.voiced_run + 1 } else { 0 };
-        if self.voiced_run >= self.min_speech_frames {
+        let audible = evidence.filter(|evidence| evidence.band_share >= self.config.min_band_share);
+        let agreement = audible.map(|evidence| evidence.agreement);
+        let onset_on_target = agreement.is_none_or(|agreement| agreement >= self.config.onset_floor);
+        if acoustic {
+          self.voiced_run += 1;
+          if self.run_evidence.len() == self.min_speech_frames {
+            self.run_evidence.pop_front();
+          }
+          self.run_evidence.push_back(agreement);
+        } else {
+          self.voiced_run = 0;
+          self.run_evidence.clear();
+        }
+        self.gated_run = if acoustic && onset_on_target {
+          self.gated_run + 1
+        } else {
+          0
+        };
+        self.trace = OnsetTrace {
+          peak_acoustic_run: self.trace.peak_acoustic_run.max(self.voiced_run),
+          peak_gated_run: self.trace.peak_gated_run.max(self.gated_run),
+          vetoed_frames: self.trace.vetoed_frames + usize::from(acoustic && !onset_on_target),
+          abstained_frames: self.trace.abstained_frames
+            + usize::from(acoustic && evidence.is_some() && audible.is_none()),
+          max_score: self.trace.max_score.max(score),
+        };
+        let candidate = self.voiced_run > 0 && self.run_on_target();
+        if candidate && self.voiced_run >= self.min_speech_frames {
           self.phase = Phase::Speaking;
           self.speech_seen = true;
           self.quiet_run = 0;
           return None;
         }
-        if self.armed_frames >= self.onset_frames && self.voiced_run == 0 {
+        if self.armed_frames >= self.onset_frames && !candidate {
           self.phase = Phase::Closed;
           return Some(TurnEnd::NoOnset);
         }
         None
       }
       Phase::Speaking => {
+        let voiced = acoustic && on_target;
         self.quiet_run = if voiced { 0 } else { self.quiet_run + 1 };
         if self.quiet_run >= self.hangover_frames {
           self.phase = Phase::Closed;
@@ -152,7 +214,23 @@ mod tests {
       min_speech: Duration::from_millis(112),
       hangover: Duration::from_millis(160),
       spatial_floor: 0.0,
+      onset_floor: 0.0,
+      min_band_share: 0.0,
     }
+  }
+
+  fn judged(agreement: f32) -> Option<TargetEvidence> {
+    Some(TargetEvidence {
+      agreement,
+      band_share: 0.2,
+    })
+  }
+
+  fn dark(agreement: f32) -> Option<TargetEvidence> {
+    Some(TargetEvidence {
+      agreement,
+      band_share: 0.005,
+    })
   }
 
   fn voiced_frames(count: usize) -> Vec<f32> {
@@ -208,10 +286,10 @@ mod tests {
     feed_with(endpointer, samples, None)
   }
 
-  fn feed_with(endpointer: &mut VoiceEndpointer, samples: &[f32], on_target: Option<f32>) -> Option<TurnEnd> {
+  fn feed_with(endpointer: &mut VoiceEndpointer, samples: &[f32], evidence: Option<TargetEvidence>) -> Option<TurnEnd> {
     let mut end = None;
     for frame in samples.chunks(FRAME_SAMPLES) {
-      end = end.or(endpointer.observe(frame, on_target));
+      end = end.or(endpointer.observe(frame, evidence));
     }
     end
   }
@@ -219,6 +297,8 @@ mod tests {
   fn gated() -> Config {
     Config {
       spatial_floor: 0.25,
+      onset_floor: 0.25,
+      min_band_share: 0.03,
       ..config()
     }
   }
@@ -307,7 +387,7 @@ mod tests {
   fn spatial_evidence_below_the_floor_keeps_a_loud_interferer_from_opening_a_turn() {
     let mut endpointer = VoiceEndpointer::new(gated());
     assert_eq!(
-      feed_with(&mut endpointer, &voiced_frames(60), Some(0.05)),
+      feed_with(&mut endpointer, &voiced_frames(60), judged(0.05)),
       Some(TurnEnd::NoOnset)
     );
     assert!(!endpointer.speech_seen(), "off-target energy opened a turn");
@@ -316,17 +396,17 @@ mod tests {
   #[test]
   fn spatial_evidence_above_the_floor_leaves_the_acoustic_decision_alone() {
     let mut endpointer = VoiceEndpointer::new(gated());
-    assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), Some(0.8)), None);
+    assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), judged(0.8)), None);
     assert!(endpointer.speech_seen());
   }
 
   #[test]
   fn a_gate_that_shuts_mid_turn_runs_the_hangover_down_and_closes() {
     let mut endpointer = VoiceEndpointer::new(gated());
-    feed_with(&mut endpointer, &voiced_frames(20), Some(0.8));
+    feed_with(&mut endpointer, &voiced_frames(20), judged(0.8));
     assert!(endpointer.speech_seen());
     assert_eq!(
-      feed_with(&mut endpointer, &voiced_frames(40), Some(0.05)),
+      feed_with(&mut endpointer, &voiced_frames(40), judged(0.05)),
       Some(TurnEnd::SilenceAfterSpeech),
       "voice-scoring energy off the target bearing must not hold the turn open"
     );
@@ -345,7 +425,7 @@ mod tests {
   #[test]
   fn a_zero_floor_passes_every_frame_the_detector_calls_voice() {
     let mut endpointer = VoiceEndpointer::new(config());
-    assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), Some(0.0)), None);
+    assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), judged(0.0)), None);
     assert!(endpointer.speech_seen());
   }
 
@@ -355,8 +435,8 @@ mod tests {
     let mut vetoed = VoiceEndpointer::new(gated());
     let speech = voiced_frames(20);
     for frame in speech.chunks(FRAME_SAMPLES) {
-      open.observe(frame, Some(0.8));
-      vetoed.observe(frame, Some(0.05));
+      open.observe(frame, judged(0.8));
+      vetoed.observe(frame, judged(0.05));
     }
     let (mut open_scores, mut vetoed_scores) = (Vec::new(), Vec::new());
     for frame in voiced_frames(10).as_chunks::<FRAME_SAMPLES>().0 {
@@ -369,6 +449,111 @@ mod tests {
       open_scores, vetoed_scores,
       "a vetoed run fed the detector differently from an open one"
     );
+  }
+
+  fn feed_frames(
+    endpointer: &mut VoiceEndpointer,
+    samples: &[f32],
+    evidence: &[Option<TargetEvidence>],
+  ) -> Option<TurnEnd> {
+    let mut end = None;
+    for (frame, frame_evidence) in samples.chunks(FRAME_SAMPLES).zip(evidence) {
+      end = end.or(endpointer.observe(frame, *frame_evidence));
+    }
+    end
+  }
+
+  fn shipping_floor() -> Config {
+    Config {
+      threshold: TEST_THRESHOLD,
+      ..Config::default()
+    }
+  }
+
+  #[test]
+  fn a_short_command_with_two_off_target_frames_still_opens_the_turn() {
+    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    let evidence: Vec<Option<TargetEvidence>> = (0..12)
+      .map(|frame| judged(if frame == 3 || frame == 7 { 0.05 } else { 0.6 }))
+      .collect();
+    feed_frames(&mut endpointer, &voiced_frames(12), &evidence);
+    assert!(
+      endpointer.speech_seen(),
+      "two off-target frames inside a short command lost the whole command"
+    );
+    assert_eq!(
+      feed(&mut endpointer, &quiet_frames(120)),
+      Some(TurnEnd::SilenceAfterSpeech)
+    );
+  }
+
+  #[test]
+  fn a_command_the_gate_band_cannot_hear_opens_on_its_voicing() {
+    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    feed_with(&mut endpointer, &voiced_frames(12), dark(0.0));
+    assert!(
+      endpointer.speech_seen(),
+      "a back-vowel command with nothing in the gate band was read as off target"
+    );
+  }
+
+  #[test]
+  fn an_interferer_the_gate_band_places_elsewhere_still_cannot_open_a_turn() {
+    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    assert_eq!(
+      feed_with(&mut endpointer, &voiced_frames(400), judged(0.05)),
+      Some(TurnEnd::NoOnset)
+    );
+    assert!(!endpointer.speech_seen());
+  }
+
+  #[test]
+  fn an_open_turn_keeps_the_per_frame_gate_where_the_band_abstains() {
+    let mut endpointer = VoiceEndpointer::new(gated());
+    feed_with(&mut endpointer, &voiced_frames(20), judged(0.8));
+    assert!(endpointer.speech_seen());
+    assert_eq!(
+      feed_with(&mut endpointer, &voiced_frames(40), dark(0.05)),
+      Some(TurnEnd::SilenceAfterSpeech),
+      "an interferer the band abstains on must not hold the turn open"
+    );
+  }
+
+  #[test]
+  fn target_speech_beginning_under_a_voiced_interferer_still_opens_the_turn() {
+    let mut endpointer = VoiceEndpointer::new(gated());
+    let evidence: Vec<Option<TargetEvidence>> = (0..30)
+      .map(|frame| judged(if frame < 15 { 0.05 } else { 0.8 }))
+      .collect();
+    assert_eq!(feed_frames(&mut endpointer, &voiced_frames(30), &evidence), None);
+    assert!(endpointer.speech_seen());
+  }
+
+  #[test]
+  fn the_onset_trace_explains_a_turn_that_never_opened() {
+    let mut endpointer = VoiceEndpointer::new(gated());
+    let window = frames_in(gated().onset);
+    assert_eq!(
+      feed_with(&mut endpointer, &voiced_frames(60), judged(0.05)),
+      Some(TurnEnd::NoOnset)
+    );
+    let trace = endpointer.onset_trace();
+    assert_eq!(trace.peak_acoustic_run, window);
+    assert_eq!(trace.peak_gated_run, 0);
+    assert_eq!(trace.vetoed_frames, window);
+    assert_eq!(trace.abstained_frames, 0);
+    assert!(trace.max_score >= TEST_THRESHOLD, "max score {}", trace.max_score);
+  }
+
+  #[test]
+  fn the_onset_trace_counts_frames_the_band_abstained_on() {
+    let mut endpointer = VoiceEndpointer::new(gated());
+    feed_with(&mut endpointer, &voiced_frames(2), dark(0.0));
+    assert_eq!(feed(&mut endpointer, &quiet_frames(60)), Some(TurnEnd::NoOnset));
+    let trace = endpointer.onset_trace();
+    assert_eq!(trace.abstained_frames, 2);
+    assert_eq!(trace.vetoed_frames, 0);
+    assert!(trace.peak_acoustic_run >= 2, "peak run {}", trace.peak_acoustic_run);
   }
 
   #[test]

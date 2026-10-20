@@ -26,7 +26,8 @@ use bridgething_gateway::{Gateway, OutboundLink, SdkError, VoiceHandler};
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use libbridgething::{
-  NluPopularityFilter, NluResolvedIntent, NluSlots, NluStage, NluTargetType, Priority, VoiceCaptureReason,
+  NluPhoneAction, NluPopularityFilter, NluResolvedIntent, NluSlots, NluStage, NluTargetType, Priority,
+  VoiceCaptureReason,
   gateway::{
     BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayVoiceMsg, GatewayToBridgeMsgData,
     GatewayToBridgeVoiceMsg, VoiceCloseReason, VoiceDispatch, VoiceFrame, VoiceStreamClose, VoiceStreamOpen,
@@ -707,6 +708,54 @@ async fn disabling_the_fast_path_routes_bare_transport_through_the_model() {
   let resolution = controller.resolve("pause").await.unwrap();
   assert_eq!(resolution.stage, NluStage::Model);
   assert_eq!(resolution.resolved.intent, "PAUSE");
+}
+
+#[tokio::test]
+async fn a_model_bare_play_with_nothing_said_about_playback_is_refused_rather_than_resumed() {
+  let resolution = controller(Some(FakeInference::new(&[("PLAY", 9.0)])))
+    .resolve("Are you aware of synthesis?")
+    .await
+    .unwrap();
+  assert_eq!(resolution.stage, NluStage::RejectedNoIntent);
+  assert_eq!(resolution.resolved.intent, intent_catalog::NO_INTENT);
+}
+
+#[tokio::test]
+async fn a_model_bare_play_with_a_playback_cue_still_resumes() {
+  let resolution = controller(Some(FakeInference::new(&[("PLAY", 9.0)])))
+    .resolve("put something good on")
+    .await
+    .unwrap();
+  assert_eq!(resolution.stage, NluStage::Model);
+  assert_eq!(resolution.resolved.intent, "PLAY");
+}
+
+#[tokio::test]
+async fn a_model_phone_action_with_nothing_said_about_a_call_is_refused() {
+  let inference = FakeInference::with_slots(
+    &[("PHONE_ACTION", 9.0)],
+    NluSlots {
+      phone_action: Some(NluPhoneAction::Answer),
+      ..NluSlots::default()
+    },
+  );
+  let resolution = controller(Some(inference)).resolve("turn left here").await.unwrap();
+  assert_eq!(resolution.stage, NluStage::RejectedNoIntent);
+  assert_eq!(resolution.resolved.intent, intent_catalog::NO_INTENT);
+}
+
+#[tokio::test]
+async fn a_model_phone_action_naming_the_call_is_accepted() {
+  let inference = FakeInference::with_slots(
+    &[("PHONE_ACTION", 9.0)],
+    NluSlots {
+      phone_action: Some(NluPhoneAction::Answer),
+      ..NluSlots::default()
+    },
+  );
+  let resolution = controller(Some(inference)).resolve("answer the call").await.unwrap();
+  assert_eq!(resolution.stage, NluStage::Model);
+  assert_eq!(resolution.resolved.intent, "PHONE_ACTION");
 }
 
 // MARK: dispatcher

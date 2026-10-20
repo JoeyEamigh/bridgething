@@ -46,7 +46,9 @@ impl Tally {
 
 fn channel_average(interleaved: &[i32]) -> Vec<f32> {
   interleaved
-    .chunks_exact(CHANNELS)
+    .as_chunks::<CHANNELS>()
+    .0
+    .iter()
     .map(|mics| (mics.iter().map(|s| *s as f64).sum::<f64>() / CHANNELS as f64 / i32::MAX as f64) as f32)
     .collect()
 }

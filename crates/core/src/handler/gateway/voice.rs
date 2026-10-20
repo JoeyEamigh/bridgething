@@ -50,9 +50,13 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
   }
 
   async fn dispatch(&self, params: VoiceDispatch) -> HandlerResult {
-    let VoiceDispatch { resolved, stage } = params;
+    let VoiceDispatch {
+      resolved,
+      stage,
+      asr_confidence,
+    } = params;
     tracing::info!(
-      "({:?}) voice dispatch: intent={} transcript={:?}",
+      "({:?}) voice dispatch: intent={} transcript={:?} asr_confidence={asr_confidence:?}",
       &self.handle.address,
       resolved.intent,
       resolved.transcript,
@@ -60,6 +64,7 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
 
     let turn = VoiceActivity {
       transcript: Some(resolved.transcript.clone()),
+      asr_confidence,
       intent: Some(resolved.intent.clone()),
       slots: resolved.slots.clone(),
       stage,

@@ -177,6 +177,26 @@ struct Turn {
   packets: Vec<Bytes>,
 }
 
+struct Answer {
+  resolved: NluResolvedIntent,
+  stage: NluStage,
+  asr_confidence: Option<f32>,
+}
+
+struct Heard {
+  transcript: String,
+  confidence: Option<f32>,
+}
+
+impl Heard {
+  fn nothing() -> Self {
+    Self {
+      transcript: String::new(),
+      confidence: None,
+    }
+  }
+}
+
 struct Inner {
   recognizer: Option<Arc<dyn SpeechRecognizer>>,
   controller: Arc<VoiceController>,
@@ -229,7 +249,11 @@ impl Inner {
   }
 
   async fn answer(&self, turn: Turn, after: Option<oneshot::Receiver<()>>, done: oneshot::Sender<()>) {
-    let (resolved, stage) = self.resolve(&turn).await;
+    let Answer {
+      resolved,
+      stage,
+      asr_confidence,
+    } = self.resolve(&turn).await;
     if let Some(after) = after {
       let _ = after.await;
     }
@@ -241,6 +265,7 @@ impl Inner {
       .command(GatewayToBridgeVoiceMsgCommand::Dispatch(VoiceDispatch {
         resolved: Box::new(resolved),
         stage: Some(stage),
+        asr_confidence,
       }))
       .await
     {
@@ -249,8 +274,8 @@ impl Inner {
     let _ = done.send(());
   }
 
-  async fn resolve(&self, turn: &Turn) -> (NluResolvedIntent, NluStage) {
-    let transcript = self.transcribe(turn).await;
+  async fn resolve(&self, turn: &Turn) -> Answer {
+    let Heard { transcript, confidence } = self.transcribe(turn).await;
     let resolution = match self.controller.resolve(&transcript).await {
       Ok(resolution) => resolution,
       Err(error) => {
@@ -275,15 +300,19 @@ impl Inner {
       resolved = refusal.resolved;
       stage = refusal.stage;
     }
-    (resolved, stage)
+    Answer {
+      resolved,
+      stage,
+      asr_confidence: confidence,
+    }
   }
 
-  async fn transcribe(&self, turn: &Turn) -> String {
+  async fn transcribe(&self, turn: &Turn) -> Heard {
     if turn.packets.is_empty() {
-      return String::new();
+      return Heard::nothing();
     }
     let Some(recognizer) = self.recognizer.clone() else {
-      return String::new();
+      return Heard::nothing();
     };
 
     let packets = turn.packets.clone();
@@ -292,32 +321,35 @@ impl Inner {
       Ok(Ok(pcm)) => pcm,
       Ok(Err(error)) => {
         tracing::warn!(%error, stream = %turn.stream_id, "capture failed");
-        return String::new();
+        return Heard::nothing();
       }
       Err(error) => {
         tracing::warn!(%error, stream = %turn.stream_id, "capture failed");
-        return String::new();
+        return Heard::nothing();
       }
     };
     if pcm.is_empty() {
-      return String::new();
+      return Heard::nothing();
     }
 
     let (sink, spoken) = TranscriptionSink::channel();
     let sample_rate_hz = format.sample_rate_hz;
     if let Err(error) = tokio::task::spawn_blocking(move || recognizer.transcribe(pcm, sample_rate_hz, sink)).await {
       tracing::warn!(%error, stream = %turn.stream_id, "the recognizer did not answer");
-      return String::new();
+      return Heard::nothing();
     }
     match spoken.await {
-      Ok(Ok(transcription)) => transcription.text,
+      Ok(Ok(transcription)) => Heard {
+        transcript: transcription.text,
+        confidence: transcription.confidence,
+      },
       Ok(Err(reason)) => {
         tracing::warn!(%reason, stream = %turn.stream_id, "transcription failed");
-        String::new()
+        Heard::nothing()
       }
       Err(error) => {
         tracing::warn!(%error, stream = %turn.stream_id, "the recognizer dropped the turn");
-        String::new()
+        Heard::nothing()
       }
     }
   }

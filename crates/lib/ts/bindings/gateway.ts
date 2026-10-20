@@ -686,7 +686,7 @@ export type VoiceCloseReason = 'endOfSpeech' | 'cancelled' | 'muted' | 'error';
 
 export type VoiceCodec = 'opus';
 
-export type VoiceDispatch = { resolved: NluResolvedIntent; stage: NluStage | null };
+export type VoiceDispatch = { resolved: NluResolvedIntent; stage: NluStage | null; asrConfidence: number | null };
 
 export type VoiceDispatchFailed = { code: VoiceDispatchErrorCode; intent: string; msg: string };
 

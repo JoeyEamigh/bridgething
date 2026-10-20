@@ -18,6 +18,9 @@ macro_rules! res {
   }};
 }
 
+pub const LIKED_SONGS: &str = "liked songs";
+pub const SAVED_ALBUMS: &str = "saved albums";
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Hit {
   pub intent: &'static str,
@@ -38,6 +41,85 @@ pub fn match_transcript(transcript: &str) -> Option<Hit> {
 
   RULES.iter().find_map(|rule| rule(&tokens, &raw, &core))
 }
+
+pub fn cued(intent: &str, slots: &NluSlots, transcript: &str) -> bool {
+  let (raw, tokens) = normalize(transcript);
+  let any_of = |cues: &[&str]| tokens.iter().any(|token| cues.contains(&token.as_str()));
+  match intent {
+    "PLAY" if !slots.has_catalog_slots() => {
+      any_of(PLAYBACK_CUES)
+        || re!(r"\b(?:turn|put|switch|throw)(?:\s+\w+){0,2}\s+on\b|\bkeep(?:\s+\w+)?\s+(?:going|rolling)\b|\bgo\s+on\b")
+          .is_match(&raw)
+    }
+    "PHONE_ACTION" => any_of(CALL_CUES) || re!(r"\bpick(?:\s+\w+)?\s+up\b").is_match(&raw),
+    _ => true,
+  }
+}
+
+const PLAYBACK_CUES: &[&str] = &[
+  "play",
+  "plays",
+  "playing",
+  "played",
+  "playback",
+  "replay",
+  "start",
+  "starting",
+  "started",
+  "resume",
+  "resuming",
+  "unpause",
+  "continue",
+  "continuing",
+  "listen",
+  "listening",
+  "hear",
+  "hearing",
+  "music",
+  "song",
+  "songs",
+  "track",
+  "tracks",
+  "tune",
+  "tunes",
+  "playlist",
+  "playlists",
+  "album",
+  "albums",
+  "radio",
+  "station",
+  "shuffle",
+];
+
+const CALL_CUES: &[&str] = &[
+  "call", "calls", "calling", "caller", "callers", "phone", "answer", "decline", "reject", "ignore", "hang", "hold",
+  "unhold", "merge", "swap", "mute", "unmute",
+];
+
+const COLLECTION_LEADS: &[&str] = &[
+  "play", "put", "start", "listen", "hear", "turn", "on", "to", "some", "all", "of", "from", "the", "a", "list",
+  "songs", "tracks", "music", "me", "us", "can", "could", "would", "will", "you", "i", "want", "wanna", "just", "go",
+  "ahead", "and",
+];
+
+const COLLECTION_VERBS: &[&str] = &["play", "put", "start", "listen", "hear", "turn"];
+
+const COLLECTION_NAMES: &[&str] = &[
+  "liked",
+  "likes",
+  "saved",
+  "favorite",
+  "favorites",
+  "favourite",
+  "favourites",
+  "faves",
+  "library",
+  "collection",
+];
+
+const COLLECTION_NOUNS: &[&str] = &["songs", "tracks", "music", "list", "albums"];
+
+const COLLECTION_TAILS: &[&str] = &["now", "again", "for", "me", "us", "on"];
 
 const FILLERS: &[&str] = &[
   "uh", "uhh", "uhhh", "uhhhh", "um", "umm", "hmm", "hmmm", "er", "eh", "ah", "oh", "well", "so", "like", "yeah",
@@ -610,6 +692,44 @@ fn rule_volume_down(_tokens: &[String], raw: &str, _core: &str) -> Option<Hit> {
   None
 }
 
+fn rule_library_collection(tokens: &[String], _raw: &str, _core: &str) -> Option<Hit> {
+  let at = tokens.iter().position(|token| token == "my")?;
+  let (lead, named) = (&tokens[..at], &tokens[at + 1..]);
+  if !lead.iter().all(|token| COLLECTION_LEADS.contains(&token.as_str()))
+    || !lead.iter().any(|token| COLLECTION_VERBS.contains(&token.as_str()))
+  {
+    return None;
+  }
+  let words = named
+    .iter()
+    .position(|token| COLLECTION_TAILS.contains(&token.as_str()))
+    .unwrap_or(named.len());
+  let (collection, tail) = named.split_at(words);
+  if !tail.iter().all(|token| COLLECTION_TAILS.contains(&token.as_str())) {
+    return None;
+  }
+  let named_word = |token: &String| COLLECTION_NAMES.contains(&token.as_str());
+  let noun = |token: &String| COLLECTION_NOUNS.contains(&token.as_str());
+  if collection.is_empty() || !collection.iter().all(|token| named_word(token) || noun(token)) {
+    return None;
+  }
+  let albums = collection.iter().any(|token| token == "albums");
+  let unambiguous = collection
+    .iter()
+    .any(|token| named_word(token) && !matches!(token.as_str(), "favorite" | "favourite"));
+  let qualified_noun = collection.iter().any(named_word) && collection.iter().any(noun);
+  if !(unambiguous || qualified_noun || collection == [String::from("albums")]) {
+    return None;
+  }
+  hit(
+    "PLAY",
+    NluSlots {
+      target: Some(if albums { SAVED_ALBUMS } else { LIKED_SONGS }.to_owned()),
+      ..Default::default()
+    },
+  )
+}
+
 fn rule_play_resume(_tokens: &[String], _raw: &str, core: &str) -> Option<Hit> {
   if core_is_only(core, &["resume"], &[&["playing", "play"]]) {
     return hit("PLAY", NluSlots::default());
@@ -697,6 +817,7 @@ const RULES: &[Rule] = &[
   rule_mute,
   rule_volume_up,
   rule_volume_down,
+  rule_library_collection,
   rule_play_resume,
   rule_pause,
   rule_pause_stop,

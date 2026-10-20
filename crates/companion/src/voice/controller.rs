@@ -144,6 +144,9 @@ impl VoiceController {
         ),
         stage: NluStage::RejectedClarify,
       },
+      RejectionOutcome::Accept { intent } if !fast_path::cued(intent, &output.slots, trimmed) => {
+        no_intent(transcript, NluStage::RejectedNoIntent)
+      }
       RejectionOutcome::Accept { intent } => Resolution {
         resolved: resolved(intent, output.slots, transcript, None),
         stage: NluStage::Model,

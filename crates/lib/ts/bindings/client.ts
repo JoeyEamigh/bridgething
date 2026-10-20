@@ -1163,6 +1163,7 @@ export type VoiceActivity = {
   reason: VoiceCaptureReason | null;
   score: number | null;
   transcript: string | null;
+  asrConfidence: number | null;
   intent: string | null;
   slots: NluSlots;
   stage: NluStage | null;

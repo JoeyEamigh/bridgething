@@ -13,12 +13,13 @@ pub struct VoiceMicOpen {
 }
 
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 pub struct VoiceDispatch {
   pub resolved: Box<NluResolvedIntent>,
   pub stage: Option<NluStage>,
+  pub asr_confidence: Option<f32>,
 }
 
 #[serde_with::skip_serializing_none]
