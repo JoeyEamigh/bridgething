@@ -184,12 +184,11 @@ fn jpeg_quality(quality: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
+  use bridgething_companion::{backend::sniff_and_scale, media::sniff};
   use image::{
     Delay, ExtendedColorType, Frame, GenericImageView, ImageEncoder, Rgb, RgbImage, Rgba, RgbaImage,
     codecs::bmp::BmpEncoder,
   };
-
-  use bridgething_companion::{backend::sniff_and_scale, media::sniff};
 
   use super::*;
 

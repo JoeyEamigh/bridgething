@@ -550,7 +550,10 @@ mod tests {
 
     sidecar.halt();
 
-    assert!(closes_within(stdout, KILLED_WITHIN), "the halted child is still running");
+    assert!(
+      closes_within(stdout, KILLED_WITHIN),
+      "the halted child is still running"
+    );
     assert!(matches!(run.finish(), Err(SidecarError::Failed { status, .. }) if status.code().is_none()));
     assert!(matches!(sidecar.spawn(Vec::new()), Err(SidecarError::Halted)));
   }
@@ -567,7 +570,10 @@ mod tests {
     let job = FfmpegTranscoder::new(sidecar.clone()).transcode(request.clone(), sink);
     let deadline = std::time::Instant::now() + KILLED_WITHIN;
     while sidecar.live.lock().unwrap().children.len() < 2 {
-      assert!(std::time::Instant::now() < deadline, "the transcode never spawned its sidecar");
+      assert!(
+        std::time::Instant::now() < deadline,
+        "the transcode never spawned its sidecar"
+      );
       thread::sleep(Duration::from_millis(5));
     }
     job.cancel();
@@ -583,8 +589,15 @@ mod tests {
       .unwrap_err();
     assert!(!reason.is_empty());
     assert!(!Path::new(&request.destination).exists());
-    assert_eq!(sidecar.live.lock().unwrap().children.len(), 1, "only the bystander is left");
-    assert!(sidecar.spawn(Vec::new()).is_ok(), "a cancelled job does not halt the sidecar");
+    assert_eq!(
+      sidecar.live.lock().unwrap().children.len(),
+      1,
+      "only the bystander is left"
+    );
+    assert!(
+      sidecar.spawn(Vec::new()).is_ok(),
+      "a cancelled job does not halt the sidecar"
+    );
 
     sidecar.halt();
     assert!(closes_within(stdout, KILLED_WITHIN));
@@ -692,7 +705,10 @@ mod tests {
   #[test]
   fn the_movie_header_gives_the_duration_in_either_version() {
     assert_eq!(duration_ms(mp4(fixture::mvhd(0, 1000, 3067)).path()).unwrap(), 3067);
-    assert_eq!(duration_ms(mp4(fixture::mvhd(1, 90_000, 180_000)).path()).unwrap(), 2000);
+    assert_eq!(
+      duration_ms(mp4(fixture::mvhd(1, 90_000, 180_000)).path()).unwrap(),
+      2000
+    );
     assert!(matches!(
       duration_ms(mp4(fixture::mvhd(0, 0, 3067)).path()),
       Err(SidecarError::Malformed(_))

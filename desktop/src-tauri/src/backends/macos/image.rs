@@ -471,8 +471,12 @@ mod tests {
       quality: 0.6,
     };
 
-    let wide = sniff_and_scale(&ImageIoScaler, still(unsafe { UTTypePNG }, &painted(2000, 1000, true)), target)
-      .expect("the thumbnail scales");
+    let wide = sniff_and_scale(
+      &ImageIoScaler,
+      still(unsafe { UTTypePNG }, &painted(2000, 1000, true)),
+      target,
+    )
+    .expect("the thumbnail scales");
     assert_eq!(wide.mime, "image/jpeg");
     assert_eq!((wide.width, wide.height), (512, 256));
     assert_eq!(jpeg::edge(&wide.bytes), Some(512));
@@ -522,7 +526,10 @@ mod tests {
 
   #[test]
   fn bytes_that_are_not_an_image_are_declined() {
-    assert_eq!(sniff_and_scale(&ImageIoScaler, b"plainly not an image".to_vec(), COVER), None);
+    assert_eq!(
+      sniff_and_scale(&ImageIoScaler, b"plainly not an image".to_vec(), COVER),
+      None
+    );
     let jpeg = still(unsafe { UTTypeJPEG }, &painted(1200, 900, false));
     assert_eq!(
       ImageIoScaler.scale(jpeg, sniff(b"plainly not an image"), COVER),

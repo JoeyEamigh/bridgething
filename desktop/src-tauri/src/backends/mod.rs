@@ -1,11 +1,11 @@
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod asr;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod ffmpeg;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod geo;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod jpeg;
-#[cfg(any(target_os = "linux", target_os = "windows"))]
-pub mod ffmpeg;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]

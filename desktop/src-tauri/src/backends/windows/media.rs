@@ -10,8 +10,8 @@ use std::{
 };
 
 use bridgething_companion::backend::{
-  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaRepeatMode, MediaSessionBackend,
-  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaRepeatMode, MediaSessionBackend, MediaSessionInbox,
+  MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use bridgething_delivery::bundle::fetch::sha256_hex;
 use windows::{
@@ -691,9 +691,9 @@ fn shaped(mime: &str, raw: Vec<u8>) -> Option<MediaArt> {
     },
   )
   .map(|scaled| MediaArt {
-      bytes: scaled.bytes,
-      mime: scaled.mime,
-    })
+    bytes: scaled.bytes,
+    mime: scaled.mime,
+  })
 }
 
 fn on_change<S: RuntimeType + 'static, A: RuntimeType + 'static>(

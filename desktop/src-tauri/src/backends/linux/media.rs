@@ -11,8 +11,8 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD_PAD_INDIFFERENT};
 use bridgething_companion::backend::{
-  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode,
-  MediaSessionBackend, MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
+  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use bridgething_io::{DownloadBody, HttpExecutor, HttpHeader, HttpMethod, HttpRequest, ReqwestTransport};
 use futures::StreamExt;

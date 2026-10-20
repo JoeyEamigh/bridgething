@@ -14,8 +14,8 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bridgething_companion::backend::{
-  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode,
-  MediaSessionBackend, MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
+  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
+  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
 };
 use serde::{Deserialize, Serialize};
 
@@ -382,9 +382,9 @@ fn shape(reply: HelperArt, token: &str) -> Option<MediaArt> {
     },
   )
   .map(|scaled| MediaArt {
-      bytes: scaled.bytes,
-      mime: scaled.mime,
-    })
+    bytes: scaled.bytes,
+    mime: scaled.mime,
+  })
 }
 
 fn now_unix_ms() -> i64 {

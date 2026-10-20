@@ -355,8 +355,14 @@ fn a_bitrate_ceiling_keeps_a_detailed_clip_under_it() {
   transcode_under(&grainy, &capped, Some(CEILING)).expect("the capped encode");
 
   let (free, capped) = (bitrate(&free), bitrate(&capped));
-  assert!(capped <= f64::from(CEILING) * 1.25, "the encoder overshot its ceiling: {capped} bps");
-  assert!(capped * 2.0 < free, "the grain is detailed enough that the ceiling bound the encode: {capped} vs {free}");
+  assert!(
+    capped <= f64::from(CEILING) * 1.25,
+    "the encoder overshot its ceiling: {capped} bps"
+  );
+  assert!(
+    capped * 2.0 < free,
+    "the grain is detailed enough that the ceiling bound the encode: {capped} vs {free}"
+  );
 }
 
 #[test]
