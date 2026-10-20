@@ -22,9 +22,10 @@ pub mod transcode;
 pub mod wake;
 
 pub use apple_music::{
-  AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmEntry, AmFavoritesSink, AmFlagSink, AmItem, AmItemSink,
-  AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode,
-  AmSearchResults, AmSearchSink, AmShelf, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
+  AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmEntry, AmFavoritesSink,
+  AmFlagSink, AmInbox, AmItem, AmItemSink, AmItemsSink, AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand,
+  AmPlayerSnapshot, AmRef, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelf, AmShelvesSink, AmSignal,
+  AmSnapshotSink, AppleMusicBackend,
 };
 pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};

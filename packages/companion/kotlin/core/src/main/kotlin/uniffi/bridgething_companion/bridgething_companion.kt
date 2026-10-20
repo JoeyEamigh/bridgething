@@ -871,8 +871,8 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod6 : com.sun.jna
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod7 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `contextUri`: RustBuffer.ByValue,
-        `startAtUri`: RustBuffer.ByValue,
+        `context`: RustBuffer.ByValue,
+        `startAt`: RustBuffer.ByValue,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -882,7 +882,7 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod7 : com.sun.jna
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod8 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `uri`: RustBuffer.ByValue,
+        `item`: RustBuffer.ByValue,
         `next`: Byte,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
@@ -915,6 +915,7 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod10 : com.sun.jn
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod11 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
+        `scope`: RustBuffer.ByValue,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -924,7 +925,8 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod11 : com.sun.jn
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod12 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `uri`: RustBuffer.ByValue,
+        `limit`: Int,
+        `offset`: Int,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -934,8 +936,7 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod12 : com.sun.jn
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod13 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `query`: RustBuffer.ByValue,
-        `limit`: Int,
+        `item`: RustBuffer.ByValue,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -945,7 +946,6 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod13 : com.sun.jn
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod14 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `uris`: RustBuffer.ByValue,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -955,7 +955,49 @@ internal interface UniffiCallbackInterfaceAppleMusicBackendMethod14 : com.sun.jn
 internal interface UniffiCallbackInterfaceAppleMusicBackendMethod15 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `uri`: RustBuffer.ByValue,
+        `item`: RustBuffer.ByValue,
+        `sink`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceAppleMusicBackendMethod16 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `query`: RustBuffer.ByValue,
+        `limit`: Int,
+        `offset`: Int,
+        `sink`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceAppleMusicBackendMethod17 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `items`: RustBuffer.ByValue,
+        `sink`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceAppleMusicBackendMethod18 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `item`: RustBuffer.ByValue,
+        `sink`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfaceAppleMusicBackendMethod19 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `url`: RustBuffer.ByValue,
         `sink`: Long,
         `uniffiOutReturn`: Pointer,
         uniffiCallStatus: UniffiRustCallStatus,
@@ -1756,11 +1798,15 @@ internal open class UniffiVTableCallbackInterfaceWebappBundleSink(
     "queueInsert",
     "command",
     "library",
+    "libraryCount",
+    "recentlyPlayed",
+    "children",
     "recommendations",
     "resolve",
     "search",
     "isFavorite",
     "addFavorite",
+    "artwork",
 )
 internal open class UniffiVTableCallbackInterfaceAppleMusicBackend(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -1776,11 +1822,15 @@ internal open class UniffiVTableCallbackInterfaceAppleMusicBackend(
     @JvmField internal var `queueInsert`: UniffiCallbackInterfaceAppleMusicBackendMethod8? = null,
     @JvmField internal var `command`: UniffiCallbackInterfaceAppleMusicBackendMethod9? = null,
     @JvmField internal var `library`: UniffiCallbackInterfaceAppleMusicBackendMethod10? = null,
-    @JvmField internal var `recommendations`: UniffiCallbackInterfaceAppleMusicBackendMethod11? = null,
-    @JvmField internal var `resolve`: UniffiCallbackInterfaceAppleMusicBackendMethod12? = null,
-    @JvmField internal var `search`: UniffiCallbackInterfaceAppleMusicBackendMethod13? = null,
-    @JvmField internal var `isFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod14? = null,
-    @JvmField internal var `addFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod15? = null,
+    @JvmField internal var `libraryCount`: UniffiCallbackInterfaceAppleMusicBackendMethod11? = null,
+    @JvmField internal var `recentlyPlayed`: UniffiCallbackInterfaceAppleMusicBackendMethod12? = null,
+    @JvmField internal var `children`: UniffiCallbackInterfaceAppleMusicBackendMethod13? = null,
+    @JvmField internal var `recommendations`: UniffiCallbackInterfaceAppleMusicBackendMethod14? = null,
+    @JvmField internal var `resolve`: UniffiCallbackInterfaceAppleMusicBackendMethod15? = null,
+    @JvmField internal var `search`: UniffiCallbackInterfaceAppleMusicBackendMethod16? = null,
+    @JvmField internal var `isFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod17? = null,
+    @JvmField internal var `addFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod18? = null,
+    @JvmField internal var `artwork`: UniffiCallbackInterfaceAppleMusicBackendMethod19? = null,
 ) : Structure() {
     class UniffiByValue(
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -1796,11 +1846,15 @@ internal open class UniffiVTableCallbackInterfaceAppleMusicBackend(
         `queueInsert`: UniffiCallbackInterfaceAppleMusicBackendMethod8? = null,
         `command`: UniffiCallbackInterfaceAppleMusicBackendMethod9? = null,
         `library`: UniffiCallbackInterfaceAppleMusicBackendMethod10? = null,
-        `recommendations`: UniffiCallbackInterfaceAppleMusicBackendMethod11? = null,
-        `resolve`: UniffiCallbackInterfaceAppleMusicBackendMethod12? = null,
-        `search`: UniffiCallbackInterfaceAppleMusicBackendMethod13? = null,
-        `isFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod14? = null,
-        `addFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod15? = null,
+        `libraryCount`: UniffiCallbackInterfaceAppleMusicBackendMethod11? = null,
+        `recentlyPlayed`: UniffiCallbackInterfaceAppleMusicBackendMethod12? = null,
+        `children`: UniffiCallbackInterfaceAppleMusicBackendMethod13? = null,
+        `recommendations`: UniffiCallbackInterfaceAppleMusicBackendMethod14? = null,
+        `resolve`: UniffiCallbackInterfaceAppleMusicBackendMethod15? = null,
+        `search`: UniffiCallbackInterfaceAppleMusicBackendMethod16? = null,
+        `isFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod17? = null,
+        `addFavorite`: UniffiCallbackInterfaceAppleMusicBackendMethod18? = null,
+        `artwork`: UniffiCallbackInterfaceAppleMusicBackendMethod19? = null,
     ) : UniffiVTableCallbackInterfaceAppleMusicBackend(
             `uniffiFree`,
             `uniffiClone`,
@@ -1815,11 +1869,15 @@ internal open class UniffiVTableCallbackInterfaceAppleMusicBackend(
             `queueInsert`,
             `command`,
             `library`,
+            `libraryCount`,
+            `recentlyPlayed`,
+            `children`,
             `recommendations`,
             `resolve`,
             `search`,
             `isFavorite`,
             `addFavorite`,
+            `artwork`,
         ),
         Structure.ByValue
 
@@ -1837,11 +1895,15 @@ internal open class UniffiVTableCallbackInterfaceAppleMusicBackend(
         `queueInsert` = other.`queueInsert`
         `command` = other.`command`
         `library` = other.`library`
+        `libraryCount` = other.`libraryCount`
+        `recentlyPlayed` = other.`recentlyPlayed`
+        `children` = other.`children`
         `recommendations` = other.`recommendations`
         `resolve` = other.`resolve`
         `search` = other.`search`
         `isFavorite` = other.`isFavorite`
         `addFavorite` = other.`addFavorite`
+        `artwork` = other.`artwork`
     }
 }
 
@@ -2760,6 +2822,10 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_amactionsink_ok(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_amartworksink_complete(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_amartworksink_fail(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_amauthsink_complete(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_amauthsink_fail(): Int
@@ -2767,6 +2833,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_amcatalogsink_complete(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_amcatalogsink_fail(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_amcountsink_complete(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_amcountsink_fail(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_amfavoritessink_complete(): Int
 
@@ -2776,15 +2846,21 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_amflagsink_fail(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_aminbox_on_library_changed(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_aminbox_on_player_changed(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_amitemsink_complete(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_amitemsink_fail(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_amitemssink_complete(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_amitemssink_fail(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_ampagesink_complete(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_ampagesink_fail(): Int
-
-    external fun uniffi_bridgething_companion_checksum_method_amplayerinbox_on_changed(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_amsearchsink_complete(): Int
 
@@ -2820,6 +2896,12 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_library(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_library_count(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_recently_played(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_children(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_recommendations(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_resolve(): Int
@@ -2829,6 +2911,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favorite(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_applemusicbackend_artwork(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_audiobackend_speak(): Int
 
@@ -3634,6 +3718,28 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_clone_amartworksink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_amartworksink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amartworksink_complete(
+        `ptr`: Long,
+        `value`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amartworksink_fail(
+        `ptr`: Long,
+        `reason`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_bridgething_companion_fn_clone_amauthsink(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3673,6 +3779,28 @@ internal object UniffiLib {
     ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_amcatalogsink_fail(
+        `ptr`: Long,
+        `reason`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_amcountsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_amcountsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amcountsink_complete(
+        `ptr`: Long,
+        `value`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amcountsink_fail(
         `ptr`: Long,
         `reason`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3722,6 +3850,26 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_clone_aminbox(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_aminbox(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_aminbox_on_library_changed(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_aminbox_on_player_changed(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_bridgething_companion_fn_clone_amitemsink(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3739,6 +3887,28 @@ internal object UniffiLib {
     ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_amitemsink_fail(
+        `ptr`: Long,
+        `reason`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_clone_amitemssink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_free_amitemssink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amitemssink_complete(
+        `ptr`: Long,
+        `value`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_amitemssink_fail(
         `ptr`: Long,
         `reason`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3763,21 +3933,6 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_ampagesink_fail(
         `ptr`: Long,
         `reason`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_bridgething_companion_fn_clone_amplayerinbox(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_bridgething_companion_fn_free_amplayerinbox(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_bridgething_companion_fn_method_amplayerinbox_on_changed(
-        `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -3904,15 +4059,15 @@ internal object UniffiLib {
 
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_play_context(
         `ptr`: Long,
-        `contextUri`: RustBuffer.ByValue,
-        `startAtUri`: RustBuffer.ByValue,
+        `context`: RustBuffer.ByValue,
+        `startAt`: RustBuffer.ByValue,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_queue_insert(
         `ptr`: Long,
-        `uri`: RustBuffer.ByValue,
+        `item`: RustBuffer.ByValue,
         `next`: Byte,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3934,6 +4089,28 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_method_applemusicbackend_library_count(
+        `ptr`: Long,
+        `scope`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_applemusicbackend_recently_played(
+        `ptr`: Long,
+        `limit`: Int,
+        `offset`: Int,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_applemusicbackend_children(
+        `ptr`: Long,
+        `item`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_recommendations(
         `ptr`: Long,
         `sink`: Long,
@@ -3942,7 +4119,7 @@ internal object UniffiLib {
 
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_resolve(
         `ptr`: Long,
-        `uri`: RustBuffer.ByValue,
+        `item`: RustBuffer.ByValue,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
@@ -3951,20 +4128,28 @@ internal object UniffiLib {
         `ptr`: Long,
         `query`: RustBuffer.ByValue,
         `limit`: Int,
+        `offset`: Int,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_is_favorite(
         `ptr`: Long,
-        `uris`: RustBuffer.ByValue,
+        `items`: RustBuffer.ByValue,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_applemusicbackend_add_favorite(
         `ptr`: Long,
-        `uri`: RustBuffer.ByValue,
+        `item`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_bridgething_companion_fn_method_applemusicbackend_artwork(
+        `ptr`: Long,
+        `url`: RustBuffer.ByValue,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
@@ -5930,6 +6115,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_amactionsink_ok() != 14718) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_amartworksink_complete() != 42470) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_amartworksink_fail() != 42405) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_amauthsink_complete() != 6514) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -5940,6 +6131,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_amcatalogsink_fail() != 47856) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_amcountsink_complete() != 46740) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_amcountsink_fail() != 4937) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_amfavoritessink_complete() != 15038) {
@@ -5954,19 +6151,28 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_amflagsink_fail() != 37547) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_aminbox_on_library_changed() != 10882) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_aminbox_on_player_changed() != 41112) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_amitemsink_complete() != 31572) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_amitemsink_fail() != 60872) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_amitemssink_complete() != 58174) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_amitemssink_fail() != 62577) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_ampagesink_complete() != 6407) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_ampagesink_fail() != 39059) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_bridgething_companion_checksum_method_amplayerinbox_on_changed() != 22514) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_amsearchsink_complete() != 34663) {
@@ -5987,7 +6193,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_amsnapshotsink_fail() != 51172) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_start() != 45406) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_start() != 29068) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_stop() != 23567) {
@@ -6008,10 +6214,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_is_other_audio_playing() != 24142) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_play_context() != 53854) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_play_context() != 32245) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_queue_insert() != 50399) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_queue_insert() != 1627) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_command() != 51206) {
@@ -6020,19 +6226,31 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_library() != 47328) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_recommendations() != 17706) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_library_count() != 34960) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_resolve() != 42011) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_recently_played() != 30539) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_search() != 56655) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_children() != 1900) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favorite() != 20046) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_recommendations() != 23158) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite() != 26475) {
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_resolve() != 56275) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_search() != 44178) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favorite() != 3791) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite() != 45252) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_applemusicbackend_artwork() != 52422) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_audiobackend_speak() != 61321) {
@@ -7618,6 +7836,260 @@ public object FfiConverterTypeAmActionSink : FfiConverter<AmActionSink, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+public interface AmArtworkSinkInterface {
+    fun `complete`(`value`: kotlin.ByteArray)
+
+    fun `fail`(`reason`: kotlin.String)
+
+    companion object
+}
+
+open class AmArtworkSink :
+    Disposable,
+    AutoCloseable,
+    AmArtworkSinkInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_amartworksink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_amartworksink(handle, status)
+        }
+    }
+
+    override fun `complete`(`value`: kotlin.ByteArray) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amartworksink_complete(
+                    it,
+                    FfiConverterByteArray.lower(`value`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `fail`(`reason`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amartworksink_fail(
+                    it,
+                    FfiConverterString.lower(`reason`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAmArtworkSink : FfiConverter<AmArtworkSink, Long> {
+    override fun lower(value: AmArtworkSink): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AmArtworkSink = AmArtworkSink(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AmArtworkSink = lift(buf.getLong())
+
+    override fun allocationSize(value: AmArtworkSink) = 8UL
+
+    override fun write(
+        value: AmArtworkSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface AmAuthSinkInterface {
     fun `complete`(`value`: AmAuthStatus)
 
@@ -8026,6 +8498,260 @@ public object FfiConverterTypeAmCatalogSink : FfiConverter<AmCatalogSink, Long> 
 
     override fun write(
         value: AmCatalogSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+public interface AmCountSinkInterface {
+    fun `complete`(`value`: kotlin.UInt)
+
+    fun `fail`(`reason`: kotlin.String)
+
+    companion object
+}
+
+open class AmCountSink :
+    Disposable,
+    AutoCloseable,
+    AmCountSinkInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_amcountsink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_amcountsink(handle, status)
+        }
+    }
+
+    override fun `complete`(`value`: kotlin.UInt) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amcountsink_complete(
+                    it,
+                    FfiConverterUInt.lower(`value`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `fail`(`reason`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amcountsink_fail(
+                    it,
+                    FfiConverterString.lower(`reason`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAmCountSink : FfiConverter<AmCountSink, Long> {
+    override fun lower(value: AmCountSink): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AmCountSink = AmCountSink(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AmCountSink = lift(buf.getLong())
+
+    override fun allocationSize(value: AmCountSink) = 8UL
+
+    override fun write(
+        value: AmCountSink,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -8634,6 +9360,258 @@ public object FfiConverterTypeAmFlagSink : FfiConverter<AmFlagSink, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+public interface AmInboxInterface {
+    fun `onLibraryChanged`()
+
+    fun `onPlayerChanged`()
+
+    companion object
+}
+
+open class AmInbox :
+    Disposable,
+    AutoCloseable,
+    AmInboxInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_aminbox(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_aminbox(handle, status)
+        }
+    }
+
+    override fun `onLibraryChanged`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_aminbox_on_library_changed(
+                    it,
+                    _status,
+                )
+            }
+        }
+
+    override fun `onPlayerChanged`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_aminbox_on_player_changed(
+                    it,
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAmInbox : FfiConverter<AmInbox, Long> {
+    override fun lower(value: AmInbox): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AmInbox = AmInbox(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AmInbox = lift(buf.getLong())
+
+    override fun allocationSize(value: AmInbox) = 8UL
+
+    override fun write(
+        value: AmInbox,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface AmItemSinkInterface {
     fun `complete`(`value`: AmItem)
 
@@ -8888,6 +9866,260 @@ public object FfiConverterTypeAmItemSink : FfiConverter<AmItemSink, Long> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+public interface AmItemsSinkInterface {
+    fun `complete`(`value`: List<AmItem>)
+
+    fun `fail`(`reason`: kotlin.String)
+
+    companion object
+}
+
+open class AmItemsSink :
+    Disposable,
+    AutoCloseable,
+    AmItemsSinkInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    /**
+     * Whether the current object has been destroyed and its reference is gone in the Rust side.
+     */
+    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_bridgething_companion_fn_free_amitemssink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_bridgething_companion_fn_clone_amitemssink(handle, status)
+        }
+    }
+
+    override fun `complete`(`value`: List<AmItem>) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amitemssink_complete(
+                    it,
+                    FfiConverterSequenceTypeAmItem.lower(`value`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `fail`(`reason`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_amitemssink_fail(
+                    it,
+                    FfiConverterString.lower(`reason`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAmItemsSink : FfiConverter<AmItemsSink, Long> {
+    override fun lower(value: AmItemsSink): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AmItemsSink = AmItemsSink(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AmItemsSink = lift(buf.getLong())
+
+    override fun allocationSize(value: AmItemsSink) = 8UL
+
+    override fun write(
+        value: AmItemsSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
 public interface AmPageSinkInterface {
     fun `complete`(`value`: AmPage)
 
@@ -9042,246 +10274,6 @@ public object FfiConverterTypeAmPageSink : FfiConverter<AmPageSink, Long> {
 
     override fun write(
         value: AmPageSink,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-public interface AmPlayerInboxInterface {
-    fun `onChanged`()
-
-    companion object
-}
-
-open class AmPlayerInbox :
-    Disposable,
-    AutoCloseable,
-    AmPlayerInboxInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    /**
-     * Whether the current object has been destroyed and its reference is gone in the Rust side.
-     */
-    val uniffiIsDestroyed: Boolean get() = wasDestroyed.get()
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_bridgething_companion_fn_free_amplayerinbox(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_bridgething_companion_fn_clone_amplayerinbox(handle, status)
-        }
-    }
-
-    override fun `onChanged`() =
-        callWithHandle {
-            uniffiRustCall { _status ->
-                UniffiLib.uniffi_bridgething_companion_fn_method_amplayerinbox_on_changed(
-                    it,
-                    _status,
-                )
-            }
-        }
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeAmPlayerInbox : FfiConverter<AmPlayerInbox, Long> {
-    override fun lower(value: AmPlayerInbox): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): AmPlayerInbox = AmPlayerInbox(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): AmPlayerInbox = lift(buf.getLong())
-
-    override fun allocationSize(value: AmPlayerInbox) = 8UL
-
-    override fun write(
-        value: AmPlayerInbox,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -10145,7 +11137,7 @@ public object FfiConverterTypeAmSnapshotSink : FfiConverter<AmSnapshotSink, Long
 //
 
 public interface AppleMusicBackend {
-    fun `start`(`inbox`: AmPlayerInbox)
+    fun `start`(`inbox`: AmInbox)
 
     fun `stop`()
 
@@ -10160,13 +11152,13 @@ public interface AppleMusicBackend {
     fun `isOtherAudioPlaying`(`sink`: AmFlagSink)
 
     fun `playContext`(
-        `contextUri`: kotlin.String,
-        `startAtUri`: kotlin.String?,
+        `context`: AmRef,
+        `startAt`: AmRef?,
         `sink`: AmActionSink,
     )
 
     fun `queueInsert`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `next`: kotlin.Boolean,
         `sink`: AmActionSink,
     )
@@ -10183,27 +11175,49 @@ public interface AppleMusicBackend {
         `sink`: AmPageSink,
     )
 
+    fun `libraryCount`(
+        `scope`: AmLibraryScope,
+        `sink`: AmCountSink,
+    )
+
+    fun `recentlyPlayed`(
+        `limit`: kotlin.UInt,
+        `offset`: kotlin.UInt,
+        `sink`: AmPageSink,
+    )
+
+    fun `children`(
+        `item`: AmRef,
+        `sink`: AmItemsSink,
+    )
+
     fun `recommendations`(`sink`: AmShelvesSink)
 
     fun `resolve`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `sink`: AmItemSink,
     )
 
     fun `search`(
         `query`: kotlin.String,
         `limit`: kotlin.UInt,
+        `offset`: kotlin.UInt,
         `sink`: AmSearchSink,
     )
 
     fun `isFavorite`(
-        `uris`: List<kotlin.String>,
+        `items`: List<AmRef>,
         `sink`: AmFavoritesSink,
     )
 
     fun `addFavorite`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `sink`: AmActionSink,
+    )
+
+    fun `artwork`(
+        `url`: kotlin.String,
+        `sink`: AmArtworkSink,
     )
 
     companion object
@@ -10313,12 +11327,12 @@ open class AppleMusicBackendImpl :
         }
     }
 
-    override fun `start`(`inbox`: AmPlayerInbox) =
+    override fun `start`(`inbox`: AmInbox) =
         callWithHandle {
             uniffiRustCall { _status ->
                 UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_start(
                     it,
-                    FfiConverterTypeAmPlayerInbox.lower(`inbox`),
+                    FfiConverterTypeAmInbox.lower(`inbox`),
                     _status,
                 )
             }
@@ -10390,15 +11404,15 @@ open class AppleMusicBackendImpl :
         }
 
     override fun `playContext`(
-        `contextUri`: kotlin.String,
-        `startAtUri`: kotlin.String?,
+        `context`: AmRef,
+        `startAt`: AmRef?,
         `sink`: AmActionSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_play_context(
                 it,
-                FfiConverterString.lower(`contextUri`),
-                FfiConverterOptionalString.lower(`startAtUri`),
+                FfiConverterTypeAmRef.lower(`context`),
+                FfiConverterOptionalTypeAmRef.lower(`startAt`),
                 FfiConverterTypeAmActionSink.lower(`sink`),
                 _status,
             )
@@ -10406,14 +11420,14 @@ open class AppleMusicBackendImpl :
     }
 
     override fun `queueInsert`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `next`: kotlin.Boolean,
         `sink`: AmActionSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_queue_insert(
                 it,
-                FfiConverterString.lower(`uri`),
+                FfiConverterTypeAmRef.lower(`item`),
                 FfiConverterBoolean.lower(`next`),
                 FfiConverterTypeAmActionSink.lower(`sink`),
                 _status,
@@ -10453,6 +11467,50 @@ open class AppleMusicBackendImpl :
         }
     }
 
+    override fun `libraryCount`(
+        `scope`: AmLibraryScope,
+        `sink`: AmCountSink,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_library_count(
+                it,
+                FfiConverterTypeAmLibraryScope.lower(`scope`),
+                FfiConverterTypeAmCountSink.lower(`sink`),
+                _status,
+            )
+        }
+    }
+
+    override fun `recentlyPlayed`(
+        `limit`: kotlin.UInt,
+        `offset`: kotlin.UInt,
+        `sink`: AmPageSink,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_recently_played(
+                it,
+                FfiConverterUInt.lower(`limit`),
+                FfiConverterUInt.lower(`offset`),
+                FfiConverterTypeAmPageSink.lower(`sink`),
+                _status,
+            )
+        }
+    }
+
+    override fun `children`(
+        `item`: AmRef,
+        `sink`: AmItemsSink,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_children(
+                it,
+                FfiConverterTypeAmRef.lower(`item`),
+                FfiConverterTypeAmItemsSink.lower(`sink`),
+                _status,
+            )
+        }
+    }
+
     override fun `recommendations`(`sink`: AmShelvesSink) =
         callWithHandle {
             uniffiRustCall { _status ->
@@ -10465,13 +11523,13 @@ open class AppleMusicBackendImpl :
         }
 
     override fun `resolve`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `sink`: AmItemSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_resolve(
                 it,
-                FfiConverterString.lower(`uri`),
+                FfiConverterTypeAmRef.lower(`item`),
                 FfiConverterTypeAmItemSink.lower(`sink`),
                 _status,
             )
@@ -10481,6 +11539,7 @@ open class AppleMusicBackendImpl :
     override fun `search`(
         `query`: kotlin.String,
         `limit`: kotlin.UInt,
+        `offset`: kotlin.UInt,
         `sink`: AmSearchSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
@@ -10488,6 +11547,7 @@ open class AppleMusicBackendImpl :
                 it,
                 FfiConverterString.lower(`query`),
                 FfiConverterUInt.lower(`limit`),
+                FfiConverterUInt.lower(`offset`),
                 FfiConverterTypeAmSearchSink.lower(`sink`),
                 _status,
             )
@@ -10495,13 +11555,13 @@ open class AppleMusicBackendImpl :
     }
 
     override fun `isFavorite`(
-        `uris`: List<kotlin.String>,
+        `items`: List<AmRef>,
         `sink`: AmFavoritesSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_is_favorite(
                 it,
-                FfiConverterSequenceString.lower(`uris`),
+                FfiConverterSequenceTypeAmRef.lower(`items`),
                 FfiConverterTypeAmFavoritesSink.lower(`sink`),
                 _status,
             )
@@ -10509,14 +11569,28 @@ open class AppleMusicBackendImpl :
     }
 
     override fun `addFavorite`(
-        `uri`: kotlin.String,
+        `item`: AmRef,
         `sink`: AmActionSink,
     ) = callWithHandle {
         uniffiRustCall { _status ->
             UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_add_favorite(
                 it,
-                FfiConverterString.lower(`uri`),
+                FfiConverterTypeAmRef.lower(`item`),
                 FfiConverterTypeAmActionSink.lower(`sink`),
+                _status,
+            )
+        }
+    }
+
+    override fun `artwork`(
+        `url`: kotlin.String,
+        `sink`: AmArtworkSink,
+    ) = callWithHandle {
+        uniffiRustCall { _status ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_applemusicbackend_artwork(
+                it,
+                FfiConverterString.lower(`url`),
+                FfiConverterTypeAmArtworkSink.lower(`sink`),
                 _status,
             )
         }
@@ -10540,7 +11614,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`start`(
-                    FfiConverterTypeAmPlayerInbox.lift(`inbox`),
+                    FfiConverterTypeAmInbox.lift(`inbox`),
                 )
             }
             val writeReturn = { _: Unit -> Unit }
@@ -10654,8 +11728,8 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
     internal object `playContext` : UniffiCallbackInterfaceAppleMusicBackendMethod7 {
         override fun callback(
             `uniffiHandle`: Long,
-            `contextUri`: RustBuffer.ByValue,
-            `startAtUri`: RustBuffer.ByValue,
+            `context`: RustBuffer.ByValue,
+            `startAt`: RustBuffer.ByValue,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
@@ -10663,8 +11737,8 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`playContext`(
-                    FfiConverterString.lift(`contextUri`),
-                    FfiConverterOptionalString.lift(`startAtUri`),
+                    FfiConverterTypeAmRef.lift(`context`),
+                    FfiConverterOptionalTypeAmRef.lift(`startAt`),
                     FfiConverterTypeAmActionSink.lift(`sink`),
                 )
             }
@@ -10676,7 +11750,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
     internal object `queueInsert` : UniffiCallbackInterfaceAppleMusicBackendMethod8 {
         override fun callback(
             `uniffiHandle`: Long,
-            `uri`: RustBuffer.ByValue,
+            `item`: RustBuffer.ByValue,
             `next`: Byte,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
@@ -10685,7 +11759,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`queueInsert`(
-                    FfiConverterString.lift(`uri`),
+                    FfiConverterTypeAmRef.lift(`item`),
                     FfiConverterBoolean.lift(`next`),
                     FfiConverterTypeAmActionSink.lift(`sink`),
                 )
@@ -10739,7 +11813,69 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
         }
     }
 
-    internal object `recommendations` : UniffiCallbackInterfaceAppleMusicBackendMethod11 {
+    internal object `libraryCount` : UniffiCallbackInterfaceAppleMusicBackendMethod11 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `scope`: RustBuffer.ByValue,
+            `sink`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`libraryCount`(
+                    FfiConverterTypeAmLibraryScope.lift(`scope`),
+                    FfiConverterTypeAmCountSink.lift(`sink`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `recentlyPlayed` : UniffiCallbackInterfaceAppleMusicBackendMethod12 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `limit`: Int,
+            `offset`: Int,
+            `sink`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`recentlyPlayed`(
+                    FfiConverterUInt.lift(`limit`),
+                    FfiConverterUInt.lift(`offset`),
+                    FfiConverterTypeAmPageSink.lift(`sink`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `children` : UniffiCallbackInterfaceAppleMusicBackendMethod13 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `item`: RustBuffer.ByValue,
+            `sink`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`children`(
+                    FfiConverterTypeAmRef.lift(`item`),
+                    FfiConverterTypeAmItemsSink.lift(`sink`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `recommendations` : UniffiCallbackInterfaceAppleMusicBackendMethod14 {
         override fun callback(
             `uniffiHandle`: Long,
             `sink`: Long,
@@ -10757,10 +11893,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
         }
     }
 
-    internal object `resolve` : UniffiCallbackInterfaceAppleMusicBackendMethod12 {
+    internal object `resolve` : UniffiCallbackInterfaceAppleMusicBackendMethod15 {
         override fun callback(
             `uniffiHandle`: Long,
-            `uri`: RustBuffer.ByValue,
+            `item`: RustBuffer.ByValue,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
@@ -10768,7 +11904,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`resolve`(
-                    FfiConverterString.lift(`uri`),
+                    FfiConverterTypeAmRef.lift(`item`),
                     FfiConverterTypeAmItemSink.lift(`sink`),
                 )
             }
@@ -10777,11 +11913,12 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
         }
     }
 
-    internal object `search` : UniffiCallbackInterfaceAppleMusicBackendMethod13 {
+    internal object `search` : UniffiCallbackInterfaceAppleMusicBackendMethod16 {
         override fun callback(
             `uniffiHandle`: Long,
             `query`: RustBuffer.ByValue,
             `limit`: Int,
+            `offset`: Int,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
@@ -10791,6 +11928,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
                 uniffiObj.`search`(
                     FfiConverterString.lift(`query`),
                     FfiConverterUInt.lift(`limit`),
+                    FfiConverterUInt.lift(`offset`),
                     FfiConverterTypeAmSearchSink.lift(`sink`),
                 )
             }
@@ -10799,10 +11937,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
         }
     }
 
-    internal object `isFavorite` : UniffiCallbackInterfaceAppleMusicBackendMethod14 {
+    internal object `isFavorite` : UniffiCallbackInterfaceAppleMusicBackendMethod17 {
         override fun callback(
             `uniffiHandle`: Long,
-            `uris`: RustBuffer.ByValue,
+            `items`: RustBuffer.ByValue,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
@@ -10810,7 +11948,7 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`isFavorite`(
-                    FfiConverterSequenceString.lift(`uris`),
+                    FfiConverterSequenceTypeAmRef.lift(`items`),
                     FfiConverterTypeAmFavoritesSink.lift(`sink`),
                 )
             }
@@ -10819,10 +11957,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
         }
     }
 
-    internal object `addFavorite` : UniffiCallbackInterfaceAppleMusicBackendMethod15 {
+    internal object `addFavorite` : UniffiCallbackInterfaceAppleMusicBackendMethod18 {
         override fun callback(
             `uniffiHandle`: Long,
-            `uri`: RustBuffer.ByValue,
+            `item`: RustBuffer.ByValue,
             `sink`: Long,
             `uniffiOutReturn`: Pointer,
             uniffiCallStatus: UniffiRustCallStatus,
@@ -10830,8 +11968,28 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
             val makeCall = {
                 uniffiObj.`addFavorite`(
-                    FfiConverterString.lift(`uri`),
+                    FfiConverterTypeAmRef.lift(`item`),
                     FfiConverterTypeAmActionSink.lift(`sink`),
+                )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `artwork` : UniffiCallbackInterfaceAppleMusicBackendMethod19 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `url`: RustBuffer.ByValue,
+            `sink`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
+            val makeCall = {
+                uniffiObj.`artwork`(
+                    FfiConverterString.lift(`url`),
+                    FfiConverterTypeAmArtworkSink.lift(`sink`),
                 )
             }
             val writeReturn = { _: Unit -> Unit }
@@ -10864,11 +12022,15 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             `queueInsert`,
             `command`,
             `library`,
+            `libraryCount`,
+            `recentlyPlayed`,
+            `children`,
             `recommendations`,
             `resolve`,
             `search`,
             `isFavorite`,
             `addFavorite`,
+            `artwork`,
         )
 
     // Registers the foreign callback with the Rust side.
@@ -28746,7 +29908,7 @@ public object FfiConverterTypeActiveWebapp : FfiConverterRustBuffer<ActiveWebapp
 }
 
 data class AmEntry(
-    var `uri`: kotlin.String?,
+    var `item`: AmRef?,
     var `title`: kotlin.String,
     var `artistName`: kotlin.String?,
     var `albumName`: kotlin.String?,
@@ -28762,7 +29924,7 @@ data class AmEntry(
 public object FfiConverterTypeAmEntry : FfiConverterRustBuffer<AmEntry> {
     override fun read(buf: ByteBuffer): AmEntry =
         AmEntry(
-            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalTypeAmRef.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -28772,7 +29934,7 @@ public object FfiConverterTypeAmEntry : FfiConverterRustBuffer<AmEntry> {
 
     override fun allocationSize(value: AmEntry) =
         (
-            FfiConverterOptionalString.allocationSize(value.`uri`) +
+            FfiConverterOptionalTypeAmRef.allocationSize(value.`item`) +
                 FfiConverterString.allocationSize(value.`title`) +
                 FfiConverterOptionalString.allocationSize(value.`artistName`) +
                 FfiConverterOptionalString.allocationSize(value.`albumName`) +
@@ -28784,7 +29946,7 @@ public object FfiConverterTypeAmEntry : FfiConverterRustBuffer<AmEntry> {
         value: AmEntry,
         buf: ByteBuffer,
     ) {
-        FfiConverterOptionalString.write(value.`uri`, buf)
+        FfiConverterOptionalTypeAmRef.write(value.`item`, buf)
         FfiConverterString.write(value.`title`, buf)
         FfiConverterOptionalString.write(value.`artistName`, buf)
         FfiConverterOptionalString.write(value.`albumName`, buf)
@@ -28794,14 +29956,11 @@ public object FfiConverterTypeAmEntry : FfiConverterRustBuffer<AmEntry> {
 }
 
 data class AmItem(
-    var `uri`: kotlin.String,
-    var `kind`: AmKind,
+    var `item`: AmRef,
     var `title`: kotlin.String,
     var `subtitle`: kotlin.String?,
     var `artistName`: kotlin.String?,
-    var `artistUri`: kotlin.String?,
     var `albumName`: kotlin.String?,
-    var `albumUri`: kotlin.String?,
     var `artworkUrl`: kotlin.String?,
     var `durationMs`: kotlin.UInt?,
     var `trackCount`: kotlin.UInt?,
@@ -28815,11 +29974,8 @@ data class AmItem(
 public object FfiConverterTypeAmItem : FfiConverterRustBuffer<AmItem> {
     override fun read(buf: ByteBuffer): AmItem =
         AmItem(
+            FfiConverterTypeAmRef.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterTypeAmKind.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -28830,14 +29986,11 @@ public object FfiConverterTypeAmItem : FfiConverterRustBuffer<AmItem> {
 
     override fun allocationSize(value: AmItem) =
         (
-            FfiConverterString.allocationSize(value.`uri`) +
-                FfiConverterTypeAmKind.allocationSize(value.`kind`) +
+            FfiConverterTypeAmRef.allocationSize(value.`item`) +
                 FfiConverterString.allocationSize(value.`title`) +
                 FfiConverterOptionalString.allocationSize(value.`subtitle`) +
                 FfiConverterOptionalString.allocationSize(value.`artistName`) +
-                FfiConverterOptionalString.allocationSize(value.`artistUri`) +
                 FfiConverterOptionalString.allocationSize(value.`albumName`) +
-                FfiConverterOptionalString.allocationSize(value.`albumUri`) +
                 FfiConverterOptionalString.allocationSize(value.`artworkUrl`) +
                 FfiConverterOptionalUInt.allocationSize(value.`durationMs`) +
                 FfiConverterOptionalUInt.allocationSize(value.`trackCount`)
@@ -28847,14 +30000,11 @@ public object FfiConverterTypeAmItem : FfiConverterRustBuffer<AmItem> {
         value: AmItem,
         buf: ByteBuffer,
     ) {
-        FfiConverterString.write(value.`uri`, buf)
-        FfiConverterTypeAmKind.write(value.`kind`, buf)
+        FfiConverterTypeAmRef.write(value.`item`, buf)
         FfiConverterString.write(value.`title`, buf)
         FfiConverterOptionalString.write(value.`subtitle`, buf)
         FfiConverterOptionalString.write(value.`artistName`, buf)
-        FfiConverterOptionalString.write(value.`artistUri`, buf)
         FfiConverterOptionalString.write(value.`albumName`, buf)
-        FfiConverterOptionalString.write(value.`albumUri`, buf)
         FfiConverterOptionalString.write(value.`artworkUrl`, buf)
         FfiConverterOptionalUInt.write(value.`durationMs`, buf)
         FfiConverterOptionalUInt.write(value.`trackCount`, buf)
@@ -28863,7 +30013,6 @@ public object FfiConverterTypeAmItem : FfiConverterRustBuffer<AmItem> {
 
 data class AmPage(
     var `items`: List<AmItem>,
-    var `total`: kotlin.UInt?,
     var `hasMore`: kotlin.Boolean,
 ) {
     companion object
@@ -28876,14 +30025,12 @@ public object FfiConverterTypeAmPage : FfiConverterRustBuffer<AmPage> {
     override fun read(buf: ByteBuffer): AmPage =
         AmPage(
             FfiConverterSequenceTypeAmItem.read(buf),
-            FfiConverterOptionalUInt.read(buf),
             FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: AmPage) =
         (
             FfiConverterSequenceTypeAmItem.allocationSize(value.`items`) +
-                FfiConverterOptionalUInt.allocationSize(value.`total`) +
                 FfiConverterBoolean.allocationSize(value.`hasMore`)
         )
 
@@ -28892,7 +30039,6 @@ public object FfiConverterTypeAmPage : FfiConverterRustBuffer<AmPage> {
         buf: ByteBuffer,
     ) {
         FfiConverterSequenceTypeAmItem.write(value.`items`, buf)
-        FfiConverterOptionalUInt.write(value.`total`, buf)
         FfiConverterBoolean.write(value.`hasMore`, buf)
     }
 }
@@ -28942,6 +30088,42 @@ public object FfiConverterTypeAmPlayerSnapshot : FfiConverterRustBuffer<AmPlayer
         FfiConverterBoolean.write(value.`shuffle`, buf)
         FfiConverterTypeAmRepeatMode.write(value.`repeat`, buf)
         FfiConverterBoolean.write(value.`canSeek`, buf)
+    }
+}
+
+data class AmRef(
+    var `kind`: AmKind,
+    var `id`: kotlin.String,
+    var `library`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAmRef : FfiConverterRustBuffer<AmRef> {
+    override fun read(buf: ByteBuffer): AmRef =
+        AmRef(
+            FfiConverterTypeAmKind.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: AmRef) =
+        (
+            FfiConverterTypeAmKind.allocationSize(value.`kind`) +
+                FfiConverterString.allocationSize(value.`id`) +
+                FfiConverterBoolean.allocationSize(value.`library`)
+        )
+
+    override fun write(
+        value: AmRef,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeAmKind.write(value.`kind`, buf)
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterBoolean.write(value.`library`, buf)
     }
 }
 
@@ -33202,22 +34384,12 @@ public object FfiConverterTypeAmKind : FfiConverterRustBuffer<AmKind> {
     }
 }
 
-sealed class AmLibraryScope {
-    object Playlists : AmLibraryScope()
-
-    object Albums : AmLibraryScope()
-
-    object Artists : AmLibraryScope()
-
-    object Songs : AmLibraryScope()
-
-    object RecentlyPlayed : AmLibraryScope()
-
-    data class Children(
-        val `uri`: kotlin.String,
-    ) : AmLibraryScope() {
-        companion object
-    }
+enum class AmLibraryScope {
+    PLAYLISTS,
+    ALBUMS,
+    ARTISTS,
+    SONGS,
+    ;
 
     companion object
 }
@@ -33226,121 +34398,20 @@ sealed class AmLibraryScope {
  * @suppress
  */
 public object FfiConverterTypeAmLibraryScope : FfiConverterRustBuffer<AmLibraryScope> {
-    override fun read(buf: ByteBuffer): AmLibraryScope =
-        when (buf.getInt()) {
-            1 -> {
-                AmLibraryScope.Playlists
-            }
-
-            2 -> {
-                AmLibraryScope.Albums
-            }
-
-            3 -> {
-                AmLibraryScope.Artists
-            }
-
-            4 -> {
-                AmLibraryScope.Songs
-            }
-
-            5 -> {
-                AmLibraryScope.RecentlyPlayed
-            }
-
-            6 -> {
-                AmLibraryScope.Children(
-                    FfiConverterString.read(buf),
-                )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
+    override fun read(buf: ByteBuffer) =
+        try {
+            AmLibraryScope.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
         }
 
-    override fun allocationSize(value: AmLibraryScope): ULong =
-        when (value) {
-            is AmLibraryScope.Playlists -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is AmLibraryScope.Albums -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is AmLibraryScope.Artists -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is AmLibraryScope.Songs -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is AmLibraryScope.RecentlyPlayed -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is AmLibraryScope.Children -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`uri`)
-                )
-            }
-        }
+    override fun allocationSize(value: AmLibraryScope) = 4UL
 
     override fun write(
         value: AmLibraryScope,
         buf: ByteBuffer,
     ) {
-        when (value) {
-            is AmLibraryScope.Playlists -> {
-                buf.putInt(1)
-                Unit
-            }
-
-            is AmLibraryScope.Albums -> {
-                buf.putInt(2)
-                Unit
-            }
-
-            is AmLibraryScope.Artists -> {
-                buf.putInt(3)
-                Unit
-            }
-
-            is AmLibraryScope.Songs -> {
-                buf.putInt(4)
-                Unit
-            }
-
-            is AmLibraryScope.RecentlyPlayed -> {
-                buf.putInt(5)
-                Unit
-            }
-
-            is AmLibraryScope.Children -> {
-                buf.putInt(6)
-                FfiConverterString.write(value.`uri`, buf)
-                Unit
-            }
-        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+        buf.putInt(value.ordinal + 1)
     }
 }
 
@@ -39084,6 +40155,38 @@ public object FfiConverterOptionalTypeAmEntry : FfiConverterRustBuffer<AmEntry?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeAmRef : FfiConverterRustBuffer<AmRef?> {
+    override fun read(buf: ByteBuffer): AmRef? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeAmRef.read(buf)
+    }
+
+    override fun allocationSize(value: AmRef?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeAmRef.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: AmRef?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeAmRef.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeArtifactDigest : FfiConverterRustBuffer<ArtifactDigest?> {
     override fun read(buf: ByteBuffer): ArtifactDigest? {
         if (buf.get().toInt() == 0) {
@@ -40109,6 +41212,34 @@ public object FfiConverterSequenceTypeAmItem : FfiConverterRustBuffer<List<AmIte
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeAmItem.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeAmRef : FfiConverterRustBuffer<List<AmRef>> {
+    override fun read(buf: ByteBuffer): List<AmRef> {
+        val len = buf.getInt()
+        return List<AmRef>(len) {
+            FfiConverterTypeAmRef.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<AmRef>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeAmRef.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<AmRef>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeAmRef.write(it, buf)
         }
     }
 }

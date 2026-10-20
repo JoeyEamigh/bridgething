@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet, VecDeque},
   sync::{Arc, Mutex},
   time::Duration,
 };
@@ -15,19 +15,20 @@ use libbridgething::{
     LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibrarySearchRequest, PlayUri, QueueUri, TrackIdentity,
   },
 };
-use tokio::task::JoinHandle;
+use tokio::{sync::watch, task::JoinHandle};
 
 use crate::{
   backend::{
-    AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmEntry, AmFavoritesSink, AmFlagSink, AmItem, AmItemSink,
-    AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode,
-    AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend,
+    AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmEntry, AmFavoritesSink,
+    AmFlagSink, AmInbox, AmItem, AmItemSink, AmItemsSink, AmKind, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand,
+    AmPlayerSnapshot, AmRef, AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink, AmSignal, AmSnapshotSink,
+    AppleMusicBackend,
   },
   dispatch::tell,
   provider::{
     AssetBytes, AuthObserver, NowPlayingObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError,
     ProviderLink, ProviderNowPlaying,
-    art::{ArtCache, ImageAssetCodec},
+    art::{ArtCache, ArtOrigin, ImageAssetCodec},
     none_if_empty,
   },
 };
@@ -35,6 +36,8 @@ use crate::{
 pub const PROVIDER_NAME: &str = "apple-music";
 pub(crate) const KEY_CONNECTED: &str = "apple_music.connected";
 const APPLE_MUSIC_APP_BUNDLE: &str = "com.apple.Music";
+const URI_SCHEME: &str = "applemusic:";
+const LIBRARY_SEGMENT: &str = "library:";
 const REC_NODE_PREFIX: &str = "rec:";
 const PLAYLISTS_NODE_ID: &str = "playlists";
 const ALBUMS_NODE_ID: &str = "albums";
@@ -44,15 +47,27 @@ const RECENTS_NODE_ID: &str = "recently-played";
 const DEFAULT_HERO_EDGE: u32 = 248;
 const DEFAULT_THUMB_EDGE: u32 = 96;
 const DEFAULT_ROOT_PREVIEW: u32 = 8;
+const SEARCH_LIMIT_MAX: u32 = 25;
+const CHILDREN_CACHE_ENTRIES: usize = 8;
 const BACKEND_DEADLINE: Duration = Duration::from_secs(10);
+const BULK_DEADLINE: Duration = Duration::from_secs(30);
+const STAPLES: [AmLibraryScope; 4] = [
+  AmLibraryScope::Playlists,
+  AmLibraryScope::Albums,
+  AmLibraryScope::Artists,
+  AmLibraryScope::Songs,
+];
 
 const IMAGE_CODEC: ImageAssetCodec = ImageAssetCodec {
   namespace: "applemusic/img/",
   short_form: None,
 };
 
-async fn reply<T>(rx: tokio::sync::oneshot::Receiver<Result<T, String>>) -> Result<T, ProviderError> {
-  match tokio::time::timeout(BACKEND_DEADLINE, rx).await {
+async fn reply_within<T>(
+  deadline: Duration,
+  rx: tokio::sync::oneshot::Receiver<Result<T, String>>,
+) -> Result<T, ProviderError> {
+  match tokio::time::timeout(deadline, rx).await {
     Ok(Ok(Ok(value))) => Ok(value),
     Ok(Ok(Err(reason))) => Err(ProviderError::Failed(reason)),
     Ok(Err(_)) => Err(ProviderError::Failed("the backend dropped the call".into())),
@@ -60,10 +75,100 @@ async fn reply<T>(rx: tokio::sync::oneshot::Receiver<Result<T, String>>) -> Resu
   }
 }
 
+async fn reply<T>(rx: tokio::sync::oneshot::Receiver<Result<T, String>>) -> Result<T, ProviderError> {
+  reply_within(BACKEND_DEADLINE, rx).await
+}
+
 fn sized_artwork_url(template: &str, edge: u32) -> String {
   template
     .replace("{w}", &edge.to_string())
     .replace("{h}", &edge.to_string())
+}
+
+fn kind_name(kind: AmKind) -> &'static str {
+  match kind {
+    AmKind::Song => "song",
+    AmKind::Album => "album",
+    AmKind::Playlist => "playlist",
+    AmKind::Artist => "artist",
+    AmKind::Station => "station",
+  }
+}
+
+fn kind_named(name: &str) -> Option<AmKind> {
+  match name {
+    "song" => Some(AmKind::Song),
+    "album" => Some(AmKind::Album),
+    "playlist" => Some(AmKind::Playlist),
+    "artist" => Some(AmKind::Artist),
+    "station" => Some(AmKind::Station),
+    _ => None,
+  }
+}
+
+fn uri_of(item: &AmRef) -> String {
+  let library = if item.library { LIBRARY_SEGMENT } else { "" };
+  format!("{URI_SCHEME}{library}{}:{}", kind_name(item.kind), item.id)
+}
+
+fn parse_uri(uri: &str) -> Option<AmRef> {
+  let rest = uri.strip_prefix(URI_SCHEME)?;
+  let (library, rest) = match rest.strip_prefix(LIBRARY_SEGMENT) {
+    Some(rest) => (true, rest),
+    None => (false, rest),
+  };
+  let (kind, id) = rest.split_once(':')?;
+  let kind = kind_named(kind)?;
+  (!id.is_empty()).then(|| AmRef {
+    kind,
+    id: id.to_owned(),
+    library,
+  })
+}
+
+fn parsed(uri: &str) -> Result<AmRef, ProviderError> {
+  parse_uri(uri).ok_or_else(|| ProviderError::Failed(format!("not an apple music uri: {uri}")))
+}
+
+fn same_name(a: &str, b: &str) -> bool {
+  a.trim().to_lowercase() == b.trim().to_lowercase()
+}
+
+fn window(items: &[AmItem], limit: u32, offset: u32) -> (&[AmItem], bool) {
+  let start = (offset as usize).min(items.len());
+  let end = start.saturating_add(limit as usize).min(items.len());
+  (&items[start..end], end < items.len())
+}
+
+struct AppleMusicArt {
+  http: HttpExecutor,
+  backend: Arc<dyn AppleMusicBackend>,
+}
+
+fn is_web_url(url: &str) -> bool {
+  url
+    .split_once("://")
+    .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("https") || scheme.eq_ignore_ascii_case("http"))
+}
+
+#[async_trait::async_trait]
+impl ArtOrigin for AppleMusicArt {
+  async fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+    if is_web_url(url) {
+      return self.http.fetch(url).await;
+    }
+    let (sink, rx) = AmArtworkSink::channel();
+    let asked = url.to_owned();
+    tell(&self.backend, move |backend| backend.artwork(asked, sink)).await;
+    match reply(rx).await {
+      Ok(bytes) if !bytes.is_empty() => Some(bytes),
+      Ok(_) => None,
+      Err(error) => {
+        tracing::warn!(%url, %error, "apple music artwork did not load");
+        None
+      }
+    }
+  }
 }
 
 #[derive(Default)]
@@ -76,12 +181,30 @@ struct Shared {
   thumb_edge: u32,
 }
 
+#[derive(Default)]
+struct Catalogue {
+  generation: u64,
+  counts: HashMap<AmLibraryScope, watch::Receiver<Option<u32>>>,
+  children: VecDeque<(AmRef, Arc<Vec<AmItem>>)>,
+  stand_ins: HashMap<AmRef, AmRef>,
+}
+
+impl Catalogue {
+  fn forget(&mut self) {
+    *self = Catalogue {
+      generation: self.generation + 1,
+      ..Catalogue::default()
+    };
+  }
+}
+
 struct Core {
   backend: Arc<dyn AppleMusicBackend>,
   art_cache: Arc<ArtCache>,
-  art_origin: HttpExecutor,
+  art_origin: AppleMusicArt,
   link: Mutex<Option<ProviderLink>>,
   shared: Mutex<Shared>,
+  catalogue: Mutex<Catalogue>,
   np_observer: Mutex<Option<NowPlayingObserver>>,
   auth_observer: Mutex<Option<AuthObserver>>,
   auth_task: Mutex<Option<JoinHandle<()>>>,
@@ -110,15 +233,19 @@ impl AppleMusicProvider {
   ) -> Arc<Self> {
     Arc::new(Self {
       core: Arc::new(Core {
+        art_origin: AppleMusicArt {
+          http: HttpExecutor::new(http),
+          backend: backend.clone(),
+        },
         backend,
         art_cache,
-        art_origin: HttpExecutor::new(http),
         link: Mutex::new(None),
         shared: Mutex::new(Shared {
           hero_edge: DEFAULT_HERO_EDGE,
           thumb_edge: DEFAULT_THUMB_EDGE,
           ..Shared::default()
         }),
+        catalogue: Mutex::new(Catalogue::default()),
         np_observer: Mutex::new(None),
         auth_observer: Mutex::new(None),
         auth_task: Mutex::new(None),
@@ -131,19 +258,74 @@ impl AppleMusicProvider {
 impl Core {
   fn start_observation(self: &Arc<Self>) {
     let core = self.clone();
-    let (inbox, mut rx) = AmPlayerInbox::channel();
+    let (inbox, mut rx) = AmInbox::channel();
     let backend = core.backend.clone();
     let task = tokio::spawn(async move {
       tell(&backend, move |backend| backend.start(inbox)).await;
       if core.snapshot().await.is_some_and(|snap| snap.entry.is_some()) {
         core.emit_current().await;
       }
-      while rx.recv().await.is_some() {
-        core.emit_current().await;
+      while let Some(signal) = rx.recv().await {
+        match signal {
+          AmSignal::Player => core.emit_current().await,
+          AmSignal::Library => core.library_changed(),
+        }
       }
     });
     if let Some(previous) = self.observe_task.lock().unwrap().replace(task) {
       previous.abort();
+    }
+  }
+
+  fn library_changed(self: &Arc<Self>) {
+    self.catalogue.lock().unwrap().forget();
+    self.warm_counts();
+  }
+
+  fn warm_counts(self: &Arc<Self>) {
+    for scope in STAPLES {
+      self.count_slot(scope);
+    }
+  }
+
+  fn count_slot(self: &Arc<Self>, scope: AmLibraryScope) -> watch::Receiver<Option<u32>> {
+    let mut catalogue = self.catalogue.lock().unwrap();
+    if let Some(slot) = catalogue.counts.get(&scope) {
+      return slot.clone();
+    }
+    let (tx, rx) = watch::channel(None);
+    catalogue.counts.insert(scope, rx.clone());
+    drop(catalogue);
+    let core = self.clone();
+    let slot = rx.clone();
+    tokio::spawn(async move {
+      let (sink, reply_rx) = AmCountSink::channel();
+      tell(&core.backend, move |backend| backend.library_count(scope, sink)).await;
+      match reply_within(BULK_DEADLINE, reply_rx).await {
+        Ok(count) => {
+          let _ = tx.send(Some(count));
+        }
+        Err(error) => {
+          tracing::warn!(?scope, %error, "apple music library count failed");
+          let mut catalogue = core.catalogue.lock().unwrap();
+          if catalogue
+            .counts
+            .get(&scope)
+            .is_some_and(|held| held.same_channel(&slot))
+          {
+            catalogue.counts.remove(&scope);
+          }
+        }
+      }
+    });
+    rx
+  }
+
+  async fn count(self: &Arc<Self>, scope: AmLibraryScope) -> Option<u32> {
+    let mut slot = self.count_slot(scope);
+    match tokio::time::timeout(BACKEND_DEADLINE, slot.wait_for(Option::is_some)).await {
+      Ok(Ok(count)) => *count,
+      _ => None,
     }
   }
 
@@ -204,14 +386,15 @@ impl Core {
   }
 
   fn like_for(&self, entry: Option<&AmEntry>) -> Option<bool> {
-    let uri = entry?.uri.as_ref()?;
-    self.shared.lock().unwrap().liked_cache.get(uri).copied()
+    let uri = uri_of(entry?.item.as_ref()?);
+    self.shared.lock().unwrap().liked_cache.get(&uri).copied()
   }
 
   fn refresh_liked_if_needed(self: &Arc<Self>, entry: Option<&AmEntry>) {
-    let Some(uri) = entry.and_then(|entry| entry.uri.clone()) else {
+    let Some(item) = entry.and_then(|entry| entry.item.clone()) else {
       return;
     };
+    let uri = uri_of(&item);
     let needs_fetch = {
       let mut shared = self.shared.lock().unwrap();
       if shared.liked_cache.contains_key(&uri) || shared.liked_fetch_uri.as_ref() == Some(&uri) {
@@ -227,8 +410,7 @@ impl Core {
     let core = self.clone();
     tokio::spawn(async move {
       let (sink, rx) = AmFavoritesSink::channel();
-      let asked = uri.clone();
-      tell(&core.backend, move |backend| backend.is_favorite(vec![asked], sink)).await;
+      tell(&core.backend, move |backend| backend.is_favorite(vec![item], sink)).await;
       let Ok(favorites) = reply(rx).await else { return };
       let Some(liked) = favorites.first().copied() else {
         return;
@@ -240,8 +422,9 @@ impl Core {
           .last_snapshot
           .as_ref()
           .and_then(|snap| snap.entry.as_ref())
-          .and_then(|entry| entry.uri.as_ref())
-          == Some(&uri)
+          .and_then(|entry| entry.item.as_ref())
+          .map(uri_of)
+          == Some(uri)
       };
       if still_current {
         core.emit_current().await;
@@ -257,7 +440,9 @@ impl Core {
         .last_snapshot
         .as_ref()
         .and_then(|snap| snap.entry.as_ref())
-        .and_then(|entry| entry.uri.as_deref())
+        .and_then(|entry| entry.item.as_ref())
+        .map(uri_of)
+        .as_deref()
         == Some(uri)
     };
     if is_current {
@@ -297,6 +482,7 @@ impl Core {
     self.shared.lock().unwrap().authorized = true;
     self.notify_auth(ProviderAuthState::Authenticated);
     self.start_observation();
+    self.warm_counts();
   }
 
   async fn action(
@@ -324,6 +510,123 @@ impl Core {
     reply(rx).await
   }
 
+  async fn recents(&self, limit: u32, offset: u32) -> Result<AmPage, ProviderError> {
+    let (sink, rx) = AmPageSink::channel();
+    tell(&self.backend, move |backend| {
+      backend.recently_played(limit, offset, sink)
+    })
+    .await;
+    reply(rx).await
+  }
+
+  async fn resolve(&self, item: AmRef) -> Result<AmItem, ProviderError> {
+    let (sink, rx) = AmItemSink::channel();
+    tell(&self.backend, move |backend| backend.resolve(item, sink)).await;
+    reply(rx).await
+  }
+
+  async fn search_backend(&self, query: String, limit: u32, offset: u32) -> Result<AmSearchResults, ProviderError> {
+    let (sink, rx) = AmSearchSink::channel();
+    let limit = limit.clamp(1, SEARCH_LIMIT_MAX);
+    tell(&self.backend, move |backend| backend.search(query, limit, offset, sink)).await;
+    reply(rx).await
+  }
+
+  async fn fetch_children(&self, item: AmRef) -> Result<Vec<AmItem>, ProviderError> {
+    let (sink, rx) = AmItemsSink::channel();
+    tell(&self.backend, move |backend| backend.children(item, sink)).await;
+    reply_within(BULK_DEADLINE, rx).await
+  }
+
+  async fn children(&self, item: &AmRef) -> Result<Arc<Vec<AmItem>>, ProviderError> {
+    let generation = {
+      let catalogue = self.catalogue.lock().unwrap();
+      if let Some((_, held)) = catalogue.children.iter().find(|(key, _)| key == item) {
+        return Ok(held.clone());
+      }
+      catalogue.generation
+    };
+    let items = match (item.kind, item.library) {
+      (AmKind::Artist, true) => self.library_artist_children(item).await?,
+      (AmKind::Song | AmKind::Station, _) => Vec::new(),
+      _ => self.fetch_children(item.clone()).await?,
+    };
+    let items = Arc::new(items);
+    let mut catalogue = self.catalogue.lock().unwrap();
+    if catalogue.generation != generation {
+      return Ok(items);
+    }
+    catalogue.children.retain(|(key, _)| key != item);
+    catalogue.children.push_back((item.clone(), items.clone()));
+    while catalogue.children.len() > CHILDREN_CACHE_ENTRIES {
+      catalogue.children.pop_front();
+    }
+    Ok(items)
+  }
+
+  async fn library_artist_children(&self, artist: &AmRef) -> Result<Vec<AmItem>, ProviderError> {
+    let albums = self.fetch_children(artist.clone()).await?;
+    let stand_in = match self.resolve(artist.clone()).await {
+      Ok(resolved) => self.catalog_stand_in(&resolved.title, &albums).await,
+      Err(error) => {
+        tracing::info!(%error, "library artist did not resolve; albums only");
+        None
+      }
+    };
+    let Some((catalog_artist, top)) = stand_in else {
+      return Ok(albums);
+    };
+    self
+      .catalogue
+      .lock()
+      .unwrap()
+      .stand_ins
+      .insert(artist.clone(), catalog_artist);
+    Ok(top.into_iter().chain(albums).collect())
+  }
+
+  fn stand_in_for(&self, artist: &AmRef) -> Option<AmRef> {
+    self.catalogue.lock().unwrap().stand_ins.get(artist).cloned()
+  }
+
+  async fn catalog_stand_in(&self, name: &str, library_albums: &[AmItem]) -> Option<(AmRef, Vec<AmItem>)> {
+    let owned: HashSet<String> = library_albums
+      .iter()
+      .filter(|item| item.item.kind == AmKind::Album)
+      .map(|album| album.title.trim().to_lowercase())
+      .collect();
+    if owned.is_empty() {
+      return None;
+    }
+    let results = match self.search_backend(name.to_owned(), SEARCH_LIMIT_MAX, 0).await {
+      Ok(results) => results,
+      Err(error) => {
+        tracing::info!(%error, "catalog artist search failed; albums only");
+        return None;
+      }
+    };
+    for candidate in results
+      .artists
+      .iter()
+      .filter(|artist| !artist.item.library && same_name(&artist.title, name))
+    {
+      let Ok(catalog) = self.fetch_children(candidate.item.clone()).await else {
+        continue;
+      };
+      let shares_an_album = catalog
+        .iter()
+        .any(|item| item.item.kind == AmKind::Album && owned.contains(&item.title.trim().to_lowercase()));
+      if shares_an_album {
+        let top = catalog
+          .into_iter()
+          .filter(|item| item.item.kind == AmKind::Song)
+          .collect();
+        return Some((candidate.item.clone(), top));
+      }
+    }
+    None
+  }
+
   async fn shelves(&self) -> Result<Vec<crate::backend::AmShelf>, ProviderError> {
     let (sink, rx) = AmShelvesSink::channel();
     tell(&self.backend, move |backend| backend.recommendations(sink)).await;
@@ -338,20 +641,21 @@ impl Core {
     IMAGE_CODEC.asset_id(&sized_artwork_url(template, edge), edge)
   }
 
-  fn library_item(&self, item: &AmItem) -> Option<LibraryItem> {
+  fn library_item(&self, item: &AmItem) -> LibraryItem {
     let (hero, thumb) = self.art_edges();
     let art = self.art_asset_id(item.artwork_url.as_deref(), hero);
-    match item.kind {
-      AmKind::Song => Some(LibraryItem::Track(WireTrack {
-        id: item.uri.clone(),
+    let uri = uri_of(&item.item);
+    match item.item.kind {
+      AmKind::Song => LibraryItem::Track(WireTrack {
+        id: uri,
         name: item.title.clone(),
         album: WireAlbum {
-          id: item.album_uri.clone().unwrap_or_default(),
+          id: String::new(),
           name: item.album_name.clone().unwrap_or_default(),
           artwork_id: None,
         },
         artist: WireArtist {
-          id: item.artist_uri.clone().unwrap_or_default(),
+          id: String::new(),
           name: item.artist_name.clone().unwrap_or_default(),
           artwork_id: None,
         },
@@ -360,7 +664,7 @@ impl Core {
           .as_ref()
           .map(|name| {
             vec![WireArtist {
-              id: item.artist_uri.clone().unwrap_or_default(),
+              id: String::new(),
               name: name.clone(),
               artwork_id: None,
             }]
@@ -371,96 +675,110 @@ impl Core {
           .art_asset_id(item.artwork_url.as_deref(), thumb)
           .unwrap_or_default(),
         saved: false,
-      })),
-      AmKind::Album => Some(LibraryItem::Album(WireAlbum {
-        id: item.uri.clone(),
+      }),
+      AmKind::Album => LibraryItem::Album(WireAlbum {
+        id: uri,
         name: item.title.clone(),
         artwork_id: art,
-      })),
-      AmKind::Artist => Some(LibraryItem::Artist(WireArtist {
-        id: item.uri.clone(),
+      }),
+      AmKind::Artist => LibraryItem::Artist(WireArtist {
+        id: uri,
         name: item.title.clone(),
         artwork_id: art,
-      })),
-      AmKind::Playlist => Some(LibraryItem::Playlist(Playlist {
-        uri: item.uri.clone(),
+      }),
+      AmKind::Playlist => LibraryItem::Playlist(Playlist {
+        uri,
         name: item.title.clone(),
         owner_name: item.subtitle.clone(),
         track_count: item.track_count,
         artwork_id: art,
-      })),
-      AmKind::Station => Some(LibraryItem::Station(Station {
-        uri: item.uri.clone(),
+      }),
+      AmKind::Station => LibraryItem::Station(Station {
+        uri,
         name: item.title.clone(),
         seed: None,
         artwork_id: art,
-      })),
+      }),
     }
   }
 
-  fn page_result(&self, page: AmPage) -> BrowseResult {
-    BrowseResult {
-      entries: page
-        .items
-        .iter()
-        .filter_map(|item| self.library_item(item).map(BrowseEntry::Item))
-        .collect(),
-      total: page.total,
-      has_more: page.has_more,
-    }
+  fn entries(&self, items: &[AmItem]) -> Vec<BrowseEntry> {
+    items
+      .iter()
+      .map(|item| BrowseEntry::Item(self.library_item(item)))
+      .collect()
   }
 
-  async fn root_browse(&self, sections: Option<u32>, preview: Option<u32>) -> Result<BrowseResult, ProviderError> {
+  async fn staple(
+    self: &Arc<Self>,
+    scope: AmLibraryScope,
+    limit: u32,
+    offset: u32,
+  ) -> Result<BrowseResult, ProviderError> {
+    let (page, total) = tokio::join!(self.page(scope, limit, offset), self.count(scope));
+    let page = page?;
+    let has_more = match total {
+      Some(total) => (offset as usize).saturating_add(page.items.len()) < total as usize,
+      None => page.has_more,
+    };
+    Ok(BrowseResult {
+      entries: self.entries(&page.items),
+      total,
+      has_more,
+    })
+  }
+
+  async fn child_page(&self, item: &AmRef, limit: u32, offset: u32) -> Result<BrowseResult, ProviderError> {
+    let items = self.children(item).await?;
+    let (page, has_more) = window(&items, limit, offset);
+    Ok(BrowseResult {
+      entries: self.entries(page),
+      total: Some(items.len() as u32),
+      has_more,
+    })
+  }
+
+  async fn root_browse(
+    self: &Arc<Self>,
+    sections: Option<u32>,
+    preview: Option<u32>,
+  ) -> Result<BrowseResult, ProviderError> {
     let preview_count = preview.unwrap_or(DEFAULT_ROOT_PREVIEW);
-    let mut folders: Vec<BrowseFolder> = Vec::new();
-    let staples: [(&str, &str, AmLibraryScope); 4] = [
+    let staples = [
       (PLAYLISTS_NODE_ID, "Playlists", AmLibraryScope::Playlists),
       (ALBUMS_NODE_ID, "Albums", AmLibraryScope::Albums),
       (ARTISTS_NODE_ID, "Artists", AmLibraryScope::Artists),
       (SONGS_NODE_ID, "Songs", AmLibraryScope::Songs),
-    ];
-    for (node_id, title, scope) in staples {
-      if preview_count == 0 {
-        folders.push(BrowseFolder {
-          node_id: node_id.into(),
-          title: title.into(),
-          subtitle: None,
-          artwork_id: None,
-          total: None,
-          preview_children: None,
-        });
-        continue;
-      }
-      let page = self.page(scope, preview_count, 0).await.unwrap_or(AmPage {
-        items: Vec::new(),
-        total: None,
-        has_more: false,
-      });
-      let children: Vec<BrowseEntry> = page
-        .items
-        .iter()
-        .filter_map(|item| self.library_item(item).map(BrowseEntry::Item))
-        .collect();
-      folders.push(BrowseFolder {
+    ]
+    .map(|(node_id, title, scope)| async move {
+      let (children, total) = if preview_count == 0 {
+        (Vec::new(), self.count(scope).await)
+      } else {
+        match self.staple(scope, preview_count, 0).await {
+          Ok(result) => (result.entries, result.total),
+          Err(error) => {
+            tracing::info!(?scope, %error, "apple music staple preview failed");
+            (Vec::new(), None)
+          }
+        }
+      };
+      BrowseFolder {
         node_id: node_id.into(),
         title: title.into(),
         subtitle: None,
         artwork_id: None,
-        total: page.total,
+        total,
         preview_children: (!children.is_empty()).then_some(children),
-      });
-    }
-    if let Ok(rails) = self.shelves().await {
+      }
+    });
+    let (mut folders, rails) = tokio::join!(futures::future::join_all(staples), self.shelves());
+    if let Ok(rails) = rails {
       for rail in rails {
         let children: Vec<BrowseEntry> = if preview_count == 0 {
           Vec::new()
         } else {
-          rail
-            .items
-            .iter()
-            .take(preview_count as usize)
-            .filter_map(|item| self.library_item(item).map(BrowseEntry::Item))
-            .collect()
+          let shown = rail.items.len().min(preview_count as usize);
+          self.entries(&rail.items[..shown])
         };
         folders.push(BrowseFolder {
           node_id: format!("{REC_NODE_PREFIX}{}", rail.id),
@@ -508,8 +826,8 @@ fn make_snapshot(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -
       .and_then(|template| IMAGE_CODEC.asset_id(&sized_artwork_url(template, hero_edge), hero_edge))
   };
   let track = snap.entry.as_ref().map(|entry| MediaItem {
-    uri: Some(entry.uri.clone().unwrap_or_default()),
-    persistent_id: entry.uri.clone(),
+    uri: Some(entry.item.as_ref().map(uri_of).unwrap_or_default()),
+    persistent_id: entry.item.as_ref().map(uri_of),
     title: none_if_empty(&entry.title),
     album: entry.album_name.clone(),
     album_uri: None,
@@ -522,7 +840,7 @@ fn make_snapshot(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -
     media_types: None,
     track_number: None,
     track_count: None,
-    is_like_supported: entry.uri.is_some().then_some(true),
+    is_like_supported: entry.item.is_some().then_some(true),
     is_ban_supported: None,
     is_banned: None,
     chapter_count: None,
@@ -563,7 +881,7 @@ fn make_snapshot(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -
 
 fn make_update(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -> NowPlayingUpdate {
   let media = snap.entry.as_ref().map(|entry| MediaItemUpdate {
-    persistent_id: entry.uri.clone(),
+    persistent_id: entry.item.as_ref().map(uri_of),
     title: none_if_empty(&entry.title),
     album: entry.album_name.clone(),
     album_uri: None,
@@ -580,7 +898,7 @@ fn make_update(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -> 
     media_types: None,
     track_number: None,
     track_count: None,
-    is_like_supported: entry.uri.is_some().then_some(true),
+    is_like_supported: entry.item.is_some().then_some(true),
     is_ban_supported: None,
     is_banned: None,
     is_resident_on_device: None,
@@ -615,20 +933,21 @@ fn make_update(snap: &AmPlayerSnapshot, hero_edge: u32, liked: Option<bool>) -> 
 #[async_trait::async_trait]
 impl PlayerTransport for AppleMusicProvider {
   async fn play(&self, uri: PlayUri) -> Result<(), ProviderError> {
-    match uri.context {
-      Some(context) => {
-        self
-          .core
-          .action(move |backend, sink| backend.play_context(context.context_uri, Some(uri.uri), sink))
-          .await
-      }
-      None => {
-        self
-          .core
-          .action(move |backend, sink| backend.play_context(uri.uri, None, sink))
-          .await
-      }
+    let (mut context, start_at) = match uri.context {
+      Some(context) => (parsed(&context.context_uri)?, Some(parsed(&uri.uri)?)),
+      None => (parsed(&uri.uri)?, None),
+    };
+    if context.kind == AmKind::Artist
+      && context.library
+      && start_at.as_ref().is_some_and(|start| !start.library)
+      && let Some(stand_in) = self.core.stand_in_for(&context)
+    {
+      context = stand_in;
     }
+    self
+      .core
+      .action(move |backend, sink| backend.play_context(context, start_at, sink))
+      .await
   }
 
   async fn queue(&self, req: QueueUri) -> Result<(), ProviderError> {
@@ -637,9 +956,10 @@ impl PlayerTransport for AppleMusicProvider {
       libbridgething::QueuePosition::Next => true,
       libbridgething::QueuePosition::Index(_) => return Err(ProviderError::NotImplemented),
     };
+    let item = parsed(&req.uri)?;
     self
       .core
-      .action(move |backend, sink| backend.queue_insert(req.uri, next, sink))
+      .action(move |backend, sink| backend.queue_insert(item, next, sink))
       .await
   }
 
@@ -735,6 +1055,7 @@ impl Provider for AppleMusicProvider {
     if let Some(link) = link {
       link.sink.clear_source(PROVIDER_NAME);
     }
+    self.core.catalogue.lock().unwrap().forget();
     let mut shared = self.core.shared.lock().unwrap();
     shared.authorized = false;
     shared.last_snapshot = None;
@@ -818,39 +1139,24 @@ impl Provider for AppleMusicProvider {
   }
 
   async fn browse(&self, req: LibraryBrowseRequest) -> Result<BrowseResult, ProviderError> {
+    let core = &self.core;
     match req.node_id.as_deref() {
-      None | Some("") | Some("root") => self.core.root_browse(req.sections, req.preview).await,
-      Some(PLAYLISTS_NODE_ID) => Ok(
-        self
-          .core
-          .page_result(self.core.page(AmLibraryScope::Playlists, req.limit, req.offset).await?),
-      ),
-      Some(ALBUMS_NODE_ID) => Ok(
-        self
-          .core
-          .page_result(self.core.page(AmLibraryScope::Albums, req.limit, req.offset).await?),
-      ),
-      Some(ARTISTS_NODE_ID) => Ok(
-        self
-          .core
-          .page_result(self.core.page(AmLibraryScope::Artists, req.limit, req.offset).await?),
-      ),
-      Some(SONGS_NODE_ID) => Ok(
-        self
-          .core
-          .page_result(self.core.page(AmLibraryScope::Songs, req.limit, req.offset).await?),
-      ),
-      Some(RECENTS_NODE_ID) => Ok(
-        self.core.page_result(
-          self
-            .core
-            .page(AmLibraryScope::RecentlyPlayed, req.limit, req.offset)
-            .await?,
-        ),
-      ),
+      None | Some("") | Some("root") => core.root_browse(req.sections, req.preview).await,
+      Some(PLAYLISTS_NODE_ID) => core.staple(AmLibraryScope::Playlists, req.limit, req.offset).await,
+      Some(ALBUMS_NODE_ID) => core.staple(AmLibraryScope::Albums, req.limit, req.offset).await,
+      Some(ARTISTS_NODE_ID) => core.staple(AmLibraryScope::Artists, req.limit, req.offset).await,
+      Some(SONGS_NODE_ID) => core.staple(AmLibraryScope::Songs, req.limit, req.offset).await,
+      Some(RECENTS_NODE_ID) => {
+        let page = core.recents(req.limit, req.offset).await?;
+        Ok(BrowseResult {
+          entries: core.entries(&page.items),
+          total: None,
+          has_more: page.has_more,
+        })
+      }
       Some(node) if node.starts_with(REC_NODE_PREFIX) => {
         let rail_id = node.trim_start_matches(REC_NODE_PREFIX).to_owned();
-        let shelves = self.core.shelves().await?;
+        let shelves = core.shelves().await?;
         let Some(shelf) = shelves.into_iter().find(|shelf| shelf.id == rail_id) else {
           return Ok(BrowseResult {
             entries: Vec::new(),
@@ -858,38 +1164,19 @@ impl Provider for AppleMusicProvider {
             has_more: false,
           });
         };
-        let page: Vec<&AmItem> = shelf
-          .items
-          .iter()
-          .skip(req.offset as usize)
-          .take(req.limit as usize)
-          .collect();
-        let taken = page.len();
+        let (page, has_more) = window(&shelf.items, req.limit, req.offset);
         Ok(BrowseResult {
-          entries: page
-            .into_iter()
-            .filter_map(|item| self.core.library_item(item).map(BrowseEntry::Item))
-            .collect(),
+          entries: core.entries(page),
           total: shelf.total.or(Some(shelf.items.len() as u32)),
-          has_more: req.offset as usize + taken < shelf.items.len(),
+          has_more,
         })
       }
-      Some(node) => {
-        let scope = AmLibraryScope::Children { uri: node.to_owned() };
-        Ok(
-          self
-            .core
-            .page_result(self.core.page(scope, req.limit, req.offset).await?),
-        )
-      }
+      Some(node) => core.child_page(&parsed(node)?, req.limit, req.offset).await,
     }
   }
 
   async fn resolve_context(&self, uri: &str) -> Result<ContextResolveReply, ProviderError> {
-    let (sink, rx) = AmItemSink::channel();
-    let asked = uri.to_owned();
-    tell(&self.core.backend, move |backend| backend.resolve(asked, sink)).await;
-    let item = reply(rx).await?;
+    let item = self.core.resolve(parsed(uri)?).await?;
     let (hero, _) = self.core.art_edges();
     Ok(ContextResolveReply {
       name: none_if_empty(&item.title),
@@ -903,12 +1190,8 @@ impl Provider for AppleMusicProvider {
       Some(kinds) if !kinds.is_empty() => kinds.clone(),
       _ => vec![ItemKind::Track, ItemKind::Album, ItemKind::Artist, ItemKind::Playlist],
     };
-    let (sink, rx) = AmSearchSink::channel();
-    let query = req.query.clone();
-    let limit = req.limit;
-    tell(&self.core.backend, move |backend| backend.search(query, limit, sink)).await;
-    let results = reply(rx).await?;
-    let limit = req.limit as usize;
+    let limit = req.limit.clamp(1, SEARCH_LIMIT_MAX);
+    let results = self.core.search_backend(req.query.clone(), limit, req.offset).await?;
     let mut items = Vec::new();
     let mut present = Vec::new();
     let mut full = false;
@@ -920,14 +1203,13 @@ impl Provider for AppleMusicProvider {
         ItemKind::Playlist => &results.playlists,
         _ => continue,
       };
-      let mapped: Vec<LibraryItem> = bucket.iter().filter_map(|item| self.core.library_item(item)).collect();
-      if !mapped.is_empty() {
+      if !bucket.is_empty() {
         present.push(kind);
-        if mapped.len() >= limit {
+        if bucket.len() >= limit as usize {
           full = true;
         }
       }
-      items.extend(mapped);
+      items.extend(bucket.iter().map(|item| self.core.library_item(item)));
     }
     Ok(SearchResult {
       items,
@@ -938,25 +1220,24 @@ impl Provider for AppleMusicProvider {
   }
 
   async fn recommendations(&self, req: LibraryRecommendationsRequest) -> Result<RecommendationsResult, ProviderError> {
-    if let Some(artist) = req.seeds.iter().find(|seed| seed.kind == ItemKind::Artist) {
-      let scope = AmLibraryScope::Children {
-        uri: artist.uri.clone(),
-      };
-      let page = self.core.page(scope, req.limit, req.offset).await?;
+    let Some(artist) = req
+      .seeds
+      .iter()
+      .filter(|seed| seed.kind == ItemKind::Artist)
+      .find_map(|seed| parse_uri(&seed.uri))
+    else {
       return Ok(RecommendationsResult {
-        items: page
-          .items
-          .iter()
-          .filter_map(|item| self.core.library_item(item))
-          .collect(),
-        total: page.total,
-        has_more: page.has_more,
+        items: Vec::new(),
+        total: None,
+        has_more: false,
       });
-    }
+    };
+    let items = self.core.children(&artist).await?;
+    let (page, has_more) = window(&items, req.limit, req.offset);
     Ok(RecommendationsResult {
-      items: Vec::new(),
-      total: None,
-      has_more: false,
+      items: page.iter().map(|item| self.core.library_item(item)).collect(),
+      total: Some(items.len() as u32),
+      has_more,
     })
   }
 
@@ -965,9 +1246,20 @@ impl Provider for AppleMusicProvider {
   }
 
   async fn favorites_contains(&self, req: LibraryFavoritesContainsRequest) -> Result<Vec<bool>, ProviderError> {
+    let refs: Vec<Option<AmRef>> = req.uris.iter().map(|uri| parse_uri(uri)).collect();
+    let asked: Vec<AmRef> = refs.iter().flatten().cloned().collect();
+    if asked.is_empty() {
+      return Ok(vec![false; refs.len()]);
+    }
     let (sink, rx) = AmFavoritesSink::channel();
-    tell(&self.core.backend, move |backend| backend.is_favorite(req.uris, sink)).await;
-    reply(rx).await
+    tell(&self.core.backend, move |backend| backend.is_favorite(asked, sink)).await;
+    let mut answers = reply(rx).await?.into_iter();
+    Ok(
+      refs
+        .iter()
+        .map(|item| item.is_some() && answers.next().unwrap_or(false))
+        .collect(),
+    )
   }
 
   async fn favorites_toggle(&self, item: ItemRef) -> Result<(), ProviderError> {
@@ -986,10 +1278,10 @@ impl Provider for AppleMusicProvider {
     if current {
       return Err(ProviderError::NotImplemented);
     }
-    let uri = item.uri.clone();
+    let target = parsed(&item.uri)?;
     self
       .core
-      .action(move |backend, sink| backend.add_favorite(uri, sink))
+      .action(move |backend, sink| backend.add_favorite(target, sink))
       .await?;
     self.core.apply_liked_change(&item.uri, true).await;
     Ok(())
@@ -999,10 +1291,10 @@ impl Provider for AppleMusicProvider {
     if !liked {
       return Err(ProviderError::NotImplemented);
     }
-    let uri = item.uri.clone();
+    let target = parsed(&item.uri)?;
     self
       .core
-      .action(move |backend, sink| backend.add_favorite(uri, sink))
+      .action(move |backend, sink| backend.add_favorite(target, sink))
       .await?;
     self.core.apply_liked_change(&item.uri, true).await;
     Ok(())
@@ -1014,10 +1306,10 @@ impl Provider for AppleMusicProvider {
         tracing::info!(uri = %entry.item.uri, "skipping unfavorite: apple music favorites are add-only");
         continue;
       }
-      let uri = entry.item.uri.clone();
+      let target = parsed(&entry.item.uri)?;
       self
         .core
-        .action(move |backend, sink| backend.add_favorite(uri, sink))
+        .action(move |backend, sink| backend.add_favorite(target, sink))
         .await?;
       self.core.apply_liked_change(&entry.item.uri, true).await;
     }

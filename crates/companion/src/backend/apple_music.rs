@@ -19,7 +19,7 @@ pub enum AmRepeatMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AmEntry {
-  pub uri: Option<String>,
+  pub item: Option<AmRef>,
   pub title: String,
   pub artist_name: Option<String>,
   pub album_name: Option<String>,
@@ -37,7 +37,7 @@ pub struct AmPlayerSnapshot {
   pub can_seek: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
 pub enum AmKind {
   Song,
   Album,
@@ -46,16 +46,20 @@ pub enum AmKind {
   Station,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, uniffi::Record)]
+pub struct AmRef {
+  pub kind: AmKind,
+  pub id: String,
+  pub library: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AmItem {
-  pub uri: String,
-  pub kind: AmKind,
+  pub item: AmRef,
   pub title: String,
   pub subtitle: Option<String>,
   pub artist_name: Option<String>,
-  pub artist_uri: Option<String>,
   pub album_name: Option<String>,
-  pub album_uri: Option<String>,
   pub artwork_url: Option<String>,
   pub duration_ms: Option<u32>,
   pub track_count: Option<u32>,
@@ -64,7 +68,6 @@ pub struct AmItem {
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct AmPage {
   pub items: Vec<AmItem>,
-  pub total: Option<u32>,
   pub has_more: bool,
 }
 
@@ -95,52 +98,64 @@ pub enum AmPlayerCommand {
   SetRepeat { mode: AmRepeatMode },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
 pub enum AmLibraryScope {
   Playlists,
   Albums,
   Artists,
   Songs,
-  RecentlyPlayed,
-  Children { uri: String },
 }
 
 #[uniffi::export(with_foreign)]
 pub trait AppleMusicBackend: Send + Sync {
-  fn start(&self, inbox: Arc<AmPlayerInbox>);
+  fn start(&self, inbox: Arc<AmInbox>);
   fn stop(&self);
   fn snapshot(&self, sink: Arc<AmSnapshotSink>);
   fn auth_status(&self, sink: Arc<AmAuthSink>);
   fn request_authorization(&self, sink: Arc<AmAuthSink>);
   fn can_play_catalog_content(&self, sink: Arc<AmCatalogSink>);
   fn is_other_audio_playing(&self, sink: Arc<AmFlagSink>);
-  fn play_context(&self, context_uri: String, start_at_uri: Option<String>, sink: Arc<AmActionSink>);
-  fn queue_insert(&self, uri: String, next: bool, sink: Arc<AmActionSink>);
+  fn play_context(&self, context: AmRef, start_at: Option<AmRef>, sink: Arc<AmActionSink>);
+  fn queue_insert(&self, item: AmRef, next: bool, sink: Arc<AmActionSink>);
   fn command(&self, cmd: AmPlayerCommand, sink: Arc<AmActionSink>);
   fn library(&self, scope: AmLibraryScope, limit: u32, offset: u32, sink: Arc<AmPageSink>);
+  fn library_count(&self, scope: AmLibraryScope, sink: Arc<AmCountSink>);
+  fn recently_played(&self, limit: u32, offset: u32, sink: Arc<AmPageSink>);
+  fn children(&self, item: AmRef, sink: Arc<AmItemsSink>);
   fn recommendations(&self, sink: Arc<AmShelvesSink>);
-  fn resolve(&self, uri: String, sink: Arc<AmItemSink>);
-  fn search(&self, query: String, limit: u32, sink: Arc<AmSearchSink>);
-  fn is_favorite(&self, uris: Vec<String>, sink: Arc<AmFavoritesSink>);
-  fn add_favorite(&self, uri: String, sink: Arc<AmActionSink>);
+  fn resolve(&self, item: AmRef, sink: Arc<AmItemSink>);
+  fn search(&self, query: String, limit: u32, offset: u32, sink: Arc<AmSearchSink>);
+  fn is_favorite(&self, items: Vec<AmRef>, sink: Arc<AmFavoritesSink>);
+  fn add_favorite(&self, item: AmRef, sink: Arc<AmActionSink>);
+  fn artwork(&self, url: String, sink: Arc<AmArtworkSink>);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmSignal {
+  Player,
+  Library,
 }
 
 #[derive(uniffi::Object)]
-pub struct AmPlayerInbox {
-  tx: mpsc::UnboundedSender<()>,
+pub struct AmInbox {
+  tx: mpsc::UnboundedSender<AmSignal>,
 }
 
-impl AmPlayerInbox {
-  pub fn channel() -> (Arc<Self>, mpsc::UnboundedReceiver<()>) {
+impl AmInbox {
+  pub fn channel() -> (Arc<Self>, mpsc::UnboundedReceiver<AmSignal>) {
     let (tx, rx) = mpsc::unbounded_channel();
     (Arc::new(Self { tx }), rx)
   }
 }
 
 #[uniffi::export]
-impl AmPlayerInbox {
-  pub fn on_changed(&self) {
-    let _ = self.tx.send(());
+impl AmInbox {
+  pub fn on_player_changed(&self) {
+    let _ = self.tx.send(AmSignal::Player);
+  }
+
+  pub fn on_library_changed(&self) {
+    let _ = self.tx.send(AmSignal::Library);
   }
 }
 
@@ -185,6 +200,9 @@ am_sink!(AmAuthSink, AmAuthStatus);
 am_sink!(AmCatalogSink, Option<bool>);
 am_sink!(AmFlagSink, bool);
 am_sink!(AmPageSink, AmPage);
+am_sink!(AmCountSink, u32);
+am_sink!(AmItemsSink, Vec<AmItem>);
+am_sink!(AmArtworkSink, Vec<u8>);
 am_sink!(AmShelvesSink, Vec<AmShelf>);
 am_sink!(AmItemSink, AmItem);
 am_sink!(AmSearchSink, AmSearchResults);

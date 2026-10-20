@@ -343,28 +343,28 @@ typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod10)(uint64_t, RustB
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD11
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD11
-typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod11)(uint64_t, uint64_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod11)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD12
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD12
-typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod12)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod12)(uint64_t, uint32_t, uint32_t, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD13
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD13
-typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod13)(uint64_t, RustBuffer, uint32_t, uint64_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod13)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
 #endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD14
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD14
-typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod14)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod14)(uint64_t, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -372,6 +372,34 @@ typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod14)(uint64_t, RustB
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD15
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD15
 typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod15)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD16
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD16
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod16)(uint64_t, RustBuffer, uint32_t, uint32_t, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD17
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD17
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod17)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD18
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD18
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod18)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD19
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_APPLE_MUSIC_BACKEND_METHOD19
+typedef void (*UniffiCallbackInterfaceAppleMusicBackendMethod19)(uint64_t, RustBuffer, uint64_t, void* _Nonnull, 
         RustCallStatus *_Nonnull uniffiCallStatus
     );
 
@@ -972,11 +1000,15 @@ typedef struct UniffiVTableCallbackInterfaceAppleMusicBackend {
     UniffiCallbackInterfaceAppleMusicBackendMethod8 _Nonnull queueInsert;
     UniffiCallbackInterfaceAppleMusicBackendMethod9 _Nonnull command;
     UniffiCallbackInterfaceAppleMusicBackendMethod10 _Nonnull library;
-    UniffiCallbackInterfaceAppleMusicBackendMethod11 _Nonnull recommendations;
-    UniffiCallbackInterfaceAppleMusicBackendMethod12 _Nonnull resolve;
-    UniffiCallbackInterfaceAppleMusicBackendMethod13 _Nonnull search;
-    UniffiCallbackInterfaceAppleMusicBackendMethod14 _Nonnull isFavorite;
-    UniffiCallbackInterfaceAppleMusicBackendMethod15 _Nonnull addFavorite;
+    UniffiCallbackInterfaceAppleMusicBackendMethod11 _Nonnull libraryCount;
+    UniffiCallbackInterfaceAppleMusicBackendMethod12 _Nonnull recentlyPlayed;
+    UniffiCallbackInterfaceAppleMusicBackendMethod13 _Nonnull children;
+    UniffiCallbackInterfaceAppleMusicBackendMethod14 _Nonnull recommendations;
+    UniffiCallbackInterfaceAppleMusicBackendMethod15 _Nonnull resolve;
+    UniffiCallbackInterfaceAppleMusicBackendMethod16 _Nonnull search;
+    UniffiCallbackInterfaceAppleMusicBackendMethod17 _Nonnull isFavorite;
+    UniffiCallbackInterfaceAppleMusicBackendMethod18 _Nonnull addFavorite;
+    UniffiCallbackInterfaceAppleMusicBackendMethod19 _Nonnull artwork;
 } UniffiVTableCallbackInterfaceAppleMusicBackend;
 
 #endif
@@ -1679,6 +1711,26 @@ void uniffi_bridgething_companion_fn_method_amactionsink_fail(uint64_t ptr, Rust
 void uniffi_bridgething_companion_fn_method_amactionsink_ok(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMARTWORKSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMARTWORKSINK
+uint64_t uniffi_bridgething_companion_fn_clone_amartworksink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMARTWORKSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMARTWORKSINK
+void uniffi_bridgething_companion_fn_free_amartworksink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMARTWORKSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMARTWORKSINK_COMPLETE
+void uniffi_bridgething_companion_fn_method_amartworksink_complete(uint64_t ptr, RustBuffer value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMARTWORKSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMARTWORKSINK_FAIL
+void uniffi_bridgething_companion_fn_method_amartworksink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMAUTHSINK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMAUTHSINK
 uint64_t uniffi_bridgething_companion_fn_clone_amauthsink(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -1717,6 +1769,26 @@ void uniffi_bridgething_companion_fn_method_amcatalogsink_complete(uint64_t ptr,
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCATALOGSINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCATALOGSINK_FAIL
 void uniffi_bridgething_companion_fn_method_amcatalogsink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMCOUNTSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMCOUNTSINK
+uint64_t uniffi_bridgething_companion_fn_clone_amcountsink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMCOUNTSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMCOUNTSINK
+void uniffi_bridgething_companion_fn_free_amcountsink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCOUNTSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCOUNTSINK_COMPLETE
+void uniffi_bridgething_companion_fn_method_amcountsink_complete(uint64_t ptr, uint32_t value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCOUNTSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMCOUNTSINK_FAIL
+void uniffi_bridgething_companion_fn_method_amcountsink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMFAVORITESSINK
@@ -1759,6 +1831,26 @@ void uniffi_bridgething_companion_fn_method_amflagsink_complete(uint64_t ptr, in
 void uniffi_bridgething_companion_fn_method_amflagsink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMINBOX
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMINBOX
+uint64_t uniffi_bridgething_companion_fn_clone_aminbox(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMINBOX
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMINBOX
+void uniffi_bridgething_companion_fn_free_aminbox(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMINBOX_ON_LIBRARY_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMINBOX_ON_LIBRARY_CHANGED
+void uniffi_bridgething_companion_fn_method_aminbox_on_library_changed(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMINBOX_ON_PLAYER_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMINBOX_ON_PLAYER_CHANGED
+void uniffi_bridgething_companion_fn_method_aminbox_on_player_changed(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMITEMSINK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMITEMSINK
 uint64_t uniffi_bridgething_companion_fn_clone_amitemsink(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -1779,6 +1871,26 @@ void uniffi_bridgething_companion_fn_method_amitemsink_complete(uint64_t ptr, Ru
 void uniffi_bridgething_companion_fn_method_amitemsink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMITEMSSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMITEMSSINK
+uint64_t uniffi_bridgething_companion_fn_clone_amitemssink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMITEMSSINK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMITEMSSINK
+void uniffi_bridgething_companion_fn_free_amitemssink(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMITEMSSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMITEMSSINK_COMPLETE
+void uniffi_bridgething_companion_fn_method_amitemssink_complete(uint64_t ptr, RustBuffer value, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMITEMSSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMITEMSSINK_FAIL
+void uniffi_bridgething_companion_fn_method_amitemssink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMPAGESINK
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMPAGESINK
 uint64_t uniffi_bridgething_companion_fn_clone_ampagesink(uint64_t handle, RustCallStatus *_Nonnull out_status
@@ -1797,21 +1909,6 @@ void uniffi_bridgething_companion_fn_method_ampagesink_complete(uint64_t ptr, Ru
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMPAGESINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMPAGESINK_FAIL
 void uniffi_bridgething_companion_fn_method_ampagesink_fail(uint64_t ptr, RustBuffer reason, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMPLAYERINBOX
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMPLAYERINBOX
-uint64_t uniffi_bridgething_companion_fn_clone_amplayerinbox(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMPLAYERINBOX
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_FREE_AMPLAYERINBOX
-void uniffi_bridgething_companion_fn_free_amplayerinbox(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMPLAYERINBOX_ON_CHANGED
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_AMPLAYERINBOX_ON_CHANGED
-void uniffi_bridgething_companion_fn_method_amplayerinbox_on_changed(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AMSEARCHSINK
@@ -1926,12 +2023,12 @@ void uniffi_bridgething_companion_fn_method_applemusicbackend_is_other_audio_pla
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_PLAY_CONTEXT
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_PLAY_CONTEXT
-void uniffi_bridgething_companion_fn_method_applemusicbackend_play_context(uint64_t ptr, RustBuffer context_uri, RustBuffer start_at_uri, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_play_context(uint64_t ptr, RustBuffer context, RustBuffer start_at, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_QUEUE_INSERT
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_QUEUE_INSERT
-void uniffi_bridgething_companion_fn_method_applemusicbackend_queue_insert(uint64_t ptr, RustBuffer uri, int8_t next, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_queue_insert(uint64_t ptr, RustBuffer item, int8_t next, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_COMMAND
@@ -1944,6 +2041,21 @@ void uniffi_bridgething_companion_fn_method_applemusicbackend_command(uint64_t p
 void uniffi_bridgething_companion_fn_method_applemusicbackend_library(uint64_t ptr, RustBuffer scope, uint32_t limit, uint32_t offset, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_LIBRARY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_LIBRARY_COUNT
+void uniffi_bridgething_companion_fn_method_applemusicbackend_library_count(uint64_t ptr, RustBuffer scope, uint64_t sink, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RECENTLY_PLAYED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RECENTLY_PLAYED
+void uniffi_bridgething_companion_fn_method_applemusicbackend_recently_played(uint64_t ptr, uint32_t limit, uint32_t offset, uint64_t sink, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_CHILDREN
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_CHILDREN
+void uniffi_bridgething_companion_fn_method_applemusicbackend_children(uint64_t ptr, RustBuffer item, uint64_t sink, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RECOMMENDATIONS
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RECOMMENDATIONS
 void uniffi_bridgething_companion_fn_method_applemusicbackend_recommendations(uint64_t ptr, uint64_t sink, RustCallStatus *_Nonnull out_status
@@ -1951,22 +2063,27 @@ void uniffi_bridgething_companion_fn_method_applemusicbackend_recommendations(ui
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RESOLVE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_RESOLVE
-void uniffi_bridgething_companion_fn_method_applemusicbackend_resolve(uint64_t ptr, RustBuffer uri, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_resolve(uint64_t ptr, RustBuffer item, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_SEARCH
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_SEARCH
-void uniffi_bridgething_companion_fn_method_applemusicbackend_search(uint64_t ptr, RustBuffer query, uint32_t limit, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_search(uint64_t ptr, RustBuffer query, uint32_t limit, uint32_t offset, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_IS_FAVORITE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_IS_FAVORITE
-void uniffi_bridgething_companion_fn_method_applemusicbackend_is_favorite(uint64_t ptr, RustBuffer uris, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_is_favorite(uint64_t ptr, RustBuffer items, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_ADD_FAVORITE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_ADD_FAVORITE
-void uniffi_bridgething_companion_fn_method_applemusicbackend_add_favorite(uint64_t ptr, RustBuffer uri, uint64_t sink, RustCallStatus *_Nonnull out_status
+void uniffi_bridgething_companion_fn_method_applemusicbackend_add_favorite(uint64_t ptr, RustBuffer item, uint64_t sink, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_ARTWORK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_METHOD_APPLEMUSICBACKEND_ARTWORK
+void uniffi_bridgething_companion_fn_method_applemusicbackend_artwork(uint64_t ptr, RustBuffer url, uint64_t sink, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_FN_CLONE_AUDIOBACKEND
@@ -4091,6 +4208,18 @@ uint16_t uniffi_bridgething_companion_checksum_method_amactionsink_ok(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMARTWORKSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMARTWORKSINK_COMPLETE
+uint16_t uniffi_bridgething_companion_checksum_method_amartworksink_complete(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMARTWORKSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMARTWORKSINK_FAIL
+uint16_t uniffi_bridgething_companion_checksum_method_amartworksink_fail(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMAUTHSINK_COMPLETE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMAUTHSINK_COMPLETE
 uint16_t uniffi_bridgething_companion_checksum_method_amauthsink_complete(void
@@ -4112,6 +4241,18 @@ uint16_t uniffi_bridgething_companion_checksum_method_amcatalogsink_complete(voi
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCATALOGSINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCATALOGSINK_FAIL
 uint16_t uniffi_bridgething_companion_checksum_method_amcatalogsink_fail(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCOUNTSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCOUNTSINK_COMPLETE
+uint16_t uniffi_bridgething_companion_checksum_method_amcountsink_complete(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCOUNTSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMCOUNTSINK_FAIL
+uint16_t uniffi_bridgething_companion_checksum_method_amcountsink_fail(void
     
 );
 #endif
@@ -4139,6 +4280,18 @@ uint16_t uniffi_bridgething_companion_checksum_method_amflagsink_fail(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMINBOX_ON_LIBRARY_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMINBOX_ON_LIBRARY_CHANGED
+uint16_t uniffi_bridgething_companion_checksum_method_aminbox_on_library_changed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMINBOX_ON_PLAYER_CHANGED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMINBOX_ON_PLAYER_CHANGED
+uint16_t uniffi_bridgething_companion_checksum_method_aminbox_on_player_changed(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSINK_COMPLETE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSINK_COMPLETE
 uint16_t uniffi_bridgething_companion_checksum_method_amitemsink_complete(void
@@ -4151,6 +4304,18 @@ uint16_t uniffi_bridgething_companion_checksum_method_amitemsink_fail(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSSINK_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSSINK_COMPLETE
+uint16_t uniffi_bridgething_companion_checksum_method_amitemssink_complete(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSSINK_FAIL
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMITEMSSINK_FAIL
+uint16_t uniffi_bridgething_companion_checksum_method_amitemssink_fail(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPAGESINK_COMPLETE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPAGESINK_COMPLETE
 uint16_t uniffi_bridgething_companion_checksum_method_ampagesink_complete(void
@@ -4160,12 +4325,6 @@ uint16_t uniffi_bridgething_companion_checksum_method_ampagesink_complete(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPAGESINK_FAIL
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPAGESINK_FAIL
 uint16_t uniffi_bridgething_companion_checksum_method_ampagesink_fail(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPLAYERINBOX_ON_CHANGED
-#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_AMPLAYERINBOX_ON_CHANGED
-uint16_t uniffi_bridgething_companion_checksum_method_amplayerinbox_on_changed(void
     
 );
 #endif
@@ -4271,6 +4430,24 @@ uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_library(
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_LIBRARY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_LIBRARY_COUNT
+uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_library_count(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_RECENTLY_PLAYED
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_RECENTLY_PLAYED
+uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_recently_played(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_CHILDREN
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_CHILDREN
+uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_children(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_RECOMMENDATIONS
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_RECOMMENDATIONS
 uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_recommendations(void
@@ -4298,6 +4475,12 @@ uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_is_favor
 #ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_ADD_FAVORITE
 #define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_ADD_FAVORITE
 uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_add_favorite(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_ARTWORK
+#define UNIFFI_FFIDEF_UNIFFI_BRIDGETHING_COMPANION_CHECKSUM_METHOD_APPLEMUSICBACKEND_ARTWORK
+uint16_t uniffi_bridgething_companion_checksum_method_applemusicbackend_artwork(void
     
 );
 #endif

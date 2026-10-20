@@ -33,10 +33,11 @@ use bridgething_companion::{
     LogOrigin, PeerLinkStatus, ProviderCredentials, SessionEvent, SessionPeer, SpotifyProviderConfig,
   },
   backend::{
-    AmActionSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmFavoritesSink, AmFlagSink, AmItemSink, AmLibraryScope,
-    AmPage, AmPageSink, AmPlayerCommand, AmPlayerInbox, AmPlayerSnapshot, AmRepeatMode, AmSearchResults, AmSearchSink,
-    AmShelvesSink, AmSnapshotSink, AppleMusicBackend, ConnectivityInbox, ConnectivityMonitor, LinkDevice, LinkInbox,
-    LinkTransport, MediaSessionBackend, PrepareSink, SecretStore, SpeechRecognizer, Transcription, TranscriptionSink,
+    AmActionSink, AmArtworkSink, AmAuthSink, AmAuthStatus, AmCatalogSink, AmCountSink, AmFavoritesSink, AmFlagSink,
+    AmInbox, AmItemSink, AmItemsSink, AmLibraryScope, AmPage, AmPageSink, AmPlayerCommand, AmPlayerSnapshot, AmRef,
+    AmRepeatMode, AmSearchResults, AmSearchSink, AmShelvesSink, AmSnapshotSink, AppleMusicBackend, ConnectivityInbox,
+    ConnectivityMonitor, LinkDevice, LinkInbox, LinkTransport, MediaSessionBackend, PrepareSink, SecretStore,
+    SpeechRecognizer, Transcription, TranscriptionSink,
   },
   provider::{Provider, ProviderAuthState},
   session::Session,
@@ -1520,7 +1521,7 @@ async fn a_catalog_sign_in_keeps_its_auth_feed_across_link_churn() {
 struct QuietAm;
 
 impl AppleMusicBackend for QuietAm {
-  fn start(&self, _inbox: Arc<AmPlayerInbox>) {}
+  fn start(&self, _inbox: Arc<AmInbox>) {}
   fn stop(&self) {}
   fn snapshot(&self, sink: Arc<AmSnapshotSink>) {
     sink.complete(AmPlayerSnapshot {
@@ -1544,10 +1545,10 @@ impl AppleMusicBackend for QuietAm {
   fn is_other_audio_playing(&self, sink: Arc<AmFlagSink>) {
     sink.complete(false);
   }
-  fn play_context(&self, _context_uri: String, _start_at_uri: Option<String>, sink: Arc<AmActionSink>) {
+  fn play_context(&self, _context: AmRef, _start_at: Option<AmRef>, sink: Arc<AmActionSink>) {
     sink.ok();
   }
-  fn queue_insert(&self, _uri: String, _next: bool, sink: Arc<AmActionSink>) {
+  fn queue_insert(&self, _item: AmRef, _next: bool, sink: Arc<AmActionSink>) {
     sink.ok();
   }
   fn command(&self, _cmd: AmPlayerCommand, sink: Arc<AmActionSink>) {
@@ -1556,17 +1557,28 @@ impl AppleMusicBackend for QuietAm {
   fn library(&self, _scope: AmLibraryScope, _limit: u32, _offset: u32, sink: Arc<AmPageSink>) {
     sink.complete(AmPage {
       items: Vec::new(),
-      total: Some(0),
       has_more: false,
     });
+  }
+  fn library_count(&self, _scope: AmLibraryScope, sink: Arc<AmCountSink>) {
+    sink.complete(0);
+  }
+  fn recently_played(&self, _limit: u32, _offset: u32, sink: Arc<AmPageSink>) {
+    sink.complete(AmPage {
+      items: Vec::new(),
+      has_more: false,
+    });
+  }
+  fn children(&self, _item: AmRef, sink: Arc<AmItemsSink>) {
+    sink.complete(Vec::new());
   }
   fn recommendations(&self, sink: Arc<AmShelvesSink>) {
     sink.complete(Vec::new());
   }
-  fn resolve(&self, _uri: String, sink: Arc<AmItemSink>) {
+  fn resolve(&self, _item: AmRef, sink: Arc<AmItemSink>) {
     sink.fail("nothing to resolve in these cases".into());
   }
-  fn search(&self, _query: String, _limit: u32, sink: Arc<AmSearchSink>) {
+  fn search(&self, _query: String, _limit: u32, _offset: u32, sink: Arc<AmSearchSink>) {
     sink.complete(AmSearchResults {
       songs: Vec::new(),
       albums: Vec::new(),
@@ -1574,11 +1586,14 @@ impl AppleMusicBackend for QuietAm {
       playlists: Vec::new(),
     });
   }
-  fn is_favorite(&self, uris: Vec<String>, sink: Arc<AmFavoritesSink>) {
-    sink.complete(vec![false; uris.len()]);
+  fn is_favorite(&self, items: Vec<AmRef>, sink: Arc<AmFavoritesSink>) {
+    sink.complete(vec![false; items.len()]);
   }
-  fn add_favorite(&self, _uri: String, sink: Arc<AmActionSink>) {
+  fn add_favorite(&self, _item: AmRef, sink: Arc<AmActionSink>) {
     sink.ok();
+  }
+  fn artwork(&self, _url: String, sink: Arc<AmArtworkSink>) {
+    sink.fail("no artwork in these cases".into());
   }
 }
 

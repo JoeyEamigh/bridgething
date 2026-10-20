@@ -275,6 +275,11 @@ test-swift:
   cargo build -p bridgething-companion --lib
   BRIDGETHING_COMPANION_CDYLIB=1 swift test
 
+# Live MusicKit lane on the mac host; `library=1` adds the cases that read the signed-in music library
+test-applemusic-live library="0":
+  cargo build -p bridgething-companion --lib
+  BRIDGETHING_APPLEMUSIC_LIVE=1 BRIDGETHING_APPLEMUSIC_LIBRARY={{library}} BRIDGETHING_COMPANION_CDYLIB=1 swift test --filter AppleMusicLive
+
 # Every bun workspace member that declares a test script
 test-ts:
   bun run test -- {{turbo_force}}
