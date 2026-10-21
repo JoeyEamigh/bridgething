@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUNDLE="$REPO_ROOT/crates/nlu/tests/bundle"
+BASE="${BRIDGETHING_OTA_BASE:-https://ota.bridgething.com}/nlu/stable/bundle"
+
+VERSION=1.1.0
+ZIP_SHA=acb3fefc63343a29a9196fcc9133a5362c3dffd02e2181ced96f12666c5544cf
+TOKENIZER_SHA=2a3dcfaa0c327e531aab0d600e1bf4c197b27ab430fc065ef352b74bdf76177d
+
+log() { printf '\033[1;36m[fetch-nlu-bundle]\033[0m %s\n' "$*" >&2; }
+die() { printf '\033[1;31m[fetch-nlu-bundle] error:\033[0m %s\n' "$*" >&2; exit 1; }
+
+command -v curl >/dev/null 2>&1 || die "missing curl"
+command -v shasum >/dev/null 2>&1 || die "missing shasum"
+command -v unzip >/dev/null 2>&1 || die "missing unzip"
+
+digest() { shasum -a 256 "$1" | awk '{print $1}'; }
+
+if [ -f "$BUNDLE/tokenizer.json" ] && [ "$(digest "$BUNDLE/tokenizer.json")" = "$TOKENIZER_SHA" ]; then
+  log "have tokenizer.json for $VERSION"
+  exit 0
+fi
+
+WORK=$(mktemp -d -t bridgething-fetch-nlu-bundle)
+trap 'rm -rf "$WORK"' EXIT
+
+log "fetching the $VERSION android bundle"
+curl -fsS -o "$WORK/bundle.zip" "$BASE/$VERSION/bundle-android.zip" || die "could not fetch $BASE/$VERSION/bundle-android.zip"
+have=$(digest "$WORK/bundle.zip")
+[ "$have" = "$ZIP_SHA" ] || die "bundle digest ${have:0:12}, expected ${ZIP_SHA:0:12}"
+
+unzip -q -o "$WORK/bundle.zip" manifest.json tokenizer.json -d "$WORK"
+cmp -s "$WORK/manifest.json" "$BUNDLE/manifest.json" \
+  || die "the published $VERSION manifest differs from crates/nlu/tests/bundle/manifest.json"
+have=$(digest "$WORK/tokenizer.json")
+[ "$have" = "$TOKENIZER_SHA" ] || die "tokenizer digest ${have:0:12}, expected ${TOKENIZER_SHA:0:12}"
+
+mv "$WORK/tokenizer.json" "$BUNDLE/tokenizer.json"
+log "tokenizer.json for $VERSION in place"

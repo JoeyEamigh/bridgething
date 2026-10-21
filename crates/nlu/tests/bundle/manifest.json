@@ -1,0 +1,359 @@
+{
+  "schemaVersion": "0.3.2",
+  "maxLen": 64,
+  "intents": [
+    {
+      "name": "ADD_TO_PLAYLIST",
+      "slots": [
+        "playlist",
+        "target",
+        "target_type"
+      ]
+    },
+    {
+      "name": "ADD_TO_QUEUE",
+      "slots": [
+        "target",
+        "target_type"
+      ]
+    },
+    {
+      "name": "CANCEL_INTERACTION",
+      "slots": []
+    },
+    {
+      "name": "HELP",
+      "slots": []
+    },
+    {
+      "name": "MORE_LIKE_THIS",
+      "slots": []
+    },
+    {
+      "name": "NEXT",
+      "slots": [
+        "count"
+      ]
+    },
+    {
+      "name": "OPEN_WEBAPP",
+      "slots": [
+        "webapp_name"
+      ]
+    },
+    {
+      "name": "PAUSE",
+      "slots": []
+    },
+    {
+      "name": "PHONE_ACTION",
+      "slots": [
+        "phone_action"
+      ]
+    },
+    {
+      "name": "PLAY",
+      "slots": [
+        "era",
+        "genre",
+        "mood",
+        "popularity_filter",
+        "position",
+        "target",
+        "target_type"
+      ]
+    },
+    {
+      "name": "PRESET_PLAY",
+      "slots": [
+        "preset"
+      ]
+    },
+    {
+      "name": "PRESET_SAVE",
+      "slots": [
+        "preset"
+      ]
+    },
+    {
+      "name": "PREVIOUS",
+      "slots": [
+        "scope"
+      ]
+    },
+    {
+      "name": "SEARCH",
+      "slots": [
+        "era",
+        "genre",
+        "mood",
+        "popularity_filter",
+        "target",
+        "target_type"
+      ]
+    },
+    {
+      "name": "SEEK_RELATIVE",
+      "slots": [
+        "seconds"
+      ]
+    },
+    {
+      "name": "SET_DISCOVERABLE",
+      "slots": [
+        "enabled"
+      ]
+    },
+    {
+      "name": "SET_PLAYBACK_SPEED",
+      "slots": [
+        "speed"
+      ]
+    },
+    {
+      "name": "SET_REPEAT",
+      "slots": [
+        "repeat_mode"
+      ]
+    },
+    {
+      "name": "SET_SHUFFLE",
+      "slots": [
+        "enabled"
+      ]
+    },
+    {
+      "name": "SET_VOLUME",
+      "slots": [
+        "amount",
+        "direction",
+        "level",
+        "mute"
+      ]
+    },
+    {
+      "name": "SHOW_VIEW",
+      "slots": [
+        "view"
+      ]
+    },
+    {
+      "name": "THUMBS_UP",
+      "slots": [
+        "enabled",
+        "scope",
+        "target",
+        "target_type"
+      ]
+    }
+  ],
+  "bioTags": [
+    "O",
+    "B-target",
+    "I-target",
+    "B-playlist",
+    "I-playlist",
+    "B-mood",
+    "I-mood",
+    "B-genre",
+    "I-genre",
+    "B-era",
+    "I-era",
+    "B-webapp_name",
+    "I-webapp_name"
+  ],
+  "closedHeads": [
+    {
+      "slot": "target_type",
+      "values": [
+        "<none>",
+        "album",
+        "artist",
+        "episode",
+        "playlist",
+        "podcast",
+        "station",
+        "track"
+      ]
+    },
+    {
+      "slot": "popularity_filter",
+      "values": [
+        "<none>",
+        "first",
+        "new",
+        "popular",
+        "random",
+        "recent",
+        "top_10",
+        "top_5"
+      ]
+    },
+    {
+      "slot": "scope",
+      "values": [
+        "<none>",
+        "previous_track",
+        "restart"
+      ]
+    },
+    {
+      "slot": "enabled",
+      "values": [
+        "<none>",
+        "False",
+        "True"
+      ]
+    },
+    {
+      "slot": "count",
+      "values": [
+        "<none>",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "slot": "position",
+      "values": [
+        "<none>",
+        "1",
+        "10",
+        "12",
+        "15",
+        "2",
+        "20",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "slot": "repeat_mode",
+      "values": [
+        "<none>",
+        "all",
+        "off",
+        "one"
+      ]
+    },
+    {
+      "slot": "seconds",
+      "values": [
+        "<none>",
+        "-10",
+        "-15",
+        "-30",
+        "0",
+        "10",
+        "15",
+        "30",
+        "300",
+        "45",
+        "60",
+        "80"
+      ]
+    },
+    {
+      "slot": "speed",
+      "values": [
+        "<none>",
+        "1",
+        "1.2",
+        "1.5",
+        "2"
+      ]
+    },
+    {
+      "slot": "direction",
+      "values": [
+        "<none>",
+        "down",
+        "up"
+      ]
+    },
+    {
+      "slot": "amount",
+      "values": [
+        "<none>",
+        "large",
+        "medium",
+        "small"
+      ]
+    },
+    {
+      "slot": "level",
+      "values": [
+        "<none>",
+        "1",
+        "10",
+        "100",
+        "20",
+        "30",
+        "4",
+        "50",
+        "70"
+      ]
+    },
+    {
+      "slot": "mute",
+      "values": [
+        "<none>",
+        "False",
+        "True"
+      ]
+    },
+    {
+      "slot": "preset",
+      "values": [
+        "<none>",
+        "1",
+        "2",
+        "3",
+        "4"
+      ]
+    },
+    {
+      "slot": "view",
+      "values": [
+        "<none>",
+        "album",
+        "artist",
+        "library",
+        "new_episodes",
+        "now_playing",
+        "playlist",
+        "playlists",
+        "presets",
+        "queue",
+        "saved_episodes",
+        "songs"
+      ]
+    },
+    {
+      "slot": "phone_action",
+      "values": [
+        "<none>",
+        "answer",
+        "decline",
+        "end",
+        "hold",
+        "merge",
+        "mute",
+        "swap",
+        "unhold",
+        "unmute"
+      ]
+    }
+  ],
+  "rejection": {
+    "inDomainThreshold": 0.4,
+    "clarifyMargin": 0.4
+  }
+}

@@ -82,17 +82,12 @@ impl Connection {
       tokio::select! {
         ws_msg = self.reader.next() => {
           let Some(ws_msg) = ws_msg else {
-            tracing::warn!("({}) connection closed unexpectedly!", &self.address);
             return (ws::close_code::ABNORMAL, "stream ended".to_string());
           };
 
           let ws_msg = match ws_msg {
             Ok(msg) => msg,
-            Err(err) => {
-              tracing::warn!("({}) error decoding websocket message: {:?}!", &self.address, &err);
-              self.forward(err).await;
-              return (ws::close_code::ABNORMAL, "decode error".to_string());
-            }
+            Err(err) => return (ws::close_code::ABNORMAL, format!("connection lost: {err}")),
           };
 
           match ws_msg {
@@ -312,19 +307,12 @@ enum ForwardMsg {
     data: ClientToBridgeMsgData,
   },
   ConnectionClosed(ws::CloseCode, String),
-  Error(axum::Error),
   ChangeMode(ClientMode),
 }
 
 impl From<(ws::CloseCode, String)> for ForwardMsg {
   fn from((close_code, msg): (ws::CloseCode, String)) -> Self {
     Self::ConnectionClosed(close_code, msg)
-  }
-}
-
-impl From<axum::Error> for ForwardMsg {
-  fn from(err: axum::Error) -> Self {
-    Self::Error(err)
   }
 }
 
@@ -361,12 +349,6 @@ impl From<(SocketAddr, ForwardMsg)> for RecvMsg {
         id: Uuid::now_v7(),
         from,
         data: RecvMsgData::ConnectionClosed(close_code, msg),
-        stock_msg_id: None,
-      },
-      ForwardMsg::Error(err) => Self {
-        id: Uuid::now_v7(),
-        from,
-        data: RecvMsgData::Error(err),
         stock_msg_id: None,
       },
       ForwardMsg::ChangeMode(mode) => Self {

@@ -13,6 +13,8 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.readText
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -30,7 +32,7 @@ import uniffi.bridgething_companion.WsTransport
 
 private const val WS_ABNORMAL_CLOSURE: UShort = 1006u
 
-public class KtorWsTransport : WsTransport, AutoCloseable {
+public class KtorWsTransport(private val pingInterval: Duration = 3.seconds) : WsTransport, AutoCloseable {
     private val lock = Any()
     private var scope: CoroutineScope? = null
     private var client: HttpClient? = null
@@ -41,7 +43,9 @@ public class KtorWsTransport : WsTransport, AutoCloseable {
 
     private fun liveClient(): HttpClient = synchronized(lock) {
         client ?: HttpClient(CIO) {
-            install(WebSockets)
+            install(WebSockets) {
+                pingIntervalMillis = pingInterval.inWholeMilliseconds
+            }
             engine {
                 requestTimeout = 0
             }

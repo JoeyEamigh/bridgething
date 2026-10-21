@@ -7,7 +7,7 @@ name: renders a webapp settings page, talks to it over the bridge, and reopens i
 - extendedWaitUntil:
     visible: "(?i).*long-lived access token.*"
     timeout: 180000
-- assertVisible: ".*selected on dev-gateway.*"
+- assertVisible: "0 selected"
 - assertVisible: "connect"
 - tapOn: "Done"
 - assertVisible: "open Home Assistant settings"
@@ -16,6 +16,6 @@ name: renders a webapp settings page, talks to it over the bridge, and reopens i
 - extendedWaitUntil:
     visible: "(?i).*long-lived access token.*"
     timeout: 3000
-- assertVisible: ".*selected on dev-gateway.*"
+- assertVisible: "0 selected"
 - tapOn: "Done"
 - assertVisible: "open Home Assistant settings"

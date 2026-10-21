@@ -313,9 +313,9 @@ mod tests {
         os_name: "superbird".to_owned(),
         os_version: "1.0.0".to_owned(),
         channel: "dev".to_owned(),
-        model_name: "car thing".to_owned(),
         serial_number: serial.to_owned(),
         nickname: None,
+        bluetooth_name: None,
         launcher_gesture: bridgething_companion::api::LauncherGesture::FivePress,
       },
     }

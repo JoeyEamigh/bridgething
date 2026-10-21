@@ -169,10 +169,6 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
       <View className="mb-8">
         <SectionHeader title="details" />
         <ListGroup>
-          <ListRow
-            title="model"
-            value={meta?.modelName ?? device.displayName}
-          />
           {device.serialNumber ? (
             <ListRow title="id" value={device.serialNumber} />
           ) : null}

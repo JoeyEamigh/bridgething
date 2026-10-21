@@ -1,4 +1,5 @@
 import {
+  deviceName,
   type BridgethingClient,
   type BridgeThingMeta,
   type BrightnessMode,
@@ -10,6 +11,7 @@ import {
   type TimeInfo,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
+import { clockText } from './clock.ts';
 import { factoryReset } from './power.ts';
 import { wireErrorText } from './wire-error.ts';
 
@@ -83,9 +85,8 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
       setDevices(Object.values(r.response));
     });
     client.system.versionRequest().then(r => {
-      if (cancelled || !r.ok) return;
-      const tail = r.response.serialNumber.slice(-4);
-      setAliasPlaceholder(tail ? `Car Thing (${tail})` : 'Car Thing');
+      if (cancelled || !r.ok || !r.response.bluetoothName) return;
+      setAliasPlaceholder(r.response.bluetoothName);
     });
     return () => {
       cancelled = true;
@@ -98,14 +99,10 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
     const offStatus = client.bluetooth.onStatus(s => {
       if (!s.connected) setConnectedMac(null);
     });
-    const offInterface = client.bluetooth.onInterface(i => {
-      setAliasPlaceholder(i.name);
-    });
     return () => {
       offDevices();
       offConnected();
       offStatus();
-      offInterface();
     };
   }, [client]);
 
@@ -388,7 +385,8 @@ function SystemPanel({ client }: { client: BridgethingClient }) {
   const [meta, setMeta] = useState<BridgeThingMeta | null>(null);
   const [diag, setDiag] = useState<Diagnostics | null>(null);
   const [nickname, setNickname] = useState<string | null>(null);
-  const [time, setTime] = useState<TimeInfo | null>(null);
+  const [time, setTime] = useState<{ info: TimeInfo; at: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = () => {
     client.system.diagnosticsGet().then(r => r.ok && setDiag(r.response.diagnostics));
@@ -399,9 +397,15 @@ function SystemPanel({ client }: { client: BridgethingClient }) {
     client.system.versionRequest().then(r => !cancelled && r.ok && setMeta(r.response));
     client.system.diagnosticsGet().then(r => !cancelled && r.ok && setDiag(r.response.diagnostics));
     client.system.deviceGetNickname().then(r => !cancelled && r.ok && setNickname(r.response.nickname));
-    client.time.get().then(r => !cancelled && r.ok && setTime(r.response.time));
+    client.time.get().then(r => !cancelled && r.ok && setTime({ info: r.response.time, at: Date.now() }));
+    const offTime = client.time.onChanged(s => setTime({ info: s.time, at: Date.now() }));
+    const offNickname = client.system.onDeviceNicknameChanged(r => setNickname(r.nickname ?? null));
+    const tick = setInterval(() => setNow(Date.now()), 15_000);
     return () => {
       cancelled = true;
+      offTime();
+      offNickname();
+      clearInterval(tick);
     };
   }, [client]);
 
@@ -410,8 +414,7 @@ function SystemPanel({ client }: { client: BridgethingClient }) {
       <Card title="device" hint="name is set from the companion app">
         <Rows
           rows={[
-            ['name', nickname ?? meta?.modelName ?? '...'],
-            ['model', meta?.modelName],
+            ['name', meta ? deviceName({ nickname, bluetoothName: meta.bluetoothName }) : '...'],
             ['serial', meta?.serialNumber],
             ['bluetooth', meta?.btMac],
           ]}
@@ -447,9 +450,9 @@ function SystemPanel({ client }: { client: BridgethingClient }) {
       <Card title="time">
         <Rows
           rows={[
-            ['clock', fmtClock(time)],
-            ['timezone', time?.tzIana ?? 'n/a'],
-            ['locale', time?.locale ?? 'n/a'],
+            ['clock', time ? clockText(time.info, time.at, now) : 'n/a'],
+            ['timezone', time?.info.tzIana ?? 'n/a'],
+            ['locale', time?.info.locale ?? 'n/a'],
           ]}
         />
       </Card>
@@ -643,21 +646,4 @@ function fmtUptime(s: number): string {
   if (d > 0) return `${d}d ${h}h ${m}m`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
-}
-
-function fmtClock(time: TimeInfo | null): string {
-  if (!time?.wallClockUnixS) return 'n/a';
-  const d = new Date(time.wallClockUnixS * 1000);
-  try {
-    return d.toLocaleString(time.locale ?? undefined, {
-      timeZone: time.tzIana ?? undefined,
-      hour: '2-digit',
-      minute: '2-digit',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return d.toISOString();
-  }
 }

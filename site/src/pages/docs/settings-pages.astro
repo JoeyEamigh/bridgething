@@ -71,10 +71,19 @@ export function Settings() {
 }`;
 
 const themeSnippet = `:root {
-  --bt-color-bg: #1c2127;
-  --bt-color-fg: #e7ecf0;
-  --bt-color-accent: #03a9f4;
-  --bt-font-body: system-ui, sans-serif;
+  color-scheme: var(--bt-scheme);
+}
+
+body {
+  background: var(--bt-color-bg);
+  color: var(--bt-color-fg);
+  font-family: var(--bt-font-body);
+}
+
+button {
+  border: 1px solid var(--bt-color-accent);
+  background: var(--bt-color-accent-soft);
+  color: var(--bt-color-fg);
 }`;
 
 const deviceSnippet = `// on-device webapp: adopt what the settings page authored, live
@@ -293,6 +302,11 @@ try {
       a choice commits on tap. a text or number field commits when it loses focus, or on enter.
     </p>
     <p class="mt-3 text-white/60">
+      keep each field's <code>label</code> short and put help text in <code>description</code>, which the form shows
+      under the label. an <code>enum</code> stores its <code>choices</code> values and shows <code>choiceLabels</code>
+      (value to display text) in their place.
+    </p>
+    <p class="mt-3 text-white/60">
       a touch webview does not always take focus off a field when a button is tapped. so a button that acts on the
       values calls <code>flush()</code> first: it writes every field still being typed, waits for the device, and resolves
       with the values the device holds. a done button calls <code>closeSettings(form.current)</code>, which flushes and
@@ -324,7 +338,7 @@ try {
       <code>theme: &#123; scheme, colors, text, fonts &#125;</code>, and the sdk paints it as <code>--bt-*</code> plus
       <code>--bt-scheme</code>, repainting when the phone or desktop flips between light and dark. use them in your own
       css and the page matches the app. the painted values have zero specificity, so a <code>:root</code> rule of yours wins;
-      set them there to use your own palette instead.
+      set them there to pin your own palette, at the cost of no longer following the app between light and dark.
     </p>
     <Snippet code={themeSnippet} lang="css" />
   </section>

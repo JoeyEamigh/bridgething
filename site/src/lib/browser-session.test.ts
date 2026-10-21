@@ -10,6 +10,7 @@ function meta(): BridgeThingMeta {
     libbridgethingVersion: '0.4.0',
     appName: 'bridgething',
     nickname: 'the dashboard',
+    bluetoothName: 'Car Thing (SN: B001)',
     launcherGesture: 'fivePress',
     appVersion: '0.8.1',
     daemonSha256: null,
@@ -92,9 +93,9 @@ describe('toDeviceMeta', () => {
       osName: 'superbird',
       osVersion: '1.2.3',
       channel: 'stable',
-      modelName: 'Car Thing',
       serialNumber: 'SB0001',
       nickname: 'the dashboard',
+      bluetoothName: 'Car Thing (SN: B001)',
       launcherGesture: 'fivePress',
     });
   });

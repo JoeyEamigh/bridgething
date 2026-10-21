@@ -6,8 +6,9 @@ if [ $# -ne 1 ]; then
 usage: bridgething-push-daemon <local-path>
 
 Pushes <local-path> to /opt/bridgething/daemon/bridgething.current on the
-device. Rotates the existing .current to .previous for rollback safety,
-stops bridgething, atomically swaps the binary, then restarts.
+device while the old daemon keeps running, then rotates .current to
+.previous, swaps the new binary in, restarts, and checks the new one is the
+one running.
 EOF
     exit 2
 fi
@@ -25,24 +26,35 @@ CURRENT="${DEST_DIR}/bridgething.current"
 PREVIOUS="${DEST_DIR}/bridgething.previous"
 TMP="${DEST_DIR}/bridgething.incoming.$$"
 
-echo "[push-daemon] stopping bridgething"
-device_ssh "systemctl stop bridgething.service"
+WANT=$(shasum -a 256 "$LOCAL" | awk '{print $1}')
 
 echo "[push-daemon] uploading $(basename "$LOCAL") ($(du -h "$LOCAL" | cut -f1)) to ${DEVICE_HOST}:${TMP}"
 device_scp -C -q "$LOCAL" "root@${DEVICE_HOST}:${TMP}"
 
-echo "[push-daemon] rotating current -> previous, swapping new -> current"
+echo "[push-daemon] swapping it in and restarting bridgething"
 device_ssh "
     set -eu
     chmod 0755 ${TMP}
+    systemctl stop bridgething.service
     if [ -e ${CURRENT} ]; then
         mv -f ${CURRENT} ${PREVIOUS}
     fi
     mv -f ${TMP} ${CURRENT}
     systemctl reset-failed bridgething.service 2>/dev/null || true
+    systemctl start bridgething.service
 "
 
-echo "[push-daemon] restarting bridgething"
-device_ssh "systemctl restart bridgething.service"
+sleep 5
+HAVE=$(device_ssh "sha256sum ${CURRENT}" | awk '{print $1}')
+if [ "$HAVE" != "$WANT" ]; then
+    echo "[push-daemon] the device rolled back to ${HAVE:0:12}; the pushed ${WANT:0:12} did not stay up" >&2
+    device_ssh "ls -la ${DEST_DIR}; journalctl -u bridgething -n 30 --no-pager" >&2 || true
+    exit 1
+fi
+if ! device_ssh "systemctl is-active --quiet bridgething.service"; then
+    echo "[push-daemon] ${WANT:0:12} is in place but bridgething is not active" >&2
+    device_ssh "journalctl -u bridgething -n 30 --no-pager" >&2 || true
+    exit 1
+fi
 
-echo "[push-daemon] done."
+echo "[push-daemon] ${WANT:0:12} running."

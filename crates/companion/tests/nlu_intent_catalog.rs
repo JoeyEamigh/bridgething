@@ -1,83 +1,16 @@
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{collections::BTreeSet, path::Path};
 
 use bridgething_companion::voice::intent_catalog;
-
-const OPTIONAL: &str = "BRIDGETHING_NLU_GRAMMAR_OPTIONAL";
-
-fn grammar_path() -> Option<PathBuf> {
-  if let Some(explicit) = std::env::var_os("BRIDGETHING_NLU_GRAMMAR") {
-    return Some(PathBuf::from(explicit));
-  }
-  let sibling = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../nlu/configs/grammar.strict.json");
-  sibling.exists().then_some(sibling)
-}
-
-fn bundle_manifest_path() -> Option<PathBuf> {
-  if let Some(explicit) = std::env::var_os("BRIDGETHING_NLU_BUNDLE") {
-    return Some(PathBuf::from(explicit).join("manifest.json"));
-  }
-  let sibling =
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../nlu/results/encoder/ettin-68m-s2-bundle/manifest.json");
-  sibling.exists().then_some(sibling)
-}
-
-fn grammar_intents(path: &PathBuf) -> BTreeSet<String> {
-  let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-  let root: serde_json::Value = serde_json::from_str(&text).expect("grammar is json");
-  root["oneOf"]
-    .as_array()
-    .expect("grammar has a oneOf branch list")
-    .iter()
-    .filter_map(|branch| branch["properties"]["intent"]["const"].as_str())
-    .map(str::to_owned)
-    .collect()
-}
+use nlu::Manifest;
 
 #[test]
-fn catalog_matches_the_decoding_grammar() {
-  let Some(path) = grammar_path() else {
-    assert!(
-      std::env::var_os(OPTIONAL).is_some(),
-      "grammar.strict.json not found next to this checkout; point BRIDGETHING_NLU_GRAMMAR at it or set {OPTIONAL}=1"
-    );
-    return;
-  };
-
-  let grammar = grammar_intents(&path);
-  assert!(!grammar.is_empty(), "could not parse intents out of {}", path.display());
-
-  let catalog: BTreeSet<String> = intent_catalog::SURFACE_NAMES.iter().map(|n| (*n).to_owned()).collect();
-  let unlisted: Vec<&String> = grammar.difference(&catalog).collect();
-  let unadmitted: Vec<&String> = catalog.difference(&grammar).collect();
-  assert!(
-    unlisted.is_empty(),
-    "grammar admits intents the catalog never lists: {unlisted:?}"
-  );
-  assert!(
-    unadmitted.is_empty(),
-    "catalog lists intents the grammar rejects: {unadmitted:?}"
-  );
-}
-
-#[test]
-fn catalog_matches_the_exported_bundle_manifest() {
-  let Some(path) = bundle_manifest_path() else {
-    assert!(
-      std::env::var_os(OPTIONAL).is_some(),
-      "exported bundle manifest not found next to this checkout; point BRIDGETHING_NLU_BUNDLE at the bundle \
-       directory or set {OPTIONAL}=1"
-    );
-    return;
-  };
-
-  let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-  let manifest: serde_json::Value = serde_json::from_str(&text).expect("manifest is json");
-  let intents: Vec<&str> = manifest["intents"]
-    .as_array()
-    .expect("manifest has an intent list")
-    .iter()
-    .map(|intent| intent["name"].as_str().expect("every manifest intent is named"))
-    .collect();
+fn catalog_matches_the_published_bundle_manifest() {
+  let manifest = Manifest::load(Path::new(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../nlu/tests/bundle/manifest.json"
+  )))
+  .expect("the published bundle manifest loads");
+  let intents: Vec<&str> = manifest.intents.iter().map(|intent| intent.name.as_str()).collect();
 
   assert_eq!(intents, intent_catalog::SURFACE_NAMES.to_vec());
 }

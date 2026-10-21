@@ -393,9 +393,10 @@ pub struct DeviceMeta {
   pub os_name: String,
   pub os_version: String,
   pub channel: String,
-  pub model_name: String,
   pub serial_number: String,
   pub nickname: Option<String>,
+  #[ts(optional)]
+  pub bluetooth_name: Option<String>,
   pub launcher_gesture: LauncherGesture,
 }
 

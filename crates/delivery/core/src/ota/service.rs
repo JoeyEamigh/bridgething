@@ -24,14 +24,14 @@ use uuid::Uuid;
 use crate::{
   bundle::{
     ArtifactDigest,
-    fetch::{ArtifactFetch, DownloadRequest, FetchError, fetch_json},
+    fetch::{ArtifactFetch, DownloadRequest, FetchError},
   },
   ota::{
     autopush::{AutoPushSchedule, MIN_POLL_INTERVAL_SECONDS, MIN_RESUME_DELAY_MS},
     event::{OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
     manifest::{
       OtaArtifactUrls, OtaCompositeVersion, OtaDiscoverManifest, OtaManifestRelease, OtaReleaseArtifacts,
-      WAKEWORD_MODEL_FILE,
+      WAKEWORD_MODEL_FILE, fetch_discover_manifest,
     },
     poll::{OtaPollConfig, drift, pushable_release, wakeword_drift},
     progress::{OtaRunProgress, ota_progress},
@@ -42,7 +42,7 @@ use crate::{
     watchdog::{IDLE_DEADLINE_MS, IDLE_POLL_MS, ProgressClock, stalled_reason},
   },
   seam::Clock,
-  transfer::{AckWindow, SourceRange},
+  transfer::{AckWindow, SendError, SourceRange},
   webapp::{
     BUILTIN_WEBAPPS,
     blob::{self, BlobError, BlobLane, BlobProgress, BlobPuts, BlobUpload},
@@ -621,11 +621,20 @@ impl OtaService {
         None => {}
       }
     }
+    self.interrupt_run(device_id);
+    let _ = signals.send(OtaSignal::LinkLost);
+  }
+
+  fn interrupt_run(&self, device_id: &str) {
     let interrupted = self.feed.store.lock().unwrap().interrupt(device_id);
     if let Some(run) = interrupted {
       let _ = self.feed.store_changes.send(OtaStoreChange::Run(Box::new(run)));
     }
-    let _ = signals.send(OtaSignal::LinkLost);
+  }
+
+  fn link_lost(&self, device_id: &str) -> OtaPhaseSnapshot {
+    self.interrupt_run(device_id);
+    failed(LINK_LOST_REASON)
   }
 
   pub async fn meta(&self, device_id: &str) -> Option<BridgeThingMeta> {
@@ -1131,8 +1140,7 @@ impl OtaService {
   }
 
   pub async fn discover_manifest(&self, root_url: &str) -> Result<OtaDiscoverManifest, FetchError> {
-    let url = format!("{}/manifest.json", root_url.trim_end_matches('/'));
-    fetch_json(self.deps.fetch.as_ref(), &url).await
+    fetch_discover_manifest(self.deps.fetch.as_ref(), root_url).await
   }
 
   async fn poll(&self, config: &OtaPollConfig) -> Notified<'_> {
@@ -1722,6 +1730,7 @@ impl OtaService {
           &update_id,
         );
       }
+      Err(RequestFailure::Disconnected) => return abandoned(self.link_lost(device_id), &update_id),
       Err(other) => return abandoned(failed(format!("OtaBegin protocol error: {other:?}")), &update_id),
     };
 
@@ -1750,7 +1759,11 @@ impl OtaService {
           progress.as_ref(),
         )
         .await;
-      pushed.err().map(|e| failed(format!("chunk stream failed: {e}")))
+      match pushed {
+        Ok(_) => None,
+        Err(SendError::SinkClosed { .. }) => Some(self.link_lost(device_id)),
+        Err(e) => Some(failed(format!("chunk stream failed: {e}"))),
+      }
     };
 
     let (terminal, installed) = {
@@ -3101,6 +3114,67 @@ mod tests {
     assert_eq!(run.channel.as_deref(), Some(CHANNEL));
     assert_eq!(run.root_url.as_deref(), Some(ROOT));
     assert_eq!(run.release_version.as_deref(), Some(TO_RELEASE));
+  }
+
+  async fn run_ends(service: &Arc<OtaService>) -> bool {
+    tokio::time::timeout(Duration::from_secs(5), async {
+      while run_of(service).await.outcome.is_none() {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .is_ok()
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_link_that_closes_under_the_stream_before_it_is_released_leaves_the_run_resumable() {
+    let mut rig = rig().await;
+    let body = pattern(1024 * 1024);
+    publish_daemon_release(&rig.fetch, &body);
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    drive_apply(&rig.service);
+    let (request_id, _) = rig.device.await_ota_begin().await;
+    rig.device.ack_begin(request_id, 0);
+    drop(rig.device);
+
+    assert!(
+      run_ends(&rig.service).await,
+      "the stream notices the link closed under it"
+    );
+    rig.service.release(DEVICE).await;
+
+    let run = run_of(&rig.service).await;
+    assert!(
+      run.resumable,
+      "a stream the closing link broke is interrupted, the same as one the link release ends, got {:?}",
+      run.error
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_link_that_closes_before_the_begin_is_answered_leaves_the_run_resumable() {
+    let mut rig = rig().await;
+    let body = pattern(64 * 1024);
+    publish_daemon_release(&rig.fetch, &body);
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    drive_apply(&rig.service);
+    rig.device.await_ota_begin().await;
+    drop(rig.device);
+
+    assert!(
+      run_ends(&rig.service).await,
+      "the begin notices the link closed under it"
+    );
+    rig.service.release(DEVICE).await;
+
+    let run = run_of(&rig.service).await;
+    assert!(
+      run.resumable,
+      "a begin the closing link cut off is interrupted, the same as one the link release ends, got {:?}",
+      run.error
+    );
   }
 
   #[tokio::test(start_paused = true)]

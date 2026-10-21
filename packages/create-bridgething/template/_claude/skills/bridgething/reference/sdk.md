@@ -118,6 +118,25 @@ const r = await client.config.get({ key: 'units' });
 const all = await client.config.list();
 ```
 
+Each field in the manifest's `config` array is `string`, `secret`, `number`,
+`boolean` or `enum`. Keep `label` short; help text goes in `description`, which
+the settings form shows under the label. An enum stores its `choices` values and
+shows `choiceLabels` in their place:
+
+```json
+{
+  "type": "enum",
+  "data": {
+    "key": "frost",
+    "label": "Overlay frostiness",
+    "description": "How frosted the overlay surfaces look.",
+    "choices": ["0", "1", "2"],
+    "choiceLabels": { "0": "clear", "1": "light", "2": "frosted" },
+    "default": "2"
+  }
+}
+```
+
 ## The settings page: `@bridgething/client/settings`
 
 The page under `settings/` runs in the companion: the phone app, the desktop

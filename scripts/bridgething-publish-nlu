@@ -52,6 +52,10 @@ done
 [ -z "$ANDROID_MODEL" ] || [ -f "$ANDROID_MODEL" ] || die "no android model at $ANDROID_MODEL"
 [ -z "$DESKTOP_MODEL" ] || [ -f "$DESKTOP_MODEL" ] || die "no desktop model at $DESKTOP_MODEL"
 
+PINNED="$REPO_ROOT/crates/nlu/tests/bundle/manifest.json"
+cmp -s "$BUNDLE_DIR/manifest.json" "$PINNED" || die "$BUNDLE_DIR/manifest.json differs from the pinned ${PINNED#"$REPO_ROOT"/}.
+     copy it over and get nlu_intent_catalog green first, so the label set companions decode ships tested."
+
 digest() { shasum -a 256 "$1" | awk '{print $1}'; }
 bytes()  { wc -c <"$1" | tr -d ' '; }
 

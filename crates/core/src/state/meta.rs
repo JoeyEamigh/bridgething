@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use libbridgething::{BridgeThingMeta, LauncherGesture};
 use serde::{Deserialize, Serialize};
@@ -48,10 +48,7 @@ pub struct SuperbirdMeta {
 
 impl SuperbirdMeta {
   pub async fn read_or_default() -> Self {
-    #[cfg(debug_assertions)]
-    let meta_path = PathBuf::from("./resources/superbird.json");
-    #[cfg(not(debug_assertions))]
-    let meta_path = PathBuf::from("/etc/superbird");
+    let meta_path = crate::paths::superbird_meta();
 
     if !meta_path.exists() {
       tracing::warn!(
@@ -92,6 +89,7 @@ struct Inner {
   launcher_gesture_tx: watch::Sender<LauncherGesture>,
   daemon_sha_tx: watch::Sender<Option<String>>,
   wakeword_version_tx: watch::Sender<Option<String>>,
+  bluetooth_name_tx: watch::Sender<Option<String>>,
 }
 
 impl DeviceMeta {
@@ -111,6 +109,7 @@ impl DeviceMeta {
     let (launcher_gesture_tx, _gesture_rx) = watch::channel(parse_launcher_gesture(stored_gesture.as_deref()));
     let (daemon_sha_tx, _sha_rx) = watch::channel(None);
     let (wakeword_version_tx, _ww_rx) = watch::channel(crate::ota::wakeword_model_version().await);
+    let (bluetooth_name_tx, _bt_rx) = watch::channel(None);
     let me = Self {
       inner: Arc::new(Inner {
         static_meta,
@@ -119,6 +118,7 @@ impl DeviceMeta {
         launcher_gesture_tx,
         daemon_sha_tx,
         wakeword_version_tx,
+        bluetooth_name_tx,
       }),
     };
     me.spawn_daemon_sha();
@@ -152,6 +152,14 @@ impl DeviceMeta {
   pub async fn refresh_wakeword_model_version(&self) {
     let next = crate::ota::wakeword_model_version().await;
     self.inner.wakeword_version_tx.send_replace(next);
+  }
+
+  pub fn bluetooth_name(&self) -> Option<String> {
+    self.inner.bluetooth_name_tx.borrow().clone()
+  }
+
+  pub fn set_bluetooth_name(&self, name: String) {
+    self.inner.bluetooth_name_tx.send_replace(Some(name));
   }
 
   pub fn static_meta(&self) -> &SuperbirdMeta {
@@ -197,6 +205,7 @@ impl DeviceMeta {
     build_meta(
       &self.inner.static_meta,
       self.nickname(),
+      self.bluetooth_name(),
       self.launcher_gesture(),
       self.daemon_sha256(),
       self.wakeword_model_version(),
@@ -207,6 +216,7 @@ impl DeviceMeta {
 fn build_meta(
   meta: &SuperbirdMeta,
   nickname: Option<String>,
+  bluetooth_name: Option<String>,
   launcher_gesture: LauncherGesture,
   daemon_sha256: Option<String>,
   wakeword_model_version: Option<String>,
@@ -216,6 +226,7 @@ fn build_meta(
     libbridgething_version: BridgeThingMeta::libbridgething_version(),
     app_name: BRIDGETHING_APP_NAME.to_string(),
     nickname,
+    bluetooth_name,
     launcher_gesture,
     app_version: BRIDGETHING_VERSION.to_string(),
     daemon_sha256,

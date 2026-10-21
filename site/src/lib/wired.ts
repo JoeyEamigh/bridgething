@@ -22,14 +22,10 @@ export type WiredSession = {
 
 export class LocalNetworkError extends Error {}
 
+const LOCAL_NETWORK_HINT = 'check the cable, and that you allowed local network access when the browser asked.';
+
 export async function connectWired(host: string): Promise<WiredSession> {
-  const device = await withTimeout(
-    Device.overNetwork(host),
-    new LocalNetworkError(
-      `no answer from ${host} after ${CONNECT_TIMEOUT_MS / 1000}s. check the cable, and that you allowed ` +
-        'local network access when the browser asked.',
-    ),
-  );
+  const device = await reach(host);
 
   return {
     device,
@@ -41,17 +37,23 @@ export async function connectWired(host: string): Promise<WiredSession> {
   };
 }
 
-function withTimeout<T>(work: Promise<T>, onTimeout: Error): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(onTimeout), CONNECT_TIMEOUT_MS);
-    work.then(
-      value => {
+function reach(host: string): Promise<Device> {
+  return new Promise<Device>((resolve, reject) => {
+    const timer = setTimeout(
+      () =>
+        reject(
+          new LocalNetworkError(`no answer from ${host} after ${CONNECT_TIMEOUT_MS / 1000}s. ${LOCAL_NETWORK_HINT}`),
+        ),
+      CONNECT_TIMEOUT_MS,
+    );
+    Device.overNetwork(host).then(
+      device => {
         clearTimeout(timer);
-        resolve(value);
+        resolve(device);
       },
-      err => {
+      () => {
         clearTimeout(timer);
-        reject(err instanceof Error ? err : new Error(String(err)));
+        reject(new LocalNetworkError(`could not reach ${host}. ${LOCAL_NETWORK_HINT}`));
       },
     );
   });

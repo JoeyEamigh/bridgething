@@ -37,6 +37,7 @@ fn meta() -> BridgeThingMeta {
     libbridgething_version: "0.9.0".into(),
     app_name: "bridgething".into(),
     nickname: None,
+    bluetooth_name: None,
     launcher_gesture: LauncherGesture::default(),
     app_version: "0.9.0".into(),
     daemon_sha256: None,

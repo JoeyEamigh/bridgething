@@ -208,6 +208,31 @@ describe('a settings session', () => {
     expect(replies).toEqual([]);
   });
 
+  test('hands a page height to the host that asked for it and never replies', async () => {
+    const heights: number[] = [];
+    const delivered: SettingsMessage[] = [];
+    const session = openSettingsSession({
+      target: 'w',
+      bind: () => recordingHost([]),
+      deliver: message => delivered.push(message),
+      resize: height => heights.push(height),
+    });
+
+    session.receive(JSON.stringify({ id: 1, verb: 'resize', payload: { height: 312 } }));
+    session.receive(JSON.stringify({ id: 2, verb: 'resize', payload: { height: 'tall' } }));
+    session.receive(JSON.stringify({ id: 3, verb: 'resize', payload: { height: 0 } }));
+    await tick();
+
+    expect(heights).toEqual([312]);
+    expect(delivered).toEqual([]);
+  });
+
+  test('a host that does not size its frame drops a page height without an error', async () => {
+    const replies = await serve(JSON.stringify({ id: 4, verb: 'resize', payload: { height: 312 } }), recordingHost([]));
+
+    expect(replies).toEqual([]);
+  });
+
   test('ignores anything that is not a request', async () => {
     const calls: Calls = [];
     const host = recordingHost(calls);

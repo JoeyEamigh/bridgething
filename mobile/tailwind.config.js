@@ -8,6 +8,8 @@ module.exports = {
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
     './screens/**/*.{ts,tsx}',
+    './lib/**/*.{ts,tsx}',
+    '../packages/ui/src/tokens.ts',
   ],
   presets: [require('nativewind/preset')],
   theme: {

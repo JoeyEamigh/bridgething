@@ -70,7 +70,8 @@ export type SettingsProgress<V extends SettingsVerb> = SettingsVerbs[V] extends 
 export type SettingsRequest =
   | { [V in SettingsVerb]: { id: number; verb: V; payload?: SettingsPayload<V>; epoch?: number } }[SettingsVerb]
   | { id: number; verb: 'done'; epoch?: number }
-  | { id: number; verb: 'release'; epoch: number };
+  | { id: number; verb: 'release'; epoch: number }
+  | { id: number; verb: 'resize'; payload: { height: number } };
 export type SettingsReply =
   | { id: number; ok: true; value: unknown; epoch?: number }
   | { id: number; ok: false; error: string };
@@ -96,6 +97,7 @@ export type SettingsSessionOptions<T> = {
   bind: (target: T) => SettingsHost;
   deliver: (message: SettingsMessage) => void;
   explain?: (err: unknown) => string;
+  resize?: (height: number) => void;
 };
 
 export type SettingsSession<T> = {
@@ -290,6 +292,11 @@ export function openSettingsSession<T>(options: SettingsSessionOptions<T>): Sett
     }
     if (verb === 'release') {
       if (request.epoch < now) hosts.delete(request.epoch);
+      return;
+    }
+    if (verb === 'resize') {
+      const { height } = fields;
+      if (typeof height === 'number' && height > 0) options.resize?.(height);
       return;
     }
 

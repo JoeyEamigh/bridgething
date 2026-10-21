@@ -35,3 +35,13 @@ runs:
     - if: steps.wakeword.outputs.cache-hit != 'true'
       shell: bash
       run: scripts/bridgething-fetch-wakeword-models
+
+    - id: nlu-bundle
+      uses: actions/cache@v4
+      with:
+        path: crates/nlu/tests/bundle/tokenizer.json
+        key: nlu-bundle-${{ hashFiles('scripts/bridgething-fetch-nlu-bundle') }}
+
+    - if: steps.nlu-bundle.outputs.cache-hit != 'true'
+      shell: bash
+      run: scripts/bridgething-fetch-nlu-bundle

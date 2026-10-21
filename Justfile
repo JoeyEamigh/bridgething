@@ -27,7 +27,8 @@ sidecar_run := 'docker run --rm -v bridgething-ffmpeg-sidecar:/cache'
 # The image mounts the repo at /work, so container recipes need the container's view of a path.
 container_vendor := '/work/crates/swupdate-sys/vendor/swupdate'
 # Registry and target live in named volumes: virtiofs drops writes between rapid container runs
-container_run := 'docker run --rm -v ' + justfile_directory() + ':/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -v bridgething-target-cross:/target -e CARGO_TARGET_DIR=/target -e CARGO_INCREMENTAL=0 bridgething-build'
+container_target_volume := 'bridgething-target-' + sha256(justfile_directory())
+container_run := 'docker run --rm -v ' + justfile_directory() + ':/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -v ' + container_target_volume + ':/target -e CARGO_TARGET_DIR=/target -e CARGO_INCREMENTAL=0 bridgething-build'
 # mic-debug binds alsa + evdev, which a mac host has no toolchain for; test-shipping covers it there.
 host_test_excludes := if os() == 'macos' { '--exclude bridgething-mic-debug' } else { '' }
 

@@ -867,6 +867,22 @@ describe('serveSettingsFrame', () => {
     expect(windows.listeners.size).toBe(1);
   });
 
+  test('passes the height its own frame reports, and only that frame, to the host', async () => {
+    const r = rig();
+    r.settings.select('weather');
+    const windows = hub();
+    const frame = port();
+    const heights: number[] = [];
+
+    serveSettingsFrame(windows, frame, r.settings, 0, height => heights.push(height));
+    windows.post(port(), request(1, 'resize', { height: 900 }));
+    windows.post(frame, request(2, 'resize', { height: 284 }));
+    await tick();
+
+    expect(heights).toEqual([284]);
+    expect(frame.posted).toEqual([]);
+  });
+
   test('a frame for a page that is no longer loaded never listens', () => {
     const r = rig();
     r.settings.select('ha');

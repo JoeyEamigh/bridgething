@@ -35,19 +35,33 @@ function fanOut(what: string, run: (domain: SessionDomain) => void): void {
   }
 }
 
+const inFlight = new Set<SessionEvent[]>();
+
+function deliver(event: SessionEvent): void {
+  if (event.type === 'resumed') {
+    fanOut('reconcile', domain => domain.reconcile(event.snapshot));
+    return;
+  }
+  fanOut(`apply ${event.type}`, domain => domain.apply(event));
+}
+
 export function startBridge(): void {
   if (wired) return;
   wired = true;
   getSession().subscribe(event => {
-    if (event.type === 'resumed') {
-      fanOut('reconcile', domain => domain.reconcile(event.snapshot));
-      return;
-    }
-    fanOut(`apply ${event.type}`, domain => domain.apply(event));
+    for (const arrived of inFlight) arrived.push(event);
+    deliver(event);
   });
 }
 
 export async function reconcileAll(): Promise<void> {
-  const snapshot = await getSession().snapshot();
-  fanOut('reconcile', domain => domain.reconcile(snapshot));
+  const arrived: SessionEvent[] = [];
+  inFlight.add(arrived);
+  try {
+    const snapshot = await getSession().snapshot();
+    fanOut('reconcile', domain => domain.reconcile(snapshot));
+    for (const event of arrived) deliver(event);
+  } finally {
+    inFlight.delete(arrived);
+  }
 }

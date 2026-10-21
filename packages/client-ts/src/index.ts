@@ -8,6 +8,7 @@ import type { ClientSurfaces } from './dispatch.generated.js';
 
 export * from '@bridgething/lib';
 export * from '@bridgething/lib/client';
+export { deviceName, type NamedDevice } from './device-name.js';
 export type { ClientSurfaces } from './dispatch.generated.js';
 
 const DEFAULT_URL = 'ws://127.0.0.1:8891/';

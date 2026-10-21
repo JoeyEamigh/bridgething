@@ -4,6 +4,7 @@ pub fn meta(serial: &str) -> libbridgething::BridgeThingMeta {
     libbridgething_version: "0.0.0".into(),
     app_name: "bridgething".into(),
     nickname: None,
+    bluetooth_name: None,
     launcher_gesture: libbridgething::LauncherGesture::default(),
     app_version: "0.0.0".into(),
     daemon_sha256: None,

@@ -112,7 +112,11 @@ export type WarmSettings<T, P> = {
   select(target: T): void;
   retry(): void;
   ready(state: WarmSettingsState<T, P>): boolean;
-  attach(revision: number, deliver: (message: SettingsMessage) => void): SettingsSession<T> | null;
+  attach(
+    revision: number,
+    deliver: (message: SettingsMessage) => void,
+    resize?: (height: number) => void,
+  ): SettingsSession<T> | null;
   settle(revision: number): void;
   reveal(): void;
   hide(): void;
@@ -229,13 +233,13 @@ export function warmSettings<T, P>(options: WarmSettingsOptions<T, P>): WarmSett
       store.set({ failure: null });
       if (selected !== null) select(selected);
     },
-    attach(revision, deliver) {
+    attach(revision, deliver, resize) {
       const state = store.get();
       if (revision !== state.loaded.revision) return null;
       live?.close();
       seen = false;
       if (state.settled === revision) store.set({ settled: null });
-      live = openSettingsSession<T>({ target: state.loaded.target, bind, deliver, explain: options.explain });
+      live = openSettingsSession<T>({ target: state.loaded.target, bind, deliver, explain: options.explain, resize });
       return live;
     },
     settle(revision) {
@@ -296,8 +300,9 @@ export function serveSettingsFrame<T, P>(
   port: SettingsFramePort,
   settings: WarmSettings<T, P>,
   revision: number,
+  resize?: (height: number) => void,
 ): () => void {
-  const session = settings.attach(revision, message => port.postMessage(JSON.stringify(message), '*'));
+  const session = settings.attach(revision, message => port.postMessage(JSON.stringify(message), '*'), resize);
   if (!session) return () => undefined;
 
   const onMessage = (event: SettingsFrameEvent): void => {

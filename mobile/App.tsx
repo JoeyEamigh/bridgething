@@ -9,8 +9,11 @@ import {
 } from '@react-navigation/native-stack';
 import { PortalHost } from '@rn-primitives/portal';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StatusBar, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ActivityIndicator, Platform, StatusBar, View } from 'react-native';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 import { CrashBoundary } from './components/CrashBoundary';
 import { SettingsHostView } from './components/SettingsHostView';
@@ -76,6 +79,21 @@ function useStackOptions(): NativeStackNavigationOptions {
   );
 }
 
+function useHeaderlessOptions(): NativeStackNavigationOptions {
+  const palette = usePalette();
+  const { top } = useSafeAreaInsets();
+  return useMemo(
+    () => ({
+      headerShown: false,
+      contentStyle: {
+        backgroundColor: palette.bg,
+        paddingTop: Platform.OS === 'android' ? top : 0,
+      },
+    }),
+    [palette, top],
+  );
+}
+
 function AppsTab() {
   const options = useStackOptions();
   return (
@@ -115,12 +133,13 @@ function AppsTab() {
 
 function StoreTab() {
   const options = useStackOptions();
+  const headerless = useHeaderlessOptions();
   return (
     <StoreStack.Navigator screenOptions={options}>
       <StoreStack.Screen
         name="Store"
         component={StoreScreen}
-        options={{ headerShown: false }}
+        options={headerless}
       />
       <StoreStack.Screen
         name="StoreSources"
@@ -143,12 +162,13 @@ function StoreTab() {
 
 function SettingsTab() {
   const options = useStackOptions();
+  const headerless = useHeaderlessOptions();
   return (
     <SettingsStack.Navigator screenOptions={options}>
       <SettingsStack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ headerShown: false }}
+        options={headerless}
       />
       <SettingsStack.Screen
         name="Logs"
@@ -251,7 +271,7 @@ export default function App() {
   if (boot == null) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle={barStyle} backgroundColor={palette.bg} />
+        <StatusBar barStyle={barStyle} />
         <View
           className="flex-1 items-center justify-center"
           style={{ backgroundColor: palette.bg }}
@@ -267,7 +287,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle={barStyle} backgroundColor={palette.bg} />
+      <StatusBar barStyle={barStyle} />
       <CrashBoundary>
         <NavigationContainer theme={navTheme[scheme]}>
           <RootStack.Navigator

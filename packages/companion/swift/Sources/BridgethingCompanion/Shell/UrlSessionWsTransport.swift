@@ -14,6 +14,8 @@ public final class UrlSessionWsTransport: NSObject, WsTransport, @unchecked Send
         let inbox: WsInbox
         var reported = false
         var silenced = false
+        var pings: UInt64 = 0
+        var pongs: UInt64 = 0
 
         init(id: String, task: URLSessionWebSocketTask, inbox: WsInbox) {
             self.id = id
@@ -23,11 +25,15 @@ public final class UrlSessionWsTransport: NSObject, WsTransport, @unchecked Send
     }
 
     private let lock = NSLock()
+    private let pingQueue = DispatchQueue(label: "bridgething.ws.ping")
     private var session: URLSession!
     private var connsById: [String: Conn] = [:]
     private var connsByTask: [Int: Conn] = [:]
 
-    override public init() {
+    private let pingInterval: TimeInterval
+
+    public init(pingInterval: TimeInterval = 3) {
+        self.pingInterval = pingInterval
         super.init()
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 60
@@ -115,6 +121,42 @@ public final class UrlSessionWsTransport: NSObject, WsTransport, @unchecked Send
         lock.unlock()
         guard let conn, !conn.silenced else { return }
         conn.inbox.onOpen(id: conn.id, acceptedProtocol: acceptedProtocol)
+        schedulePing(conn)
+    }
+
+    private func schedulePing(_ conn: Conn) {
+        pingQueue.asyncAfter(deadline: .now() + pingInterval) { [weak self] in
+            self?.ping(conn)
+        }
+    }
+
+    private func ping(_ conn: Conn) {
+        lock.lock()
+        let live = connsById[conn.id] === conn && !conn.reported
+        conn.pings += 1
+        let sent = conn.pings
+        lock.unlock()
+        guard live else { return }
+        conn.task.sendPing { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.reportClosed(conn, code: wsAbnormalClosure, reason: "ping failed: \(error.localizedDescription)")
+                return
+            }
+            self.lock.lock()
+            conn.pongs = max(conn.pongs, sent)
+            self.lock.unlock()
+            self.schedulePing(conn)
+        }
+        pingQueue.asyncAfter(deadline: .now() + pingInterval) { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let answered = conn.pongs >= sent
+            self.lock.unlock()
+            guard !answered else { return }
+            conn.task.cancel(with: .goingAway, reason: nil)
+            self.reportClosed(conn, code: wsAbnormalClosure, reason: "ping timeout")
+        }
     }
 
     fileprivate func handleClose(taskIdentifier: Int, code: UInt16, reason: String) {

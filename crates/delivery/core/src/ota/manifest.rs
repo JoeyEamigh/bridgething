@@ -2,9 +2,19 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::bundle::ArtifactDigest;
+use crate::bundle::{
+  ArtifactDigest,
+  fetch::{ArtifactFetch, FetchError, fetch_json},
+};
 
 pub const WAKEWORD_MODEL_FILE: &str = "hey_bridgething.btww";
+
+pub async fn fetch_discover_manifest(
+  fetch: &dyn ArtifactFetch,
+  root_url: &str,
+) -> Result<OtaDiscoverManifest, FetchError> {
+  fetch_json(fetch, &format!("{}/manifest.json", root_url.trim_end_matches('/'))).await
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all(serialize = "camelCase"))]

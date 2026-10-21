@@ -18,6 +18,7 @@ const ENV_WEBAPP_BLOBS_DIR: &str = "BRIDGETHING_WEBAPP_BLOBS_DIR";
 const ENV_RO_WEBAPPS_DIR: &str = "BRIDGETHING_RO_WEBAPPS_DIR";
 const ENV_EXAMPLES_DIR: &str = "BRIDGETHING_EXAMPLES_DIR";
 const ENV_WAKEWORD_MODEL: &str = "BRIDGETHING_WAKEWORD_MODEL";
+const ENV_SUPERBIRD_META: &str = "BRIDGETHING_SUPERBIRD_META";
 
 #[cfg(not(debug_assertions))]
 const PROD_STATE_DIR: &str = "/var/lib/bridgething/state";
@@ -116,6 +117,20 @@ pub fn examples_dir() -> PathBuf {
 
   #[cfg(not(debug_assertions))]
   PathBuf::from(PROD_EXAMPLES_DIR)
+}
+
+pub fn superbird_meta() -> PathBuf {
+  if let Ok(p) = std::env::var(ENV_SUPERBIRD_META) {
+    return PathBuf::from(p);
+  }
+
+  #[cfg(debug_assertions)]
+  {
+    PathBuf::from("./resources/superbird.json")
+  }
+
+  #[cfg(not(debug_assertions))]
+  PathBuf::from(ON_DEVICE_SENTINEL)
 }
 
 pub fn is_on_device() -> bool {

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use derive_more::derive::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -261,6 +263,8 @@ pub enum ConfigField {
 pub struct StringField {
   pub key: String,
   pub label: String,
+  #[ts(optional)]
+  pub description: Option<String>,
   pub pattern: Option<String>,
   /// In characters.
   pub min_length: Option<u32>,
@@ -276,6 +280,8 @@ pub struct StringField {
 pub struct NumberField {
   pub key: String,
   pub label: String,
+  #[ts(optional)]
+  pub description: Option<String>,
   pub min: Option<f64>,
   pub max: Option<f64>,
   pub step: Option<f64>,
@@ -289,6 +295,8 @@ pub struct NumberField {
 pub struct BoolField {
   pub key: String,
   pub label: String,
+  #[ts(optional)]
+  pub description: Option<String>,
   pub default: Option<bool>,
 }
 
@@ -299,7 +307,12 @@ pub struct BoolField {
 pub struct EnumField {
   pub key: String,
   pub label: String,
+  #[ts(optional)]
+  pub description: Option<String>,
   pub choices: Vec<String>,
+  /// Display text per choice value; a choice without an entry shows its value.
+  #[ts(optional)]
+  pub choice_labels: Option<BTreeMap<String, String>>,
   pub default: Option<String>,
 }
 
@@ -358,6 +371,30 @@ mod tests {
     assert!(
       manifest.overlays.any_enabled(),
       "one surface on means the overlay still injects"
+    );
+  }
+
+  #[test]
+  fn config_descriptions_and_choice_labels_survive_the_manifest_round_trip() {
+    let manifest: WebappManifest = serde_json::from_str(
+      r#"{"id":"00000000-0000-0000-0000-000000000001","name":"glassy","version":"0.1.0","config":[
+          {"type":"boolean","data":{"key":"ambient","label":"Ambient screensaver","description":"Show it when idle.","default":true}},
+          {"type":"enum","data":{"key":"frost","label":"Frost","description":"How frosted.","choices":["0","1"],
+           "choiceLabels":{"0":"clear","1":"light"},"default":"1"}}]}"#,
+    )
+    .expect("manifest parses");
+
+    let wire = serde_json::to_value(&manifest.config).expect("config serializes");
+    assert_eq!(wire[0]["data"]["description"], "Show it when idle.");
+    assert_eq!(wire[1]["data"]["description"], "How frosted.");
+    assert_eq!(wire[1]["data"]["choiceLabels"]["0"], "clear");
+
+    let plain: Vec<ConfigField> =
+      serde_json::from_str(r#"[{"type":"string","data":{"key":"zip","label":"ZIP"}}]"#).expect("a bare field parses");
+    let wire = serde_json::to_value(&plain).expect("config serializes");
+    assert!(
+      wire[0]["data"].get("description").is_none(),
+      "an absent description stays off the wire"
     );
   }
 }

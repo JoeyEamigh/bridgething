@@ -53,6 +53,9 @@ enter_dev_env() {
     export BRIDGETHING_WEBAPP_BLOBS_DIR="${DEV_DIR}/webapp-blobs"
     export BRIDGETHING_EXAMPLES_DIR="${DEV_DIR}/examples"
     export BRIDGETHING_WAKEWORD_MODEL="$wakeword_model"
+    if [ -f "${DEV_DIR}/superbird.json" ]; then
+        export BRIDGETHING_SUPERBIRD_META="${DEV_DIR}/superbird.json"
+    fi
     export RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}"
 }
 

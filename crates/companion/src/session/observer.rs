@@ -112,9 +112,9 @@ impl SessionObserver {
       os_name: meta.os_name,
       os_version: meta.os_version,
       channel: meta.channel,
-      model_name: meta.model_name,
       serial_number: meta.serial_number,
       nickname: meta.nickname,
+      bluetooth_name: meta.bluetooth_name,
       launcher_gesture: meta.launcher_gesture.into(),
     };
     {

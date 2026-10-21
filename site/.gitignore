@@ -11,3 +11,4 @@ apps/.compile-validator/
 .env.*.local
 .DS_Store
 *.log
+apps/apps-published.yaml

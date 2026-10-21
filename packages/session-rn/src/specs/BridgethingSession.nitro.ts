@@ -303,7 +303,6 @@ export type BridgethingDeviceMeta = {
   osName: string;
   osVersion: string;
   channel: string;
-  modelName: string;
   serialNumber: string;
   nickname?: string;
   launcherGesture: BridgethingLauncherGesture;

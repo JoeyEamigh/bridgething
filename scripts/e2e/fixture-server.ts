@@ -2,7 +2,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { daemonVersion } from '../publish-packages.ts';
@@ -27,6 +27,11 @@ const STORE_APP_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
 const ROOT = join(dirname(Bun.main), '..', '..');
 const DEV_DAEMON = join(ROOT, 'scripts', 'dev-daemon.sh');
 const DEV_DIR = process.env.BRIDGETHING_DEV_DIR ?? join(ROOT, '.e2e');
+const DEV_LOG = join(DEV_DIR, 'dev-daemon.log');
+const DEV_PIDFILE = join(DEV_DIR, 'dev-daemon.pid');
+const DEVICE_TRANSFERS = join(DEV_DIR, 'state', 'transfers');
+const DEVICE_META = join(DEV_DIR, 'superbird.json');
+const DEVICE_META_TEMPLATE = join(ROOT, 'resources', 'superbird.json');
 
 function pattern(bytes: number): Uint8Array {
   const out = new Uint8Array(bytes);
@@ -42,7 +47,7 @@ function digestOf(body: Uint8Array) {
 }
 
 const artifacts = {
-  imageSwu: pattern(64 * 1024),
+  imageSwu: pattern(32 * 1024 * 1024),
   imageZck: pattern(32 * 1024),
   imageBootZck: pattern(8 * 1024),
   daemon: pattern(48 * 1024),
@@ -212,6 +217,105 @@ function daemonCtl(action: 'start' | 'stop'): Promise<void> {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const IMAGE_UPDATE_ID = digestOf(artifacts.imageSwu).sha256;
+const STREAMING_WAIT_MS = 60_000;
+
+function imageReceived(): number | null {
+  if (!existsSync(DEVICE_TRANSFERS)) return null;
+  for (const name of readdirSync(DEVICE_TRANSFERS)) {
+    if (!name.endsWith('.meta')) continue;
+    try {
+      const meta = JSON.parse(readFileSync(join(DEVICE_TRANSFERS, name), 'utf8'));
+      if (meta.id === IMAGE_UPDATE_ID) return statSync(meta.partial_path).size;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function streamingImage(): Promise<number | string> {
+  const total = artifacts.imageSwu.byteLength;
+  const deadline = Date.now() + STREAMING_WAIT_MS;
+  while (Date.now() < deadline) {
+    const received = imageReceived();
+    if (received !== null && received >= total / 8 && received < total) return received;
+    if (received === total) return 'the image arrived whole before the link could be dropped under it';
+    await sleep(10);
+  }
+  return 'the device never started receiving the image';
+}
+
+const RESUME_WINDOW_MS = 60_000;
+
+type StreamStart = { updateId: string; offset: number; afterBootMs: number };
+
+function streamStarts(): StreamStart[] {
+  if (!existsSync(DEV_LOG)) return [];
+  const lines = readFileSync(DEV_LOG, 'utf8')
+    .replace(/\x1b\[[0-9;]*m/g, '')
+    .split('\n');
+  const stamp = (line: string) => Date.parse(line.split(' ')[0] ?? '');
+  const booted = stamp(lines[0] ?? '');
+  const starts: StreamStart[] = [];
+  for (const line of lines) {
+    if (!line.includes('OtaBegin accepted; streaming starts at offset')) continue;
+    const updateId = /update_id=([0-9a-f]+)/.exec(line)?.[1];
+    const offset = /offset=(\d+)/.exec(line)?.[1];
+    if (updateId && offset) starts.push({ updateId, offset: Number(offset), afterBootMs: stamp(line) - booted });
+  }
+  return starts;
+}
+
+let interruptedAt: number | null = null;
+let interruption: Promise<string | null> | null = null;
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function killDaemon() {
+  const pid = Number(readFileSync(DEV_PIDFILE, 'utf8').trim());
+  process.kill(pid, 'SIGKILL');
+  while (alive(pid)) await sleep(10);
+  rmSync(DEV_PIDFILE, { force: true });
+}
+
+async function bounceDaemon<T>(downMs: number, next: Mode | null, stop: () => Promise<T>): Promise<T> {
+  const stopped = await stop();
+  if (next) {
+    bounceMode = next;
+    console.log(`[e2e-fixtures] bounce root -> ${bounceMode} while the link is down`);
+  }
+  console.log(`[e2e-fixtures] daemon down for ${downMs}ms`);
+  await sleep(downMs);
+  await daemonCtl('start');
+  console.log('[e2e-fixtures] daemon back up');
+  return stopped;
+}
+
+function deviceImage(): string {
+  return existsSync(DEVICE_META) ? JSON.parse(readFileSync(DEVICE_META, 'utf8')).imageVersion : DEVICE_IMAGE;
+}
+
+function flashDeviceImage(image: string) {
+  if (image === DEVICE_IMAGE) {
+    rmSync(DEVICE_META, { force: true });
+    return;
+  }
+  const meta = JSON.parse(readFileSync(DEVICE_META_TEMPLATE, 'utf8'));
+  writeFileSync(DEVICE_META, JSON.stringify({ ...meta, imageVersion: image }, null, 2));
+}
+
+function deviceDirty(): boolean {
+  return deviceImage() !== DEVICE_IMAGE || (existsSync(DEVICE_TRANSFERS) && readdirSync(DEVICE_TRANSFERS).length > 0);
+}
+
 function otaRoute(mode: Mode, path: string): Response {
   if (path === '/manifest.json') return Response.json(manifest(mode));
   if (path === `/images/${CHANNEL}/${NEXT_IMAGE}/bridgething-${VARIANT}-image.swu`) return bytes(artifacts.imageSwu);
@@ -274,19 +378,69 @@ Bun.serve({
       return Response.json({ mode: bounceMode });
     }
 
+    if (pathname === '/control/device/reset') {
+      if (!deviceDirty()) return Response.json({ reset: false, image: DEVICE_IMAGE });
+      await daemonCtl('stop');
+      flashDeviceImage(DEVICE_IMAGE);
+      rmSync(DEVICE_TRANSFERS, { recursive: true, force: true });
+      interruptedAt = null;
+      interruption = null;
+      await daemonCtl('start');
+      console.log(`[e2e-fixtures] device reset to image ${DEVICE_IMAGE} with no retained transfers`);
+      return Response.json({ reset: true, image: DEVICE_IMAGE });
+    }
+
+    if (pathname === '/control/daemon/reboot') {
+      const image = searchParams.get('image') ?? DEVICE_IMAGE;
+      await daemonCtl('stop');
+      flashDeviceImage(image);
+      await daemonCtl('start');
+      console.log(`[e2e-fixtures] device rebooted onto image ${image}`);
+      return Response.json({ rebooted: true, image });
+    }
+
+    if (pathname === '/control/ota/resumed') {
+      const starts = streamStarts().filter(start => start.updateId === IMAGE_UPDATE_ID);
+      const resumed =
+        interruptedAt !== null &&
+        starts.some(start => start.offset === interruptedAt && start.afterBootMs < RESUME_WINDOW_MS);
+      return Response.json({ resumed, interruptedAt, starts }, { status: resumed ? 200 : 409 });
+    }
+
     if (pathname === '/control/daemon/bounce') {
+      await bounceDaemon(Number(searchParams.get('downMs') ?? '10000'), searchParams.get('mode') as Mode | null, () =>
+        daemonCtl('stop'),
+      );
+      return Response.json({ bounced: true, mode: bounceMode });
+    }
+
+    if (pathname === '/control/daemon/interrupt') {
       const downMs = Number(searchParams.get('downMs') ?? '10000');
       const next = searchParams.get('mode') as Mode | null;
-      await daemonCtl('stop');
-      if (next) {
-        bounceMode = next;
-        console.log(`[e2e-fixtures] bounce root -> ${bounceMode} while the link is down`);
-      }
-      console.log(`[e2e-fixtures] daemon down for ${downMs}ms`);
-      await sleep(downMs);
-      await daemonCtl('start');
-      console.log('[e2e-fixtures] daemon back up');
-      return Response.json({ bounced: true, downMs, mode: bounceMode });
+      interruptedAt = null;
+      interruption = (async () => {
+        const streaming = await streamingImage();
+        if (typeof streaming === 'string') return streaming;
+        const held = await bounceDaemon(downMs, next, async () => {
+          await killDaemon();
+          const held = imageReceived();
+          console.log(
+            `[e2e-fixtures] link dropped with ${held} of ${artifacts.imageSwu.byteLength} image bytes on the device`,
+          );
+          return held;
+        });
+        if (held === null || held >= artifacts.imageSwu.byteLength) {
+          return `the device held ${held} of ${artifacts.imageSwu.byteLength} image bytes when the link dropped, not a partial`;
+        }
+        interruptedAt = held;
+        return null;
+      })();
+      return Response.json({ armed: true });
+    }
+
+    if (pathname === '/control/daemon/interrupted') {
+      const failure = interruption ? await interruption : 'no interruption was armed';
+      return failure ? new Response(failure, { status: 409 }) : Response.json({ interruptedAt });
     }
 
     return new Response('not found', { status: 404 });

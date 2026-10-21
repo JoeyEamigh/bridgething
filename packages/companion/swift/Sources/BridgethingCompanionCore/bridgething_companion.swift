@@ -16671,14 +16671,14 @@ public struct DeviceMeta: Equatable, Hashable {
     public var osName: String
     public var osVersion: String
     public var channel: String
-    public var modelName: String
     public var serialNumber: String
     public var nickname: String?
+    public var bluetoothName: String?
     public var launcherGesture: LauncherGesture
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, modelName: String, serialNumber: String, nickname: String?, launcherGesture: LauncherGesture) {
+    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, serialNumber: String, nickname: String?, bluetoothName: String?, launcherGesture: LauncherGesture) {
         self.daemonVersion = daemonVersion
         self.libbridgethingVersion = libbridgethingVersion
         self.imageVersion = imageVersion
@@ -16686,9 +16686,9 @@ public struct DeviceMeta: Equatable, Hashable {
         self.osName = osName
         self.osVersion = osVersion
         self.channel = channel
-        self.modelName = modelName
         self.serialNumber = serialNumber
         self.nickname = nickname
+        self.bluetoothName = bluetoothName
         self.launcherGesture = launcherGesture
     }
 
@@ -16715,9 +16715,9 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
                 osName: FfiConverterString.read(from: &buf), 
                 osVersion: FfiConverterString.read(from: &buf), 
                 channel: FfiConverterString.read(from: &buf), 
-                modelName: FfiConverterString.read(from: &buf), 
                 serialNumber: FfiConverterString.read(from: &buf), 
                 nickname: FfiConverterOptionString.read(from: &buf), 
+                bluetoothName: FfiConverterOptionString.read(from: &buf), 
                 launcherGesture: FfiConverterTypeLauncherGesture.read(from: &buf)
         )
     }
@@ -16730,9 +16730,9 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
         FfiConverterString.write(value.osName, into: &buf)
         FfiConverterString.write(value.osVersion, into: &buf)
         FfiConverterString.write(value.channel, into: &buf)
-        FfiConverterString.write(value.modelName, into: &buf)
         FfiConverterString.write(value.serialNumber, into: &buf)
         FfiConverterOptionString.write(value.nickname, into: &buf)
+        FfiConverterOptionString.write(value.bluetoothName, into: &buf)
         FfiConverterTypeLauncherGesture.write(value.launcherGesture, into: &buf)
     }
 }

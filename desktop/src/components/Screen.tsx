@@ -24,11 +24,16 @@ export function Hint({ children }: { children: ComponentChildren }): VNode {
   return <p class="mt-2 text-hint leading-relaxed wrap-break-word text-muted">{children}</p>;
 }
 
-export function BackButton({ children }: { children: ComponentChildren }): VNode {
-  const { back } = useLocation();
+export function BackButton({ to, children }: { to?: string; children: ComponentChildren }): VNode {
+  const { back, route } = useLocation();
 
   return (
-    <Button variant="ghost" size="sm" class="mb-5" icon={<Icon name="back" size={14} />} onClick={back}>
+    <Button
+      variant="ghost"
+      size="sm"
+      class="mb-5"
+      icon={<Icon name="back" size={14} />}
+      onClick={to === undefined ? back : () => route(to)}>
       {children}
     </Button>
   );

@@ -15,6 +15,9 @@ pub struct BridgeThingMeta {
   pub libbridgething_version: String,
   pub app_name: String,
   pub nickname: Option<String>,
+  /// The adapter's bluetooth alias, the name phones see when pairing. Absent where the daemon has no radio.
+  #[ts(optional)]
+  pub bluetooth_name: Option<String>,
   pub launcher_gesture: LauncherGesture,
   pub app_version: String,
   pub daemon_sha256: Option<String>,

@@ -97,7 +97,8 @@ export function WebappSettings({ webapp, onClose }: { webapp: WebappInfo; onClos
           settings={settings}
           loaded={state.loaded}
           title={`${webapp.name} settings`}
-          class={ready ? 'border-rule bg-bg block h-[70vh] min-h-96 w-full border' : 'hidden'}
+          class={ready ? 'border-rule bg-bg block h-[70vh] w-full border' : 'hidden'}
+          fit
         />
       ) : null}
     </Section>

@@ -12,7 +12,6 @@ function meta(libbridgethingVersion: string): api.DeviceMeta {
     osName: 'superbird',
     osVersion: '1.0',
     channel: 'stable',
-    modelName: 'Car Thing',
     serialNumber: 'sn',
     nickname: null,
     launcherGesture: 'fivePress',

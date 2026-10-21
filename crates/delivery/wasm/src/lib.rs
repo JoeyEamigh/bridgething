@@ -6,10 +6,10 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use bridgething_delivery::{
   blob::{MemoryBlobStore, MemorySlotIndex},
-  bundle::fetch::{ArtifactFetch, HttpArtifactFetch, fetch_json},
+  bundle::fetch::{ArtifactFetch, HttpArtifactFetch},
   ota::{
     event::{OtaPollEvent, parse_ota_kind},
-    manifest::{OtaArtifactUrls, OtaCompositeVersion, OtaDiscoverManifest},
+    manifest::{OtaArtifactUrls, OtaCompositeVersion, fetch_discover_manifest},
     service::{BandaidArtifact, IMAGE_SWU_ASSET},
     stream::Artifact,
   },
@@ -743,12 +743,9 @@ impl WasmSession {
 
 #[wasm_bindgen(js_name = discoverManifest, unchecked_return_type = "OtaDiscoverManifest")]
 pub async fn discover_manifest(root_url: String) -> Result<JsValue, JsValue> {
-  let manifest: OtaDiscoverManifest = fetch_json(
-    fetch().as_ref(),
-    &format!("{}/discover.json", root_url.trim_end_matches('/')),
-  )
-  .await
-  .map_err(|e| JsValue::from_str(&format!("manifest fetch failed: {e}")))?;
+  let manifest = fetch_discover_manifest(fetch().as_ref(), &root_url)
+    .await
+    .map_err(|e| JsValue::from_str(&format!("manifest fetch failed: {e}")))?;
   to_js(&manifest)
 }
 

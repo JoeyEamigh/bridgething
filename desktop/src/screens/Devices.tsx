@@ -2,7 +2,10 @@ import { listedWebapps } from '@bridgething/catalog';
 import type { DeviceMetaEntry, SessionPeer } from '@bridgething/companion-types';
 import {
   Button,
+  cx,
+  describeError,
   Dialog,
+  type Endpoint,
   Field,
   ListGroup,
   ListRow,
@@ -11,16 +14,14 @@ import {
   SectionEmpty,
   SectionHeader,
   StatusStrip,
-  cx,
-  describeError,
-  useSession,
-  type Endpoint,
   type Tone,
+  useSession,
 } from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useState } from 'preact/hooks';
 
+import { deviceName } from '@bridgething/client';
 import { ConnectFlow } from '../components/ConnectFlow.tsx';
 import { OtaRunCard } from '../components/OtaRunCard.tsx';
 import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
@@ -255,11 +256,11 @@ function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEn
       <ListRow
         icon={<Icon name="plug" />}
         iconTint={connected ? (active ? 'accent' : 'default') : 'err'}
-        title={held?.nickname ?? peer.name}
+        title={held ? deviceName(held) : peer.name}
         subtitle={
           connected
             ? held
-              ? `${held.modelName} · ${held.serialNumber} · ${peerHost(peer.id)}`
+              ? `${held.serialNumber} · ${peerHost(peer.id)}`
               : `reading device info from ${peerHost(peer.id)}`
             : (peer.linkError ?? 'attached, but the link did not open')
         }

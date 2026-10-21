@@ -140,17 +140,17 @@ describe('the home assistant settings page', () => {
     const held = device();
     held.doc.set(SELECTION, 'light.kitchen');
     const page = await open(held);
-    expect(page.text()).toContain('1 selected on thing');
+    expect(page.text()).toContain('1 selected');
 
     held.doc.set(SELECTION, 'light.kitchen,switch.fan');
     page.session.notify({
       event: 'refresh',
       context: { webappId: 'ha', name: 'Home Assistant', version: '0.9.1', deviceId: 'thing' },
     });
-    await page.until(() => page.text().includes('2 selected on thing'));
+    await page.until(() => page.text().includes('2 selected'));
 
     expect(held.events.filter(event => event === `read ${SELECTION}`)).toHaveLength(2);
-    expect(page.text()).toContain('2 selected on thing');
+    expect(page.text()).toContain('2 selected');
 
     await page.close();
   });
@@ -158,13 +158,13 @@ describe('the home assistant settings page', () => {
   test('follows the saved selection when the device changes it, and ignores other keys', async () => {
     const held = device();
     const page = await open(held);
-    expect(page.text()).toContain('0 selected on thing');
+    expect(page.text()).toContain('0 selected');
 
     page.session.notify({ event: 'docChanged', key: 'layout', value: 'a,b,c,d' });
     page.session.notify({ event: 'docChanged', key: SELECTION, value: 'light.kitchen,switch.fan,climate.hall' });
-    await page.until(() => page.text().includes('3 selected on thing'));
+    await page.until(() => page.text().includes('3 selected'));
 
-    expect(page.text()).toContain('3 selected on thing');
+    expect(page.text()).toContain('3 selected');
 
     await page.close();
   });

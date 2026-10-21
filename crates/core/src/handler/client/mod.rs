@@ -50,10 +50,7 @@ mod msg;
 pub use msg::*;
 
 use super::HandlerResult;
-use crate::{
-  bluetooth::BluetoothMan, handler::HandlerError, net::WSError, state::State, stock::StockInterAppSend,
-  transport::TransportController,
-};
+use crate::{bluetooth::BluetoothMan, state::State, stock::StockInterAppSend, transport::TransportController};
 
 pub struct ClientHandler {
   state: State,
@@ -231,10 +228,6 @@ impl ClientHandler {
           .state
           .log_tap
           .drain_for_owner(crate::state::log_tap::LogOwner::Client(handle.from));
-      }
-      RecvMsgData::Error(error) => {
-        tracing::error!("({}) failed to receive message: {:?}", &handle.from, error);
-        return Err(HandlerError::WS(WSError::Websocket(error)));
       }
     }
 

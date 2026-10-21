@@ -261,7 +261,9 @@ impl BluetoothManager {
           deps.devices.clone(),
           deps.peers.clone(),
           self.iap2.reconnect.clone(),
+          deps.meta.clone(),
         ));
+        profile_man.seed_alias().await;
         let _profile_actor = profiles::spawn_command_actor(profile_man.clone(), profile_command_rx);
 
         let _agent_handle = retry_bluez("agent registration", || {

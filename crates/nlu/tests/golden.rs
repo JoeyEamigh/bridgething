@@ -25,8 +25,14 @@ struct Expected {
   slots: BTreeMap<String, String>,
 }
 
-fn bundle() -> Option<PathBuf> {
-  std::env::var("BRIDGETHING_NLU_BUNDLE").ok().map(PathBuf::from)
+fn bundle() -> PathBuf {
+  let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bundle");
+  assert!(
+    dir.join("tokenizer.json").exists(),
+    "no tokenizer.json in {}; run scripts/bridgething-fetch-nlu-bundle",
+    dir.display()
+  );
+  dir
 }
 
 fn fixtures(dir: &Path) -> Vec<Fixture> {
@@ -40,10 +46,7 @@ fn fixtures(dir: &Path) -> Vec<Fixture> {
 
 #[test]
 fn tokenization_matches_the_training_side() {
-  let Some(dir) = bundle() else {
-    eprintln!("BRIDGETHING_NLU_BUNDLE unset; skipping");
-    return;
-  };
+  let dir = bundle();
   let decoder = nlu::NluDecoder::load(&dir).expect("bundle loads");
   for fixture in fixtures(&dir) {
     let tokens = decoder.tokenize(&fixture.utterance).expect("tokenizes");
@@ -68,10 +71,7 @@ fn tokenization_matches_the_training_side() {
 
 #[test]
 fn decode_matches_the_trainers_own_frames() {
-  let Some(dir) = bundle() else {
-    eprintln!("BRIDGETHING_NLU_BUNDLE unset; skipping");
-    return;
-  };
+  let dir = bundle();
   let decoder = nlu::NluDecoder::load(&dir).expect("bundle loads");
   for fixture in fixtures(&dir) {
     let tokens = decoder.tokenize(&fixture.utterance).expect("tokenizes");

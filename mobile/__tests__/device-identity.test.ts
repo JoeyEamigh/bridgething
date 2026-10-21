@@ -85,6 +85,19 @@ describe('device identity', () => {
     expect(after).toEqual(before);
   });
 
+  test('device meta that lands while the reconnect resync is in flight outlives the resync', async () => {
+    const r = named();
+    r.emit('peerDisconnected', DEVICE);
+
+    r.emit('peerConnected', peer());
+    r.emit('deviceMetaChanged', DEVICE, meta({ imageVersion: '99.9.9' }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(
+      r.session.useSessionStore.getState().deviceMeta[DEVICE]?.imageVersion,
+    ).toBe('99.9.9');
+  });
+
   test('a device that just disconnected reports a recent last-connected time', () => {
     const r = named();
     const connectedAt = Date.now();

@@ -1,4 +1,5 @@
 import type {
+  BridgethingDeviceMeta,
   BridgethingSessionPeer,
   BridgethingSessionSnapshot,
 } from '@bridgething/session-react-native';
@@ -61,6 +62,15 @@ function fold(
     case 'peerDisconnected': {
       const peerId = args[0] as string;
       world.peers = world.peers.filter(p => p.id !== peerId);
+      world.deviceMeta = world.deviceMeta.filter(e => e.deviceId !== peerId);
+      return;
+    }
+    case 'deviceMetaChanged': {
+      const deviceId = args[0] as string;
+      world.deviceMeta = [
+        ...world.deviceMeta.filter(e => e.deviceId !== deviceId),
+        { deviceId, meta: args[1] as BridgethingDeviceMeta },
+      ];
       return;
     }
     case 'resumed':

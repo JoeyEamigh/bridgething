@@ -73,9 +73,9 @@ export type DeviceMeta = {
   osName: string;
   osVersion: string;
   channel: string;
-  modelName: string;
   serialNumber: string;
   nickname: string | null;
+  bluetoothName?: string;
   launcherGesture: LauncherGesture;
 };
 

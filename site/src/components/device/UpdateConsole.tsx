@@ -9,6 +9,7 @@ import {
 } from '../../lib/wired';
 import { ConsoleLog } from '../console/ConsoleLog';
 import { useConsoleLog } from '../console/useConsoleLog';
+import { deviceName } from '@bridgething/client';
 
 type Phase =
   | { step: 'idle' }
@@ -19,10 +20,6 @@ type Phase =
 
 function mb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} mb`;
-}
-
-function deviceName(meta: { nickname?: string | null; modelName?: string | null }): string {
-  return meta.nickname || meta.modelName || 'bridgething';
 }
 
 export function UpdateConsole() {

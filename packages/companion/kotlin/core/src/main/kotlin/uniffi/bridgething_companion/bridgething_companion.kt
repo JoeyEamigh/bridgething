@@ -31285,9 +31285,9 @@ data class DeviceMeta(
     var `osName`: kotlin.String,
     var `osVersion`: kotlin.String,
     var `channel`: kotlin.String,
-    var `modelName`: kotlin.String,
     var `serialNumber`: kotlin.String,
     var `nickname`: kotlin.String?,
+    var `bluetoothName`: kotlin.String?,
     var `launcherGesture`: LauncherGesture,
 ) {
     companion object
@@ -31307,7 +31307,7 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterTypeLauncherGesture.read(buf),
         )
@@ -31321,9 +31321,9 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
                 FfiConverterString.allocationSize(value.`osName`) +
                 FfiConverterString.allocationSize(value.`osVersion`) +
                 FfiConverterString.allocationSize(value.`channel`) +
-                FfiConverterString.allocationSize(value.`modelName`) +
                 FfiConverterString.allocationSize(value.`serialNumber`) +
                 FfiConverterOptionalString.allocationSize(value.`nickname`) +
+                FfiConverterOptionalString.allocationSize(value.`bluetoothName`) +
                 FfiConverterTypeLauncherGesture.allocationSize(value.`launcherGesture`)
         )
 
@@ -31338,9 +31338,9 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
         FfiConverterString.write(value.`osName`, buf)
         FfiConverterString.write(value.`osVersion`, buf)
         FfiConverterString.write(value.`channel`, buf)
-        FfiConverterString.write(value.`modelName`, buf)
         FfiConverterString.write(value.`serialNumber`, buf)
         FfiConverterOptionalString.write(value.`nickname`, buf)
+        FfiConverterOptionalString.write(value.`bluetoothName`, buf)
         FfiConverterTypeLauncherGesture.write(value.`launcherGesture`, buf)
     }
 }

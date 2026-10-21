@@ -79,7 +79,6 @@ pub enum RecvMsgData {
 
   // errors
   ConnectionClosed(u16, String),
-  Error(axum::Error),
 }
 
 impl From<ClientToBridgeMsg> for RecvMsgData {

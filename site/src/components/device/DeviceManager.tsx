@@ -20,6 +20,7 @@ import { AddApp, StagedInstall } from './Install';
 import { ErrorNote, Screen, Section } from './Screen';
 import { Update } from './Update';
 import { Webapps } from './Webapps';
+import { deviceName } from '@bridgething/client';
 
 export function DeviceManager(): VNode {
   const session = useMemo(() => new BrowserSession(), []);
@@ -72,7 +73,7 @@ function Header({ peer, meta }: { peer: SessionPeer; meta: DeviceMeta | null }):
     <ScreenHeader
       class="mb-0"
       eyebrow="connected"
-      title={meta?.nickname || meta?.modelName || peer.name}
+      title={meta ? deviceName(meta) : peer.name}
       subtitle={
         meta
           ? `daemon ${meta.daemonVersion} · image ${meta.imageVersion} · ${meta.channel}`
@@ -134,7 +135,6 @@ function DeviceInfo({ meta }: { meta: DeviceMeta | null }): VNode {
 
   const rows: [string, string][] = meta
     ? [
-        ['model', meta.modelName],
         ['serial', meta.serialNumber],
         ['daemon', meta.daemonVersion],
         ['libbridgething', meta.libbridgethingVersion],

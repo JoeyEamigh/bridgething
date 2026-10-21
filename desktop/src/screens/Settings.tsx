@@ -22,6 +22,7 @@ import {
 import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
+import { deviceName } from '@bridgething/client';
 import { Progress } from '../components/Progress.tsx';
 import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import { SelfUpdate } from '../components/SelfUpdate.tsx';
@@ -150,7 +151,7 @@ export function SettingsScreen(): VNode {
               <ListRow
                 key={entry.deviceId}
                 icon={<Icon name="device" />}
-                title={entry.meta.nickname ?? entry.meta.modelName}
+                title={deviceName(entry.meta)}
                 subtitle={`${entry.meta.osName} ${entry.meta.osVersion} · image ${entry.meta.imageVersion} · ${entry.meta.channel}`}
                 value={`v${entry.meta.daemonVersion}`}
               />

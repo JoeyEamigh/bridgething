@@ -1433,6 +1433,11 @@
           "type": "string"
         },
         {
+          "name": "description",
+          "type": "string",
+          "optional": true
+        },
+        {
           "name": "default",
           "type": "boolean",
           "optional": true
@@ -1459,6 +1464,12 @@
           "name": "nickname",
           "type": "string",
           "optional": true
+        },
+        {
+          "name": "bluetoothName",
+          "type": "string",
+          "optional": true,
+          "description": "The adapter's bluetooth alias, the name phones see when pairing. Absent where the daemon has no radio."
         },
         {
           "name": "launcherGesture",
@@ -2256,8 +2267,19 @@
           "type": "string"
         },
         {
+          "name": "description",
+          "type": "string",
+          "optional": true
+        },
+        {
           "name": "choices",
           "type": "string[]"
+        },
+        {
+          "name": "choiceLabels",
+          "type": "Record<string, string>",
+          "optional": true,
+          "description": "Display text per choice value; a choice without an entry shows its value."
         },
         {
           "name": "default",
@@ -4279,6 +4301,11 @@
           "type": "string"
         },
         {
+          "name": "description",
+          "type": "string",
+          "optional": true
+        },
+        {
           "name": "min",
           "type": "number",
           "optional": true
@@ -5699,6 +5726,11 @@
         {
           "name": "label",
           "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "optional": true
         },
         {
           "name": "pattern",

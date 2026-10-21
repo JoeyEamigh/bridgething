@@ -6,12 +6,15 @@ use std::{
   },
 };
 
-use bridgething_delivery::bundle::{
-  ArtifactDigest, BundleManifest,
-  fetch::{
-    ArtifactFetch, DigestField, DownloadRequest, FetchError, HttpArtifactFetch, MEMORY_BODY_CAP, fetch_json,
-    sha256_file, sha256_hex,
+use bridgething_delivery::{
+  bundle::{
+    ArtifactDigest, BundleManifest,
+    fetch::{
+      ArtifactFetch, DigestField, DownloadRequest, FetchError, HttpArtifactFetch, MEMORY_BODY_CAP, fetch_json,
+      sha256_file, sha256_hex,
+    },
   },
+  ota::manifest::fetch_discover_manifest,
 };
 use bridgething_io::{HttpDownloadSink, HttpExecutor, HttpRequest, HttpSink, HttpTransport};
 use tempfile::TempDir;
@@ -442,6 +445,22 @@ async fn fetch_json_decodes_the_response_body() {
       size: 512,
       sha256: "aaa".to_string(),
     })
+  );
+}
+
+#[tokio::test]
+async fn the_ota_discover_manifest_is_read_from_manifest_json_under_the_root() {
+  let body = br#"{"manifest_version":1,"updated_at":"2026-09-17T14:40:35Z","channels":{},"releases":{}}"#;
+  let server = StubServer::serving(body.to_vec());
+  let fetch = fetcher(server.clone());
+
+  let manifest = fetch_discover_manifest(&fetch, "https://ota.example/").await.unwrap();
+
+  assert_eq!(manifest.manifest_version, 1);
+  assert_eq!(manifest.updated_at, "2026-09-17T14:40:35Z");
+  assert_eq!(
+    *server.urls.lock().unwrap(),
+    vec!["https://ota.example/manifest.json".to_string()]
   );
 }
 

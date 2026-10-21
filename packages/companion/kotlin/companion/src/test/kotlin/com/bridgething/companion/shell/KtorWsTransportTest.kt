@@ -9,8 +9,15 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.security.MessageDigest
+import java.util.Base64
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -37,6 +44,37 @@ private class RecordingWsInbox : WsInbox(NoHandle) {
 
     override fun onClosed(id: String, code: UShort?, reason: String) {
         events.add("closed:$id:${code ?: "?"}:$reason")
+    }
+}
+
+private const val WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+private class SilentPeer : AutoCloseable {
+    private val socket = ServerSocket(0, 1, InetAddress.getByName(LOOPBACK))
+    val port: Int = socket.localPort
+
+    init {
+        thread(isDaemon = true) {
+            val peer = runCatching { socket.accept() }.getOrNull() ?: return@thread
+            val reader = peer.getInputStream().bufferedReader()
+            val key = generateSequence { reader.readLine() }
+                .takeWhile { it.isNotEmpty() }
+                .firstNotNullOfOrNull { line ->
+                    line.takeIf { it.startsWith("Sec-WebSocket-Key:", ignoreCase = true) }?.substringAfter(':')?.trim()
+                } ?: return@thread
+            val accept = Base64.getEncoder()
+                .encodeToString(MessageDigest.getInstance("SHA-1").digest((key + WS_GUID).toByteArray()))
+            peer.getOutputStream().write(
+                "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $accept\r\n\r\n"
+                    .toByteArray(),
+            )
+            peer.getOutputStream().flush()
+            runCatching { while (peer.getInputStream().read() >= 0) Unit }
+        }
+    }
+
+    override fun close() {
+        socket.close()
     }
 }
 
@@ -162,6 +200,41 @@ class KtorWsTransportTest {
                 transport.connect(connect("a", port), inbox)
                 assertEquals("open:a", inbox.events.poll(5, TimeUnit.SECONDS))
                 assertEquals("binary:a:1,2,3", inbox.events.poll(5, TimeUnit.SECONDS))
+            }
+        } finally {
+            srv.stop(0, 0)
+        }
+    }
+
+    @Test
+    fun aPeerThatStopsAnsweringWithoutClosingIsReportedClosed() {
+        SilentPeer().use { peer ->
+            KtorWsTransport(pingInterval = 200.milliseconds).use { transport ->
+                val inbox = RecordingWsInbox()
+                transport.connect(connect("a", peer.port), inbox)
+                assertEquals("open:a", inbox.events.poll(5, TimeUnit.SECONDS))
+                val event = inbox.events.poll(5, TimeUnit.SECONDS)
+                assertTrue(
+                    event != null && event.startsWith("closed:a:"),
+                    "a socket whose far end went silent without a close is dead and has to be reported, got $event",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aPeerThatAnswersPingsStaysOpen() {
+        val (srv, port) = server {
+            delay(2_000)
+            send(Frame.Text("still here"))
+            while (incoming.receiveCatching().isSuccess) Unit
+        }
+        try {
+            KtorWsTransport(pingInterval = 200.milliseconds).use { transport ->
+                val inbox = RecordingWsInbox()
+                transport.connect(connect("a", port), inbox)
+                assertEquals("open:a", inbox.events.poll(5, TimeUnit.SECONDS))
+                assertEquals("text:a:still here", inbox.events.poll(5, TimeUnit.SECONDS))
             }
         } finally {
             srv.stop(0, 0)

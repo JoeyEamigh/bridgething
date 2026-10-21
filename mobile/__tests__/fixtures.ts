@@ -41,7 +41,6 @@ export function meta(
     osName: 'superbird',
     osVersion: '1.0',
     channel: 'stable',
-    modelName: 'Superbird',
     serialNumber: SERIAL,
     launcherGesture: 'fivePress',
     ...over,

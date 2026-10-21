@@ -276,7 +276,7 @@ export function SourceRoute({ source }: { source: string }): VNode {
 
   return (
     <Screen>
-      <BackButton>store</BackButton>
+      <BackButton to={PATHS.store}>store</BackButton>
       <ScreenHeader
         eyebrow="source"
         title={held?.repo.name ?? 'catalog source'}

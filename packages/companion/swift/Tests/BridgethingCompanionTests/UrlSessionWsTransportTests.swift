@@ -91,4 +91,40 @@ final class UrlSessionWsTransportTests: XCTestCase {
         XCTAssertEqual(events.filter { $0.hasPrefix("closed:") }, ["closed:c3"])
         withExtendedLifetime(transport) {}
     }
+
+    func testAPeerThatStopsAnsweringWithoutClosingReportsClosed() throws {
+        let peer = try XCTUnwrap(MiniHttpServer(websocketPeer: .silent) { _, _, _ in
+            (404, [], Data())
+        })
+        defer { peer.stop() }
+        let inbox = RecordingWsInbox()
+        let transport = UrlSessionWsTransport(pingInterval: 0.2)
+        transport.connect(
+            connect: WsConnect(id: "c4", url: "ws://127.0.0.1:\(peer.port)/ws", protocols: [], headers: []),
+            inbox: inbox
+        )
+        let events = inbox.waitForClosed()
+        XCTAssertEqual(
+            events,
+            ["open:c4", "closed:c4"],
+            "a socket whose far end went silent without a close is dead and has to be reported"
+        )
+        withExtendedLifetime(transport) {}
+    }
+
+    func testAPeerThatAnswersPingsStaysOpen() throws {
+        let peer = try XCTUnwrap(MiniHttpServer(websocketPeer: .answersPings) { _, _, _ in
+            (404, [], Data())
+        })
+        defer { peer.stop() }
+        let inbox = RecordingWsInbox()
+        let transport = UrlSessionWsTransport(pingInterval: 0.2)
+        transport.connect(
+            connect: WsConnect(id: "c5", url: "ws://127.0.0.1:\(peer.port)/ws", protocols: [], headers: []),
+            inbox: inbox
+        )
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(inbox.events, ["open:c5"], "a peer that keeps answering pings is alive")
+        withExtendedLifetime(transport) {}
+    }
 }

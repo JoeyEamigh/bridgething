@@ -26,6 +26,7 @@ type View =
       kind: 'ready';
       fields: ConfigField[];
       values: ConfigValues;
+      overridden: ReadonlySet<string>;
       drafts: ConfigValues;
       errors: Record<string, string>;
       stale: string | null;
@@ -67,6 +68,7 @@ const STYLE = `
 .bt-field{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border:1px solid var(--bt-color-rule);background:var(--bt-color-screen)}
 .bt-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .bt-label{flex:1;min-width:0;font-family:var(--bt-font-mono);font-size:var(--bt-text-eyebrow);letter-spacing:.18em;text-transform:uppercase;color:var(--bt-color-muted)}
+.bt-desc{margin:0;font-size:var(--bt-text-hint);line-height:1.45;color:var(--bt-color-muted)}
 .bt-reset,.bt-retry{flex-shrink:0;padding:0;border:0;border-radius:0;background:none;cursor:pointer;font-family:var(--bt-font-mono);font-size:var(--bt-text-eyebrow);letter-spacing:.18em;text-transform:uppercase;color:var(--bt-color-accent)}
 .bt-retry{align-self:flex-start}
 .bt-input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid var(--bt-color-edge);border-radius:0;background:var(--bt-color-bg);color:var(--bt-color-fg);font:inherit;font-size:var(--bt-text-row)}
@@ -160,8 +162,9 @@ function createEngine({ after, show, report, invalid, lost }: EngineOptions): En
       show(failure === null ? { kind: 'loading' } : { kind: 'failed', reason: failure });
       return;
     }
-    const values = effective(fields, stored());
-    show({ kind: 'ready', fields, values, drafts, errors, stale: failure });
+    const current = stored();
+    const values = effective(fields, current);
+    show({ kind: 'ready', fields, values, overridden: new Set(Object.keys(current)), drafts, errors, stale: failure });
     const signature = JSON.stringify(values);
     if (signature === reported) return;
     reported = signature;
@@ -464,6 +467,7 @@ function Form({ onChange, slot, after, lost, onLost }: FormProps) {
             key={key}
             field={field}
             value={view.values[key] ?? ''}
+            resettable={storedDefault(field) !== null && view.overridden.has(key)}
             draft={view.drafts[key]}
             error={view.errors[key] ?? null}
             bind={input => {
@@ -491,11 +495,12 @@ type ControlProps = {
   onCommit: (value: string) => void;
 };
 
-type RowProps = ControlProps & { error: string | null; onReset: () => void };
+type RowProps = ControlProps & { error: string | null; resettable: boolean; onReset: () => void };
 
-function FieldRow({ error, onReset, ...control }: RowProps) {
+function FieldRow({ error, resettable, onReset, ...control }: RowProps) {
   const { field } = control;
   const id = `bt-field-${field.data.key}`;
+  const describedBy = field.data.description ? `bt-desc-${field.data.key}` : undefined;
   const hint = constraints(field);
   return (
     <div className="bt-field">
@@ -503,13 +508,18 @@ function FieldRow({ error, onReset, ...control }: RowProps) {
         <label className="bt-label" htmlFor={id}>
           {field.data.label}
         </label>
-        {storedDefault(field) !== null ? (
+        {resettable ? (
           <button type="button" className="bt-reset" onClick={onReset}>
             reset
           </button>
         ) : null}
       </div>
-      <Control {...control} id={id} invalid={error !== null} />
+      {describedBy ? (
+        <p id={describedBy} className="bt-desc">
+          {field.data.description}
+        </p>
+      ) : null}
+      <Control {...control} id={id} describedBy={describedBy} invalid={error !== null} />
       {hint ? <p className="bt-note">{hint}</p> : null}
       {error ? (
         <p className="bt-note" data-tone="err">
@@ -522,6 +532,7 @@ function FieldRow({ error, onReset, ...control }: RowProps) {
 
 function Control({
   id,
+  describedBy,
   field,
   value,
   draft,
@@ -530,7 +541,7 @@ function Control({
   onDraft,
   onFinish,
   onCommit,
-}: ControlProps & { id: string; invalid: boolean }) {
+}: ControlProps & { id: string; describedBy: string | undefined; invalid: boolean }) {
   if (field.type === 'boolean') {
     const on = value === 'true';
     return (
@@ -541,6 +552,7 @@ function Control({
           className="bt-switch"
           type="checkbox"
           role="switch"
+          aria-describedby={describedBy}
           checked={on}
           onChange={() => onCommit(on ? 'false' : 'true')}
         />
@@ -551,7 +563,7 @@ function Control({
   if (field.type === 'enum') {
     if (field.data.choices.length === 0) return <p className="bt-note">this field declares no choices</p>;
     return (
-      <div className="bt-choices" role="group" id={id}>
+      <div className="bt-choices" role="group" id={id} aria-describedby={describedBy}>
         {field.data.choices.map(choice => (
           <button
             key={choice}
@@ -561,7 +573,7 @@ function Control({
             onClick={() => {
               if (choice !== value) onCommit(choice);
             }}>
-            {choice}
+            {field.data.choiceLabels?.[choice] ?? choice}
           </button>
         ))}
       </div>
@@ -574,6 +586,7 @@ function Control({
     className: 'bt-input',
     value: draft ?? value,
     'aria-invalid': invalid,
+    'aria-describedby': describedBy,
     onChange: (event: { currentTarget: HTMLInputElement }) => onDraft(event.currentTarget.value),
     onBlur: onFinish,
     onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {

@@ -1,8 +1,15 @@
+use std::path::Path;
+
 use nlu::tokenize::TranscriptTokenizer;
 
-fn tokenizer() -> Option<TranscriptTokenizer> {
-  let path = std::env::var("BRIDGETHING_NLU_TOKENIZER").ok()?;
-  Some(TranscriptTokenizer::load(path.as_ref(), 64).expect("tokenizer loads"))
+fn tokenizer() -> TranscriptTokenizer {
+  let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bundle/tokenizer.json");
+  assert!(
+    path.exists(),
+    "no {}; run scripts/bridgething-fetch-nlu-bundle",
+    path.display()
+  );
+  TranscriptTokenizer::load(&path, 64).expect("tokenizer loads")
 }
 
 fn slice_chars(text: &str, start: u32, end: u32) -> String {
@@ -11,10 +18,7 @@ fn slice_chars(text: &str, start: u32, end: u32) -> String {
 
 #[test]
 fn offsets_are_char_positions_into_the_transcript() {
-  let Some(tok) = tokenizer() else {
-    eprintln!("BRIDGETHING_NLU_TOKENIZER unset; skipping");
-    return;
-  };
+  let tok = tokenizer();
   let transcript = "play héroes by beyoncé now";
   let encoded = tok.encode(transcript).unwrap();
 
@@ -36,10 +40,7 @@ fn offsets_are_char_positions_into_the_transcript() {
 
 #[test]
 fn encoding_is_fixed_length_with_a_padded_tail() {
-  let Some(tok) = tokenizer() else {
-    eprintln!("BRIDGETHING_NLU_TOKENIZER unset; skipping");
-    return;
-  };
+  let tok = tokenizer();
   let encoded = tok.encode("pause").unwrap();
   assert_eq!(encoded.input_ids.len(), 64);
   assert_eq!(encoded.attention_mask.len(), 64);

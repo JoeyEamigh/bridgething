@@ -11,7 +11,11 @@ use tokio::sync::{mpsc, oneshot};
 use super::iap2::Iap2ReconnectHandle;
 use super::{Address, BluetoothError, BluetoothResult};
 #[cfg(target_os = "linux")]
-use crate::{net::WireEventBus, peer::PeerTracker, state::DeviceStore};
+use crate::{
+  net::WireEventBus,
+  peer::PeerTracker,
+  state::{DeviceStore, meta::DeviceMeta},
+};
 
 pub(crate) const PROFILE_COMMAND_CAPACITY: usize = 16;
 
@@ -86,6 +90,7 @@ pub struct ProfileManager {
   devices: DeviceStore,
   peers: PeerTracker,
   iap2_reconnect: Iap2ReconnectHandle,
+  meta: DeviceMeta,
 }
 
 #[cfg(target_os = "linux")]
@@ -96,6 +101,7 @@ impl ProfileManager {
     devices: DeviceStore,
     peers: PeerTracker,
     iap2_reconnect: Iap2ReconnectHandle,
+    meta: DeviceMeta,
   ) -> ProfileManager {
     tracing::debug!("initializing bluetooth profile connection manager");
 
@@ -105,6 +111,14 @@ impl ProfileManager {
       devices,
       peers,
       iap2_reconnect,
+      meta,
+    }
+  }
+
+  pub async fn seed_alias(&self) {
+    match self.adapter.alias().await {
+      Ok(alias) => self.meta.set_bluetooth_name(alias),
+      Err(err) => tracing::warn!(?err, "could not read the bluetooth adapter alias"),
     }
   }
 
@@ -233,6 +247,9 @@ impl ProfileManager {
         }
         BluetoothConnectionEvent::AdapterPropertyChanged(property) => {
           tracing::trace!("adapter property changed: {:?}", &property);
+          if let AdapterProperty::Alias(alias) = property {
+            self.meta.set_bluetooth_name(alias);
+          }
           Ok(())
         }
       }

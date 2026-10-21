@@ -1,5 +1,5 @@
 appId: com.bridgething.gateway
-name: survives the link dropping under a run in flight
+name: resumes an image install the link dropped under and lands the device on the new image
 ---
 - runFlow:
       file: ../common/point-at-fixture.yaml
@@ -8,15 +8,39 @@ name: survives the link dropping under a run in flight
 - extendedWaitUntil:
       visible: ".*99.9.9 available.*"
       timeout: 180000
-- tapOn: ".*install [0-9.]+\\+image.99.9.9.*"
 - runScript:
-      file: ../scripts/ota-bounce.js
+      file: ../scripts/ota-arm-interrupt.js
       env:
           CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
           MODE: image
           DOWN_MS: "10000"
+- tapOn: ".*install [0-9.]+\\+image.99.9.9.*"
+- runScript:
+      file: ../scripts/ota-interrupted.js
+      env:
+          CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
 - extendedWaitUntil:
-      visible: ".*dev gateway.*"
+      visible: ".*update installed.*"
       timeout: 180000
-- assertVisible: ".*dev gateway.*"
-- assertVisible: ".*firmware.*"
+- assertNotVisible: ".*the update did not finish.*"
+- runScript:
+      file: ../scripts/ota-resumed.js
+      env:
+          CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+- runScript:
+      file: ../scripts/ota-reboot.js
+      env:
+          CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+          IMAGE: "99.9.9"
+- extendedWaitUntil:
+      visible: ".*dev gateway, connected.*"
+      timeout: 180000
+- extendedWaitUntil:
+      notVisible: ".*99.9.9 available.*"
+      timeout: 60000
+- tapOn: ".*dev gateway.*"
+- scrollUntilVisible:
+      element: "[0-9.]+\\+image\\.99\\.9\\.9"
+      direction: DOWN
+      timeout: 60000
+- assertNotVisible: ".*install [0-9.]+\\+image.99.9.9.*"

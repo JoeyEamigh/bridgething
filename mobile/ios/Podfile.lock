@@ -2580,7 +2580,7 @@ SPEC CHECKSUMS:
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   BridgethingSession: 53bd4de31582efdba58a3c50d5bf0213e74fcdef
   FBLazyVector: 26fd21c75314e101f280d401e97f27d54f3f7064
-  hermes-engine: 310bb55373cd68e85e542c33eaac5ace10d642a5
+  hermes-engine: ef4380fbe570c4567ab4f34e255a483a6f8d876c
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   NitroMmkv: 4b4f95387a15161b346a6a93b9c7072c179e0e88
   NitroModules: 8146b7b58cd5a478a21485fc2a0d542076f9f1ba
@@ -2592,7 +2592,7 @@ SPEC CHECKSUMS:
   React: 13cf8451582adb1bb324306e1893b91d1cba28c6
   React-callinvoker: 91e6a605826b684ad2e623811253b4d0c4196bef
   React-Core: 46818de5f211b2a2759ac823b591af8a0a95c2c1
-  React-Core-prebuilt: be0cec4aecb0ed5afcabb4b335755d6e01ab26f2
+  React-Core-prebuilt: b1f30c2a4f862081bb467e177f145a4c6a738bf1
   React-CoreModules: a6a37afee48d4a31ab398640b0795462647d5c67
   React-cxxreact: 2ec3e2f7a8ae9303460d4ba94cde183ea90d64cd
   React-debug: 0d21117b897ce0359c9d2c9dfe952f237476a14a
@@ -2660,7 +2660,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: 22e2265d86a4e871e5e858f4e7ef1c8d01103680
   ReactCodegen: e83f40ecc9968bb6b3e387ad9214411588bdd94f
   ReactCommon: a804bb8d1dcf3ecdec3a77eb8bba19b7863bbbdb
-  ReactNativeDependencies: c45bedbbf94474b7dc851aafe9b95760007bb6d7
+  ReactNativeDependencies: ec15dbec616f51435d8e636bf7abbce0b5f5b93b
   RNInAppBrowser: 904d24dc75e8e6c6c98a3160329192608946f9df
   RNPermissions: c38f6f26eb3b797f4722dcbfdbbecfe0dabe1f02
   RNReanimated: 0c7e594782ecca03a0a39af4d3dabcaad1c7c8a5

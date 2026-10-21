@@ -526,8 +526,6 @@ pub type WSResult<T> = Result<T, WSError>;
 pub enum WSError {
   #[error("failed to bind to port: {0}")]
   Bind(#[from] std::io::Error),
-  #[error("websocket error: {0}")]
-  Websocket(#[from] axum::Error),
   #[error("requested client to send to is not connected to the server!!")]
   NotConnected,
   #[error("could not send a message to requested client: {0}")]

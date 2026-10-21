@@ -8,6 +8,7 @@ import {
 import type * as api from '@bridgething/companion-types';
 import type { BridgeThingMeta, WebappInfo as WireWebappInfo } from '@bridgething/lib';
 import type { Endpoint, Invalidation, ResourceOrigin, Topic, WebappResource } from '@bridgething/ui';
+import { deviceName } from '@bridgething/client';
 
 import type { BrowserBackend } from './browser-tier';
 import { fetchBundle } from './catalog-source';
@@ -137,7 +138,7 @@ export class BrowserSession implements BrowserBackend {
     return Promise.resolve([
       {
         id: this.link.id,
-        name: this.info?.nickname || this.info?.modelName || 'bridgething',
+        name: deviceName(this.info ?? {}),
         status: 'connected',
         linkError: null,
       },
@@ -486,9 +487,9 @@ export function toDeviceMeta(meta: BridgeThingMeta): api.DeviceMeta {
     osName: meta.osName,
     osVersion: meta.osVersion,
     channel: meta.channel,
-    modelName: meta.modelName,
     serialNumber: meta.serialNumber,
     nickname: meta.nickname,
+    bluetoothName: meta.bluetoothName,
     launcherGesture: meta.launcherGesture,
   };
 }

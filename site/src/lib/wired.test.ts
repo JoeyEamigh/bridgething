@@ -1,7 +1,7 @@
 import { compositeVersion } from '@bridgething/browser';
 import type { BridgeThingMeta } from '@bridgething/lib';
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import { resolveUpdate } from './wired.ts';
+import { LocalNetworkError, connectWired, resolveUpdate } from './wired.ts';
 
 const ROOT = 'https://ota.test';
 const LATEST = '0.9.0+image.2026.06.0';
@@ -96,5 +96,18 @@ describe('resolveUpdate', () => {
     serveManifest({ yanked: null, deprecated: false });
 
     await expect(resolveUpdate(meta(), 'nightly', ROOT)).rejects.toThrow(/nightly/);
+  });
+});
+
+describe('connectWired', () => {
+  test('a host that cannot be reached fails with the local network guidance, not the raw socket error', async () => {
+    const failure = await connectWired('bridgething-absent.invalid').then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(failure).toBeInstanceOf(LocalNetworkError);
+    expect((failure as Error).message).toStartWith('could not reach bridgething-absent.invalid.');
+    expect((failure as Error).message).not.toContain('JsValue');
   });
 });

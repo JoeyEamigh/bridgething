@@ -47,7 +47,7 @@ export type AudioError =
   | { type: 'unavailable'; data: { verb: string } }
   | { type: 'noTarget' };
 
-export type BoolField = { key: string; label: string; default: boolean | null };
+export type BoolField = { key: string; label: string; description?: string; default: boolean | null };
 
 /**
  * Identity and build information for the device.
@@ -57,6 +57,10 @@ export type BridgeThingMeta = {
   libbridgethingVersion: string;
   appName: string;
   nickname: string | null;
+  /**
+   * The adapter's bluetooth alias, the name phones see when pairing. Absent where the daemon has no radio.
+   */
+  bluetoothName?: string;
   launcherGesture: LauncherGesture;
   appVersion: string;
   daemonSha256: string | null;
@@ -226,7 +230,17 @@ export type DtmfTone = 'd0' | 'd1' | 'd2' | 'd3' | 'd4' | 'd5' | 'd6' | 'd7' | '
 
 export type EndCallAction = 'end' | 'endAll';
 
-export type EnumField = { key: string; label: string; choices: Array<string>; default: string | null };
+export type EnumField = {
+  key: string;
+  label: string;
+  description?: string;
+  choices: Array<string>;
+  /**
+   * Display text per choice value; a choice without an entry shows its value.
+   */
+  choiceLabels?: { [key in string]: string };
+  default: string | null;
+};
 
 export type ExtensionInfo = { permissions: string[]; api: number };
 
@@ -561,6 +575,7 @@ export type NowPlayingUpdate = { mediaItem: MediaItemUpdate | null; playback: Pl
 export type NumberField = {
   key: string;
   label: string;
+  description?: string;
   min: number | null;
   max: number | null;
   step: number | null;
@@ -1020,6 +1035,7 @@ export type StreamError = { streamId: string; error: NetError };
 export type StringField = {
   key: string;
   label: string;
+  description?: string;
   pattern: string | null;
   /**
    * In characters.

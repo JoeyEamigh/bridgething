@@ -506,6 +506,13 @@ impl OtaActor {
       Ok(BeginOutcome::Resume {
         offset: resume_from_offset,
       }) => {
+        tracing::info!(
+          update_id = %req.update_id,
+          ?kind,
+          offset = resume_from_offset,
+          size = expected_size,
+          "OtaBegin accepted; streaming starts at offset"
+        );
         let resume_percent = phase_percent(resume_from_offset, expected_size);
         emit_progress(&self.events_tx, OtaPhase::Streaming, resume_percent, None).await;
         self.last_streaming_emit_at = Some(Instant::now());

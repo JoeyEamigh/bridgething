@@ -122,7 +122,7 @@ export function AppDetailRoute({ webappId }: { webappId: string }): VNode {
   if (!webapp) {
     return (
       <Screen>
-        <BackButton>all apps</BackButton>
+        <BackButton to={PATHS.apps}>all apps</BackButton>
         <SectionEmpty>
           {pending ? <Spinner class="mx-auto" /> : 'this app is not installed on the connected Car Thing'}
         </SectionEmpty>
@@ -164,7 +164,7 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
 
   return (
     <Screen>
-      <BackButton>all apps</BackButton>
+      <BackButton to={PATHS.apps}>all apps</BackButton>
 
       <div class="mb-6 flex items-center gap-4">
         <WebappIcon id={webapp.id} iconHash={webapp.iconHash} name={webapp.name} size="lg" />

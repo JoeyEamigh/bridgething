@@ -1,14 +1,14 @@
 :root {
-  color-scheme: light dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
+  color-scheme: var(--bt-scheme);
 }
 
 body {
   margin: 0;
   padding: 20px;
+  background: var(--bt-color-bg);
+  color: var(--bt-color-fg);
+  font-family: var(--bt-font-body);
+  font-size: var(--bt-text-body);
   line-height: 1.5;
 }
 
@@ -18,37 +18,40 @@ main {
 }
 
 h1 {
-  font-size: 1.25rem;
-  margin: 0 0 0.25rem;
+  font-family: var(--bt-font-display);
+  font-size: var(--bt-text-title);
+  font-weight: 600;
+  margin: 0 0 4px;
 }
 
 .hint {
-  opacity: 0.7;
-  font-size: 0.85rem;
-  margin: 0 0 1.25rem;
+  color: var(--bt-color-muted);
+  font-family: var(--bt-font-mono);
+  font-size: var(--bt-text-hint);
+  margin: 0 0 20px;
 }
 
 .row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   margin-top: 16px;
 }
 
 .row button {
-  padding: 9px 16px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  background: #00a8e8;
-  color: #06232e;
+  padding: 10px 16px;
+  font-family: var(--bt-font-mono);
+  font-size: var(--bt-text-body);
+  border: 1px solid var(--bt-color-accent);
+  border-radius: 0;
+  background: var(--bt-color-accent-soft);
+  color: var(--bt-color-fg);
   cursor: pointer;
 }
 
 .row button.secondary {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-  color: inherit;
+  border-color: var(--bt-color-edge);
+  background: none;
 }
 
 .row button:disabled {
@@ -57,7 +60,8 @@ h1 {
 }
 
 .status {
-  font-size: 0.85rem;
-  opacity: 0.8;
+  color: var(--bt-color-muted);
+  font-family: var(--bt-font-mono);
+  font-size: var(--bt-text-hint);
   min-height: 1.2em;
 }

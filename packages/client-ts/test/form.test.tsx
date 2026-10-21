@@ -331,6 +331,47 @@ describe('ConfigForm', () => {
     expect(input('refresh').value).toBe('15');
   });
 
+  test('a field shows its description, and enum choices show their labels but write their values', async () => {
+    await mount([
+      {
+        type: 'number',
+        data: { key: 'level', label: 'intensity', description: 'brightness while idle, in percent', min: 5, max: 100 },
+      },
+      {
+        type: 'enum',
+        data: {
+          key: 'frost',
+          label: 'frost',
+          choices: ['0', '1', '2'],
+          choiceLabels: { '0': 'clear', '2': 'frosted' },
+        },
+      },
+    ] as ConfigField[]);
+
+    const description = input('level').closest('.bt-field')!.querySelector('.bt-desc')!;
+    expect(description.textContent).toBe('brightness while idle, in percent');
+    expect(input('level').getAttribute('aria-describedby')).toBe(description.id);
+    expect(container.querySelector('#bt-field-frost')!.closest('.bt-field')!.querySelector('.bt-desc')).toBeNull();
+
+    const labels = [...container.querySelectorAll('#bt-field-frost button')].map(button => button.textContent);
+    expect(labels).toEqual(['clear', '1', 'frosted']);
+
+    await click(choice('frost', 'clear'));
+    expect(memory.writes).toEqual([['frost', '0']]);
+  });
+
+  test('reset is offered only while a stored value overrides the default', async () => {
+    await mount(FIELDS);
+    const reset = () => input('refresh').closest('.bt-field')!.querySelector('.bt-reset');
+    expect(reset()).toBeNull();
+
+    await type('refresh', '30');
+    expect(reset()).not.toBeNull();
+
+    await click(reset()!);
+    expect(reset()).toBeNull();
+  });
+
   test('reports a committed value before the host acknowledges it', async () => {
     await mount(FIELDS);
     bridge.host = { ...bridge.host!, 'config.set': () => new Promise(() => {}) };

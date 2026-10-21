@@ -515,7 +515,19 @@ export const settings = {
   },
 };
 
+function reportHeight(): void {
+  if (typeof ResizeObserver === 'undefined') return;
+  let reported = 0;
+  new ResizeObserver(() => {
+    const height = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (height <= 0 || height === reported) return;
+    reported = height;
+    send({ id: nextId++, verb: 'resize', payload: { height } });
+  }).observe(document.documentElement);
+}
+
 if (typeof document !== 'undefined') {
   paintTheme(undefined);
+  reportHeight();
   settings.context().catch(() => undefined);
 }

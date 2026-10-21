@@ -36,7 +36,7 @@ function Settings() {
   return (
     <main>
       <h1>{ctx?.name ?? '__PROJECT_NAME__'} settings</h1>
-      <p className="hint">{ctx ? `${ctx.webappId} on ${ctx.deviceId}` : 'connecting to the companion host...'}</p>
+      <p className="hint">{ctx ? `${ctx.name} ${ctx.version}` : 'connecting to the companion host...'}</p>
 
       <ConfigForm ref={form} />
 

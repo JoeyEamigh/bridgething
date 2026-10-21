@@ -111,7 +111,7 @@ function Settings() {
         <h1>{ctx?.name ?? 'Home Assistant'} settings</h1>
         <p className="hint">
           {ctx
-            ? `${selection.picked.size} selected on ${ctx.deviceId}${edited(selection) ? ', not saved yet' : ''}`
+            ? `${selection.picked.size} selected${edited(selection) ? ', not saved yet' : ''}`
             : 'connecting to the companion host...'}
         </p>
       </header>

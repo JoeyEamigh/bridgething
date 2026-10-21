@@ -232,7 +232,6 @@ function StateDump({
 
       {snapshot?.deviceMeta.map(d => (
         <Section key={d.deviceId} title={`device · ${d.deviceId}`}>
-          <Row label="model" value={d.meta.modelName || '-'} />
           <Row label="serial" value={d.meta.serialNumber || '-'} wrap />
           <Row label="channel" value={d.meta.channel || '-'} />
           <Row label="daemon" value={d.meta.daemonVersion || '-'} />
