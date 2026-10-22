@@ -32,7 +32,7 @@ use crate::{
   },
   ota::{
     range::RangeServer,
-    service::OtaService,
+    service::{MetaChange, OtaService},
     stream::{Artifact, FileSource},
   },
   seam::Clock,
@@ -364,6 +364,7 @@ pub fn meta_with_variant(
     nickname: None,
     bluetooth_name: None,
     launcher_gesture: libbridgething::LauncherGesture::default(),
+    companion_launch: true,
     app_version: app_version.into(),
     daemon_sha256: daemon_sha256.map(str::to_owned),
     wakeword_model_version: None,
@@ -529,7 +530,7 @@ pub fn route_into(gateway: &Gateway, service: &Arc<OtaService>, device_id: &str)
           service.finished(&device_id, done)
         }
         BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DeviceNicknameChanged(reply)) => {
-          service.nickname_changed(&device_id, reply.nickname);
+          service.meta_changed(&device_id, MetaChange::Nickname(reply.nickname));
         }
         BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::OtaAssetRangeAbandon(payload)) => {
           service.asset_range_abandon(&device_id, payload)

@@ -12,6 +12,7 @@ function meta(): BridgeThingMeta {
     nickname: 'the dashboard',
     bluetoothName: 'Car Thing (SN: B001)',
     launcherGesture: 'fivePress',
+    companionLaunch: false,
     appVersion: '0.8.1',
     daemonSha256: null,
     wakewordModelVersion: null,
@@ -97,6 +98,7 @@ describe('toDeviceMeta', () => {
       nickname: 'the dashboard',
       bluetoothName: 'Car Thing (SN: B001)',
       launcherGesture: 'fivePress',
+      companionLaunch: false,
     });
   });
 });

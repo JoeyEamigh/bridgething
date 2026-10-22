@@ -3,10 +3,10 @@ use std::{future::Future, pin::Pin};
 use libbridgething::{
   Diagnostics,
   client::{
-    BridgeToClientSystemMsgEvent, ClientToBridgeSystemMsgDispatch, DeviceGetNickname, DeviceNicknameReply,
-    DiagnosticsGet, DiagnosticsReply, FactoryResetRefusal, FactoryResetRefused, FactoryResetStarted,
-    LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail,
-    LogsTailReply, LogsUnsubscribe, RequestFactoryReset, RequestVersion,
+    BridgeToClientSystemMsgEvent, ClientToBridgeSystemMsgDispatch, CompanionLaunchGet, CompanionLaunchReply,
+    CompanionLaunchSet, DeviceGetNickname, DeviceNicknameReply, DiagnosticsGet, DiagnosticsReply, FactoryResetRefusal,
+    FactoryResetRefused, FactoryResetStarted, LauncherGestureGet, LauncherGestureReply, LauncherGestureSet,
+    LogsSubscribe, LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe, RequestFactoryReset, RequestVersion,
   },
 };
 use uuid::Uuid;
@@ -50,8 +50,23 @@ impl ClientToBridgeSystemMsgDispatch for SystemHandler {
     )
   }
 
+  async fn companion_launch_get(&self) -> HandlerResult {
+    let enabled = self.handle.state.meta.companion_launch();
+    Ok(
+      self
+        .handle
+        .respond_to::<CompanionLaunchGet>(CompanionLaunchReply { enabled })
+        .await?,
+    )
+  }
+
   async fn launcher_gesture_set(&self, params: LauncherGestureSet) -> HandlerResult {
     self.handle.state.meta.set_launcher_gesture(params.gesture).await?;
+    Ok(())
+  }
+
+  async fn companion_launch_set(&self, params: CompanionLaunchSet) -> HandlerResult {
+    self.handle.state.meta.set_companion_launch(params.enabled).await?;
     Ok(())
   }
 

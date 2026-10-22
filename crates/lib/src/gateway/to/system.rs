@@ -45,6 +45,13 @@ pub struct LauncherGestureReply {
   pub gesture: LauncherGesture,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct CompanionLaunchReply {
+  pub enabled: bool,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
@@ -134,6 +141,10 @@ pub enum BridgeToGatewaySystemMsg {
   LauncherGestureReply(LauncherGestureReply),
   #[bridge_event]
   LauncherGestureChanged(LauncherGestureReply),
+  #[bridge_response]
+  CompanionLaunchReply(CompanionLaunchReply),
+  #[bridge_event]
+  CompanionLaunchChanged(CompanionLaunchReply),
   #[bridge_response]
   LogsTailReply(LogsTailReply),
   #[bridge_response]

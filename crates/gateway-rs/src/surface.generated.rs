@@ -294,6 +294,12 @@ impl<'a> SystemSurface<'a> {
       .command(GatewayToBridgeSystemMsgCommand::LauncherGestureSet(payload))
       .await
   }
+  pub async fn companion_launch_set(&self, payload: CompanionLaunchSet) -> Result<(), SdkError> {
+    self
+      .0
+      .command(GatewayToBridgeSystemMsgCommand::CompanionLaunchSet(payload))
+      .await
+  }
   pub async fn logs_unsubscribe(&self, payload: LogsUnsubscribe) -> Result<(), SdkError> {
     self
       .0
@@ -316,6 +322,11 @@ impl<'a> SystemSurface<'a> {
     &self,
   ) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
     self.0.request(LauncherGestureGet).await
+  }
+  pub async fn companion_launch_get(
+    &self,
+  ) -> Result<CompanionLaunchReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(CompanionLaunchGet).await
   }
   pub async fn logs_tail(
     &self,
@@ -720,6 +731,10 @@ pub trait SystemHandler {
   fn launcher_gesture_changed(
     &self,
     payload: LauncherGestureReply,
+  ) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn companion_launch_changed(
+    &self,
+    payload: CompanionLaunchReply,
   ) -> impl Future<Output = Result<(), WireError>> + Send;
   fn log_entry(&self, payload: LogEntry) -> impl Future<Output = Result<(), WireError>> + Send;
 }
@@ -1578,6 +1593,25 @@ where
         tracing::warn!(
           surface = "system",
           variant = "launcherGestureChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::CompanionLaunchReply(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "companionLaunchReply",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::CompanionLaunchChanged(payload)) => {
+      if let Err(error) = <H as SystemHandler>::companion_launch_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "system",
+          variant = "companionLaunchChanged",
           ?error,
           "inbound not handled"
         );

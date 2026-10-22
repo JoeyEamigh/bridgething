@@ -265,6 +265,9 @@ impl SystemHandler for Unsupported {
   async fn launcher_gesture_changed(&self, _payload: LauncherGestureReply) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn companion_launch_changed(&self, _payload: CompanionLaunchReply) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,

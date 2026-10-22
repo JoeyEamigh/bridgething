@@ -215,6 +215,23 @@ pub enum OtaSignal {
   BlobFailed(Box<WebappBlobFailed>),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetaChange {
+  Nickname(Option<String>),
+  LauncherGesture(libbridgething::LauncherGesture),
+  CompanionLaunch(bool),
+}
+
+impl MetaChange {
+  fn apply(self, meta: &mut BridgeThingMeta) {
+    match self {
+      MetaChange::Nickname(nickname) => meta.nickname = nickname,
+      MetaChange::LauncherGesture(gesture) => meta.launcher_gesture = gesture,
+      MetaChange::CompanionLaunch(enabled) => meta.companion_launch = enabled,
+    }
+  }
+}
+
 struct Link {
   gateway: Gateway,
   range: Arc<RangeServer>,
@@ -535,16 +552,11 @@ impl OtaService {
     self.record_meta(device_id, meta);
   }
 
-  pub fn nickname_changed(&self, device_id: &str, nickname: Option<String>) -> Option<BridgeThingMeta> {
-    self.record_nickname(device_id, nickname)
-  }
-
-  pub fn launcher_gesture_changed(
-    &self,
-    device_id: &str,
-    gesture: libbridgething::LauncherGesture,
-  ) -> Option<BridgeThingMeta> {
-    self.record_launcher_gesture(device_id, gesture)
+  pub fn meta_changed(&self, device_id: &str, change: MetaChange) -> Option<BridgeThingMeta> {
+    let mut links = self.links.lock().unwrap();
+    let meta = links.get_mut(device_id).and_then(|link| link.meta.as_mut())?;
+    change.apply(meta);
+    Some(meta.clone())
   }
 
   pub fn progress(&self, device_id: &str, tick: OtaProgress) {
@@ -974,24 +986,6 @@ impl OtaService {
     if first_announce {
       self.wake.notify_waiters();
     }
-  }
-
-  fn record_nickname(&self, device_id: &str, nickname: Option<String>) -> Option<BridgeThingMeta> {
-    let mut links = self.links.lock().unwrap();
-    let meta = links.get_mut(device_id).and_then(|link| link.meta.as_mut())?;
-    meta.nickname = nickname;
-    Some(meta.clone())
-  }
-
-  fn record_launcher_gesture(
-    &self,
-    device_id: &str,
-    gesture: libbridgething::LauncherGesture,
-  ) -> Option<BridgeThingMeta> {
-    let mut links = self.links.lock().unwrap();
-    let meta = links.get_mut(device_id).and_then(|link| link.meta.as_mut())?;
-    meta.launcher_gesture = gesture;
-    Some(meta.clone())
   }
 
   fn arm_range_server(&self, device_id: &str, zcks: BTreeMap<String, Arc<dyn Artifact>>) {

@@ -306,6 +306,7 @@ export type BridgethingDeviceMeta = {
   serialNumber: string;
   nickname?: string;
   launcherGesture: BridgethingLauncherGesture;
+  companionLaunch: boolean;
 };
 
 export type BridgethingHostInfo = {
@@ -490,6 +491,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   deviceSetNickname(deviceId: string, nickname: string): Promise<void>;
 
   setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void>;
+
+  setCompanionLaunch(deviceId: string, enabled: boolean): Promise<void>;
 
   presentPairPicker(): Promise<BridgethingBtDevice | null>;
 

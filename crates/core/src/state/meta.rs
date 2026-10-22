@@ -10,6 +10,7 @@ const BRIDGETHING_VERSION: &str = env!("CARGO_PKG_VERSION");
 const BRIDGETHING_APP_NAME: &str = env!("CARGO_PKG_NAME");
 const NICKNAME_KV_KEY: &str = "nickname";
 const LAUNCHER_GESTURE_KV_KEY: &str = "launcher_gesture";
+const COMPANION_LAUNCH_KV_KEY: &str = "companion_launch";
 
 fn launcher_gesture_as_storage(gesture: LauncherGesture) -> &'static str {
   match gesture {
@@ -24,6 +25,10 @@ fn parse_launcher_gesture(stored: Option<&str>) -> LauncherGesture {
     Some("fivePress") => LauncherGesture::FivePress,
     _ => LauncherGesture::default(),
   }
+}
+
+fn parse_companion_launch(stored: Option<&str>) -> bool {
+  stored != Some("false")
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -87,6 +92,7 @@ struct Inner {
   kv: KvStore,
   nickname_tx: watch::Sender<Option<String>>,
   launcher_gesture_tx: watch::Sender<LauncherGesture>,
+  companion_launch_tx: watch::Sender<bool>,
   daemon_sha_tx: watch::Sender<Option<String>>,
   wakeword_version_tx: watch::Sender<Option<String>>,
   bluetooth_name_tx: watch::Sender<Option<String>>,
@@ -107,6 +113,14 @@ impl DeviceMeta {
       None
     });
     let (launcher_gesture_tx, _gesture_rx) = watch::channel(parse_launcher_gesture(stored_gesture.as_deref()));
+    let stored_launch = kv.device_get(COMPANION_LAUNCH_KV_KEY).await.unwrap_or_else(|err| {
+      tracing::warn!(
+        ?err,
+        "kv device_get companion launch at startup failed; starting default"
+      );
+      None
+    });
+    let (companion_launch_tx, _launch_rx) = watch::channel(parse_companion_launch(stored_launch.as_deref()));
     let (daemon_sha_tx, _sha_rx) = watch::channel(None);
     let (wakeword_version_tx, _ww_rx) = watch::channel(crate::ota::wakeword_model_version().await);
     let (bluetooth_name_tx, _bt_rx) = watch::channel(None);
@@ -116,6 +130,7 @@ impl DeviceMeta {
         kv,
         nickname_tx,
         launcher_gesture_tx,
+        companion_launch_tx,
         daemon_sha_tx,
         wakeword_version_tx,
         bluetooth_name_tx,
@@ -192,6 +207,24 @@ impl DeviceMeta {
     Ok(())
   }
 
+  pub fn companion_launch(&self) -> bool {
+    *self.inner.companion_launch_tx.borrow()
+  }
+
+  pub fn subscribe_companion_launch(&self) -> watch::Receiver<bool> {
+    self.inner.companion_launch_tx.subscribe()
+  }
+
+  pub async fn set_companion_launch(&self, enabled: bool) -> StateResult<()> {
+    self
+      .inner
+      .kv
+      .device_set(COMPANION_LAUNCH_KV_KEY, enabled.to_string())
+      .await?;
+    self.inner.companion_launch_tx.send_replace(enabled);
+    Ok(())
+  }
+
   pub async fn set_nickname(&self, next: Option<String>) -> StateResult<()> {
     match &next {
       Some(value) => self.inner.kv.device_set(NICKNAME_KV_KEY, value.clone()).await?,
@@ -207,6 +240,7 @@ impl DeviceMeta {
       self.nickname(),
       self.bluetooth_name(),
       self.launcher_gesture(),
+      self.companion_launch(),
       self.daemon_sha256(),
       self.wakeword_model_version(),
     )
@@ -218,6 +252,7 @@ fn build_meta(
   nickname: Option<String>,
   bluetooth_name: Option<String>,
   launcher_gesture: LauncherGesture,
+  companion_launch: bool,
   daemon_sha256: Option<String>,
   wakeword_model_version: Option<String>,
 ) -> BridgeThingMeta {
@@ -228,6 +263,7 @@ fn build_meta(
     nickname,
     bluetooth_name,
     launcher_gesture,
+    companion_launch,
     app_version: BRIDGETHING_VERSION.to_string(),
     daemon_sha256,
     wakeword_model_version,

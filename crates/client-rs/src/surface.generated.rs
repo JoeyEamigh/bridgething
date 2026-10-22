@@ -678,6 +678,12 @@ impl<'a> SystemSurface<'a> {
       .command(ClientToBridgeSystemMsgCommand::LauncherGestureSet(payload))
       .await
   }
+  pub async fn companion_launch_set(&self, payload: CompanionLaunchSet) -> Result<(), SdkError> {
+    self
+      .0
+      .command(ClientToBridgeSystemMsgCommand::CompanionLaunchSet(payload))
+      .await
+  }
   pub async fn version_request(&self) -> Result<BridgeThingMeta, RequestFailure<::core::convert::Infallible>> {
     self.0.request(RequestVersion).await
   }
@@ -706,6 +712,11 @@ impl<'a> SystemSurface<'a> {
     &self,
   ) -> Result<LauncherGestureReply, RequestFailure<::core::convert::Infallible>> {
     self.0.request(LauncherGestureGet).await
+  }
+  pub async fn companion_launch_get(
+    &self,
+  ) -> Result<CompanionLaunchReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(CompanionLaunchGet).await
   }
   /// Stream of `System` events.
   pub fn events(&self) -> impl Stream<Item = BridgeToClientSystemMsgEvent> + 'static {

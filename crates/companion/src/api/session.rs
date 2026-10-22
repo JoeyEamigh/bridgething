@@ -398,6 +398,7 @@ pub struct DeviceMeta {
   #[ts(optional)]
   pub bluetooth_name: Option<String>,
   pub launcher_gesture: LauncherGesture,
+  pub companion_launch: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]

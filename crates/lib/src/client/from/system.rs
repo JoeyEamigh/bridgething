@@ -115,6 +115,24 @@ pub struct LauncherGestureSet {
   pub gesture: LauncherGesture,
 }
 
+/// Returns whether the device opens the companion app when an iPhone reconnects without it running.
+#[derive(Debug, Clone, Copy, Default, WireRequest)]
+#[wire_request(
+  direction = ClientToBridge,
+  surface = System,
+  request_variant = CompanionLaunchGet,
+  response = crate::client::CompanionLaunchReply,
+  response_variant = CompanionLaunchReply,
+)]
+pub struct CompanionLaunchGet;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct CompanionLaunchSet {
+  pub enabled: bool,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum, BridgeDispatch)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
@@ -143,4 +161,8 @@ pub enum ClientToBridgeSystemMsg {
   LauncherGestureGet,
   #[bridge_command]
   LauncherGestureSet(LauncherGestureSet),
+  #[bridge_request]
+  CompanionLaunchGet,
+  #[bridge_command]
+  CompanionLaunchSet(CompanionLaunchSet),
 }

@@ -4,7 +4,7 @@ import {
 } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { Field } from '../components/Field';
@@ -27,6 +27,7 @@ import {
   getSession,
   knownDevices,
   patchOtaPollConfig,
+  setCompanionLaunch,
   setDeviceName,
   setLauncherGesture,
   useSession,
@@ -132,6 +133,12 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
             deviceId={deviceId}
             gesture={meta?.launcherGesture ?? 'fivePress'}
           />
+          {Platform.OS === 'ios' ? (
+            <CompanionLaunchRow
+              deviceId={deviceId}
+              enabled={meta?.companionLaunch ?? true}
+            />
+          ) : null}
         </ListGroup>
         {renameError ? (
           <Note className="mt-2" tone="err">
@@ -347,6 +354,47 @@ function LauncherGestureRow({
             options={LAUNCHER_GESTURE_OPTIONS}
             value={pending ?? gesture}
             onChange={pick}
+          />
+        }
+      />
+      <RowNote notice={failure} />
+    </View>
+  );
+}
+
+function CompanionLaunchRow({
+  deviceId,
+  enabled,
+}: {
+  deviceId: string;
+  enabled: boolean;
+}) {
+  const [pending, setPending] = useState<boolean | null>(null);
+  const [failure, setFailure] = useState<RowNotice | null>(null);
+
+  useEffect(() => setPending(null), [enabled]);
+
+  const toggle = (next: boolean) => {
+    setPending(next);
+    setFailure(null);
+    void setCompanionLaunch(deviceId, next).catch((err: unknown) => {
+      setPending(null);
+      setFailure({ text: describeError(err) });
+    });
+  };
+
+  return (
+    <View>
+      <ListRow
+        icon="AppWindow"
+        iconTint={(pending ?? enabled) ? 'accent' : 'default'}
+        title="open bridgething on reconnect"
+        subtitle="off leaves it closed. iOS reconnects it in the background, on its own schedule"
+        trailing={
+          <Switch
+            testID="companion-launch"
+            value={pending ?? enabled}
+            onValueChange={toggle}
           />
         }
       />

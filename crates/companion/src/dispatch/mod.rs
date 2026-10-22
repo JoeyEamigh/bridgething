@@ -15,6 +15,7 @@ use std::{
   sync::{Arc, Mutex},
 };
 
+use bridgething_delivery::ota::service::MetaChange;
 use bridgething_gateway::{HandlerError, Reply};
 use futures::future::BoxFuture;
 use libbridgething::{
@@ -110,8 +111,7 @@ pub trait OtaInbound: Send + Sync {
   fn progress(&self, payload: OtaProgress);
   fn error(&self, payload: OtaError);
   fn finished(&self, payload: OtaFinished);
-  fn nickname_changed(&self, nickname: Option<String>) -> Option<BridgeThingMeta>;
-  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta>;
+  fn meta_changed(&self, change: MetaChange) -> Option<BridgeThingMeta>;
   fn device_meta(&self, meta: BridgeThingMeta);
   fn transfer_ack(&self, ack: TransferAck);
   fn webapp_installed(&self, info: WebappInfo);

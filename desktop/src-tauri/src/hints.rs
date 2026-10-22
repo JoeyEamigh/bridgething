@@ -317,6 +317,7 @@ mod tests {
         nickname: None,
         bluetooth_name: None,
         launcher_gesture: bridgething_companion::api::LauncherGesture::FivePress,
+        companion_launch: true,
       },
     }
   }

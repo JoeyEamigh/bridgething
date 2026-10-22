@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bridgething_delivery::ota::service::OtaService;
+use bridgething_delivery::ota::service::{MetaChange, OtaService};
 use bridgething_gateway::{HandlerError, Reply};
 use libbridgething::{
   BridgeThingMeta, OtaError, OtaFinished, OtaProgress, WebappInfo,
@@ -53,12 +53,8 @@ impl OtaInbound for OtaLink {
     self.service.finished(&self.device_id, payload);
   }
 
-  fn nickname_changed(&self, nickname: Option<String>) -> Option<BridgeThingMeta> {
-    self.service.nickname_changed(&self.device_id, nickname)
-  }
-
-  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta> {
-    self.service.launcher_gesture_changed(&self.device_id, gesture)
+  fn meta_changed(&self, change: MetaChange) -> Option<BridgeThingMeta> {
+    self.service.meta_changed(&self.device_id, change)
   }
 
   fn device_meta(&self, meta: BridgeThingMeta) {

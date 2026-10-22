@@ -715,6 +715,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         try await requireSession().setLauncherGesture(deviceId: deviceId, gesture: toLauncherGesture(gesture))
     }
 
+    public func setCompanionLaunch(deviceId: String, enabled: Bool) async throws {
+        try await requireSession().setCompanionLaunch(deviceId: deviceId, enabled: enabled)
+    }
+
     public func presentPairPicker() async throws -> BridgethingBtDevice? {
         guard let result = await requireCompanionOrNil()?.presentPairPicker() else { return nil }
         return BridgethingBtDevice(
@@ -1158,7 +1162,8 @@ private func toRNDeviceMeta(_ meta: DeviceMeta) -> BridgethingDeviceMeta {
         channel: meta.channel,
         serialNumber: meta.serialNumber,
         nickname: meta.nickname,
-        launcherGesture: toRNLauncherGesture(meta.launcherGesture)
+        launcherGesture: toRNLauncherGesture(meta.launcherGesture),
+        companionLaunch: meta.companionLaunch
     )
 }
 

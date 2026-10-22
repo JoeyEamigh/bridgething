@@ -2775,6 +2775,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_capability_flags(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_set_companion_launch(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_auto_resume(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming(): Int
@@ -3515,6 +3517,12 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_capability_flags(
         `ptr`: Long,
         `flags`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_set_companion_launch(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        `enabled`: Byte,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_auto_resume(
@@ -6070,6 +6078,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_capability_flags() != 58070) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_companion_launch() != 42955) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_auto_resume() != 2622) {
@@ -13406,6 +13417,11 @@ public interface CompanionSessionInterface {
 
     suspend fun `setCapabilityFlags`(`flags`: CapabilityFlags)
 
+    suspend fun `setCompanionLaunch`(
+        `deviceId`: kotlin.String,
+        `enabled`: kotlin.Boolean,
+    )
+
     suspend fun `setDeviceAutoResume`(
         `deviceId`: kotlin.String,
         `enabled`: kotlin.Boolean,
@@ -14415,6 +14431,28 @@ open class CompanionSession :
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
+
+    @Throws(CompanionException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `setCompanionLaunch`(
+        `deviceId`: kotlin.String,
+        `enabled`: kotlin.Boolean,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_companion_launch(
+                uniffiHandle,
+                FfiConverterString.lower(`deviceId`),
+                FfiConverterBoolean.lower(`enabled`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        CompanionException.ErrorHandler,
+    )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `setDeviceAutoResume`(
@@ -31289,6 +31327,7 @@ data class DeviceMeta(
     var `nickname`: kotlin.String?,
     var `bluetoothName`: kotlin.String?,
     var `launcherGesture`: LauncherGesture,
+    var `companionLaunch`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -31310,6 +31349,7 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterTypeLauncherGesture.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: DeviceMeta) =
@@ -31324,7 +31364,8 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
                 FfiConverterString.allocationSize(value.`serialNumber`) +
                 FfiConverterOptionalString.allocationSize(value.`nickname`) +
                 FfiConverterOptionalString.allocationSize(value.`bluetoothName`) +
-                FfiConverterTypeLauncherGesture.allocationSize(value.`launcherGesture`)
+                FfiConverterTypeLauncherGesture.allocationSize(value.`launcherGesture`) +
+                FfiConverterBoolean.allocationSize(value.`companionLaunch`)
         )
 
     override fun write(
@@ -31342,6 +31383,7 @@ public object FfiConverterTypeDeviceMeta : FfiConverterRustBuffer<DeviceMeta> {
         FfiConverterOptionalString.write(value.`nickname`, buf)
         FfiConverterOptionalString.write(value.`bluetoothName`, buf)
         FfiConverterTypeLauncherGesture.write(value.`launcherGesture`, buf)
+        FfiConverterBoolean.write(value.`companionLaunch`, buf)
     }
 }
 

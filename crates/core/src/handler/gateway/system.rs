@@ -2,10 +2,11 @@ use std::{future::Future, pin::Pin};
 
 use libbridgething::{
   gateway::{
-    BridgeToGatewayMsg, BridgeToGatewaySystemMsg, DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply,
-    DeviceSetNickname, GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch,
-    LauncherGestureGet, LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail,
-    LogsTailReply, LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
+    BridgeToGatewayMsg, BridgeToGatewaySystemMsg, CompanionLaunchGet, CompanionLaunchReply, CompanionLaunchSet,
+    DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply, DeviceSetNickname,
+    GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch, LauncherGestureGet,
+    LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail, LogsTailReply,
+    LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
   },
   wire::MsgMeta,
 };
@@ -54,6 +55,11 @@ impl GatewayToBridgeSystemMsgCommandDispatch for SystemHandler {
 
   async fn launcher_gesture_set(&self, params: LauncherGestureSet) -> HandlerResult {
     self.handle.state.meta.set_launcher_gesture(params.gesture).await?;
+    Ok(())
+  }
+
+  async fn companion_launch_set(&self, params: CompanionLaunchSet) -> HandlerResult {
+    self.handle.state.meta.set_companion_launch(params.enabled).await?;
     Ok(())
   }
 
@@ -143,6 +149,15 @@ impl GatewayToBridgeSystemMsgRequestDispatch for SystemHandler {
     self
       .handle
       .respond_to::<LauncherGestureGet>(LauncherGestureReply { gesture })
+      .await;
+    Ok(())
+  }
+
+  async fn companion_launch_get(&self) -> HandlerResult {
+    let enabled = self.handle.state.meta.companion_launch();
+    self
+      .handle
+      .respond_to::<CompanionLaunchGet>(CompanionLaunchReply { enabled })
       .await;
     Ok(())
   }

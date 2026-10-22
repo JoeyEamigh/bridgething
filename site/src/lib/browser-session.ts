@@ -491,6 +491,7 @@ export function toDeviceMeta(meta: BridgeThingMeta): api.DeviceMeta {
     nickname: meta.nickname,
     bluetoothName: meta.bluetoothName,
     launcherGesture: meta.launcherGesture,
+    companionLaunch: meta.companionLaunch,
   };
 }
 

@@ -133,6 +133,8 @@ public interface BridgethingSessionBackend {
 
     public suspend fun setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture)
 
+    public suspend fun setCompanionLaunch(deviceId: String, enabled: Boolean)
+
     public suspend fun presentPairPicker(): BridgethingBtDevice?
 
     public suspend fun isNotificationAccessGranted(): Boolean

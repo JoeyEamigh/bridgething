@@ -9,8 +9,8 @@ use tokio::{
 };
 
 use crate::{
-  DeviceEmulator, DeviceEmulatorHandle, EmulatorEvent, Iap2Command, Iap2Session, Link, LinkConfig, Lsp, MfiAccess,
-  NowPlayingAuthorityState, SessionEvent, SessionTriple,
+  AppLaunch, DeviceEmulator, DeviceEmulatorHandle, EmulatorEvent, Iap2Command, Iap2Session, Link, LinkConfig, Lsp,
+  MfiAccess, NowPlayingAuthorityState, SessionEvent, SessionTriple,
   csm::identification::{CarthingIdentification, IdentificationConfig},
   session::{HidCommand, NowPlayingCommand, TelephonyCommand},
 };
@@ -110,7 +110,7 @@ struct Keep {
 
 pub fn spawn<F>(
   ident: IdentificationConfig,
-  app_launch_bundle: Option<String>,
+  app_launch: Option<AppLaunch>,
   setup: F,
 ) -> (EmuHarness, mpsc::Receiver<EmulatorEvent>, DeviceEmulatorHandle)
 where
@@ -136,7 +136,7 @@ where
   let (session_shutdown_tx, session_shutdown_rx) = mpsc::channel(1);
   let session = Iap2Session::with_app_launch(
     ident,
-    app_launch_bundle,
+    app_launch,
     app_launch_rx,
     session_shutdown_rx,
     FakeMfi,

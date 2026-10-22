@@ -66,7 +66,9 @@ function CrashScreen({
 
         <View className="gap-2">
           <Button
-            onPress={() => void Share.share({ message: details }).catch(() => {})}
+            onPress={() =>
+              void Share.share({ message: details }).catch(() => {})
+            }
             size="md"
             icon="Share2"
           >
@@ -80,4 +82,3 @@ function CrashScreen({
     </SafeAreaView>
   );
 }
-

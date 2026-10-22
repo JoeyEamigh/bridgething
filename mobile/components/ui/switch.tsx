@@ -23,10 +23,12 @@ function Switch({
   value,
   onValueChange,
   disabled,
+  testID,
 }: {
   value: boolean;
   onValueChange: (next: boolean) => void;
   disabled?: boolean;
+  testID?: string;
 }) {
   const palette = usePalette();
   const progress = useSharedValue(value ? 1 : 0);
@@ -61,6 +63,7 @@ function Switch({
   return (
     <Pressable
       accessibilityRole="switch"
+      testID={testID}
       accessibilityState={{ checked: value, disabled: disabled ?? false }}
       disabled={disabled}
       hitSlop={8}

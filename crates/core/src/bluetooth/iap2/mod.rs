@@ -11,14 +11,14 @@ use bluer::{
   Adapter, Session,
   rfcomm::{ConnectRequest, Profile, ProfileHandle, Role, Stream},
 };
-use bridgething_iap2::{HidCommand, NowPlayingCommand, SessionEvent, session::TelephonyCommand};
 #[cfg(target_os = "linux")]
 use bridgething_iap2::{
-  IAP2_ACCESSORY_UUID, IAP2_DEVICE_UUID, IAP2_RFCOMM_CHANNEL, Iap2Event as Iap2InternalEvent, Iap2Session, Link,
-  LinkConfig, Lsp,
+  AppLaunch, IAP2_ACCESSORY_UUID, IAP2_DEVICE_UUID, IAP2_RFCOMM_CHANNEL, Iap2Event as Iap2InternalEvent, Iap2Session,
+  Link, LinkConfig, Lsp,
   csm::identification::{CarthingIdentification, EaProtocol, EaProtocolMatchAction, IdentificationConfig},
   session::WorkerMfiAccess,
 };
+use bridgething_iap2::{HidCommand, NowPlayingCommand, SessionEvent, session::TelephonyCommand};
 #[cfg(target_os = "linux")]
 use bridgething_iap2::{Iap2Command, NowPlayingAuthorityState};
 #[cfg(target_os = "linux")]
@@ -38,7 +38,10 @@ use super::Address;
 #[cfg(target_os = "linux")]
 use super::BluetoothResult;
 #[cfg(target_os = "linux")]
-use crate::{authority::AuthorityRegistry, state::meta::SuperbirdMeta};
+use crate::{
+  authority::AuthorityRegistry,
+  state::meta::{DeviceMeta, SuperbirdMeta},
+};
 
 #[cfg(target_os = "linux")]
 const IAP2_PROFILE_NAME: &str = "iAP2";
@@ -275,6 +278,7 @@ pub struct Iap2Manager {
   telephony_rx: mpsc::Receiver<TelephonyCommand>,
   events_tx: mpsc::Sender<Iap2Event>,
   now_playing_authority: watch::Receiver<NowPlayingAuthorityState>,
+  companion_launch: watch::Receiver<bool>,
   next_generation: u64,
   session_dead_tx: mpsc::Sender<(Address, u64)>,
   session_dead_rx: mpsc::Receiver<(Address, u64)>,
@@ -375,7 +379,7 @@ impl Iap2Manager {
     bootstrap: Iap2Bootstrap,
     session: &Session,
     adapter: Adapter,
-    meta: &SuperbirdMeta,
+    meta: &DeviceMeta,
     authority: &AuthorityRegistry,
   ) -> BluetoothResult<Option<JoinHandle<()>>> {
     let mfi_worker = match probe_and_spawn_worker().await {
@@ -417,7 +421,7 @@ impl Iap2Manager {
     .await;
     tracing::info!("registered iAP2 RFCOMM client profile (accessory-initiated reconnect)");
 
-    let identification = build_identification(meta);
+    let identification = build_identification(meta.static_meta());
     let Iap2Bootstrap {
       reconnect_rx,
       transport_rx,
@@ -444,6 +448,7 @@ impl Iap2Manager {
       telephony_rx,
       events_tx,
       now_playing_authority: authority.now_playing_subscription_rx(),
+      companion_launch: meta.subscribe_companion_launch(),
       next_generation: 0,
       session_dead_tx,
       session_dead_rx,
@@ -592,7 +597,10 @@ impl Iap2Manager {
     let mfi = self.mfi_worker.handle();
     let session = Iap2Session::with_app_launch(
       self.identification.clone(),
-      Some(COMPANION_BUNDLE_ID.to_string()),
+      Some(AppLaunch {
+        bundle_id: COMPANION_BUNDLE_ID.to_string(),
+        relaunch: self.companion_launch.clone(),
+      }),
       app_launch_rx,
       session_shutdown_rx,
       mfi,

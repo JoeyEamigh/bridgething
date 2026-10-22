@@ -10,7 +10,7 @@ use bridgething_delivery::{
   ota::{
     event::{OtaPollEvent, parse_ota_kind},
     manifest::{OtaArtifactUrls, OtaCompositeVersion, fetch_discover_manifest},
-    service::{BandaidArtifact, IMAGE_SWU_ASSET},
+    service::{BandaidArtifact, IMAGE_SWU_ASSET, MetaChange},
     stream::Artifact,
   },
   seam::{BlobStore, SystemClock},
@@ -487,7 +487,7 @@ impl WasmSession {
     self
       .session
       .ota
-      .nickname_changed(self.session.device_id(), reply.nickname.clone());
+      .meta_changed(self.session.device_id(), MetaChange::Nickname(reply.nickname.clone()));
     to_js(&reply)
   }
 

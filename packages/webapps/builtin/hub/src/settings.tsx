@@ -221,6 +221,8 @@ function BluetoothPanel({ client }: { client: BridgethingClient }) {
           </div>
         )}
       </Card>
+
+      <CompanionLaunchCard client={client} />
     </div>
   );
 }
@@ -352,31 +354,100 @@ function GesturePanel({ client }: { client: BridgethingClient }) {
     }
   };
 
-  const options: { value: LauncherGesture; label: string; hint: string }[] = [
-    { value: 'longPress', label: 'hold m', hint: 'press and hold the m button for a moment' },
-    { value: 'fivePress', label: 'press m 5 times', hint: 'tap the m button five times, quickly' },
-  ];
-
   return (
     <div className="flex flex-col gap-5">
       <Card title="launcher gesture" hint="how you jump back to apps">
-        <div className="flex flex-col gap-2">
-          {options.map(o => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => choose(o.value)}
-              className={`border px-4 py-3 text-left transition ${
-                gesture === o.value ? 'border-accent bg-accent-soft' : 'border-rule active:bg-neutral-soft'
-              }`}>
-              <span className={`block font-mono text-row ${gesture === o.value ? 'text-accent' : 'text-off-white'}`}>
-                {o.label}
-              </span>
-              <span className="block pt-1 text-body text-soft">{o.hint}</span>
-            </button>
-          ))}
-        </div>
+        <Choices
+          value={gesture}
+          onChoose={choose}
+          options={[
+            { value: 'longPress', label: 'hold m', hint: 'press and hold the m button for a moment' },
+            { value: 'fivePress', label: 'press m 5 times', hint: 'tap the m button five times, quickly' },
+          ]}
+        />
       </Card>
+    </div>
+  );
+}
+
+function CompanionLaunchCard({ client }: { client: BridgethingClient }) {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    client.system
+      .companionLaunchGet()
+      .then(r => {
+        if (cancelled || !r.ok) return;
+        setEnabled(r.response.enabled);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    return client.system.onCompanionLaunchChanged(c => setEnabled(c.enabled));
+  }, [client]);
+
+  const choose = async (next: boolean) => {
+    setEnabled(next);
+    try {
+      await client.system.companionLaunchSet({ enabled: next });
+    } catch {
+      client.system
+        .companionLaunchGet()
+        .then(r => {
+          if (r.ok) setEnabled(r.response.enabled);
+        })
+        .catch(() => {});
+    }
+  };
+
+  return (
+    <Card title="iphone app" hint="when an iphone reconnects without bridgething running">
+      <Choices
+        value={enabled}
+        onChoose={choose}
+        options={[
+          { value: true, label: 'open it', hint: 'brings bridgething to the front so it connects right away' },
+          {
+            value: false,
+            label: 'leave it closed',
+            hint: 'iOS reconnects in the background on its own schedule. open the app to connect sooner',
+          },
+        ]}
+      />
+    </Card>
+  );
+}
+
+function Choices<T extends string | boolean>({
+  value,
+  onChoose,
+  options,
+}: {
+  value: T | null;
+  onChoose: (next: T) => void;
+  options: { value: T; label: string; hint: string }[];
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {options.map(o => (
+        <button
+          key={String(o.value)}
+          type="button"
+          onClick={() => onChoose(o.value)}
+          className={`border px-4 py-3 text-left transition ${
+            value === o.value ? 'border-accent bg-accent-soft' : 'border-rule active:bg-neutral-soft'
+          }`}>
+          <span className={`block font-mono text-row ${value === o.value ? 'text-accent' : 'text-off-white'}`}>
+            {o.label}
+          </span>
+          <span className="block pt-1 text-body text-soft">{o.hint}</span>
+        </button>
+      ))}
     </div>
   );
 }

@@ -359,6 +359,8 @@ export type BridgeToClientSystemMsg =
   | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply }
   | { event: 'launcherGestureReply'; data: LauncherGestureReply }
   | { event: 'launcherGestureChanged'; data: LauncherGestureReply }
+  | { event: 'companionLaunchReply'; data: CompanionLaunchReply }
+  | { event: 'companionLaunchChanged'; data: CompanionLaunchReply }
   | { event: 'factoryResetStarted'; data: FactoryResetStarted }
   | { event: 'factoryResetRefused'; data: FactoryResetRefused };
 
@@ -587,7 +589,9 @@ export type ClientToBridgeSystemMsg =
   | { event: 'factoryReset' }
   | { event: 'deviceGetNickname' }
   | { event: 'launcherGestureGet' }
-  | { event: 'launcherGestureSet'; data: LauncherGestureSet };
+  | { event: 'launcherGestureSet'; data: LauncherGestureSet }
+  | { event: 'companionLaunchGet' }
+  | { event: 'companionLaunchSet'; data: CompanionLaunchSet };
 
 export type ClientToBridgeTimeMsg = { event: 'get' };
 
@@ -607,6 +611,10 @@ export type ClientToBridgeWebappMsg =
   | { event: 'current' }
   | { event: 'activate'; data: WebappActivate }
   | { event: 'icon'; data: WebappIcon };
+
+export type CompanionLaunchReply = { enabled: boolean };
+
+export type CompanionLaunchSet = { enabled: boolean };
 
 export type ConfigChanged = {
   key: string;

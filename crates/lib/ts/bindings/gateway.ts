@@ -205,6 +205,8 @@ export type BridgeToGatewaySystemMsg =
   | { event: 'deviceNicknameChanged'; data: DeviceNicknameReply }
   | { event: 'launcherGestureReply'; data: LauncherGestureReply }
   | { event: 'launcherGestureChanged'; data: LauncherGestureReply }
+  | { event: 'companionLaunchReply'; data: CompanionLaunchReply }
+  | { event: 'companionLaunchChanged'; data: CompanionLaunchReply }
   | { event: 'logsTailReply'; data: LogsTailReply }
   | { event: 'logsSubscribeReply'; data: LogsSubscribeReply }
   | { event: 'logEntry'; data: LogEntry }
@@ -263,6 +265,10 @@ export type BrowseReply = { result: BrowseResult };
 export type ChromeNavigate = { url: string };
 
 export type CommunicationsSnapshot = { state: CommunicationsState };
+
+export type CompanionLaunchReply = { enabled: boolean };
+
+export type CompanionLaunchSet = { enabled: boolean };
 
 export type ContextResolveReply = { name: string | null; artworkId: string | null; subtitle: string | null };
 
@@ -412,6 +418,8 @@ export type GatewayToBridgeSystemMsg =
   | { event: 'deviceSetNickname'; data: DeviceSetNickname }
   | { event: 'launcherGestureGet' }
   | { event: 'launcherGestureSet'; data: LauncherGestureSet }
+  | { event: 'companionLaunchGet' }
+  | { event: 'companionLaunchSet'; data: CompanionLaunchSet }
   | { event: 'logsTail'; data: LogsTail }
   | { event: 'logsSubscribe'; data: LogsSubscribe }
   | { event: 'logsUnsubscribe'; data: LogsUnsubscribe }

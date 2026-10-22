@@ -626,6 +626,10 @@ public class HybridBridgethingSessionImpl(
         requireSession().setLauncherGesture(deviceId, toLauncherGesture(gesture))
     }
 
+    override suspend fun setCompanionLaunch(deviceId: String, enabled: Boolean) {
+        requireSession().setCompanionLaunch(deviceId, enabled)
+    }
+
     override suspend fun exportLogs(archiveId: String?): String = withContext(Dispatchers.IO) {
         LogExport.writeBundle(context, archiveId).absolutePath
     }

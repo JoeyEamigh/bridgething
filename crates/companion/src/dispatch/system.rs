@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use bridgething_delivery::ota::service::MetaChange;
 use bridgething_gateway::{HandlerError, Reply, SystemHandler};
 use libbridgething::{
   LogEntry, OtaError, OtaFinished, OtaProgress,
   gateway::{
-    DeviceNicknameReply, KeepaliveAck, KeepalivePing, LauncherGestureReply, OtaAssetRange, OtaAssetRangeAbandon,
-    OtaAssetRangeRejected, OtaAssetRangeReply,
+    CompanionLaunchReply, DeviceNicknameReply, KeepaliveAck, KeepalivePing, LauncherGestureReply, OtaAssetRange,
+    OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply,
   },
   wire::WireError,
 };
@@ -65,12 +66,17 @@ impl SystemHandler for SystemDispatcher {
   }
 
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
-    self.ota.nickname_changed(payload.nickname);
+    self.ota.meta_changed(MetaChange::Nickname(payload.nickname));
     Ok(())
   }
 
   async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
-    self.ota.launcher_gesture_changed(payload.gesture);
+    self.ota.meta_changed(MetaChange::LauncherGesture(payload.gesture));
+    Ok(())
+  }
+
+  async fn companion_launch_changed(&self, payload: CompanionLaunchReply) -> Result<(), WireError> {
+    self.ota.meta_changed(MetaChange::CompanionLaunch(payload.enabled));
     Ok(())
   }
 

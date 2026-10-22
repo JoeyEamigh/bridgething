@@ -62,6 +62,10 @@ export type BridgeThingMeta = {
    */
   bluetoothName?: string;
   launcherGesture: LauncherGesture;
+  /**
+   * Whether the device opens the companion app when an iPhone reconnects without it running.
+   */
+  companionLaunch: boolean;
   appVersion: string;
   daemonSha256: string | null;
   /**

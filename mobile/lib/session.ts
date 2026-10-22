@@ -267,6 +267,13 @@ export async function setLauncherGesture(
   await getSession().setLauncherGesture(deviceId, gesture);
 }
 
+export async function setCompanionLaunch(
+  deviceId: string,
+  enabled: boolean,
+): Promise<void> {
+  await getSession().setCompanionLaunch(deviceId, enabled);
+}
+
 export function forgetKnownDevice(deviceId: string): void {
   void getSession()
     .forgetCompanionDevice(deviceId)

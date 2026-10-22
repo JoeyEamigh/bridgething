@@ -37,6 +37,7 @@ pub enum EmulatorEvent {
   Authenticated,
   Identified,
   ArtworkSent(u8),
+  AppLaunchRequested(String),
   EaStreamOpened(DeviceEaStream),
   EaStreamClosed(u16),
   LinkDown(String),
@@ -46,6 +47,7 @@ pub enum EmulatorEvent {
 enum EmulatorCommand {
   PushNowPlaying(Box<NowPlayingUpdate>),
   PushArtwork { transfer_id: u8, bytes: Bytes },
+  OpenEaStream(String),
 }
 
 #[derive(Clone)]
@@ -66,6 +68,14 @@ impl DeviceEmulatorHandle {
     self
       .commands
       .send(EmulatorCommand::PushArtwork { transfer_id, bytes })
+      .await
+      .map_err(|_| Error::LinkClosed)
+  }
+
+  pub async fn open_ea_stream(&self, bundle_id: &str) -> Result<()> {
+    self
+      .commands
+      .send(EmulatorCommand::OpenEaStream(bundle_id.to_owned()))
       .await
       .map_err(|_| Error::LinkClosed)
   }
@@ -217,6 +227,11 @@ impl DeviceEmulator {
       }
       RequestAppLaunch::CSM_MSG_ID => {
         let request = RequestAppLaunch::try_from(frame)?;
+        emit(
+          &self.events_tx,
+          EmulatorEvent::AppLaunchRequested(request.bundle_id.clone()),
+        )
+        .await;
         self.open_ea_stream(&request.bundle_id).await?;
       }
       StatusExternalAccessoryProtocolSession::CSM_MSG_ID => {
@@ -276,6 +291,10 @@ impl DeviceEmulator {
         }
         None => tracing::warn!("emulator: artwork push before link established; dropping"),
       },
+      EmulatorCommand::OpenEaStream(bundle_id) => {
+        tracing::info!(bundle = %bundle_id, "emulator: app opening its EA stream on its own");
+        self.open_ea_stream(&bundle_id).await?;
+      }
     }
     Ok(())
   }

@@ -285,14 +285,8 @@ impl BluetoothManager {
           .await?;
 
         tracing::debug!("setting up iap2 manager");
-        let _iap2_handle = Iap2Manager::start(
-          iap2_bootstrap,
-          &session,
-          adapter.clone(),
-          deps.meta.static_meta(),
-          &state.authority,
-        )
-        .await?;
+        let _iap2_handle =
+          Iap2Manager::start(iap2_bootstrap, &session, adapter.clone(), &deps.meta, &state.authority).await?;
 
         tracing::debug!("setting up le dispatcher");
         let _le_handle = le_bootstrap

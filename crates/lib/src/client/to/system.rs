@@ -20,6 +20,13 @@ pub struct LauncherGestureReply {
   pub gesture: LauncherGesture,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "client.ts")]
+pub struct CompanionLaunchReply {
+  pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
@@ -103,6 +110,10 @@ pub enum BridgeToClientSystemMsg {
   LauncherGestureReply(LauncherGestureReply),
   #[bridge_event]
   LauncherGestureChanged(LauncherGestureReply),
+  #[bridge_response]
+  CompanionLaunchReply(CompanionLaunchReply),
+  #[bridge_event]
+  CompanionLaunchChanged(CompanionLaunchReply),
   #[bridge_response]
   FactoryResetStarted(FactoryResetStarted),
   #[bridge_response]

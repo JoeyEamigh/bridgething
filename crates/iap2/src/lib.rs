@@ -15,7 +15,7 @@ pub use frame::{
 };
 pub use link::{Iap2Command, Iap2Event, Link, LinkConfig};
 pub use session::{
-  HidCommand, Iap2Session, MfiAccess, MfiHandle, NowPlayingAuthorityState, NowPlayingCommand, SessionEvent,
+  AppLaunch, HidCommand, Iap2Session, MfiAccess, MfiHandle, NowPlayingAuthorityState, NowPlayingCommand, SessionEvent,
   WorkerMfiAccess,
 };
 

@@ -442,7 +442,7 @@ Read a surface's class in `dispatch.generated.d.ts` for its exact methods.
 | `net` | HTTP, WS, and SOCKS through the phone | fetch, wsOpen, wsSend, wsClose, streamOpen, streamCancel |
 | `hardware` | backlight and ambient light sensor | displaySetMode, displaySetLevel, stateGet, onAmbientLightUpdate, onBrightnessChanged |
 | `bluetooth` | adapter alias, bonds, discoverable | list, connect, forget, setAlias, enableDiscoverable |
-| `system` | version, logs, power, diagnostics, launcher gesture | versionRequest, logsTail, logsSubscribe, reboot, powerOff, factoryReset, launcherGestureGet, launcherGestureSet, onVersion, onLogEntry, onOtaProgress, onLauncherGestureChanged |
+| `system` | version, logs, power, diagnostics, launcher gesture, companion launch | versionRequest, logsTail, logsSubscribe, reboot, powerOff, factoryReset, launcherGestureGet, launcherGestureSet, companionLaunchGet, companionLaunchSet, onVersion, onLogEntry, onOtaProgress, onLauncherGestureChanged, onCompanionLaunchChanged |
 | `time` | wall clock | get, onSnapshot, onChanged |
 | `voice` | mic and push-to-talk, capability-gated | pushToTalk, cancel, muteMic, stateGet |
 | `webapp` | list and activate installed webapps | list, current, activate, icon |

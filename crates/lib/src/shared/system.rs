@@ -19,6 +19,9 @@ pub struct BridgeThingMeta {
   #[ts(optional)]
   pub bluetooth_name: Option<String>,
   pub launcher_gesture: LauncherGesture,
+  /// Whether the device opens the companion app when an iPhone reconnects without it running.
+  #[serde(default = "companion_launch_default")]
+  pub companion_launch: bool,
   pub app_version: String,
   pub daemon_sha256: Option<String>,
   /// Null when no wake word model is loaded, or the loaded model carries no version.
@@ -40,6 +43,10 @@ pub struct BridgeThingMeta {
   pub image_machine: String,
   pub discord: String,
   pub credits: String,
+}
+
+fn companion_launch_default() -> bool {
+  true
 }
 
 impl BridgeThingMeta {
@@ -156,4 +163,22 @@ pub struct RangeSpec {
 pub struct RangePart {
   pub start: u32,
   pub length: u32,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn a_meta_from_a_daemon_without_the_companion_launch_setting_reads_as_launching() {
+    let meta: BridgeThingMeta = serde_json::from_str(
+      r#"{"bridgethingVersion":"v0.13.1","libbridgethingVersion":"v0.13.1","appName":"bridgething",
+          "nickname":null,"launcherGesture":"fivePress","appVersion":"0.13.1","daemonSha256":null,
+          "wakewordModelVersion":null,"osName":"","osVersion":"","osDescription":"","btMac":"","serialNumber":"",
+          "fccId":"","icId":"","modelName":"","channel":"","imageVariant":"","imageVersion":"","imageBuildId":"",
+          "imageBuildDate":"","imageDistro":"","imageMachine":"","discord":"","credits":""}"#,
+    )
+    .expect("an older daemon's meta still decodes");
+    assert!(meta.companion_launch, "older daemons always open the companion app");
+  }
 }

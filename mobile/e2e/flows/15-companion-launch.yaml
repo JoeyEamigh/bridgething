@@ -1,0 +1,51 @@
+appId: com.bridgething.gateway
+name: the reconnect launch toggle round-trips through the daemon on iOS and is absent on android
+---
+- runFlow: ../common/fresh-start.yaml
+- tapOn: ".*dev gateway.*"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: "companion-launch"
+          direction: DOWN
+          centerElement: true
+      - assertVisible:
+          id: "companion-launch"
+          checked: true
+      - tapOn:
+          id: "companion-launch"
+      - tapOn: "apps"
+      - tapOn: ".*dev gateway.*"
+      - scrollUntilVisible:
+          element:
+            id: "companion-launch"
+          direction: DOWN
+          centerElement: true
+      - extendedWaitUntil:
+          visible:
+            id: "companion-launch"
+            checked: false
+          timeout: 10000
+      - tapOn:
+          id: "companion-launch"
+      - tapOn: "apps"
+      - tapOn: ".*dev gateway.*"
+      - scrollUntilVisible:
+          element:
+            id: "companion-launch"
+          direction: DOWN
+          centerElement: true
+      - extendedWaitUntil:
+          visible:
+            id: "companion-launch"
+            checked: true
+          timeout: 10000
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - assertNotVisible:
+          id: "companion-launch"

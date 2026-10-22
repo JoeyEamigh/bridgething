@@ -3,12 +3,13 @@
 use std::time::Duration;
 
 use bridgething_iap2::{
-  EmulatorEvent, SessionEvent,
+  AppLaunch, EmulatorEvent, SessionEvent,
   csm::identification::{EaProtocol, EaProtocolMatchAction, IdentificationConfig},
   emulator::harness::{self as emu, recv_with_timeout},
 };
 use bytes::Bytes;
 use libbridgething::Priority;
+use tokio::sync::watch;
 
 const GATEWAY_BUNDLE: &str = "com.bridgething.gateway";
 const GATEWAY_EA_PROTOCOL_ID: u8 = 1;
@@ -24,10 +25,17 @@ fn gateway_identification() -> IdentificationConfig {
   ident
 }
 
+fn gateway_launch(relaunch: bool) -> AppLaunch {
+  AppLaunch {
+    bundle_id: GATEWAY_BUNDLE.into(),
+    relaunch: watch::channel(relaunch).1,
+  }
+}
+
 #[tokio::test]
 async fn emulator_opens_ea_gateway_stream_and_round_trips_bytes() {
   let (mut harness, mut emu_events, _emu_handle) =
-    emu::spawn(gateway_identification(), Some(GATEWAY_BUNDLE.into()), |e| e);
+    emu::spawn(gateway_identification(), Some(gateway_launch(true)), |e| e);
 
   let (mut acc_inbound, acc_outbound) = loop {
     match recv_with_timeout(&mut harness.acc_events, Duration::from_secs(10))
@@ -50,15 +58,21 @@ async fn emulator_opens_ea_gateway_stream_and_round_trips_bytes() {
     }
   };
 
+  let mut launch_requested = false;
   let mut dev_stream = loop {
     match recv_with_timeout(&mut emu_events, Duration::from_secs(10))
       .await
       .expect("emulator event timed out before the EA stream opened")
     {
+      EmulatorEvent::AppLaunchRequested(bundle) => {
+        assert_eq!(bundle, GATEWAY_BUNDLE);
+        launch_requested = true;
+      }
       EmulatorEvent::EaStreamOpened(stream) => break stream,
       _ => continue,
     }
   };
+  assert!(launch_requested, "the accessory opened the app to get its stream");
   assert_eq!(
     dev_stream.protocol_id, GATEWAY_EA_PROTOCOL_ID,
     "emulator discovered the protocol id from identification"
@@ -87,7 +101,7 @@ async fn emulator_opens_ea_gateway_stream_and_round_trips_bytes() {
 #[tokio::test]
 async fn shutdown_closes_the_ea_session_on_the_device() {
   let (mut harness, mut emu_events, _emu_handle) =
-    emu::spawn(gateway_identification(), Some(GATEWAY_BUNDLE.into()), |e| e);
+    emu::spawn(gateway_identification(), Some(gateway_launch(true)), |e| e);
 
   let dev_stream = loop {
     match recv_with_timeout(&mut emu_events, Duration::from_secs(10))
@@ -123,4 +137,68 @@ async fn shutdown_closes_the_ea_session_on_the_device() {
     }
   }
   assert!(saw_accessory_close, "the accessory reports its own stream closed");
+}
+
+#[tokio::test]
+async fn with_relaunch_off_the_accessory_never_opens_the_app_and_still_takes_its_stream() {
+  let (mut harness, mut emu_events, emu_handle) =
+    emu::spawn(gateway_identification(), Some(gateway_launch(false)), |e| e);
+
+  loop {
+    match recv_with_timeout(&mut emu_events, Duration::from_secs(10))
+      .await
+      .expect("emulator event timed out before identification")
+    {
+      EmulatorEvent::AppLaunchRequested(bundle) => panic!("the accessory opened {bundle} with relaunch off"),
+      EmulatorEvent::Identified => break,
+      _ => continue,
+    }
+  }
+
+  emu_handle
+    .open_ea_stream(GATEWAY_BUNDLE)
+    .await
+    .expect("the app opens its own stream");
+
+  let acc_outbound = loop {
+    match recv_with_timeout(&mut harness.acc_events, Duration::from_secs(10))
+      .await
+      .expect("accessory event timed out before the app's stream opened")
+    {
+      SessionEvent::EaStreamOpened {
+        protocol_id, outbound, ..
+      } => {
+        assert_eq!(protocol_id, GATEWAY_EA_PROTOCOL_ID);
+        break outbound;
+      }
+      _ => continue,
+    }
+  };
+
+  let mut dev_stream = loop {
+    match recv_with_timeout(&mut emu_events, Duration::from_secs(10))
+      .await
+      .expect("emulator event timed out before the app's stream opened")
+    {
+      EmulatorEvent::AppLaunchRequested(bundle) => panic!("the accessory opened {bundle} with relaunch off"),
+      EmulatorEvent::EaStreamOpened(stream) => break stream,
+      _ => continue,
+    }
+  };
+
+  acc_outbound
+    .send(Priority::Normal, Bytes::from_static(b"after identification"))
+    .await
+    .unwrap();
+  let got = recv_with_timeout(&mut dev_stream.inbound_rx, Duration::from_secs(5))
+    .await
+    .expect("device never received the accessory's gateway bytes");
+  assert_eq!(&got[..], b"after identification");
+
+  while let Ok(event) = emu_events.try_recv() {
+    assert!(
+      !matches!(event, EmulatorEvent::AppLaunchRequested(_)),
+      "everything the accessory sent before these bytes has landed, and none of it opened the app"
+    );
+  }
 }

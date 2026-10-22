@@ -4,6 +4,7 @@ use bridgething_companion::dispatch::{
   OtaInbound,
   system::{DeviceLogSink, SystemDispatcher},
 };
+use bridgething_delivery::ota::service::MetaChange;
 use bridgething_gateway::{HandlerError, Reply, SystemHandler};
 use libbridgething::{
   BridgeThingMeta, LogEntry, LogLevel, OtaError, OtaFinished, OtaProgress, RangeSpec, WebappInfo,
@@ -26,8 +27,7 @@ impl DeviceLogSink for RecordedLogs {
 #[derive(Default)]
 struct RecordedOta {
   progress: Mutex<Vec<OtaProgress>>,
-  nicknames: Mutex<Vec<Option<String>>>,
-  gestures: Mutex<Vec<libbridgething::LauncherGesture>>,
+  meta_changes: Mutex<Vec<MetaChange>>,
   ranges: Mutex<Vec<(Uuid, OtaAssetRange)>>,
   abandoned: Mutex<Vec<Uuid>>,
   metas: Mutex<Vec<BridgeThingMeta>>,
@@ -79,13 +79,8 @@ impl OtaInbound for RecordedOta {
 
   fn finished(&self, _payload: OtaFinished) {}
 
-  fn nickname_changed(&self, nickname: Option<String>) -> Option<BridgeThingMeta> {
-    self.nicknames.lock().unwrap().push(nickname);
-    None
-  }
-
-  fn launcher_gesture_changed(&self, gesture: libbridgething::LauncherGesture) -> Option<BridgeThingMeta> {
-    self.gestures.lock().unwrap().push(gesture);
+  fn meta_changed(&self, change: MetaChange) -> Option<BridgeThingMeta> {
+    self.meta_changes.lock().unwrap().push(change);
     None
   }
 
@@ -139,8 +134,8 @@ async fn a_nickname_change_reaches_the_update_service() {
     .expect("an event never refuses");
 
   assert_eq!(
-    ota.nicknames.lock().unwrap().clone(),
-    vec![Some("garage thing".to_owned())]
+    ota.meta_changes.lock().unwrap().clone(),
+    vec![MetaChange::Nickname(Some("garage thing".to_owned()))]
   );
 }
 
@@ -156,8 +151,23 @@ async fn a_gesture_change_reaches_the_update_service() {
     .expect("an event never refuses");
 
   assert_eq!(
-    ota.gestures.lock().unwrap().clone(),
-    vec![libbridgething::LauncherGesture::LongPress]
+    ota.meta_changes.lock().unwrap().clone(),
+    vec![MetaChange::LauncherGesture(libbridgething::LauncherGesture::LongPress)]
+  );
+}
+
+#[tokio::test]
+async fn a_companion_launch_change_reaches_the_update_service() {
+  let (dispatch, ota, _logs) = dispatcher();
+
+  dispatch
+    .companion_launch_changed(libbridgething::gateway::CompanionLaunchReply { enabled: false })
+    .await
+    .expect("an event never refuses");
+
+  assert_eq!(
+    ota.meta_changes.lock().unwrap().clone(),
+    vec![MetaChange::CompanionLaunch(false)]
   );
 }
 

@@ -896,6 +896,61 @@ async fn a_gesture_change_rewrites_the_held_meta_for_that_peer_alone() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_companion_launch_change_rewrites_the_held_meta_for_that_peer_alone() {
+  let link = Arc::new(HandLink::default());
+  let (session, _heard, _spool) = session(link.clone());
+  session.start();
+  two_peers(&link, &session).await;
+
+  for (device_id, serial) in [(DEVICE, "serial-one"), (OTHER, "serial-two")] {
+    link.say(
+      device_id,
+      BridgeToGatewayMsg {
+        id: Uuid::now_v7(),
+        meta: MsgMeta::Event,
+        data: BridgeToGatewayMsgData::Version(Box::new(meta(serial))),
+      },
+    );
+  }
+
+  let launch_of = |device_id: &'static str| {
+    session
+      .observer()
+      .device_metas()
+      .iter()
+      .find(|entry| entry.device_id == device_id)
+      .map(|entry| entry.meta.companion_launch)
+  };
+  assert!(
+    eventually(|| launch_of(DEVICE) == Some(true) && launch_of(OTHER) == Some(true)).await,
+    "the announce seeds the setting along with the rest of the meta, saw {:?}",
+    launch_of(DEVICE)
+  );
+
+  link.say(
+    DEVICE,
+    BridgeToGatewayMsg {
+      id: Uuid::now_v7(),
+      meta: MsgMeta::Event,
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::CompanionLaunchChanged(
+        libbridgething::gateway::CompanionLaunchReply { enabled: false },
+      )),
+    },
+  );
+
+  assert!(
+    eventually(|| launch_of(DEVICE) == Some(false)).await,
+    "a change rewrites the meta the host reads, saw {:?}",
+    launch_of(DEVICE)
+  );
+  assert_eq!(
+    launch_of(OTHER),
+    Some(true),
+    "and the peer that did not change keeps its own"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_ancs_seed_lands_on_a_session_with_no_notification_backend() {
   let link = Arc::new(HandLink::default());
   let (session, heard, _spool) = session(link.clone());

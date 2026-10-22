@@ -38,6 +38,8 @@ import type {
   BrowseChanged,
   CapabilitiesSnapshot,
   ClientToBridgeMsg,
+  CompanionLaunchReply,
+  CompanionLaunchSet,
   ConfigChanged,
   ConfigGet,
   ConfigGetReply,
@@ -300,6 +302,8 @@ export type SystemInboundHandlers = {
   deviceNicknameChanged: (msg: DeviceNicknameReply) => void;
   launcherGestureReply: (msg: LauncherGestureReply) => void;
   launcherGestureChanged: (msg: LauncherGestureReply) => void;
+  companionLaunchReply: (msg: CompanionLaunchReply) => void;
+  companionLaunchChanged: (msg: CompanionLaunchReply) => void;
   factoryResetStarted: (msg: FactoryResetStarted) => void;
   factoryResetRefused: (msg: FactoryResetRefused) => void;
 };
@@ -2995,6 +2999,30 @@ export class SystemSurface {
     });
   }
 
+  /** Subscribe to `System::CompanionLaunchReply` from the daemon. */
+  onCompanionLaunchReply(handler: (msg: CompanionLaunchReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'companionLaunchReply') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `System::CompanionLaunchChanged` from the daemon. */
+  onCompanionLaunchChanged(handler: (msg: CompanionLaunchReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'system') return;
+      const inner = data.data;
+      if (inner.event !== 'companionLaunchChanged') return;
+      handler(inner.data);
+    });
+  }
+
   /** Subscribe to `System::FactoryResetStarted` from the daemon. */
   onFactoryResetStarted(handler: (msg: FactoryResetStarted) => void): () => void {
     return this._client.on(event => {
@@ -3084,6 +3112,14 @@ export class SystemSurface {
           handlers.launcherGestureChanged?.(inner.data);
           return;
         }
+        case 'companionLaunchReply': {
+          handlers.companionLaunchReply?.(inner.data);
+          return;
+        }
+        case 'companionLaunchChanged': {
+          handlers.companionLaunchChanged?.(inner.data);
+          return;
+        }
         case 'factoryResetStarted': {
           handlers.factoryResetStarted?.(inner.data);
           return;
@@ -3136,6 +3172,16 @@ export class SystemSurface {
       id: newUuid(),
       meta: { kind: 'command' },
       data: { type: 'system', data: { event: 'launcherGestureSet', data: payload } },
+    };
+    await this._client.send(msg);
+  }
+
+  /** Send `System::CompanionLaunchSet` to the daemon. */
+  async companionLaunchSet(payload: CompanionLaunchSet): Promise<void> {
+    const msg: ClientToBridgeMsg = {
+      id: newUuid(),
+      meta: { kind: 'command' },
+      data: { type: 'system', data: { event: 'companionLaunchSet', data: payload } },
     };
     await this._client.send(msg);
   }
@@ -3232,6 +3278,19 @@ export class SystemSurface {
     if (d.type === 'system') {
       const inner = d.data;
       if (inner.event === 'launcherGestureReply') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async companionLaunchGet(options?: { timeoutMs?: number }): Promise<TypedRequestResult<CompanionLaunchReply, never>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'system', data: { event: 'companionLaunchGet' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'system') {
+      const inner = d.data;
+      if (inner.event === 'companionLaunchReply') return { ok: true, response: inner.data };
     }
     if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
     return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
@@ -4734,6 +4793,14 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           case 'launcherGestureChanged': {
             innerHandlers.launcherGestureChanged?.(inner.data);
+            return;
+          }
+          case 'companionLaunchReply': {
+            innerHandlers.companionLaunchReply?.(inner.data);
+            return;
+          }
+          case 'companionLaunchChanged': {
+            innerHandlers.companionLaunchChanged?.(inner.data);
             return;
           }
           case 'factoryResetStarted': {

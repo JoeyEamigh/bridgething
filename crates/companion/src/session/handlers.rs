@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bridgething_delivery::{
+  ota::service::MetaChange,
   serve::{net::NetDispatcher, tunnel::TunnelDispatcher},
   transfer::TransferReceiver,
 };
@@ -66,6 +67,12 @@ impl Peer {
 
   fn voice(&self) -> Result<&VoiceDispatcher, WireError> {
     self.voice.as_ref().ok_or(WireError::Unsupported)
+  }
+
+  fn meta_changed(&self, change: MetaChange) {
+    if let Some(meta) = self.ota.meta_changed(change) {
+      self.observer.device_meta(&self.device_id, meta);
+    }
   }
 }
 
@@ -316,15 +323,15 @@ impl SystemHandler for Peer {
     self.system.ota_asset_range_abandon(payload).await
   }
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
-    if let Some(meta) = self.ota.nickname_changed(payload.nickname) {
-      self.observer.device_meta(&self.device_id, meta);
-    }
+    self.meta_changed(MetaChange::Nickname(payload.nickname));
     Ok(())
   }
   async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
-    if let Some(meta) = self.ota.launcher_gesture_changed(payload.gesture) {
-      self.observer.device_meta(&self.device_id, meta);
-    }
+    self.meta_changed(MetaChange::LauncherGesture(payload.gesture));
+    Ok(())
+  }
+  async fn companion_launch_changed(&self, payload: CompanionLaunchReply) -> Result<(), WireError> {
+    self.meta_changed(MetaChange::CompanionLaunch(payload.enabled));
     Ok(())
   }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {

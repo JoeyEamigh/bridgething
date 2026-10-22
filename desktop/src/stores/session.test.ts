@@ -15,6 +15,7 @@ function meta(libbridgethingVersion: string): api.DeviceMeta {
     serialNumber: 'sn',
     nickname: null,
     launcherGesture: 'fivePress',
+    companionLaunch: true,
   };
 }
 

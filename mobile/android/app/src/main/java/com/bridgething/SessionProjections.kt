@@ -219,6 +219,7 @@ internal fun toRnDeviceMeta(meta: DeviceMeta): BridgethingDeviceMeta = Bridgethi
     serialNumber = meta.serialNumber,
     nickname = meta.nickname,
     launcherGesture = toRnLauncherGesture(meta.launcherGesture),
+    companionLaunch = meta.companionLaunch,
 )
 
 internal fun toRnLauncherGesture(gesture: LauncherGesture): BridgethingLauncherGesture = when (gesture) {

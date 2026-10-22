@@ -4309,6 +4309,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func setCapabilityFlags(flags: CapabilityFlags) async 
     
+    func setCompanionLaunch(deviceId: String, enabled: Bool) async throws 
+    
     func setDeviceAutoResume(deviceId: String, enabled: Bool) async 
     
     func setDeviceLogStreaming(enabled: Bool) async 
@@ -4973,6 +4975,22 @@ open func setCapabilityFlags(flags: CapabilityFlags)async   {
             liftFunc: { $0 },
             errorHandler: nil
             
+        )
+}
+    
+open func setCompanionLaunch(deviceId: String, enabled: Bool)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_set_companion_launch(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterBool.lower(enabled)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeCompanionError_lift
         )
 }
     
@@ -16675,10 +16693,11 @@ public struct DeviceMeta: Equatable, Hashable {
     public var nickname: String?
     public var bluetoothName: String?
     public var launcherGesture: LauncherGesture
+    public var companionLaunch: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, serialNumber: String, nickname: String?, bluetoothName: String?, launcherGesture: LauncherGesture) {
+    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, serialNumber: String, nickname: String?, bluetoothName: String?, launcherGesture: LauncherGesture, companionLaunch: Bool) {
         self.daemonVersion = daemonVersion
         self.libbridgethingVersion = libbridgethingVersion
         self.imageVersion = imageVersion
@@ -16690,6 +16709,7 @@ public struct DeviceMeta: Equatable, Hashable {
         self.nickname = nickname
         self.bluetoothName = bluetoothName
         self.launcherGesture = launcherGesture
+        self.companionLaunch = companionLaunch
     }
 
     
@@ -16718,7 +16738,8 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
                 serialNumber: FfiConverterString.read(from: &buf), 
                 nickname: FfiConverterOptionString.read(from: &buf), 
                 bluetoothName: FfiConverterOptionString.read(from: &buf), 
-                launcherGesture: FfiConverterTypeLauncherGesture.read(from: &buf)
+                launcherGesture: FfiConverterTypeLauncherGesture.read(from: &buf), 
+                companionLaunch: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -16734,6 +16755,7 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.nickname, into: &buf)
         FfiConverterOptionString.write(value.bluetoothName, into: &buf)
         FfiConverterTypeLauncherGesture.write(value.launcherGesture, into: &buf)
+        FfiConverterBool.write(value.companionLaunch, into: &buf)
     }
 }
 
@@ -31236,6 +31258,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_capability_flags() != 58070) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_companion_launch() != 42955) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_auto_resume() != 2622) {

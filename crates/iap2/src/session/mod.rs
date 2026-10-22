@@ -54,6 +54,12 @@ pub trait MfiAccess: Send + 'static {
 
 pub(crate) const CONTROL_SESSION_ID: u8 = 1;
 
+#[derive(Debug, Clone)]
+pub struct AppLaunch {
+  pub bundle_id: String,
+  pub relaunch: watch::Receiver<bool>,
+}
+
 #[derive(Debug)]
 pub enum SessionEvent {
   LinkEstablished(Lsp),
@@ -93,7 +99,7 @@ pub enum SessionEvent {
 
 pub struct Iap2Session<M: MfiAccess> {
   identification: IdentificationConfig,
-  app_launch_bundle_id: Option<String>,
+  app_launch: Option<AppLaunch>,
   app_launch_command_rx: mpsc::Receiver<String>,
   shutdown_rx: mpsc::Receiver<oneshot::Sender<()>>,
   mfi: M,
@@ -145,7 +151,7 @@ impl<M: MfiAccess> Iap2Session<M> {
   #[allow(clippy::too_many_arguments)]
   pub fn with_app_launch(
     identification: IdentificationConfig,
-    app_launch_bundle_id: Option<String>,
+    app_launch: Option<AppLaunch>,
     app_launch_command_rx: mpsc::Receiver<String>,
     shutdown_rx: mpsc::Receiver<oneshot::Sender<()>>,
     mfi: M,
@@ -168,7 +174,7 @@ impl<M: MfiAccess> Iap2Session<M> {
       telephony: TelephonyFlow::new(telephony_command_rx),
       device: DeviceFlow::new(),
       identification,
-      app_launch_bundle_id,
+      app_launch,
       app_launch_command_rx,
       shutdown_rx,
       mfi,
@@ -211,8 +217,11 @@ impl<M: MfiAccess> Iap2Session<M> {
           self.now_playing.ensure_subscribed(&self.link_command_tx).await?;
           self.hid.ensure_started(&self.link_command_tx).await?;
           self.telephony.ensure_subscribed(&self.link_command_tx).await?;
-          if let (Some(ea), Some(bundle)) = (self.ea.as_mut(), self.app_launch_bundle_id.as_deref()) {
-            ea.ensure_app_launch_requested(bundle, &self.link_command_tx).await?;
+          if let (Some(ea), Some(launch)) = (self.ea.as_mut(), self.app_launch.as_ref())
+            && *launch.relaunch.borrow()
+          {
+            ea.ensure_app_launch_requested(&launch.bundle_id, &self.link_command_tx)
+              .await?;
           }
         }
       }
@@ -233,12 +242,12 @@ impl<M: MfiAccess> Iap2Session<M> {
           Some(Iap2Event::Established(lsp)) => {
             tracing::debug!("iap2 session: link established");
             if self.ea.is_none() {
-              let accept_id = self.app_launch_bundle_id.as_deref().and_then(|bundle| {
+              let accept_id = self.app_launch.as_ref().and_then(|launch| {
                 self
                   .identification
                   .supported_external_accessory_protocols
                   .iter()
-                  .find(|p| p.name == bundle)
+                  .find(|p| p.name == launch.bundle_id)
                   .map(|p| p.id)
               });
               self.ea = Some(EaFlow::new(self.link_command_tx.clone(), lsp.max_len, accept_id));

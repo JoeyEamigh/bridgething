@@ -22,6 +22,7 @@ function meta(): BridgeThingMeta {
     appName: 'bridgething',
     nickname: 'the dashboard',
     launcherGesture: 'fivePress',
+    companionLaunch: true,
     appVersion: '0.8.1',
     daemonSha256: null,
     wakewordModelVersion: null,

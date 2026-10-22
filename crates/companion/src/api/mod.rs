@@ -384,6 +384,15 @@ impl CompanionSession {
       .map_err(|failure| CompanionError::Device(format!("{failure:?}")))
   }
 
+  pub async fn set_companion_launch(&self, device_id: String, enabled: bool) -> Result<(), CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    gateway
+      .system()
+      .companion_launch_set(libbridgething::gateway::CompanionLaunchSet { enabled })
+      .await
+      .map_err(|failure| CompanionError::Device(format!("{failure:?}")))
+  }
+
   pub async fn list_webapps(&self, device_id: String) -> Result<Vec<WebappInfo>, CompanionError> {
     let gateway = self.gateway_checked(&device_id)?;
     let list = gateway.webapp().list().await.map_err(device_error)?;

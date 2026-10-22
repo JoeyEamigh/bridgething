@@ -392,6 +392,11 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     bluetooth.clone(),
     state.bus.clone(),
   );
+  spawn_companion_launch_observer(
+    state.meta.subscribe_companion_launch(),
+    bluetooth.clone(),
+    state.bus.clone(),
+  );
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
@@ -640,6 +645,7 @@ fn spawn_ota_event_forwarder(
         BridgeToGatewaySystemMsgEvent::OtaFinished(f) => Some(BridgeToClientSystemMsgEvent::OtaFinished(f.clone())),
         BridgeToGatewaySystemMsgEvent::DeviceNicknameChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(_) => None,
+        BridgeToGatewaySystemMsgEvent::CompanionLaunchChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LogEntry(_) => None,
       };
       match event {
@@ -743,6 +749,34 @@ fn spawn_launcher_gesture_observer(
       let client_event = BridgeToClientSystemMsgEvent::LauncherGestureChanged(ClientGestureReply { gesture });
       if let Err(errs) = bus.broadcast_event(client_event).await {
         tracing::debug!(count = errs.len(), "launcher-gesture client broadcast non-fatal errors");
+      }
+    }
+  });
+}
+
+fn spawn_companion_launch_observer(
+  mut rx: tokio::sync::watch::Receiver<bool>,
+  bluetooth: bluetooth::BluetoothMan,
+  bus: net::WireEventBus,
+) {
+  use libbridgething::{
+    client::{BridgeToClientSystemMsgEvent, CompanionLaunchReply as ClientLaunchReply},
+    gateway::{BridgeToGatewaySystemMsgEvent, CompanionLaunchReply as GatewayLaunchReply},
+  };
+  tokio::spawn(async move {
+    while rx.changed().await.is_ok() {
+      let enabled = *rx.borrow_and_update();
+
+      bluetooth
+        .gateway_man
+        .broadcast(BridgeToGatewaySystemMsgEvent::CompanionLaunchChanged(
+          GatewayLaunchReply { enabled },
+        ))
+        .await;
+
+      let client_event = BridgeToClientSystemMsgEvent::CompanionLaunchChanged(ClientLaunchReply { enabled });
+      if let Err(errs) = bus.broadcast_event(client_event).await {
+        tracing::debug!(count = errs.len(), "companion-launch client broadcast non-fatal errors");
       }
     }
   });

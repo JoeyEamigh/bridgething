@@ -321,6 +321,8 @@ impl From<BridgeToClientSystemMsg> for StockSendMsg {
       | BridgeToClientSystemMsg::DeviceNicknameChanged(_)
       | BridgeToClientSystemMsg::LauncherGestureReply(_)
       | BridgeToClientSystemMsg::LauncherGestureChanged(_)
+      | BridgeToClientSystemMsg::CompanionLaunchReply(_)
+      | BridgeToClientSystemMsg::CompanionLaunchChanged(_)
       | BridgeToClientSystemMsg::FactoryResetStarted(_)
       | BridgeToClientSystemMsg::FactoryResetRefused(_) => StockSendMsg::Unsupported,
     }

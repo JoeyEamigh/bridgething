@@ -77,6 +77,7 @@ export type DeviceMeta = {
   nickname: string | null;
   bluetoothName?: string;
   launcherGesture: LauncherGesture;
+  companionLaunch: boolean;
 };
 
 export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };

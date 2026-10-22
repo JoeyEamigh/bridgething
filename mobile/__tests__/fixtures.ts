@@ -43,6 +43,7 @@ export function meta(
     channel: 'stable',
     serialNumber: SERIAL,
     launcherGesture: 'fivePress',
+    companionLaunch: true,
     ...over,
   };
 }

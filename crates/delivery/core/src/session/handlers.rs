@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::serve::tunnel::TunnelDispatcher;
-use crate::{ota::service::OtaService, transfer::TransferReceiver};
+use crate::{
+  ota::service::{MetaChange, OtaService},
+  transfer::TransferReceiver,
+};
 
 const DOC_CHANGE_BACKLOG: usize = 64;
 
@@ -314,11 +317,21 @@ impl SystemHandler for DeliveryHandlers {
     Ok(())
   }
   async fn device_nickname_changed(&self, payload: DeviceNicknameReply) -> Result<(), WireError> {
-    self.ota.nickname_changed(&self.device_id, payload.nickname);
+    self
+      .ota
+      .meta_changed(&self.device_id, MetaChange::Nickname(payload.nickname));
     Ok(())
   }
   async fn launcher_gesture_changed(&self, payload: LauncherGestureReply) -> Result<(), WireError> {
-    self.ota.launcher_gesture_changed(&self.device_id, payload.gesture);
+    self
+      .ota
+      .meta_changed(&self.device_id, MetaChange::LauncherGesture(payload.gesture));
+    Ok(())
+  }
+  async fn companion_launch_changed(&self, payload: CompanionLaunchReply) -> Result<(), WireError> {
+    self
+      .ota
+      .meta_changed(&self.device_id, MetaChange::CompanionLaunch(payload.enabled));
     Ok(())
   }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {

@@ -853,6 +853,11 @@
           "method": "onLauncherGestureChanged",
           "payload": "LauncherGestureReply",
           "payload_ref": "LauncherGestureReply"
+        },
+        {
+          "method": "onCompanionLaunchChanged",
+          "payload": "CompanionLaunchReply",
+          "payload_ref": "CompanionLaunchReply"
         }
       ],
       "requests": [
@@ -899,6 +904,12 @@
           "description": "Returns the M-button gesture that jumps to the launcher.",
           "response": "LauncherGestureReply",
           "response_event": "onLauncherGestureReply"
+        },
+        {
+          "method": "companionLaunchGet",
+          "description": "Returns whether the device opens the companion app when an iPhone reconnects without it running.",
+          "response": "CompanionLaunchReply",
+          "response_event": "onCompanionLaunchReply"
         }
       ],
       "commands": [
@@ -917,6 +928,11 @@
           "method": "launcherGestureSet",
           "payload": "LauncherGestureSet",
           "payload_ref": "LauncherGestureSet"
+        },
+        {
+          "method": "companionLaunchSet",
+          "payload": "CompanionLaunchSet",
+          "payload_ref": "CompanionLaunchSet"
         }
       ],
       "handlers": []
@@ -1477,6 +1493,11 @@
           "type_ref": "LauncherGesture"
         },
         {
+          "name": "companionLaunch",
+          "type": "boolean",
+          "description": "Whether the device opens the companion app when an iPhone reconnects without it running."
+        },
+        {
           "name": "appVersion",
           "type": "string"
         },
@@ -1853,6 +1874,24 @@
         },
         {
           "name": "Volume"
+        }
+      ]
+    },
+    "CompanionLaunchReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "enabled",
+          "type": "boolean"
+        }
+      ]
+    },
+    "CompanionLaunchSet": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "enabled",
+          "type": "boolean"
         }
       ]
     },

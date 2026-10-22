@@ -407,6 +407,10 @@ export class BridgethingSession {
     await this.native.setLauncherGesture(deviceId, gesture);
   }
 
+  async setCompanionLaunch(deviceId: string, enabled: boolean): Promise<void> {
+    await this.native.setCompanionLaunch(deviceId, enabled);
+  }
+
   async presentPairPicker(): Promise<BridgethingBtDevice | null> {
     return this.native.presentPairPicker();
   }
