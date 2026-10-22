@@ -28,14 +28,14 @@
     },
     "crates/delivery/napi": {
       "name": "@bridgething/core-node",
-      "version": "0.14.0",
+      "version": "0.14.1",
       "devDependencies": {
         "@napi-rs/cli": "^3.8.5",
       },
     },
     "crates/lib": {
       "name": "@bridgething/lib",
-      "version": "0.14.0",
+      "version": "0.14.1",
       "dependencies": {
         "uuid": "^14.0.0",
       },
@@ -73,7 +73,7 @@
     },
     "mobile": {
       "name": "@bridgething/mobile",
-      "version": "0.14.0",
+      "version": "0.14.1",
       "dependencies": {
         "@bottom-tabs/react-navigation": "^1.4.0",
         "@bridgething/catalog": "workspace:*",

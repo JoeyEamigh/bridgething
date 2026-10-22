@@ -1385,14 +1385,12 @@ impl SpotifyClient {
   }
 
   pub async fn resolve_context(&self, uri: &str) -> Result<BrowseItem> {
-    Ok(
-      self
-        .hydrate_uris(std::slice::from_ref(&uri.to_string()))
-        .await
-        .into_iter()
-        .next()
-        .unwrap_or_default(),
-    )
+    self
+      .hydrate_map(std::slice::from_ref(&uri.to_string()))
+      .await
+      .remove(uri)
+      .filter(|item| !item.title.is_empty() || !item.image_id.is_empty())
+      .ok_or_else(|| Error::other(format!("no metadata for {uri}")))
   }
 
   pub async fn favorites_list(&self, limit: u32, offset: u32) -> Result<BrowsePage> {
@@ -3636,5 +3634,17 @@ pub(crate) mod tests {
       .unwrap_err();
     assert!(err.to_string().contains("409"), "the caller sees the failure: {err}");
     assert_eq!(commands(&r.hits, "set_queue").len(), 2, "the retry is bounded at one");
+  }
+
+  #[tokio::test]
+  async fn resolving_a_context_spotify_returned_nothing_for_is_an_error() {
+    let client = test_client(Arc::new(NullObserver));
+    for uri in ["spotify:playlist:gone", "spotify:album:gone", "spotify:track:gone"] {
+      let resolved = client.resolve_context(uri).await;
+      assert!(
+        resolved.is_err(),
+        "an empty hydration must not pass as a nameless, artless context: {uri} -> {resolved:?}"
+      );
+    }
   }
 }

@@ -109,6 +109,8 @@ pub struct Chrome {
   external: Arc<AtomicBool>,
   dev_host: DevHost,
   tx: ChromeTx,
+  #[cfg(feature = "test-tap")]
+  tap: tokio::sync::broadcast::Sender<ChromeCommand>,
 
   cancel_token: tokio_util::sync::CancellationToken,
   _worker: tokio::task::JoinHandle<()>,
@@ -137,6 +139,8 @@ impl Chrome {
       external,
       dev_host,
       tx,
+      #[cfg(feature = "test-tap")]
+      tap: tokio::sync::broadcast::channel(64).0,
 
       cancel_token: cancel_token.clone(),
       _worker: tokio::spawn(async move { worker.run().await }),
@@ -161,7 +165,14 @@ impl Chrome {
 
   pub async fn send(&self, command: ChromeCommand) -> Result<()> {
     tracing::debug!("sending command to chrome: {:?}", command);
+    #[cfg(feature = "test-tap")]
+    let _ = self.tap.send(command.clone());
     Ok(self.tx.send(command).await?)
+  }
+
+  #[cfg(feature = "test-tap")]
+  pub fn tap(&self) -> tokio::sync::broadcast::Receiver<ChromeCommand> {
+    self.tap.subscribe()
   }
 
   pub async fn shutdown(&self) {

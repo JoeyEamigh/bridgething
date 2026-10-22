@@ -122,6 +122,11 @@ pub(super) enum Command {
     id: String,
     reply: oneshot::Sender<bool>,
   },
+  #[cfg(feature = "test-tap")]
+  IsDiskPinned {
+    id: String,
+    reply: oneshot::Sender<bool>,
+  },
   Clear {
     id: String,
     ack: oneshot::Sender<Result<(), AssetError>>,
@@ -311,6 +316,14 @@ impl AssetActor {
       }
       Command::Contains { id, reply } => {
         let _ = reply.send(self.entries.contains_key(&id));
+      }
+      #[cfg(feature = "test-tap")]
+      Command::IsDiskPinned { id, reply } => {
+        let pinned = self
+          .entries
+          .get(&id)
+          .is_some_and(|entry| entry.tier() == Tier::Disk && entry.retention.is_pinned());
+        let _ = reply.send(pinned);
       }
       Command::Clear { id, ack } => {
         let result = self.handle_clear(id).await;

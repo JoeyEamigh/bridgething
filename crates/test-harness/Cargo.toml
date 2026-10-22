@@ -28,6 +28,7 @@ serde_json.workspace = true
 bridgething-gateway = { workspace = true }
 async-trait.workspace = true
 bridgething-client = { workspace = true }
+bridgething-delivery = { path = "../delivery/core" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bluer = { workspace = true, features = ["bluetoothd", "rfcomm"] }
@@ -38,7 +39,6 @@ chrome = ["dep:chromiumoxide"]
 
 [dev-dependencies]
 base64 = "0.23.1"
-bridgething-delivery = { path = "../delivery/core" }
 bridgething-host-gateway = { path = "../host-gateway" }
 hex = "0.4.3"
 proptest = "1.11.0"

@@ -142,6 +142,21 @@ impl AssetCache {
     rx.await.map_err(|_| AssetError::CacheClosed)
   }
 
+  #[cfg(feature = "test-tap")]
+  pub async fn is_disk_pinned(&self, id: &str) -> Result<bool, AssetError> {
+    let (reply, rx) = oneshot::channel();
+    self
+      .inner
+      .cmd_tx
+      .send(actor::Command::IsDiskPinned {
+        id: id.to_string(),
+        reply,
+      })
+      .await
+      .map_err(|_| AssetError::CacheClosed)?;
+    rx.await.map_err(|_| AssetError::CacheClosed)
+  }
+
   pub async fn get(&self, id: &str) -> Result<Option<CachedAsset>, AssetError> {
     let (reply, rx) = oneshot::channel();
     self

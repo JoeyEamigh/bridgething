@@ -54,17 +54,23 @@ pub struct Harness {
 
 impl Harness {
   pub async fn start() -> Result<Self> {
-    Self::start_inner(false).await
+    Self::start_inner(StockBundle::None).await
   }
 
   pub async fn start_with_stock_webapp() -> Result<Self> {
-    Self::start_inner(true).await
+    Self::start_inner(StockBundle::Dist).await
   }
 
-  async fn start_inner(provision_stock: bool) -> Result<Self> {
+  pub async fn start_with_stub_stock_webapp() -> Result<Self> {
+    Self::start_inner(StockBundle::Stub).await
+  }
+
+  async fn start_inner(stock: StockBundle) -> Result<Self> {
     let state_dir = tempfile::tempdir()?;
-    if provision_stock {
-      provision_stock_bundle(state_dir.path())?;
+    match stock {
+      StockBundle::None => {}
+      StockBundle::Dist => provision_stock_bundle(state_dir.path())?,
+      StockBundle::Stub => provision_stub_stock_bundle(state_dir.path())?,
     }
     let reset_rig = Arc::new(FakeResetRig::default());
     let assembled = bridgething::init(headless_config(state_dir.path(), &reset_rig)).await;
@@ -428,6 +434,28 @@ fn headless_config(state_dir: &Path, reset_rig: &Arc<FakeResetRig>) -> DaemonCon
     factory_reset: reset_rig.clone(),
     ..DaemonConfig::headless(state_dir.to_path_buf())
   }
+}
+
+enum StockBundle {
+  None,
+  Dist,
+  Stub,
+}
+
+fn provision_stub_stock_bundle(state_dir: &Path) -> Result<()> {
+  let stock = state_dir.join("builtin").join("stock");
+  std::fs::create_dir_all(&stock)?;
+  std::fs::write(stock.join("index.html"), "<!doctype html><title>stock</title>")?;
+  let manifest = serde_json::json!({
+    "id": bridgething_delivery::webapp::STOCK_WEBAPP_ID,
+    "name": "Spotify",
+    "version": "0.0.0",
+    "role": "standard",
+    "config": [],
+    "permissions": [],
+  });
+  std::fs::write(stock.join("manifest.json"), manifest.to_string())?;
+  Ok(())
 }
 
 fn provision_stock_bundle(state_dir: &Path) -> Result<()> {

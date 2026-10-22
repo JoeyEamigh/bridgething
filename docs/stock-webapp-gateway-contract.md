@@ -186,7 +186,10 @@ The user fills a preset slot by holding a physical preset button. Pressing a fil
 slot's stored context URI, which reaches your gateway as `player.play`.
 
 When the user saves a slot, the daemon sends `library.resolveContext { uri }` and stores what you
-return as the preset's name and artwork:
+return as the preset's name and artwork. It pins that artwork to disk so the preset renders without a
+phone attached. A slot still missing a name or artwork is resolved again each time the webapp loads
+presets. Answer within five seconds, and reply with an error rather than all nulls when you cannot
+resolve the URI:
 
 ```ts
 type ContextResolveReply = {

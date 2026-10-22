@@ -39,6 +39,8 @@ pub use bluetooth::{Address, Iap2Event, Iap2InjectTx, Iap2OutboundTapTx, Iap2Tra
 use bluetooth::{BluetoothBringup, BluetoothDeps, BluetoothManager};
 use capabilities::CapabilitiesRegistry;
 #[cfg(feature = "test-tap")]
+pub use chrome::ChromeCommand;
+#[cfg(feature = "test-tap")]
 pub use handler::client::{ClientMode, PossibleSendMsg};
 use handler::{ClientHandler, GatewayHandler};
 use libbridgething::{
@@ -398,6 +400,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     state.bus.clone(),
   );
   spawn_next_art_warmer(state.clone(), bluetooth.clone());
+  spawn_stock_preset_repair(state.clone(), bluetooth.clone());
   spawn_primary_companion_resync(state.authority.clone(), bluetooth.clone());
   spawn_asset_event_forwarder(state.assets.subscribe(), state.bus.clone());
 
@@ -804,6 +807,24 @@ fn spawn_next_art_warmer(state: State, bluetooth: bluetooth::BluetoothMan) {
       }
       if rx.changed().await.is_err() {
         break;
+      }
+    }
+  });
+}
+
+fn spawn_stock_preset_repair(state: State, bluetooth: bluetooth::BluetoothMan) {
+  let mut rx = state.peers.watch_snapshot();
+  tokio::spawn(async move {
+    let mut connected = state.gateway_info().is_some();
+    while rx.changed().await.is_ok() {
+      rx.borrow_and_update();
+      let now = state.gateway_info().is_some();
+      let arrived = now && !connected;
+      connected = now;
+      if arrived {
+        let state = state.clone();
+        let bluetooth = bluetooth.clone();
+        tokio::spawn(async move { stock::presets::repair_for_stock(&state, &bluetooth).await });
       }
     }
   });

@@ -294,9 +294,10 @@ impl VoiceHandler {
       VoiceDispatchErrorCode::PlaybackFailed,
       "nothing is playing to save".into(),
     ))?;
-    crate::stock::presets::upsert_many(
-      &self.handle.state.kv,
-      &[libbridgething::stock::StockPreset {
+    crate::stock::presets::save(
+      &self.handle.state,
+      &self.handle.bluetooth,
+      vec![libbridgething::stock::StockPreset {
         slot_index: slot as usize,
         context_uri: context.uri,
         name: context.name,
