@@ -108,7 +108,7 @@ jobs:
         with:
           tool: cargo-zigbuild
 
-      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile --filter './' --filter '@bridgething/core-node'
 
       - name: build the addon
         shell: bash
@@ -145,7 +145,7 @@ jobs:
           npm install -g npm@latest
           npm --version
 
-      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile --filter './' --filter '@bridgething/core-node'
 
       - name: align the addon version with the workspace
         working-directory: crates/delivery/napi

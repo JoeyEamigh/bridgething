@@ -144,7 +144,7 @@ jobs:
           name: ffmpeg-sidecar-${{ matrix.sidecar }}
           path: desktop/src-tauri/binaries
 
-      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile --filter './' --filter '@bridgething/desktop-frontend'
 
       - name: build the frontend and its workspace deps
         run: bunx turbo run build --filter='@bridgething/desktop-frontend...'
