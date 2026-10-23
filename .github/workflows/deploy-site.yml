@@ -59,6 +59,17 @@ jobs:
           set -euo pipefail
           curl -fsSL https://apps.bridgething.com/catalog.json -o apps/catalog.json || \
             echo "no published catalog yet; the store will render its empty state"
+      - name: build the shell easter egg from the published stable image
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends zchunk
+          image=$(jq -r '.channels.stable.latest | split("+image.")[1]' manifest/fixture.json)
+          ext4="$RUNNER_TEMP/bridgething-prod-image-${image}.ext4"
+          curl -fsSL "https://ota.bridgething.com/images/stable/${image}/bridgething-prod-image.zck" -o "$RUNNER_TEMP/rootfs.zck"
+          unzck --stdout "$RUNNER_TEMP/rootfs.zck" >"$ext4"
+          rm "$RUNNER_TEMP/rootfs.zck"
+          bun run shell-fs:build "$ext4"
       - run: bun run build
       - name: deploy
         run: bunx wrangler deploy
