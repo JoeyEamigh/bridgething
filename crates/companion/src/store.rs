@@ -11,7 +11,7 @@ pub fn stored<T: DeserializeOwned>(path: &Path) -> Option<T> {
 }
 
 pub struct JsonFile<T> {
-  path: PathBuf,
+  path: Option<PathBuf>,
   noun: &'static str,
   held: Mutex<T>,
 }
@@ -19,7 +19,15 @@ pub struct JsonFile<T> {
 impl<T: Serialize> JsonFile<T> {
   pub fn new(path: PathBuf, noun: &'static str, held: T) -> Self {
     Self {
-      path,
+      path: Some(path),
+      noun,
+      held: Mutex::new(held),
+    }
+  }
+
+  pub fn in_memory(noun: &'static str, held: T) -> Self {
+    Self {
+      path: None,
       noun,
       held: Mutex::new(held),
     }
@@ -37,18 +45,22 @@ impl<T: Serialize> JsonFile<T> {
   }
 
   fn flush(&self, held: &T) {
-    let Some(parent) = self.path.parent() else { return };
+    let Some(path) = &self.path else { return };
+    let Some(parent) = path.parent() else { return };
     if let Err(error) = fs::create_dir_all(parent) {
       tracing::warn!(%error, path = %parent.display(), "the {} directory could not be created", self.noun);
       return;
     }
-    match serde_json::to_vec_pretty(held) {
-      Ok(body) => {
-        if let Err(error) = fs::write(&self.path, body) {
-          tracing::warn!(%error, path = %self.path.display(), "the {} could not be written", self.noun);
-        }
+    let body = match serde_json::to_vec_pretty(held) {
+      Ok(body) => body,
+      Err(error) => {
+        tracing::warn!(%error, "the {} could not be serialized", self.noun);
+        return;
       }
-      Err(error) => tracing::warn!(%error, "the {} could not be serialized", self.noun),
+    };
+    let staged = path.with_extension("json.part");
+    if let Err(error) = fs::write(&staged, body).and_then(|()| fs::rename(&staged, path)) {
+      tracing::warn!(%error, path = %path.display(), "the {} could not be written", self.noun);
     }
   }
 }

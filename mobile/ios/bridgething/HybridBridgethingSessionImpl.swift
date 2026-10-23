@@ -138,6 +138,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             return nil
         }
         if let raced { return raced }
+        await inheritHostSettings(companion.session)
         try await companion.start()
         return companion
     }
@@ -159,7 +160,6 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         }
         if localDesired { CompanionLogRelay.shared.setInbox(companion.logInbox()) }
         if deviceDesired { await companion.session.setDeviceLogStreaming(enabled: true) }
-        await replayHostSettings(companion.session)
         connectDevGateway(companion.session)
     }
 
@@ -302,7 +302,6 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     }
 
     public func setProviderPriority(ids: [String]) async {
-        Self.defaults.set(ids, forKey: PrefKey.providerPriority)
         guard let session = try? requireSession() else { return }
         await session.setProviderPriority(ids: ids)
     }
@@ -618,7 +617,6 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     // MARK: - Capability flags + voice model
 
     public func setCapabilityFlags(flags: BridgethingCapabilityFlags) async {
-        Self.saveCapabilityFlags(flags)
         guard let session = try? requireSession() else { return }
         await session.setCapabilityFlags(flags: toCoreCapabilityFlags(flags))
     }
@@ -640,41 +638,36 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     // MARK: - OTA
 
     public func setDeviceAutoResume(deviceId: String, enabled: Bool) async {
-        var map = Self.loadAutoResumeMap()
-        map[deviceId] = enabled
-        Self.defaults.set(map, forKey: PrefKey.autoResume)
         guard let session = try? requireSession() else { return }
         await session.setDeviceAutoResume(deviceId: deviceId, enabled: enabled)
     }
 
     public func isDeviceAutoResumeEnabled(deviceId: String) async -> Bool {
-        Self.loadAutoResumeMap()[deviceId] ?? true
-    }
-
-    private static func loadAutoResumeMap() -> [String: Bool] {
-        defaults.dictionary(forKey: PrefKey.autoResume) as? [String: Bool] ?? [:]
+        guard let session = try? requireSession() else { return true }
+        return session.deviceAutoResume(deviceId: deviceId)
     }
 
     public func setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) async {
-        var map = Self.loadResumeTargetMap()
-        map[deviceId] = target.stringValue
-        Self.defaults.set(map, forKey: PrefKey.resumeTarget)
         guard let session = try? requireSession() else { return }
         await session.setDeviceResumeTarget(deviceId: deviceId, target: toCoreResumeTarget(target))
     }
 
     public func deviceResumeTarget(deviceId: String) async -> BridgethingResumeTarget {
-        Self.loadResumeTargetMap()[deviceId].flatMap { BridgethingResumeTarget(fromString: $0) } ?? .phoneonly
-    }
-
-    private static func loadResumeTargetMap() -> [String: String] {
-        defaults.dictionary(forKey: PrefKey.resumeTarget) as? [String: String] ?? [:]
+        guard let session = try? requireSession() else { return .phoneonly }
+        return toRnResumeTarget(session.deviceResumeTarget(deviceId: deviceId))
     }
 
     public func setOtaPollConfig(config: BridgethingOtaPollConfig?) async {
-        Self.saveOtaPollConfig(config)
         guard let session = try? requireSession() else { return }
         await session.setOtaPollConfig(config: config.map(toCoreOtaPollConfig))
+    }
+
+    public func catalogSources() async throws -> [String] {
+        try requireSession().catalogSources()
+    }
+
+    public func setCatalogSources(urls: [String]) async throws -> [String] {
+        try requireSession().setCatalogSources(urls: urls)
     }
 
     public func checkForOtaUpdate(rootUrl: String) async {
@@ -742,7 +735,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     public func installCompanionUpdate(url: String, filename: String, size: Double, sha256: String) async throws {
         throw SessionError.unsupportedOnPlatform
     }
-    public func forgetCompanionDevice(mac: String) async throws {}
+    public func forgetCompanionDevice(mac: String) async throws {
+        guard let session = try? requireSession() else { return }
+        session.forgetDevice(deviceId: mac)
+    }
     public func isIgnoringBatteryOptimizations() async -> Bool { false }
     public func requestIgnoreBatteryOptimizations() async throws { throw SessionError.unsupportedOnPlatform }
     public func revokeRuntimePermissions(permissions: [String]) async -> Bool { false }
@@ -831,18 +827,28 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         )
     }
 
-    private func replayHostSettings(_ session: CompanionSession) async {
-        await session.setCapabilityFlags(flags: toCoreCapabilityFlags(Self.loadCapabilityFlags()))
-        await session.setOtaPollConfig(config: Self.loadOtaPollConfig().map(toCoreOtaPollConfig))
-        for (deviceId, enabled) in Self.loadAutoResumeMap() {
+    private static func inheritHostSettings(_ session: CompanionSession) async {
+        if defaults.bool(forKey: PrefKey.capsConfigured) {
+            await session.setCapabilityFlags(flags: toCoreCapabilityFlags(loadCapabilityFlags()))
+        }
+        if defaults.bool(forKey: PrefKey.otaConfigured) {
+            await session.setOtaPollConfig(config: toCoreOtaPollConfig(inheritedOtaPollConfig()))
+        }
+        let autoResume = defaults.dictionary(forKey: PrefKey.autoResume) as? [String: Bool] ?? [:]
+        for (deviceId, enabled) in autoResume {
             await session.setDeviceAutoResume(deviceId: deviceId, enabled: enabled)
         }
-        for (deviceId, raw) in Self.loadResumeTargetMap() {
+        let targets = defaults.dictionary(forKey: PrefKey.resumeTarget) as? [String: String] ?? [:]
+        for (deviceId, raw) in targets {
             guard let target = BridgethingResumeTarget(fromString: raw) else { continue }
             await session.setDeviceResumeTarget(deviceId: deviceId, target: toCoreResumeTarget(target))
         }
-        let priority = Self.defaults.stringArray(forKey: PrefKey.providerPriority) ?? []
-        await session.setProviderPriority(ids: priority)
+        if let priority = defaults.stringArray(forKey: PrefKey.providerPriority) {
+            await session.setProviderPriority(ids: priority)
+        }
+        for key in PrefKey.all {
+            defaults.removeObject(forKey: key)
+        }
     }
 
     private static let defaults = UserDefaults.standard
@@ -862,6 +868,11 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         static let otaAutoPush = "bridgething.ota.autoPush"
         static let otaRootUrl = "bridgething.ota.rootUrl"
         static let providerPriority = "bridgething.providerPriority"
+
+        static let all = [
+            capsConfigured, capsGeo, capsNotifications, capsNetFetch, capsNetWs, capsAudioTts, capsVoiceModel,
+            autoResume, resumeTarget, otaConfigured, otaInterval, otaAutoPush, otaRootUrl, providerPriority,
+        ]
     }
 
     private static func loadCapabilityFlags() -> BridgethingCapabilityFlags {
@@ -871,30 +882,18 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
                 voiceModel: true
             )
         }
+        let chosen = { (key: String) in defaults.object(forKey: key) as? Bool ?? true }
         return BridgethingCapabilityFlags(
-            geo: defaults.bool(forKey: PrefKey.capsGeo),
-            notifications: defaults.bool(forKey: PrefKey.capsNotifications),
-            netFetch: defaults.bool(forKey: PrefKey.capsNetFetch),
-            netWs: defaults.bool(forKey: PrefKey.capsNetWs),
-            audioTts: defaults.bool(forKey: PrefKey.capsAudioTts),
-            voiceModel: defaults.bool(forKey: PrefKey.capsVoiceModel)
+            geo: chosen(PrefKey.capsGeo),
+            notifications: chosen(PrefKey.capsNotifications),
+            netFetch: chosen(PrefKey.capsNetFetch),
+            netWs: chosen(PrefKey.capsNetWs),
+            audioTts: chosen(PrefKey.capsAudioTts),
+            voiceModel: chosen(PrefKey.capsVoiceModel)
         )
     }
 
-    private static func saveCapabilityFlags(_ f: BridgethingCapabilityFlags) {
-        defaults.set(true, forKey: PrefKey.capsConfigured)
-        defaults.set(f.geo, forKey: PrefKey.capsGeo)
-        defaults.set(f.notifications, forKey: PrefKey.capsNotifications)
-        defaults.set(f.netFetch, forKey: PrefKey.capsNetFetch)
-        defaults.set(f.netWs, forKey: PrefKey.capsNetWs)
-        defaults.set(f.audioTts, forKey: PrefKey.capsAudioTts)
-        defaults.set(f.voiceModel, forKey: PrefKey.capsVoiceModel)
-    }
-
-    private static func loadOtaPollConfig() -> BridgethingOtaPollConfig? {
-        guard defaults.bool(forKey: PrefKey.otaConfigured) else {
-            return BridgethingOtaPollConfig(intervalSeconds: 3600, autoPush: true, rootUrl: nil)
-        }
+    private static func inheritedOtaPollConfig() -> BridgethingOtaPollConfig {
         let root = defaults.string(forKey: PrefKey.otaRootUrl)
         return BridgethingOtaPollConfig(
             intervalSeconds: defaults.double(forKey: PrefKey.otaInterval),
@@ -902,17 +901,6 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
                 ? true : defaults.bool(forKey: PrefKey.otaAutoPush),
             rootUrl: (root?.isEmpty == false) ? root : nil
         )
-    }
-
-    private static func saveOtaPollConfig(_ config: BridgethingOtaPollConfig?) {
-        guard let config else {
-            defaults.set(false, forKey: PrefKey.otaConfigured)
-            return
-        }
-        defaults.set(true, forKey: PrefKey.otaConfigured)
-        defaults.set(config.intervalSeconds, forKey: PrefKey.otaInterval)
-        defaults.set(config.autoPush, forKey: PrefKey.otaAutoPush)
-        defaults.set(config.rootUrl, forKey: PrefKey.otaRootUrl)
     }
 
     private func emptySnapshot() -> BridgethingSessionSnapshot {
@@ -938,7 +926,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             voiceModel: BridgethingVoiceModelState(
                 status: .absent, receivedBytes: 0, totalBytes: 0, version: nil, error: nil
             ),
-            otaPollConfig: Self.loadOtaPollConfig(),
+            otaPollConfig: nil,
             webapps: [],
             otaRuns: [],
             otaAvailable: [],
@@ -1439,6 +1427,13 @@ private func toCoreResumeTarget(_ target: BridgethingResumeTarget) -> ResumeTarg
     switch target {
     case .phoneonly: .phoneOnly
     case .anyspeaker: .anySpeaker
+    }
+}
+
+private func toRnResumeTarget(_ target: ResumeTarget) -> BridgethingResumeTarget {
+    switch target {
+    case .phoneOnly: .phoneonly
+    case .anySpeaker: .anyspeaker
     }
 }
 

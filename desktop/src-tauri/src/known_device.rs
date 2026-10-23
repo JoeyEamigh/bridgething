@@ -1,8 +1,7 @@
 use std::path::Path;
 
+use bridgething_companion::store::{JsonFile, stored};
 use serde::{Deserialize, Serialize};
-
-use crate::store::{JsonFile, stored};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +39,9 @@ impl KnownDevices {
         .iter()
         .position(|known| known.id == id)
         .or_else(|| held.iter().position(claims));
+      if seat.is_none() && id == url && held.iter().any(|known| known.url == url) {
+        return;
+      }
       if let Some(seat) = seat {
         let folded: Vec<usize> = held
           .iter()
@@ -117,6 +119,30 @@ mod tests {
     assert_eq!(
       held[0].name, "Kitchen Thing",
       "and it keeps everything the url-keyed row had learned"
+    );
+  }
+
+  #[test]
+  fn a_redial_of_an_identified_device_does_not_open_a_second_row() {
+    let dir = tempfile::tempdir().expect("a scratch directory");
+
+    let devices = KnownDevices::open(dir.path());
+    devices.seen(SERIAL, URL, Some("Kitchen Thing"));
+    devices.seen(URL, URL, Some("bridgething-q61r"));
+
+    let held = devices.list();
+    assert_eq!(held.len(), 1, "the address already belongs to a device");
+    assert_eq!(held[0].id, SERIAL);
+    assert_eq!(
+      held[0].name, "Kitchen Thing",
+      "and an unidentified dial does not rename whoever had it"
+    );
+
+    devices.seen("OTHERSERIAL01", URL, None);
+    assert_eq!(
+      devices.list().len(),
+      2,
+      "a different device answering there still gets its own row once it speaks"
     );
   }
 

@@ -27,6 +27,15 @@ export type ExtensionEntry = {
   orphaned: boolean;
 };
 
+export type SelfUpdateState =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'current'; checkedAt: string }
+  | { kind: 'downloading'; version: string; received: number; total: number | null }
+  | { kind: 'ready'; version: string; date: string | null; notes: string | null }
+  | { kind: 'installing'; version: string }
+  | { kind: 'unavailable'; reason: string };
+
 export interface DesktopSession extends CompanionSession {
   readonly host: 'desktop';
 
@@ -81,6 +90,10 @@ export interface DesktopSession extends CompanionSession {
   removeExtension(id: string): Promise<void>;
   openExtensionData(id: string): Promise<void>;
   retryExtensionRuntime(): Promise<void>;
+
+  selfUpdate(): Promise<SelfUpdateState>;
+  checkSelfUpdate(): Promise<void>;
+  applySelfUpdate(): Promise<void>;
 
   setDeviceResumeTarget(target: api.ResumeTarget): Promise<void>;
 }

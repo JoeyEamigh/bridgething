@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { validate } from '@bridgething/catalog';
 import {
-  keyFor,
   normalizeSourceUrl,
   SourceUrlError,
   toCatalogDocument,
@@ -55,10 +54,8 @@ describe('normalizeSourceUrl', () => {
     expect(() => normalizeSourceUrl('not a url')).toThrow(SourceUrlError);
   });
 
-  test('is the kv identity, so two spellings of one url collide', () => {
-    expect(keyFor(normalizeSourceUrl('https://example.com/c.json#a'))).toBe(
-      keyFor(normalizeSourceUrl('https://example.com/c.json')),
-    );
+  test('is the record identity, so two spellings of one url collide', () => {
+    expect(normalizeSourceUrl('https://example.com/c.json#a')).toBe(normalizeSourceUrl('https://example.com/c.json'));
   });
 });
 

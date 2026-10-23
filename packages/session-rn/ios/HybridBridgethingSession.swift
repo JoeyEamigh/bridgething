@@ -68,6 +68,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func deviceResumeTarget(deviceId: String) async -> BridgethingResumeTarget
 
     func setOtaPollConfig(config: BridgethingOtaPollConfig?) async
+    func catalogSources() async throws -> [String]
+    func setCatalogSources(urls: [String]) async throws -> [String]
     func checkForOtaUpdate(rootUrl: String) async
     func fetchOtaManifest(rootUrl: String) async throws -> BridgethingOtaManifest
     func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String) async throws
@@ -570,6 +572,18 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         }
         return Promise.async {
             await (try Self.backend()).setOtaPollConfig(config: unwrapped)
+        }
+    }
+
+    public func catalogSources() throws -> Promise<[String]> {
+        Promise.async {
+            try await (try Self.backend()).catalogSources()
+        }
+    }
+
+    public func setCatalogSources(urls: [String]) throws -> Promise<[String]> {
+        Promise.async {
+            try await (try Self.backend()).setCatalogSources(urls: urls)
         }
     }
 

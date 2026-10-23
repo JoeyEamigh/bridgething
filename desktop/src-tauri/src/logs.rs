@@ -1,17 +1,19 @@
 use std::{
   cell::Cell,
   fmt::Write as _,
-  sync::{
-    Arc, Mutex, OnceLock,
-    atomic::{AtomicBool, Ordering},
-  },
+  path::Path,
+  sync::{Arc, Mutex, OnceLock},
 };
 
-use bridgething_companion::backend::{LogInbox, LogLevel};
+use bridgething_companion::{
+  backend::{LogInbox, LogLevel},
+  store::{JsonFile, stored},
+};
 use tracing_subscriber::{
   EnvFilter,
-  layer::{Context, Layer},
+  layer::{Context, Layer, SubscriberExt as _},
   reload,
+  util::SubscriberInitExt as _,
 };
 
 use crate::hints::DEVICE_TARGET;
@@ -30,38 +32,58 @@ fn quiet() -> String {
     .unwrap_or_else(|| DEFAULT_FILTER.to_owned())
 }
 
-pub fn filter(verbose: bool) -> EnvFilter {
+fn filter(verbose: bool) -> EnvFilter {
   EnvFilter::new(if verbose { VERBOSE_FILTER.to_owned() } else { quiet() })
 }
 
 pub struct Verbosity {
   swap: Box<dyn Fn(bool) + Send + Sync>,
-  verbose: AtomicBool,
+  kept: JsonFile<bool>,
 }
 
 impl Verbosity {
-  pub fn new<S>(handle: reload::Handle<EnvFilter, S>) -> Self
-  where
-    S: 'static,
-  {
+  fn new(kept: JsonFile<bool>, swap: impl Fn(bool) + Send + Sync + 'static) -> Self {
     Self {
-      swap: Box::new(move |verbose| {
-        if let Err(error) = handle.reload(filter(verbose)) {
-          tracing::warn!(%error, "the log filter could not be swapped");
-        }
-      }),
-      verbose: AtomicBool::new(false),
+      swap: Box::new(swap),
+      kept,
     }
   }
 
   pub fn set(&self, verbose: bool) {
     (self.swap)(verbose);
-    self.verbose.store(verbose, Ordering::Relaxed);
+    self.kept.set(verbose);
   }
 
   pub fn get(&self) -> bool {
-    self.verbose.load(Ordering::Relaxed)
+    self.kept.read(|verbose| *verbose)
   }
+}
+
+fn kept(config_dir: Option<&Path>) -> JsonFile<bool> {
+  const NOUN: &str = "log verbosity";
+  match config_dir {
+    Some(dir) => {
+      let path = dir.join("verbose-logging.json");
+      let held = stored(&path).unwrap_or(false);
+      JsonFile::new(path, NOUN, held)
+    }
+    None => JsonFile::in_memory(NOUN, false),
+  }
+}
+
+pub fn install(config_dir: Option<&Path>) -> Arc<Verbosity> {
+  let kept = kept(config_dir);
+  let (layer, handle) = reload::Layer::new(filter(kept.read(|verbose| *verbose)));
+  tracing_subscriber::registry()
+    .with(layer)
+    .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+    .with(RingLayer)
+    .init();
+  Arc::new(Verbosity::new(kept, move |verbose| {
+    if let Err(error) = handle.reload(filter(verbose)) {
+      tracing::warn!(%error, "the log filter could not be swapped");
+    }
+  }))
 }
 
 struct Line {
@@ -103,7 +125,7 @@ pub fn attach(inbox: Arc<LogInbox>) {
   }
 }
 
-pub struct RingLayer;
+struct RingLayer;
 
 impl<S: tracing::Subscriber> Layer<S> for RingLayer {
   fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
@@ -174,5 +196,33 @@ impl tracing::field::Visit for Rendered {
     } else {
       let _ = write!(self.fields, " {}={:?}", field.name(), value);
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn verbose_logging_survives_a_relaunch() {
+    let dir = tempfile::tempdir().expect("a scratch directory");
+    let swapped = Arc::new(Mutex::new(Vec::new()));
+
+    let first = Verbosity::new(kept(Some(dir.path())), {
+      let swapped = Arc::clone(&swapped);
+      move |verbose| swapped.lock().unwrap().push(verbose)
+    });
+    assert!(!first.get(), "a fresh host logs quietly");
+    first.set(true);
+
+    assert_eq!(
+      *swapped.lock().unwrap(),
+      vec![true],
+      "the live filter follows the toggle"
+    );
+    assert!(
+      kept(Some(dir.path())).read(|verbose| *verbose),
+      "the next launch starts verbose"
+    );
   }
 }

@@ -31,14 +31,8 @@ export type SourceRecord = {
 
 export type DirectoryEntry = Omit<SourceRecord, 'note' | 'reviewed_by'>;
 
-export const KEY_PREFIX = 'source:';
-
 export const NAME_MAX_LEN = 120;
 export const DESCRIPTION_MAX_LEN = 400;
-
-export function keyFor(url: string): string {
-  return `${KEY_PREFIX}${url}`;
-}
 
 export function normalizeSourceUrl(raw: string): string {
   const url = normalizeCatalogUrl(raw);
@@ -61,7 +55,9 @@ export function isVisible(record: SourceRecord): boolean {
   return record.status !== 'rejected';
 }
 
-export function byAttestedThenName(a: SourceRecord, b: SourceRecord): number {
+type Ranked = Pick<SourceRecord, 'status' | 'name' | 'url'>;
+
+export function byAttestedThenName(a: Ranked, b: Ranked): number {
   if (a.status !== b.status) {
     if (a.status === 'attested') return -1;
     if (b.status === 'attested') return 1;

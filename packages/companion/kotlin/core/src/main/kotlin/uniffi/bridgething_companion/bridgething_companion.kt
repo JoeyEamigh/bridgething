@@ -2709,6 +2709,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_capability_flags(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_companion_debug(): Int
@@ -2731,7 +2733,13 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_doc(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_device_auto_resume(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_device_identity(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_device_set_nickname(): Int
 
@@ -2746,6 +2754,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_companionsession_download_voice_model(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_forget_device(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc(): Int
 
@@ -2812,6 +2822,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_companionsession_webapp_resource(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_catalog_sources(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_set_catalog_sources(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event(): Int
 
@@ -3326,6 +3340,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_capability_flags(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_check_for_ota_update(
         `ptr`: Long,
         `rootUrl`: RustBuffer.ByValue,
@@ -3390,9 +3409,27 @@ internal object UniffiLib {
         `key`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_device_auto_resume(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_device_identity(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_device_log_snapshot(
         `ptr`: Long,
         `limit`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_device_resume_target(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -3430,6 +3467,12 @@ internal object UniffiLib {
         `ptr`: Long,
         `rootUrl`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_forget_device(
+        `ptr`: Long,
+        `deviceId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_get_webapp_doc(
         `ptr`: Long,
@@ -3618,6 +3661,17 @@ internal object UniffiLib {
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_catalog_sources(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_set_catalog_sources(
+        `ptr`: Long,
+        `urls`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_bridgething_companion_fn_clone_sessioneventsink(
         `handle`: Long,
@@ -5981,6 +6035,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import() != 14729) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_capability_flags() != 49856) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update() != 64188) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -6014,7 +6071,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_doc() != 62193) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_auto_resume() != 21368) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_identity() != 28922) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot() != 3371) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target() != 35275) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_set_nickname() != 14738) {
@@ -6036,6 +6102,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_forget_device() != 17085) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
@@ -6135,6 +6204,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots() != 15167) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_catalog_sources() != 33526) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_catalog_sources() != 7228) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event() != 19676) {
@@ -13288,6 +13363,8 @@ public interface CompanionSessionInterface {
 
     fun `cancelMediaImport`(`ticket`: kotlin.ULong)
 
+    fun `capabilityFlags`(): CapabilityFlags
+
     suspend fun `checkForOtaUpdate`(`rootUrl`: kotlin.String)
 
     fun `companionDebug`(): CompanionDebug
@@ -13328,7 +13405,13 @@ public interface CompanionSessionInterface {
         `key`: kotlin.String,
     )
 
+    fun `deviceAutoResume`(`deviceId`: kotlin.String): kotlin.Boolean
+
+    fun `deviceIdentity`(`deviceId`: kotlin.String): kotlin.String?
+
     fun `deviceLogSnapshot`(`limit`: kotlin.UInt): List<DeviceLogLine>
+
+    fun `deviceResumeTarget`(`deviceId`: kotlin.String): ResumeTarget
 
     suspend fun `deviceSetNickname`(
         `deviceId`: kotlin.String,
@@ -13350,6 +13433,8 @@ public interface CompanionSessionInterface {
     suspend fun `downloadVoiceModel`()
 
     suspend fun `fetchOtaManifest`(`rootUrl`: kotlin.String): OtaDiscoverManifest
+
+    fun `forgetDevice`(`deviceId`: kotlin.String)
 
     suspend fun `getWebappDoc`(
         `deviceId`: kotlin.String,
@@ -13491,6 +13576,10 @@ public interface CompanionSessionInterface {
     ): WebappResourceFile
 
     suspend fun `webappSlots`(`deviceId`: kotlin.String): WebappSlots
+
+    fun `catalogSources`(): List<kotlin.String>
+
+    fun `setCatalogSources`(`urls`: List<kotlin.String>): List<kotlin.String>
 
     companion object
 }
@@ -13698,6 +13787,18 @@ open class CompanionSession :
                 )
             }
         }
+
+    override fun `capabilityFlags`(): CapabilityFlags =
+        FfiConverterTypeCapabilityFlags.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_capability_flags(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `checkForOtaUpdate`(`rootUrl`: kotlin.String) =
@@ -13915,6 +14016,32 @@ open class CompanionSession :
         CompanionException.ErrorHandler,
     )
 
+    override fun `deviceAutoResume`(`deviceId`: kotlin.String): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_auto_resume(
+                        it,
+                        FfiConverterString.lower(`deviceId`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `deviceIdentity`(`deviceId`: kotlin.String): kotlin.String? =
+        FfiConverterOptionalString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_identity(
+                        it,
+                        FfiConverterString.lower(`deviceId`),
+                        _status,
+                    )
+                }
+            },
+        )
+
     override fun `deviceLogSnapshot`(`limit`: kotlin.UInt): List<DeviceLogLine> =
         FfiConverterSequenceTypeDeviceLogLine.lift(
             callWithHandle {
@@ -13922,6 +14049,19 @@ open class CompanionSession :
                     UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_log_snapshot(
                         it,
                         FfiConverterUInt.lower(`limit`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `deviceResumeTarget`(`deviceId`: kotlin.String): ResumeTarget =
+        FfiConverterTypeResumeTarget.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_resume_target(
+                        it,
+                        FfiConverterString.lower(`deviceId`),
                         _status,
                     )
                 }
@@ -14076,6 +14216,17 @@ open class CompanionSession :
             // Error FFI converter
             CompanionException.ErrorHandler,
         )
+
+    override fun `forgetDevice`(`deviceId`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_forget_device(
+                    it,
+                    FfiConverterString.lower(`deviceId`),
+                    _status,
+                )
+            }
+        }
 
     @Throws(CompanionException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -14842,6 +14993,31 @@ open class CompanionSession :
             { FfiConverterTypeWebappSlots.lift(it) },
             // Error FFI converter
             CompanionException.ErrorHandler,
+        )
+
+    override fun `catalogSources`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_catalog_sources(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `setCatalogSources`(`urls`: List<kotlin.String>): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_catalog_sources(
+                        it,
+                        FfiConverterSequenceString.lower(`urls`),
+                        _status,
+                    )
+                }
+            },
         )
 
     companion object {

@@ -1,5 +1,3 @@
-import type { AppEntry, Catalog } from '@bridgething/catalog';
-
 import { DEVICE, peer } from './fixtures';
 import { rig, type Rig } from './harness';
 
@@ -113,70 +111,5 @@ describe('a third-party launcher on the phone', () => {
     expect(
       r.webapps.useWebappsStore.getState().slotsByDevice[DEVICE],
     ).toBeUndefined();
-  });
-});
-
-function app(version: string): AppEntry {
-  return {
-    id: FLOW_ID.toUpperCase(),
-    name: 'FlowState',
-    description: 'a launcher',
-    author: 'someone',
-    icon: null,
-    homepage: null,
-    source: null,
-    versions: [
-      {
-        version,
-        released_at: '2026-05-31T00:00:00Z',
-        download: {
-          url: `https://example.test/r/flowstate/${version}.zip`,
-          size: 4096,
-          sha256: 'a'.repeat(64),
-        },
-        permissions: [],
-        min_libbridgething_version: '0.1.0',
-        changelog: null,
-      },
-    ],
-  };
-}
-
-function serve(version: string): void {
-  const catalog: Catalog = {
-    schema: 'catalog.v1',
-    updated_at: '2026-05-31T00:00:00Z',
-    repo: {
-      name: 'official',
-      description: 'official',
-      homepage: null,
-      icon: null,
-    },
-    apps: [app(version)],
-    recommended_sources: [],
-  };
-  globalThis.fetch = jest.fn((url: string) => {
-    if (url !== OFFICIAL)
-      return Promise.resolve({ ok: false, status: 503, json: () => ({}) });
-    return Promise.resolve({ ok: true, status: 200, json: () => catalog });
-  }) as unknown as typeof fetch;
-}
-
-describe('a third-party launcher and updates', () => {
-  test('a newer version installs itself like any other app', async () => {
-    const r = rig();
-    serve('2.0.0');
-    const calls: unknown[][] = [];
-    r.native.__returns.set('installWebappFromUrl', (...args: unknown[]) => {
-      calls.push(args);
-      return Promise.resolve(null);
-    });
-    r.catalog.startWebappAutoUpdate();
-    connect(r);
-
-    await r.catalog.refreshCatalog();
-    await tick();
-
-    expect(calls).toHaveLength(1);
   });
 });

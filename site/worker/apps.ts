@@ -1,56 +1,59 @@
-import { OFFICIAL_CATALOG_URL, type MergedApps, type MergedCatalog } from '@bridgething/catalog';
-import { byAttestedThenName, isPublished, type SourceRecord } from './directory.ts';
-import { listInstalls, toInstallCounts } from './installs.ts';
-import { fetchCatalogResponse, parseCatalogBody } from './probe.ts';
-import { listSources, type KvLike } from './store.ts';
+import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
+import { byAttestedThenName, toDirectoryView, type SourceStatus } from './directory.ts';
+import { installCountsStatement, toInstallCounts } from './installs.ts';
+import { listSourcesStatement, toRecords } from './sources.ts';
 
-export { OFFICIAL_CATALOG_URL };
-export type { MergedApps, MergedCatalog };
+type MergeRow = { url: string; body: string | null; name: string; status: SourceStatus; check_error: string | null };
 
-export const MAX_MERGED_SOURCES = 1024;
+const UNFETCHED = 'the directory has not fetched this catalog yet';
 
-type Candidate = { url: string; official: boolean; attested: boolean };
+function mergeStatement(db: D1Database): D1PreparedStatement {
+  return db
+    .prepare(
+      `SELECT c.url, c.body, c.name, s.status, c.check_error FROM catalogs c LEFT JOIN sources s ON s.url = c.url
+       WHERE c.url = ?1 OR s.status IN ('listed', 'attested')`,
+    )
+    .bind(OFFICIAL_CATALOG_URL);
+}
 
-function candidates(records: SourceRecord[]): Candidate[] {
-  const published = records
-    .filter(isPublished)
-    .sort(byAttestedThenName)
-    .map(record => ({ url: record.url, official: false, attested: record.status === 'attested' }));
+function merged(rows: MergeRow[], installRows: unknown[], now: string): string {
+  const official = rows.find(row => row.url === OFFICIAL_CATALOG_URL);
+  const community = rows.filter(row => row.url !== OFFICIAL_CATALOG_URL).sort(byAttestedThenName);
+  const ordered = [...(official ? [official] : []), ...community];
 
-  return [
-    { url: OFFICIAL_CATALOG_URL, official: true, attested: true },
-    ...published.filter(entry => entry.url !== OFFICIAL_CATALOG_URL),
+  const catalogs = ordered.flatMap(row => {
+    if (row.body === null) return [];
+    const isOfficial = row === official;
+    const head = JSON.stringify({
+      url: row.url,
+      official: isOfficial,
+      attested: isOfficial || row.status === 'attested',
+    });
+    return [`${head.slice(0, -1)},"catalog":${row.body}}`];
+  });
+
+  const failures = [
+    ...(official ? [] : [{ url: OFFICIAL_CATALOG_URL, reason: UNFETCHED }]),
+    ...ordered.filter(row => row.body === null).map(row => ({ url: row.url, reason: row.check_error ?? UNFETCHED })),
   ];
+  const tail = JSON.stringify({ failures, installs: toInstallCounts(installRows) }).slice(1);
+
+  return `{"updated_at":${JSON.stringify(now)},"catalogs":[${catalogs.join(',')}],${tail}`;
 }
 
-async function fetchOne(
-  candidate: Candidate,
-  fetchImpl: typeof fetch,
-): Promise<{ ok: true; merged: MergedCatalog } | { ok: false; url: string; reason: string }> {
-  const fetched = await fetchCatalogResponse(candidate.url, fetchImpl);
-  if (!fetched.ok) return { ok: false, url: candidate.url, reason: fetched.reason };
-
-  const parsed = await parseCatalogBody(fetched.response, candidate.url);
-  if (!parsed.ok) return { ok: false, url: candidate.url, reason: parsed.reason };
-
-  return { ok: true, merged: { ...candidate, catalog: parsed.catalog } };
+export async function mergedApps(args: { db: D1Database; now: string }): Promise<string> {
+  const { db, now } = args;
+  const [catalogs, installs] = await db.batch([mergeStatement(db), installCountsStatement(db)]);
+  return merged(catalogs!.results as MergeRow[], installs!.results, now);
 }
 
-export async function mergedApps(args: { kv: KvLike; now: string; fetchImpl?: typeof fetch }): Promise<MergedApps> {
-  const { kv, now, fetchImpl = fetch } = args;
-
-  const all = candidates(await listSources(kv));
-  const included = all.slice(0, MAX_MERGED_SOURCES);
-  const skipped = all.slice(MAX_MERGED_SOURCES).map(entry => entry.url);
-
-  const results = await Promise.all(included.map(candidate => fetchOne(candidate, fetchImpl)));
-
-  const catalogs: MergedCatalog[] = [];
-  const failures: { url: string; reason: string }[] = [];
-  for (const result of results) {
-    if (result.ok) catalogs.push(result.merged);
-    else failures.push({ url: result.url, reason: result.reason });
-  }
-
-  return { updated_at: now, catalogs, failures, skipped, installs: toInstallCounts(await listInstalls(kv)) };
+export async function storeData(args: { db: D1Database; now: string }): Promise<string> {
+  const { db, now } = args;
+  const [catalogs, installs, sources] = await db.batch([
+    mergeStatement(db),
+    installCountsStatement(db),
+    listSourcesStatement(db),
+  ]);
+  const apps = merged(catalogs!.results as MergeRow[], installs!.results, now);
+  return `{"apps":${apps},"directory":${JSON.stringify(toDirectoryView(toRecords(sources!.results)))}}`;
 }

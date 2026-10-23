@@ -97,8 +97,15 @@ function makeNative(name: string): FakeNative {
   const returns = new Map<string, unknown>();
   const calls: string[] = [];
   const world = emptySnapshot();
-  if (name === 'BridgethingSession')
+  let catalogSources = ['https://apps.bridgething.com/catalog.json'];
+  if (name === 'BridgethingSession') {
     returns.set('snapshot', () => Promise.resolve({ ...world }));
+    returns.set('catalogSources', () => Promise.resolve([...catalogSources]));
+    returns.set('setCatalogSources', (urls: unknown) => {
+      catalogSources = [...new Set(urls as string[])];
+      return Promise.resolve([...catalogSources]);
+    });
+  }
   const target = {
     __handlers: handlers,
     __returns: returns,

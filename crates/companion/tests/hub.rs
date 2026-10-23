@@ -309,6 +309,7 @@ impl Provider for HubProvider {
 
 fn hub(gateway: Gateway) -> Arc<Hub> {
   let hub = Hub::new(Arc::new(gateway), host(), flags(), false);
+  hub.set_identity_wait(Duration::ZERO);
   hub.start();
   hub
 }
@@ -316,6 +317,7 @@ fn hub(gateway: Gateway) -> Arc<Hub> {
 // a host that can move its own output volume, which a phone cannot
 fn hub_owning_volume(gateway: Gateway) -> Arc<Hub> {
   let hub = Hub::new(Arc::new(gateway), host(), flags(), true);
+  hub.set_identity_wait(Duration::ZERO);
   hub.start();
   hub
 }
@@ -330,6 +332,7 @@ fn hub_on(gateway: Gateway, os_name: &str) -> Arc<Hub> {
     flags(),
     false,
   );
+  hub.set_identity_wait(Duration::ZERO);
   hub.start();
   hub
 }
@@ -1099,19 +1102,19 @@ async fn a_link_flap_after_a_long_connection_does_not_resume() {
 #[tokio::test]
 async fn a_relaunch_moments_after_the_app_died_does_not_resume() {
   let state = tempfile::tempdir().unwrap();
-  let file = state.path().join("peer-presence.json");
+  let file = state.path().join("device-records.json");
   let first = HubProvider::new("spotify", &["spotify"]);
   {
     let (gateway, _peer) = Peer::link();
     let hub = hub(gateway);
-    hub.persist_presence(file.clone());
+    hub.persist_devices(file.clone());
     hub.attach(first.clone()).await.unwrap();
     hub.peer_connected("carthing-1").await;
   }
 
   let (gateway, _peer) = Peer::link();
   let relaunched = hub(gateway);
-  relaunched.persist_presence(file);
+  relaunched.persist_devices(file);
   let provider = HubProvider::new("spotify", &["spotify"]);
   relaunched.attach(provider.clone()).await.unwrap();
   relaunched.peer_connected("carthing-1").await;
@@ -1127,12 +1130,12 @@ async fn a_relaunch_moments_after_the_app_died_does_not_resume() {
 #[tokio::test]
 async fn a_long_connection_stays_present_across_an_app_death() {
   let state = tempfile::tempdir().unwrap();
-  let file = state.path().join("peer-presence.json");
+  let file = state.path().join("device-records.json");
   {
     let (gateway, _peer) = Peer::link();
     let hub = hub(gateway);
     hub.set_auto_resume_absence(Duration::from_millis(300));
-    hub.persist_presence(file.clone());
+    hub.persist_devices(file.clone());
     hub.peer_connected("carthing-1").await;
     tokio::time::sleep(Duration::from_millis(600)).await;
   }
@@ -1140,7 +1143,7 @@ async fn a_long_connection_stays_present_across_an_app_death() {
   let (gateway, _peer) = Peer::link();
   let relaunched = hub(gateway);
   relaunched.set_auto_resume_absence(Duration::from_millis(300));
-  relaunched.persist_presence(file);
+  relaunched.persist_devices(file);
   let provider = HubProvider::new("spotify", &["spotify"]);
   relaunched.attach(provider.clone()).await.unwrap();
   relaunched.peer_connected("carthing-1").await;
@@ -1155,11 +1158,11 @@ async fn a_long_connection_stays_present_across_an_app_death() {
 #[tokio::test]
 async fn a_relaunch_after_a_real_absence_resumes() {
   let state = tempfile::tempdir().unwrap();
-  let file = state.path().join("peer-presence.json");
+  let file = state.path().join("device-records.json");
   {
     let (gateway, _peer) = Peer::link();
     let hub = hub(gateway);
-    hub.persist_presence(file.clone());
+    hub.persist_devices(file.clone());
     hub.peer_connected("carthing-1").await;
     hub.peer_disconnected("carthing-1");
   }
@@ -1168,7 +1171,7 @@ async fn a_relaunch_after_a_real_absence_resumes() {
   let (gateway, _peer) = Peer::link();
   let relaunched = hub(gateway);
   relaunched.set_auto_resume_absence(Duration::from_millis(50));
-  relaunched.persist_presence(file);
+  relaunched.persist_devices(file);
   let provider = HubProvider::new("spotify", &["spotify"]);
   relaunched.attach(provider.clone()).await.unwrap();
   relaunched.peer_connected("carthing-1").await;
@@ -1266,6 +1269,121 @@ async fn a_disabled_device_never_resumes() {
     vec![false],
     "auto-resume off must veto regardless of timing"
   );
+}
+
+#[tokio::test]
+async fn a_choice_follows_the_device_to_a_new_address() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+  hub.identify("ws://bridgething.local:8892/", "serial-1");
+  hub.set_device_auto_resume("ws://bridgething.local:8892/", false);
+  hub.peer_disconnected("ws://bridgething.local:8892/");
+
+  hub.identify("ws://bridgething-0001.local:8892/", "serial-1");
+  hub.peer_connected("ws://bridgething-0001.local:8892/").await;
+
+  assert!(!hub.device_auto_resume("ws://bridgething-0001.local:8892/"));
+  assert_eq!(
+    provider.peer_connects(),
+    vec![false],
+    "the device turned auto-resume off, whatever address it answers at"
+  );
+}
+
+#[tokio::test]
+async fn a_choice_made_before_the_device_identified_moves_onto_its_identity() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  hub.set_device_auto_resume("AA:BB:CC:DD:EE:FF", false);
+  hub.set_device_resume_target("AA:BB:CC:DD:EE:FF", ResumeTarget::PhoneOnly);
+
+  hub.identify("AA:BB:CC:DD:EE:FF", "serial-1");
+
+  assert_eq!(hub.device_identity("AA:BB:CC:DD:EE:FF").as_deref(), Some("serial-1"));
+  assert_eq!(hub.auto_resume_prefs().get("serial-1"), Some(&false));
+  assert_eq!(
+    hub.resume_target_prefs().get("serial-1"),
+    Some(&ResumeTarget::PhoneOnly)
+  );
+  assert!(
+    !hub.auto_resume_prefs().contains_key("AA:BB:CC:DD:EE:FF"),
+    "the link-keyed record is absorbed, not left behind"
+  );
+}
+
+#[tokio::test]
+async fn the_connect_decision_waits_for_the_device_to_say_who_it_is() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  hub.set_identity_wait(Duration::from_secs(5));
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+  hub.identify("old-address", "serial-1");
+  hub.set_device_auto_resume("old-address", false);
+  hub.peer_disconnected("old-address");
+
+  let connecting = {
+    let hub = hub.clone();
+    tokio::spawn(async move { hub.peer_connected("new-address").await })
+  };
+  tokio::time::sleep(Duration::from_millis(50)).await;
+  assert!(
+    provider.peer_connects().is_empty(),
+    "nothing is decided before the version arrives"
+  );
+  hub.identify("new-address", "serial-1");
+  connecting.await.unwrap();
+
+  assert_eq!(provider.peer_connects(), vec![false]);
+}
+
+#[tokio::test]
+async fn a_device_without_a_serial_is_known_by_its_link_without_waiting() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  hub.set_identity_wait(Duration::from_secs(5));
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+
+  hub.identify("dev-gateway", "");
+  tokio::time::timeout(Duration::from_millis(500), hub.peer_connected("dev-gateway"))
+    .await
+    .expect("an empty serial is still an answer");
+
+  assert_eq!(provider.peer_connects(), vec![true]);
+  assert_eq!(hub.device_identity("dev-gateway").as_deref(), Some("dev-gateway"));
+}
+
+#[tokio::test]
+async fn a_second_link_to_a_device_already_up_does_not_resume_again() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  let provider = HubProvider::new("spotify", &["spotify"]);
+  hub.attach(provider.clone()).await.unwrap();
+  hub.identify("bluetooth", "serial-1");
+  hub.peer_connected("bluetooth").await;
+
+  hub.identify("usb", "serial-1");
+  hub.peer_connected("usb").await;
+
+  assert_eq!(provider.peer_connects(), vec![true, false]);
+}
+
+#[tokio::test]
+async fn forgetting_a_device_drops_its_choices() {
+  let (gateway, _peer) = Peer::link();
+  let hub = hub(gateway);
+  hub.identify("link", "serial-1");
+  hub.set_device_auto_resume("link", false);
+  hub.peer_disconnected("link");
+
+  hub.forget_device("serial-1");
+
+  assert!(hub.device_auto_resume("link"), "a forgotten device is back to defaults");
+  assert!(hub.auto_resume_prefs().is_empty());
+  assert_eq!(hub.device_identity("link"), None);
 }
 
 // ---- registry ----------------------------------------------------------------

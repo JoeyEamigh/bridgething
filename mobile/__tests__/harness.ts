@@ -24,7 +24,6 @@ const MMKV_KEYS = [
   'setup.completed',
   'setup.voiceIntro',
   'device.ledger',
-  'catalog.sources',
   'companionUpdate.dismissed',
 ];
 

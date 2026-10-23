@@ -10,7 +10,7 @@ import {
 import { keyed, type Store } from './resource.ts';
 
 const EMPTY: CatalogSnapshot = { catalogs: [], directory: null, failures: [] };
-const NO_DIRECTORY: MergedApps = { updated_at: '', catalogs: [], failures: [], skipped: [], installs: [] };
+const NO_DIRECTORY: MergedApps = { updated_at: '', catalogs: [], failures: [], installs: [] };
 
 const snapshots = keyed<CatalogSnapshot>(EMPTY);
 const single = keyed<Catalog | null>(null);

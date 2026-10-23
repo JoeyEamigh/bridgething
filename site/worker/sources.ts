@@ -1,126 +1,146 @@
-import type { Catalog } from '@bridgething/catalog';
-import {
-  clamp,
-  DESCRIPTION_MAX_LEN,
-  NAME_MAX_LEN,
-  normalizeSourceUrl,
-  SourceUrlError,
-  type SourceRecord,
-  type SourceStatus,
-} from './directory.ts';
-import { probeSource } from './probe.ts';
-import { readSource, writeSource, type KvLike } from './store.ts';
+import { normalizeSourceUrl, SourceUrlError, type SourceRecord, type SourceStatus } from './directory.ts';
+import { storeCatalog } from './catalogs.ts';
+import { probeCatalog } from './probe.ts';
 
-export type SubmitOutcome =
-  | { ok: true; created: boolean; record: SourceRecord; catalog: Catalog }
-  | { ok: false; status: number; reason: string };
+type SourceRow = {
+  url: string;
+  name: string;
+  description: string | null;
+  homepage: string | null;
+  icon: string | null;
+  status: SourceStatus;
+  submitted_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  app_count: number;
+  checked_at: string;
+  check_ok: number;
+  check_error: string | null;
+  downloads_cors_ok: number | null;
+  note: string | null;
+};
 
-export async function submitSource(args: {
-  kv: KvLike;
-  rawUrl: string;
-  now: string;
-  fetchImpl?: typeof fetch;
-}): Promise<SubmitOutcome> {
-  const { kv, rawUrl, now, fetchImpl } = args;
+const SOURCE_SELECT = `SELECT s.url, c.name, c.description, c.homepage, c.icon, s.status, s.submitted_at, s.reviewed_at,
+  s.reviewed_by, c.app_count, c.checked_at, c.check_ok, c.check_error, c.downloads_cors_ok, s.note
+  FROM sources s JOIN catalogs c ON c.url = s.url`;
 
-  let url: string;
+function toRecord(row: SourceRow): SourceRecord {
+  return {
+    url: row.url,
+    name: row.name,
+    description: row.description,
+    homepage: row.homepage,
+    icon: row.icon,
+    status: row.status,
+    submitted_at: row.submitted_at,
+    reviewed_at: row.reviewed_at,
+    reviewed_by: row.reviewed_by,
+    app_count: row.app_count,
+    last_checked_at: row.checked_at,
+    last_check_ok: row.check_ok === 1,
+    last_check_error: row.check_error,
+    downloads_cors_ok: row.downloads_cors_ok === null ? null : row.downloads_cors_ok === 1,
+    note: row.note,
+  };
+}
+
+export function listSourcesStatement(db: D1Database): D1PreparedStatement {
+  return db.prepare(SOURCE_SELECT);
+}
+
+export function toRecords(rows: unknown[]): SourceRecord[] {
+  return (rows as SourceRow[]).map(toRecord);
+}
+
+export async function listSources(db: D1Database): Promise<SourceRecord[]> {
+  return toRecords((await listSourcesStatement(db).all()).results);
+}
+
+export async function readSource(db: D1Database, url: string): Promise<SourceRecord | null> {
+  const row = await db.prepare(`${SOURCE_SELECT} WHERE s.url = ?1`).bind(url).first<SourceRow>();
+  return row === null ? null : toRecord(row);
+}
+
+type Failure = { ok: false; status: number; reason: string };
+
+function normalized(rawUrl: string): { ok: true; url: string } | Failure {
   try {
-    url = normalizeSourceUrl(rawUrl);
+    return { ok: true, url: normalizeSourceUrl(rawUrl) };
   } catch (err) {
     if (err instanceof SourceUrlError) return { ok: false, status: 400, reason: err.message };
     throw err;
   }
+}
 
-  const existing = await readSource(kv, url);
+export type SubmitOutcome = { ok: true; created: boolean; record: SourceRecord } | Failure;
+
+export async function submitSource(args: {
+  db: D1Database;
+  rawUrl: string;
+  now: string;
+  admit: (existing: SourceRecord | null, url: string) => Promise<Failure | null>;
+  fetchImpl?: typeof fetch;
+}): Promise<SubmitOutcome> {
+  const { db, rawUrl, now, admit, fetchImpl } = args;
+
+  const target = normalized(rawUrl);
+  if (!target.ok) return target;
+  const { url } = target;
+
+  const existing = await readSource(db, url);
   if (existing?.status === 'rejected') {
     return { ok: false, status: 403, reason: `${url} was removed from the directory and cannot be resubmitted` };
   }
 
-  const probe = await probeSource(url, fetchImpl);
+  const refused = await admit(existing, url);
+  if (refused !== null) return refused;
+
+  const probe = await probeCatalog(url, { fetchImpl });
   if (!probe.ok) return { ok: false, status: 422, reason: probe.reason };
+  if (!probe.changed) throw new Error('an unconditional probe always reports a change');
 
-  const { catalog, downloadsCorsOk } = probe;
-  const record: SourceRecord = {
-    url,
-    name: clamp(catalog.repo.name, NAME_MAX_LEN),
-    description: catalog.repo.description ? clamp(catalog.repo.description, DESCRIPTION_MAX_LEN) : null,
-    homepage: catalog.repo.homepage,
-    icon: catalog.repo.icon,
-    status: existing?.status ?? 'quarantined',
-    submitted_at: existing?.submitted_at ?? now,
-    reviewed_at: existing?.reviewed_at ?? null,
-    reviewed_by: existing?.reviewed_by ?? null,
-    app_count: catalog.apps.length,
-    last_checked_at: now,
-    last_check_ok: true,
-    last_check_error: null,
-    downloads_cors_ok: downloadsCorsOk,
-    note: existing?.note ?? null,
-  };
+  await db.batch([
+    storeCatalog(db, url, probe, now),
+    db
+      .prepare(
+        `INSERT INTO sources (url, status, submitted_at) VALUES (?1, 'listed', ?2)
+         ON CONFLICT (url) DO NOTHING`,
+      )
+      .bind(url, now),
+  ]);
 
-  await writeSource(kv, record);
-  return { ok: true, created: existing === null, record, catalog };
+  const record = await readSource(db, url);
+  if (record === null) throw new Error(`${url} vanished between its write and its read`);
+  return { ok: true, created: existing === null, record };
 }
 
-export async function recheckSource(args: {
-  kv: KvLike;
-  record: SourceRecord;
-  now: string;
-  fetchImpl?: typeof fetch;
-}): Promise<SourceRecord> {
-  const { kv, record, now, fetchImpl } = args;
-  const probe = await probeSource(record.url, fetchImpl);
-
-  const updated: SourceRecord = probe.ok
-    ? {
-        ...record,
-        name: clamp(probe.catalog.repo.name, NAME_MAX_LEN),
-        description: probe.catalog.repo.description ? clamp(probe.catalog.repo.description, DESCRIPTION_MAX_LEN) : null,
-        homepage: probe.catalog.repo.homepage,
-        icon: probe.catalog.repo.icon,
-        app_count: probe.catalog.apps.length,
-        last_checked_at: now,
-        last_check_ok: true,
-        last_check_error: null,
-        downloads_cors_ok: probe.downloadsCorsOk,
-      }
-    : { ...record, last_checked_at: now, last_check_ok: false, last_check_error: probe.reason };
-
-  await writeSource(kv, updated);
-  return updated;
-}
-
-export type ModerateOutcome = { ok: true; record: SourceRecord } | { ok: false; status: number; reason: string };
+export type ModerateOutcome = { ok: true; record: SourceRecord } | Failure;
 
 export async function setSourceStatus(args: {
-  kv: KvLike;
+  db: D1Database;
   rawUrl: string;
   status: SourceStatus;
   reviewedBy: string;
   note?: string | null;
   now: string;
 }): Promise<ModerateOutcome> {
-  const { kv, rawUrl, status, reviewedBy, note, now } = args;
+  const { db, rawUrl, status, reviewedBy, note, now } = args;
 
-  let url: string;
-  try {
-    url = normalizeSourceUrl(rawUrl);
-  } catch (err) {
-    if (err instanceof SourceUrlError) return { ok: false, status: 400, reason: err.message };
-    throw err;
-  }
+  const target = normalized(rawUrl);
+  if (!target.ok) return target;
+  const { url } = target;
 
-  const existing = await readSource(kv, url);
-  if (!existing) return { ok: false, status: 404, reason: `${url} is not in the directory` };
+  const updated = await db
+    .prepare(
+      `UPDATE sources SET status = ?2, reviewed_at = ?3, reviewed_by = ?4,
+         note = CASE WHEN ?5 THEN ?6 ELSE note END
+       WHERE url = ?1 RETURNING url`,
+    )
+    .bind(url, status, now, reviewedBy, Number(note !== undefined), note ?? null)
+    .first<{ url: string }>();
+  if (updated === null) return { ok: false, status: 404, reason: `${url} is not in the directory` };
 
-  const record: SourceRecord = {
-    ...existing,
-    status,
-    reviewed_at: now,
-    reviewed_by: reviewedBy,
-    note: note === undefined ? existing.note : note,
-  };
-
-  await writeSource(kv, record);
+  const record = await readSource(db, url);
+  if (record === null) throw new Error(`${url} vanished between its write and its read`);
   return { ok: true, record };
 }

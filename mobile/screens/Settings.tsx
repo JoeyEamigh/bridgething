@@ -16,6 +16,7 @@ import { NotificationAccessRow } from '../components/permissions/NotificationAcc
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionHeader } from '../components/SectionHeader';
+import { UpdatesSection } from '../components/UpdatesSection';
 import { VoiceSection } from '../components/VoiceSection';
 import {
   CAPABILITIES,
@@ -113,6 +114,8 @@ export function SettingsScreen({ navigation }: Props) {
       </View>
 
       <VoiceSection />
+
+      <UpdatesSection />
 
       <View className="mb-8">
         <SectionHeader title="diagnostics" />

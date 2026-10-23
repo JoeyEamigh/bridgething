@@ -1,98 +1,96 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
-type Fake = {
-  available: boolean;
-  version: string;
-  date?: string;
-  body?: string;
-  download: () => Promise<void>;
-  install: () => Promise<void>;
-};
+import type { Invalidation } from '@bridgething/ui';
 
-let offered: Fake | null = null;
-let refuse: Error | null = null;
-let installed = 0;
-let restarted = 0;
+import type { DesktopSession, SelfUpdateState } from '../desktop.ts';
+import { postponedUpdate, promptedUpdate, seed, selfUpdate } from './session.ts';
 
-mock.module('@tauri-apps/plugin-updater', () => ({
-  check: async () => {
-    if (refuse) throw refuse;
-    return offered;
-  },
-}));
+class Host {
+  held: SelfUpdateState = { kind: 'current', checkedAt: '2026-10-22T17:47:58Z' };
+  pulls = 0;
+  private watchers = new Set<(event: Invalidation) => void>();
 
-mock.module('../lib/lifecycle.ts', () => ({
-  restart: async () => {
-    restarted += 1;
-  },
-  quit: async () => {},
-}));
+  session(): DesktopSession {
+    const answer =
+      <T>(value: T) =>
+      () =>
+        Promise.resolve(value);
+    return {
+      tier: 'companion',
+      host: 'desktop',
+      subscribe: (listener: (event: Invalidation) => void) => {
+        this.watchers.add(listener);
+        return () => this.watchers.delete(listener);
+      },
+      selfUpdate: () => {
+        this.pulls += 1;
+        return Promise.resolve(this.held);
+      },
+      extensions: answer([]),
+      snapshot: answer(null),
+      endpoints: answer([]),
+      capabilitySupport: answer(null),
+      defaultGateway: answer(null),
+      route: answer(null),
+      catalogSources: answer([]),
+      knownDevices: answer([]),
+      selectedDevice: answer(null),
+      webapps: answer([]),
+      webappActive: answer(null),
+      webappSlots: answer({ launcher: null, overlay: null }),
+      deviceAutoResume: answer(true),
+      deviceResumeTarget: answer('anySpeaker'),
+      deviceLogStreaming: answer(false),
+      debugLogging: answer(false),
+    } as unknown as DesktopSession;
+  }
 
-const { applySelfUpdate, checkSelfUpdate, selfUpdate } = await import('./self-update.ts');
-
-function available(version: string): Fake {
-  return {
-    available: true,
-    version,
-    download: async () => {},
-    install: async () => {
-      installed += 1;
-    },
-  };
+  hint(topic: Invalidation['topic'], next: SelfUpdateState): void {
+    this.held = next;
+    for (const watcher of this.watchers) watcher({ topic, id: null });
+  }
 }
 
-describe('the desktop app keeping itself current', () => {
-  beforeEach(() => {
-    selfUpdate.value = { kind: 'idle' };
-    offered = null;
-    refuse = null;
-    installed = 0;
-    restarted = 0;
+async function settle(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+describe('the self-update store', () => {
+  let host: Host;
+
+  beforeEach(async () => {
+    host = new Host();
+    selfUpdate.data.value = { kind: 'idle' };
+    await seed(host.session());
   });
 
-  test('a published build is fetched on sight, without waiting to be asked', async () => {
-    offered = available('0.9.0');
-
-    await checkSelfUpdate();
-
-    expect(selfUpdate.value.kind).toBe('ready');
+  test('the shell state is there before the first render, never fetched on mount', () => {
+    expect(host.pulls).toBe(1);
+    expect(selfUpdate.data.value.kind).toBe('current');
   });
 
-  test('nothing newer leaves the app saying so', async () => {
-    await checkSelfUpdate();
+  test('a build the shell fetched in the background shows up off the hint', async () => {
+    host.hint('self-update', { kind: 'ready', version: '0.15.0', date: null, notes: null });
+    await settle();
 
-    expect(selfUpdate.value.kind).toBe('current');
+    expect(selfUpdate.data.value).toEqual({ kind: 'ready', version: '0.15.0', date: null, notes: null });
   });
 
-  test('a fetched build is applied and the app comes back on it', async () => {
-    offered = available('0.9.0');
-    await checkSelfUpdate();
+  test('a ready build prompts until it is put off, and a newer one prompts again', async () => {
+    postponedUpdate.value = null;
+    host.hint('self-update', { kind: 'ready', version: '0.15.0', date: null, notes: null });
+    await settle();
+    expect(promptedUpdate.value?.version).toBe('0.15.0');
 
-    await applySelfUpdate();
+    postponedUpdate.value = '0.15.0';
+    host.hint('self-update', { kind: 'ready', version: '0.15.0', date: null, notes: null });
+    await settle();
+    expect(promptedUpdate.value).toBeNull();
+    expect(selfUpdate.data.value.kind).toBe('ready');
 
-    expect(installed).toBe(1);
-    expect(restarted).toBe(1);
-  });
-
-  test('a build already waiting is not re-fetched by the next sweep', async () => {
-    offered = available('0.9.0');
-    await checkSelfUpdate();
-    offered = available('1.0.0');
-
-    await checkSelfUpdate();
-
-    expect(selfUpdate.value.kind === 'ready' && selfUpdate.value.update.version).toBe('0.9.0');
-  });
-
-  test('a feed that cannot be reached is reported, and the next sweep tries again', async () => {
-    refuse = new Error('no signing key yet');
-    await checkSelfUpdate();
-    expect(selfUpdate.value).toEqual({ kind: 'unavailable', reason: 'no signing key yet' });
-
-    refuse = null;
-    offered = available('0.9.0');
-    await checkSelfUpdate();
-
-    expect(selfUpdate.value.kind).toBe('ready');
+    host.hint('self-update', { kind: 'ready', version: '0.16.0', date: null, notes: null });
+    await settle();
+    expect(promptedUpdate.value?.version).toBe('0.16.0');
   });
 });

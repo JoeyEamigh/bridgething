@@ -2,7 +2,7 @@ import type * as api from '@bridgething/companion-types';
 import type { Endpoint, Topic } from '@bridgething/ui';
 import { computed, signal, type ReadonlySignal } from '@preact/signals';
 
-import type { DesktopSession, ExtensionEntry, KnownDevice } from '../desktop.ts';
+import type { DesktopSession, ExtensionEntry, KnownDevice, SelfUpdateState } from '../desktop.ts';
 import { keyed, resource, type Store } from './resource.ts';
 
 let attached: DesktopSession | null = null;
@@ -22,6 +22,12 @@ export const knownDevices = resource<KnownDevice[]>([], () => bound().knownDevic
 export const selectedDevice = resource<string | null>(null, () => bound().selectedDevice());
 export const debugLogging = resource(false, () => bound().debugLogging());
 export const extensions = resource<ExtensionEntry[]>([], () => bound().extensions());
+export const selfUpdate = resource<SelfUpdateState>({ kind: 'idle' }, () => bound().selfUpdate());
+export const postponedUpdate = signal<string | null>(null);
+export const promptedUpdate: ReadonlySignal<Extract<SelfUpdateState, { kind: 'ready' }> | null> = computed(() => {
+  const held = selfUpdate.data.value;
+  return held.kind === 'ready' && held.version !== postponedUpdate.value ? held : null;
+});
 
 export const webapps = resource<api.WebappInfo[]>([], () => bound().webapps());
 export const webappActive = resource<api.ActiveWebapp | null>(null, () => bound().webappActive());
@@ -105,6 +111,7 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   'ota-poll': [snapshot],
   logs: [logStreaming, { refresh: logs.refreshAll }],
   extensions: [extensions],
+  'self-update': [selfUpdate],
 };
 
 export async function seed(session: DesktopSession): Promise<void> {
@@ -120,6 +127,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     knownDevices.refresh(),
     selectedDevice.refresh(),
     extensions.refresh(),
+    selfUpdate.refresh(),
   ]);
 
   void Promise.all([

@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod lyrics;
 pub mod nlu;
 pub mod ota;
@@ -5,7 +6,7 @@ pub mod session;
 
 use std::sync::Arc;
 
-use bridgething_delivery::bundle::fetch::{ArtifactFetch, DownloadRequest, HttpArtifactFetch, sha256_hex};
+use bridgething_delivery::bundle::fetch::{ArtifactFetch, DownloadRequest, HttpArtifactFetch};
 use bridgething_io::HttpExecutor;
 pub use session::*;
 
@@ -339,6 +340,10 @@ impl CompanionSession {
   pub fn companion_debug(&self) -> CompanionDebug {
     self.session.debug()
   }
+
+  pub fn capability_flags(&self) -> CapabilityFlags {
+    self.session.capability_flags()
+  }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -351,8 +356,24 @@ impl CompanionSession {
     self.session.set_device_auto_resume(&device_id, enabled);
   }
 
+  pub fn device_auto_resume(&self, device_id: String) -> bool {
+    self.session.device_auto_resume(&device_id)
+  }
+
   pub fn default_resume_target(&self) -> ResumeTarget {
     self.session.default_resume_target()
+  }
+
+  pub fn device_resume_target(&self, device_id: String) -> ResumeTarget {
+    self.session.device_resume_target(&device_id)
+  }
+
+  pub fn device_identity(&self, device_id: String) -> Option<String> {
+    self.session.device_identity(&device_id)
+  }
+
+  pub fn forget_device(&self, device_id: String) {
+    self.session.forget_device(&device_id);
   }
 
   pub async fn set_device_resume_target(&self, device_id: String, target: ResumeTarget) {
@@ -460,18 +481,14 @@ impl CompanionSession {
     self.gateway_checked(&device_id)?;
     let path = self
       .session
-      .fetch()
-      .download(DownloadRequest {
-        filename: format!("{}.zip", sha256_hex(url.as_bytes())),
-        dir: self.session.cache_dir().join("webapp-install"),
-        asset: url.clone(),
-        url,
-        expected: expected.map(|digest| bridgething_delivery::bundle::ArtifactDigest {
+      .ota()
+      .download_webapp(
+        &url,
+        expected.map(|digest| bridgething_delivery::bundle::ArtifactDigest {
           size: digest.size,
-          sha256: digest.sha256.to_lowercase(),
+          sha256: digest.sha256,
         }),
-        progress: None,
-      })
+      )
       .await
       .map_err(|failure| CompanionError::Device(failure.to_string()))?;
     let installed = self

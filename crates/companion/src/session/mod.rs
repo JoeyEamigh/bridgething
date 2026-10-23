@@ -1,4 +1,5 @@
 mod blobs;
+mod catalog;
 pub mod handlers;
 mod imports;
 pub mod link;
@@ -6,6 +7,7 @@ pub mod models;
 mod network;
 pub mod observer;
 pub mod ota;
+mod settings;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -67,8 +69,9 @@ use crate::{
   },
   session::{
     handlers::Peer, link::LinkConnector, models::VoiceModels, network::NetworkLink, observer::SessionObserver,
-    ota::OtaLink,
+    ota::OtaLink, settings::HostSettings,
   },
+  store::JsonFile,
   voice::{
     controller::{ArmedModel, VoiceController, VoiceControllerConfig},
     dispatcher::{VoiceDispatcher, VoiceDispatcherDeps},
@@ -94,9 +97,19 @@ enum LogTap {
   Open(String),
 }
 
+fn poll_config(config: OtaPollConfig) -> bridgething_delivery::ota::poll::OtaPollConfig {
+  bridgething_delivery::ota::poll::OtaPollConfig {
+    root_url: config
+      .root_url
+      .unwrap_or_else(|| bridgething_delivery::ota::poll::OtaPollConfig::default().root_url),
+    interval_seconds: config.interval_seconds.max(60),
+    auto_push: config.auto_push,
+  }
+}
+
 const LOG_RING_CAPACITY: usize = 2000;
 const COMPANION_UPDATE_DIR: &str = "companion-update";
-const PEER_PRESENCE_FILE: &str = "peer-presence.json";
+const DEVICE_RECORDS_FILE: &str = "device-records.json";
 const BLOB_HANDLES_DIR: &str = "blob-handles";
 const LOG_BACKFILL_LINES: u32 = 1000;
 const LOG_BACKFILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
@@ -173,6 +186,7 @@ pub struct Session {
   caps: Arc<Mutex<CapabilityFlags>>,
   log_stream: Mutex<LogStream>,
   poll_config: Mutex<Option<OtaPollConfig>>,
+  settings: JsonFile<HostSettings>,
   blobs: Arc<FsBlobStore>,
   resource_slots: Arc<FsSlotIndex>,
   handles: Arc<BlobHandles<FsHandleStore>>,
@@ -201,12 +215,18 @@ impl Session {
   ) -> Arc<Self> {
     crate::backend::log::forward_tracing(backends.log.clone());
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
+    let settings = settings::open(std::path::Path::new(&config.state_dir));
+    let recalled = settings.read(Clone::clone);
+    let flags = config
+      .capabilities
+      .overlaid(serde_json::Value::Object(recalled.capability_choices.clone()));
     let ota = OtaService::new(OtaServiceDeps {
       clock: clock.clone(),
       fetch: fetch.clone(),
       cache_dir: std::path::PathBuf::from(&config.cache_dir),
       data_dir: Some(std::path::PathBuf::from(&config.state_dir)),
     });
+    ota.set_catalog_sources(recalled.catalog_sources.clone());
     let models = config
       .model_platform
       .zip(backends.model_validator.clone())
@@ -226,7 +246,7 @@ impl Session {
             ModelPlatform::Windows => BundlePlatform::Windows,
           },
           std::path::PathBuf::from(&config.state_dir),
-          config.capabilities.voice_model,
+          flags.voice_model,
           fetch.clone(),
           policy,
           Arc::new(ForeignModelValidator::new(validator)),
@@ -273,10 +293,11 @@ impl Session {
     let hub = Hub::new(
       broadcast.clone() as Arc<dyn OutboundLink>,
       config.host.clone(),
-      config.capabilities,
+      flags,
       backends.volume.is_some(),
     );
-    hub.persist_presence(std::path::Path::new(&config.state_dir).join(PEER_PRESENCE_FILE));
+    hub.persist_devices(std::path::Path::new(&config.state_dir).join(DEVICE_RECORDS_FILE));
+    hub.set_priority_sync(recalled.provider_priority.clone());
     let extensions = backends.extensions.clone().map(ExtensionDispatcher::new);
     let handles = Arc::new(BlobHandles::new(FsHandleStore::new(cache_dir.join(BLOB_HANDLES_DIR))));
     let normalizer = Arc::new(MediaNormalizer::new(
@@ -286,7 +307,7 @@ impl Session {
     ));
     Arc::new(Self {
       cache,
-      caps: Arc::new(Mutex::new(config.capabilities)),
+      caps: Arc::new(Mutex::new(flags)),
       config,
       backends,
       clock,
@@ -303,9 +324,10 @@ impl Session {
       provider_gate: tokio::sync::Mutex::new(()),
       connected: Mutex::new(HashSet::new()),
       auth: Arc::new(Mutex::new(HashMap::new())),
-      priority: Mutex::new(Vec::new()),
+      priority: Mutex::new(recalled.provider_priority),
       log_stream: Mutex::new(LogStream::default()),
-      poll_config: Mutex::new(None),
+      poll_config: Mutex::new(recalled.ota_poll_config),
+      settings,
       blobs: Arc::new(FsBlobStore::new(cache_dir.join("blobs"))),
       resource_slots: Arc::new(FsSlotIndex::new(cache_dir.join("slots.json"))),
       handles,
@@ -509,6 +531,7 @@ impl Session {
 
   pub async fn set_provider_priority(&self, ids: Vec<String>) {
     *self.priority.lock().unwrap() = ids.clone();
+    self.settings.write(|held| held.provider_priority = ids.clone());
     self.hub.set_priority(ids).await;
     self.providers_changed();
   }
@@ -610,6 +633,9 @@ impl Session {
 
   pub fn start(self: &Arc<Self>) {
     self.hub.start();
+    self
+      .ota
+      .set_poll_config(self.poll_config.lock().unwrap().clone().map(poll_config));
     self.mirror_system_media();
     self.attach_stream();
     if let Some(extensions) = &self.extensions {
@@ -1147,6 +1173,7 @@ impl Session {
       receiver: TransferReceiver::new(Arc::new(LinkAcks(outbound.clone())), self.clock.clone()),
       ota: OtaLink::new(self.ota.clone(), device_id),
       observer: observer.clone(),
+      hub: self.hub.clone(),
     })
   }
 
@@ -1244,6 +1271,10 @@ impl Session {
 
   pub async fn set_capability_flags(&self, flags: CapabilityFlags) {
     *self.caps.lock().unwrap() = flags;
+    let fresh = self.config.capabilities;
+    self
+      .settings
+      .write(|held| held.capability_choices = flags.departures_from(fresh));
     if let Some(models) = &self.models {
       models.set_enabled(flags.voice_model).await;
     }
@@ -1254,8 +1285,24 @@ impl Session {
     self.hub.set_device_auto_resume(device_id, enabled);
   }
 
+  pub fn device_auto_resume(&self, device_id: &str) -> bool {
+    self.hub.device_auto_resume(device_id)
+  }
+
   pub fn default_resume_target(&self) -> ResumeTarget {
     self.hub.default_resume_target()
+  }
+
+  pub fn device_resume_target(&self, device_id: &str) -> ResumeTarget {
+    self.hub.device_resume_target(device_id)
+  }
+
+  pub fn device_identity(&self, device_id: &str) -> Option<String> {
+    self.hub.device_identity(device_id)
+  }
+
+  pub fn forget_device(&self, device_id: &str) {
+    self.hub.forget_device(device_id);
   }
 
   pub fn set_device_resume_target(&self, device_id: &str, target: ResumeTarget) {
@@ -1264,14 +1311,8 @@ impl Session {
 
   pub async fn set_ota_poll_config(&self, config: Option<OtaPollConfig>) {
     *self.poll_config.lock().unwrap() = config.clone();
-    let mapped = config.map(|config| bridgething_delivery::ota::poll::OtaPollConfig {
-      root_url: config
-        .root_url
-        .unwrap_or_else(|| bridgething_delivery::ota::poll::OtaPollConfig::default().root_url),
-      interval_seconds: config.interval_seconds.max(60),
-      auto_push: config.auto_push,
-    });
-    self.ota.set_poll_config(mapped).await;
+    self.settings.write(|held| held.ota_poll_config = config.clone());
+    self.ota.set_poll_config(config.map(poll_config));
   }
 
   pub fn resources_for(&self, device_id: &str) -> Option<WebappResourceService> {

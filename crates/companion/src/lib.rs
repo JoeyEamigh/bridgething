@@ -8,6 +8,7 @@ pub mod lyrics;
 pub mod media;
 pub mod provider;
 pub mod session;
+pub mod store;
 pub mod voice;
 
 uniffi::setup_scaffolding!();

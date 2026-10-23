@@ -335,6 +335,14 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         backend?.setOtaPollConfig(unwrapped)
     }
 
+    override fun catalogSources(): Promise<Array<String>> = Promise.async {
+        backend?.catalogSources()?.toTypedArray() ?: emptyArray()
+    }
+
+    override fun setCatalogSources(urls: Array<String>): Promise<Array<String>> = Promise.async {
+        backend?.setCatalogSources(urls.toList())?.toTypedArray() ?: emptyArray()
+    }
+
     override fun checkForOtaUpdate(rootUrl: String): Promise<Unit> = Promise.async {
         backend?.checkForOtaUpdate(rootUrl)
     }

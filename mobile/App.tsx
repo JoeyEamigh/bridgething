@@ -20,11 +20,7 @@ import { SettingsHostView } from './components/SettingsHostView';
 import { StatusLine } from './components/StatusLine';
 import { TabBar } from './components/TabBar';
 import { Wordmark } from './components/Wordmark';
-import {
-  refreshCatalog,
-  startInstallCensus,
-  startWebappAutoUpdate,
-} from './lib/catalog';
+import { refreshCatalog, startInstallCensus } from './lib/catalog';
 import { startReachability } from './lib/reachability';
 import { bootstrapSession } from './lib/session';
 import { getNativeTabs, getSetupCompleted } from './lib/storage';
@@ -253,7 +249,6 @@ export default function App() {
     let cancelled = false;
     setBoot(getSetupCompleted() ? 'Tabs' : 'Setup');
     startReachability();
-    startWebappAutoUpdate();
     startInstallCensus();
     bootstrapSession().catch(err => {
       if (cancelled) return;

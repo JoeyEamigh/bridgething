@@ -57,6 +57,7 @@ function serve(served: Record<string, unknown>): jest.Mock {
 }
 
 const sourcesOf = (r: Rig) => r.catalog.useCatalogStore.getState().sources;
+const heldByCore = (r: Rig) => r.bridge.getSession().catalogSources();
 
 const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
@@ -115,16 +116,34 @@ describe('catalog sources', () => {
     expect(state.directory).not.toBeNull();
   });
 
-  test('subscriptions survive an app relaunch', async () => {
-    const first = rig();
+  test('subscriptions an older build kept on the phone move into the core once', async () => {
+    const r = rig();
+    r.storage.storage.set(
+      'catalog.sources',
+      JSON.stringify([OFFICIAL, THIRD_PARTY]),
+    );
     serve({
       [OFFICIAL]: catalog('official'),
       [DIRECTORY]: catalog('dir'),
       [THIRD_PARTY]: catalog('third'),
     });
-    await first.catalog.addSource(THIRD_PARTY);
 
-    expect(sourcesOf(first.relaunch())).toContain(THIRD_PARTY);
+    await r.catalog.refreshCatalog();
+
+    expect(await heldByCore(r)).toEqual([OFFICIAL, THIRD_PARTY]);
+    expect(r.storage.storage.getString('catalog.sources')).toBeUndefined();
+  });
+
+  test('a subscription is held by the companion core, not by the app', async () => {
+    const r = rig();
+    serve({
+      [OFFICIAL]: catalog('official'),
+      [DIRECTORY]: catalog('dir'),
+      [THIRD_PARTY]: catalog('third'),
+    });
+    await r.catalog.addSource(THIRD_PARTY);
+
+    expect(await heldByCore(r)).toEqual([OFFICIAL, THIRD_PARTY]);
   });
 
   test('unsubscribing drops the source and its apps', async () => {
@@ -141,7 +160,7 @@ describe('catalog sources', () => {
     expect(
       r.catalog.useCatalogStore.getState().catalogs.map(c => c.url),
     ).not.toContain(THIRD_PARTY);
-    expect(sourcesOf(r.relaunch())).not.toContain(THIRD_PARTY);
+    expect(await heldByCore(r)).not.toContain(THIRD_PARTY);
   });
 
   test('unsubscribing wins over a refresh that was already in flight', async () => {
@@ -172,18 +191,31 @@ describe('catalog sources', () => {
     ).not.toContain(THIRD_PARTY);
   });
 
-  test('a corrupt subscription list falls back to the official catalog', () => {
+  test('the official catalog can be unsubscribed like any other source', async () => {
     const r = rig();
-    r.storage.storage.set('catalog.sources', 'not json at all');
+    serve({ [OFFICIAL]: catalog('official'), [DIRECTORY]: catalog('dir') });
+    await r.catalog.removeSource(OFFICIAL);
 
-    expect(sourcesOf(r.relaunch())).toEqual([OFFICIAL]);
+    expect(sourcesOf(r)).toEqual([]);
+    expect(await heldByCore(r)).toEqual([]);
   });
 
-  test('an empty subscription list falls back to the official catalog', () => {
+  test('the store starts from the list the core holds', async () => {
     const r = rig();
-    r.storage.storage.set('catalog.sources', '[]');
+    serve({
+      [OFFICIAL]: catalog('official'),
+      [DIRECTORY]: catalog('dir'),
+      [THIRD_PARTY]: catalog('third'),
+    });
+    r.native.__returns.set('catalogSources', () =>
+      Promise.resolve([THIRD_PARTY]),
+    );
+    await r.catalog.refreshCatalog();
 
-    expect(sourcesOf(r.relaunch())).toEqual([OFFICIAL]);
+    expect(sourcesOf(r)).toEqual([THIRD_PARTY]);
+    expect(
+      r.catalog.useCatalogStore.getState().catalogs.map(c => c.url),
+    ).toEqual([THIRD_PARTY]);
   });
 });
 
@@ -269,7 +301,7 @@ describe('installing from a catalog you added yourself', () => {
     await expect(
       r.catalog.addSource('ftp://example.test/c.json'),
     ).rejects.toThrow();
-    expect(sourcesOf(r)).toEqual([OFFICIAL]);
+    expect(await heldByCore(r)).toEqual([OFFICIAL]);
   });
 });
 
@@ -293,13 +325,13 @@ describe('source priority', () => {
 
     expect(winner()).toBe(OFFICIAL);
 
-    r.catalog.moveSource(THIRD_PARTY, -1);
+    await r.catalog.moveSource(THIRD_PARTY, -1);
 
     expect(sourcesOf(r)).toEqual([THIRD_PARTY, OFFICIAL]);
     expect(winner()).toBe(THIRD_PARTY);
   });
 
-  test('a reorder survives an app relaunch', async () => {
+  test('a reorder is written to the core', async () => {
     const r = rig();
     serve({
       [OFFICIAL]: catalog('official'),
@@ -307,9 +339,9 @@ describe('source priority', () => {
       [THIRD_PARTY]: catalog('third'),
     });
     await r.catalog.addSource(THIRD_PARTY);
-    r.catalog.moveSource(THIRD_PARTY, -1);
+    await r.catalog.moveSource(THIRD_PARTY, -1);
 
-    expect(sourcesOf(r.relaunch())).toEqual([THIRD_PARTY, OFFICIAL]);
+    expect(await heldByCore(r)).toEqual([THIRD_PARTY, OFFICIAL]);
   });
 
   test('moving the top source up does nothing', async () => {
@@ -321,7 +353,7 @@ describe('source priority', () => {
     });
     await r.catalog.addSource(THIRD_PARTY);
 
-    r.catalog.moveSource(OFFICIAL, -1);
+    await r.catalog.moveSource(OFFICIAL, -1);
 
     expect(sourcesOf(r)).toEqual([OFFICIAL, THIRD_PARTY]);
   });

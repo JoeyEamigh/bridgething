@@ -12,3 +12,5 @@ pub mod watchdog;
 
 #[cfg(test)]
 pub(crate) mod harness;
+#[cfg(test)]
+mod store_apps;

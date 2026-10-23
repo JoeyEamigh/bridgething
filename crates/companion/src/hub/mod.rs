@@ -1,5 +1,5 @@
 mod arbiter;
-mod presence;
+mod devices;
 
 use std::{
   collections::{HashMap, HashSet},
@@ -10,11 +10,11 @@ use std::{
 
 pub use arbiter::{AuthorityHold, NowPlayingHub, NowPlayingSink};
 use bridgething_gateway::{OutboundLink, OutboundLinkExt};
+use devices::DeviceRecords;
 use libbridgething::{
   AudioCapabilities, GatewayCapabilities, GatewayInfo, MusicProvider, NetworkInfo, NluResolvedIntent,
   SurfaceAvailability, gateway::GatewayToBridgeCapabilitiesMsgEvent,
 };
-use presence::PeerPresence;
 
 use crate::{
   api::{CapabilityFlags, HostInfo},
@@ -28,6 +28,7 @@ use crate::{
 
 pub const AUTO_RESUME_ABSENCE: Duration = Duration::from_secs(180);
 const PRESENCE_STAMPS_PER_ABSENCE: u32 = 6;
+pub const IDENTITY_WAIT: Duration = Duration::from_secs(5);
 
 struct Attached {
   providers: HashMap<String, Arc<dyn Provider>>,
@@ -37,11 +38,34 @@ struct Attached {
 
 struct ResumeGate {
   absence: Duration,
-  enabled: HashMap<String, bool>,
-  presence: PeerPresence,
+  identity_wait: Duration,
+  devices: DeviceRecords,
+  identified: HashMap<String, String>,
   resuming_for: Option<String>,
-  targets: HashMap<String, ResumeTarget>,
   connected: HashSet<String>,
+}
+
+impl ResumeGate {
+  fn key(&self, device_id: &str) -> String {
+    self
+      .identified
+      .get(device_id)
+      .cloned()
+      .or_else(|| self.devices.identity_of(device_id))
+      .unwrap_or_else(|| device_id.to_owned())
+  }
+
+  fn enabled_for(&self, device_id: &str) -> bool {
+    self.devices.get(&self.key(device_id)).auto_resume.unwrap_or(true)
+  }
+
+  fn target_for(&self, device_id: &str, fallback: ResumeTarget) -> ResumeTarget {
+    self.devices.get(&self.key(device_id)).resume_target.unwrap_or(fallback)
+  }
+
+  fn connected_keys(&self) -> Vec<String> {
+    self.connected.iter().map(|id| self.key(id)).collect()
+  }
 }
 
 struct Announced {
@@ -56,6 +80,7 @@ pub struct Hub {
   attached: Mutex<Attached>,
   system: Mutex<Option<Arc<SystemMediaProvider>>>,
   resume: Arc<Mutex<ResumeGate>>,
+  identified: tokio::sync::Notify,
   announced: Mutex<Announced>,
 }
 
@@ -72,12 +97,13 @@ impl Hub {
       system: Mutex::new(None),
       resume: Arc::new(Mutex::new(ResumeGate {
         absence: AUTO_RESUME_ABSENCE,
-        enabled: HashMap::new(),
-        presence: PeerPresence::in_memory(),
+        identity_wait: IDENTITY_WAIT,
+        devices: DeviceRecords::in_memory(),
+        identified: HashMap::new(),
         resuming_for: None,
-        targets: HashMap::new(),
         connected: HashSet::new(),
       })),
+      identified: tokio::sync::Notify::new(),
       announced: Mutex::new(Announced {
         host,
         flags,
@@ -91,8 +117,55 @@ impl Hub {
     tokio::spawn(stamp_presence(Arc::downgrade(&self.resume)));
   }
 
-  pub fn persist_presence(&self, file: PathBuf) {
-    self.resume.lock().unwrap().presence = PeerPresence::persisted(file);
+  pub fn persist_devices(&self, file: PathBuf) {
+    self.resume.lock().unwrap().devices = DeviceRecords::persisted(file);
+  }
+
+  pub fn identify(&self, device_id: &str, identity: &str) {
+    let identity = if identity.is_empty() { device_id } else { identity };
+    {
+      let mut resume = self.resume.lock().unwrap();
+      resume.devices.adopt(device_id, identity);
+      resume.identified.insert(device_id.to_owned(), identity.to_owned());
+    }
+    self.identified.notify_waiters();
+    self.push_resume_target();
+  }
+
+  pub fn device_identity(&self, device_id: &str) -> Option<String> {
+    let resume = self.resume.lock().unwrap();
+    resume
+      .identified
+      .get(device_id)
+      .cloned()
+      .or_else(|| resume.devices.identity_of(device_id))
+  }
+
+  pub fn forget_device(&self, device_id: &str) {
+    let resume = self.resume.lock().unwrap();
+    let key = resume.key(device_id);
+    resume.devices.forget(&[device_id, key.as_str()]);
+  }
+
+  pub fn set_identity_wait(&self, wait: Duration) {
+    self.resume.lock().unwrap().identity_wait = wait;
+  }
+
+  async fn await_identity(&self, device_id: &str) {
+    let wait = self.resume.lock().unwrap().identity_wait;
+    let deadline = tokio::time::Instant::now() + wait;
+    loop {
+      let notified = self.identified.notified();
+      tokio::pin!(notified);
+      notified.as_mut().enable();
+      if self.resume.lock().unwrap().identified.contains_key(device_id) {
+        return;
+      }
+      if tokio::time::timeout_at(deadline, notified).await.is_err() {
+        tracing::info!(%device_id, "the peer never identified itself; keying it on its link");
+        return;
+      }
+    }
   }
 
   pub fn now_playing(&self) -> &NowPlayingHub {
@@ -152,8 +225,12 @@ impl Hub {
     self.attached.lock().unwrap().providers.keys().cloned().collect()
   }
 
-  pub async fn set_priority(&self, ids: Vec<String>) {
+  pub fn set_priority_sync(&self, ids: Vec<String>) {
     self.attached.lock().unwrap().priority = ids;
+  }
+
+  pub async fn set_priority(&self, ids: Vec<String>) {
+    self.set_priority_sync(ids);
     self.announce().await;
   }
 
@@ -314,12 +391,19 @@ impl Hub {
   }
 
   pub fn set_device_auto_resume(&self, device_id: &str, enabled: bool) {
-    self
-      .resume
-      .lock()
-      .unwrap()
-      .enabled
-      .insert(device_id.to_owned(), enabled);
+    let resume = self.resume.lock().unwrap();
+    resume
+      .devices
+      .edit(&resume.key(device_id), |record| record.auto_resume = Some(enabled));
+  }
+
+  pub fn device_auto_resume(&self, device_id: &str) -> bool {
+    self.resume.lock().unwrap().enabled_for(device_id)
+  }
+
+  pub fn device_resume_target(&self, device_id: &str) -> ResumeTarget {
+    let fallback = self.default_resume_target();
+    self.resume.lock().unwrap().target_for(device_id, fallback)
   }
 
   pub fn set_auto_resume_absence(&self, absence: Duration) {
@@ -327,16 +411,29 @@ impl Hub {
   }
 
   pub fn auto_resume_prefs(&self) -> HashMap<String, bool> {
-    self.resume.lock().unwrap().enabled.clone()
+    let records = self.resume.lock().unwrap().devices.all();
+    records
+      .into_iter()
+      .filter_map(|(key, record)| record.auto_resume.map(|enabled| (key, enabled)))
+      .collect()
   }
 
   pub fn set_device_resume_target(&self, device_id: &str, target: ResumeTarget) {
-    self.resume.lock().unwrap().targets.insert(device_id.to_owned(), target);
+    {
+      let resume = self.resume.lock().unwrap();
+      resume
+        .devices
+        .edit(&resume.key(device_id), |record| record.resume_target = Some(target));
+    }
     self.push_resume_target();
   }
 
   pub fn resume_target_prefs(&self) -> HashMap<String, ResumeTarget> {
-    self.resume.lock().unwrap().targets.clone()
+    let records = self.resume.lock().unwrap().devices.all();
+    records
+      .into_iter()
+      .filter_map(|(key, record)| record.resume_target.map(|target| (key, target)))
+      .collect()
   }
 
   pub fn default_resume_target(&self) -> ResumeTarget {
@@ -361,7 +458,7 @@ impl Hub {
       && resume
         .connected
         .iter()
-        .all(|id| resume.targets.get(id).copied().unwrap_or(fallback) == ResumeTarget::AnySpeaker);
+        .all(|id| resume.target_for(id, fallback) == ResumeTarget::AnySpeaker);
     if all_any_speaker {
       ResumeTarget::AnySpeaker
     } else {
@@ -385,8 +482,10 @@ impl Hub {
   pub fn peer_disconnected(&self, device_id: &str) {
     let cancel_resume = {
       let mut resume = self.resume.lock().unwrap();
+      let key = resume.key(device_id);
       resume.connected.remove(device_id);
-      resume.presence.stamp([&device_id.to_owned()]);
+      resume.identified.remove(device_id);
+      resume.devices.stamp(&[key]);
       let cancel = resume.resuming_for.as_deref() == Some(device_id);
       if cancel {
         resume.resuming_for = None;
@@ -406,11 +505,22 @@ impl Hub {
 
   fn allow_auto_resume(&self, device_id: &str) -> bool {
     let resume = self.resume.lock().unwrap();
-    if !resume.enabled.get(device_id).copied().unwrap_or(true) {
+    if !resume.enabled_for(device_id) {
       tracing::info!(%device_id, "auto-resume off; skipping connect resume");
       return false;
     }
-    match resume.presence.absent_for(device_id) {
+    let others_hold_it = {
+      let key = resume.key(device_id);
+      resume
+        .connected
+        .iter()
+        .any(|other| other != device_id && resume.key(other) == key)
+    };
+    if others_hold_it {
+      tracing::info!(%device_id, "another link to this device is already up; skipping connect resume");
+      return false;
+    }
+    match resume.devices.absent_for(&resume.key(device_id)) {
       Some(absent) if absent < resume.absence => {
         tracing::info!(
           %device_id,
@@ -445,11 +555,13 @@ impl Hub {
   pub async fn peer_connected(&self, device_id: &str) {
     self.announce().await;
     self.now_playing.on_connect();
+    self.await_identity(device_id).await;
     let allow = self.allow_auto_resume(device_id);
     {
       let mut resume = self.resume.lock().unwrap();
       resume.connected.insert(device_id.to_owned());
-      resume.presence.stamp([&device_id.to_owned()]);
+      let key = resume.key(device_id);
+      resume.devices.stamp(&[key]);
       if allow {
         resume.resuming_for = Some(device_id.to_owned());
       }
@@ -484,11 +596,8 @@ async fn stamp_presence(gate: Weak<Mutex<ResumeGate>>) {
     };
     tokio::time::sleep(every).await;
     let Some(gate) = gate.upgrade() else { return };
-    let mut resume = gate.lock().unwrap();
-    let ResumeGate {
-      presence, connected, ..
-    } = &mut *resume;
-    presence.stamp(connected.iter());
+    let resume = gate.lock().unwrap();
+    resume.devices.stamp(&resume.connected_keys());
   }
 }
 

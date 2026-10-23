@@ -233,7 +233,7 @@ function SourceRow({
       {reorderable ? (
         <View className="flex-row items-center">
           <Press
-            onPress={() => moveSource(url, -1)}
+            onPress={() => void moveSource(url, -1)}
             disabled={first}
             hitSlop={8}
           >
@@ -245,7 +245,11 @@ function SourceRow({
               />
             </View>
           </Press>
-          <Press onPress={() => moveSource(url, 1)} disabled={last} hitSlop={8}>
+          <Press
+            onPress={() => void moveSource(url, 1)}
+            disabled={last}
+            hitSlop={8}
+          >
             <View className="px-1.5 py-1">
               <Icon
                 name="ChevronDown"

@@ -1,7 +1,7 @@
 import { CatalogValidationError, sortNewestFirst, validate, type Catalog } from '@bridgething/catalog';
 
 export const SITE_ORIGIN = 'https://bridgething.com';
-export const MAX_CATALOG_BYTES = 5 * 1024 * 1024;
+export const MAX_CATALOG_BYTES = 1024 * 1024;
 export const PROBE_TIMEOUT_MS = 10_000;
 const MAX_REPORTED_ERRORS = 5;
 
@@ -11,10 +11,6 @@ function summarize(err: unknown): string {
   const extra = err.errors.length - shown.length;
   return shown.join('; ') + (extra > 0 ? ` (and ${extra} more)` : '');
 }
-
-export type ProbeResult =
-  | { ok: true; catalog: Catalog; downloadsCorsOk: boolean | null }
-  | { ok: false; reason: string };
 
 function corsPermits(headers: Headers): boolean {
   const allow = headers.get('access-control-allow-origin');
@@ -74,27 +70,6 @@ async function probeDownloadCors(catalog: Catalog, fetchImpl: typeof fetch): Pro
   }
 }
 
-export type FetchedResponse = { ok: true; response: Response } | { ok: false; reason: string };
-
-export async function fetchCatalogResponse(url: string, fetchImpl: typeof fetch = fetch): Promise<FetchedResponse> {
-  let response: Response;
-  try {
-    response = await fetchImpl(url, {
-      redirect: 'follow',
-      headers: { accept: 'application/json', origin: SITE_ORIGIN },
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    });
-  } catch {
-    return { ok: false, reason: `could not reach ${url}` };
-  }
-
-  if (!response.ok) {
-    return { ok: false, reason: `${url} returned ${response.status} ${response.statusText}`.trimEnd() };
-  }
-
-  return { ok: true, response };
-}
-
 export type ParsedCatalog = { ok: true; catalog: Catalog } | { ok: false; reason: string };
 
 export async function parseCatalogBody(response: Response, url: string): Promise<ParsedCatalog> {
@@ -124,16 +99,71 @@ export function corsFailureReason(url: string): string {
   );
 }
 
-export async function probeSource(url: string, fetchImpl: typeof fetch = fetch): Promise<ProbeResult> {
-  const fetched = await fetchCatalogResponse(url, fetchImpl);
-  if (!fetched.ok) return { ok: false, reason: fetched.reason };
+export type CatalogValidators = { etag: string | null; lastModified: string | null };
 
-  if (!corsPermits(fetched.response.headers)) {
+export type HeldCatalog = CatalogValidators & { body: string };
+
+export type ProbeResult =
+  | ({ ok: true; changed: false } & CatalogValidators)
+  | ({ ok: true; changed: true; catalog: Catalog; body: string; downloadsCorsOk: boolean | null } & CatalogValidators)
+  | { ok: false; reason: string };
+
+function requestHeaders(held: HeldCatalog | null): Record<string, string> {
+  const headers: Record<string, string> = { accept: 'application/json', origin: SITE_ORIGIN };
+  if (held?.etag) headers['if-none-match'] = held.etag;
+  if (held?.lastModified) headers['if-modified-since'] = held.lastModified;
+  return headers;
+}
+
+export async function probeCatalog(
+  url: string,
+  init: { held?: HeldCatalog | null; fetchImpl?: typeof fetch } = {},
+): Promise<ProbeResult> {
+  const { held = null, fetchImpl = fetch } = init;
+
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      redirect: 'follow',
+      headers: requestHeaders(held),
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+  } catch {
+    return { ok: false, reason: `could not reach ${url}` };
+  }
+
+  const validators: CatalogValidators = {
+    etag: response.headers.get('etag') ?? held?.etag ?? null,
+    lastModified: response.headers.get('last-modified') ?? held?.lastModified ?? null,
+  };
+
+  if (response.status === 304 && held !== null) {
+    await response.body?.cancel();
+    return { ok: true, changed: false, ...validators };
+  }
+
+  if (!response.ok) {
+    await response.body?.cancel();
+    return { ok: false, reason: `${url} returned ${response.status} ${response.statusText}`.trimEnd() };
+  }
+
+  if (!corsPermits(response.headers)) {
+    await response.body?.cancel();
     return { ok: false, reason: corsFailureReason(url) };
   }
 
-  const parsed = await parseCatalogBody(fetched.response, url);
+  const parsed = await parseCatalogBody(response, url);
   if (!parsed.ok) return { ok: false, reason: parsed.reason };
 
-  return { ok: true, catalog: parsed.catalog, downloadsCorsOk: await probeDownloadCors(parsed.catalog, fetchImpl) };
+  const body = JSON.stringify(parsed.catalog);
+  if (held !== null && held.body === body) return { ok: true, changed: false, ...validators };
+
+  return {
+    ok: true,
+    changed: true,
+    catalog: parsed.catalog,
+    body,
+    downloadsCorsOk: await probeDownloadCors(parsed.catalog, fetchImpl),
+    ...validators,
+  };
 }

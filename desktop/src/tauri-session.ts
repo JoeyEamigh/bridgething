@@ -3,7 +3,7 @@ import type { CompanionSession, Endpoint, Invalidation, ResourceOrigin, Topic, W
 import { Channel, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-import type { BundleExtension, ExtensionEntry, KnownDevice } from './desktop.ts';
+import type { BundleExtension, ExtensionEntry, KnownDevice, SelfUpdateState } from './desktop.ts';
 
 const HINTS: Record<string, Topic> = {
   'invalidate:session': 'session',
@@ -22,6 +22,7 @@ const HINTS: Record<string, Topic> = {
   'invalidate:logs': 'logs',
   'invalidate:known-devices': 'known-devices',
   'invalidate:extensions': 'extensions',
+  'invalidate:self-update': 'self-update',
 };
 
 const RESYNC = 'invalidate:all';
@@ -175,6 +176,10 @@ export class TauriSession implements CompanionSession {
   removeExtension = (id: string) => invoke<void>('remove_extension', { id });
   openExtensionData = (id: string) => invoke<void>('open_extension_data', { id });
   retryExtensionRuntime = () => invoke<void>('retry_extension_runtime');
+
+  selfUpdate = () => invoke<SelfUpdateState>('self_update');
+  checkSelfUpdate = () => invoke<void>('check_self_update');
+  applySelfUpdate = () => invoke<void>('apply_self_update');
 
   deviceLogs = (limit: number) => invoke<api.DeviceLogLine[]>('device_logs', { limit });
   deviceLogStreaming = () => invoke<boolean>('device_log_streaming');

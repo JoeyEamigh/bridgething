@@ -44,7 +44,8 @@ export type Topic =
   | 'ota-poll'
   | 'logs'
   | 'known-devices'
-  | 'extensions';
+  | 'extensions'
+  | 'self-update';
 
 export type Invalidation = { topic: Topic; id: string | null };
 

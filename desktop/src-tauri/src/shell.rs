@@ -13,24 +13,26 @@ use bridgething_companion::{
     SpotifyProviderConfig,
   },
   backend::{ExtensionHost, ForeignHttp, GeoProvider, HttpTransport, LinkDevice, NativeHttp, NativeWs},
+  store::{JsonFile, stored},
 };
 use bridgething_delivery::{blob::FsBlobStore, ota::service::OtaService, webapp::WebappResourceService};
 use bridgething_gateway::{Gateway, connect_ws, transport::WsConnector};
 use bridgething_io::HttpExecutor;
 use tauri::webview::PageLoadEvent;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, watch};
 
 use crate::{
-  backends::{DesktopHost, FileSecrets, Platform, TracingLog},
-  capabilities::Capabilities,
+  backends::{DesktopHost, FileSecrets, Online, Platform, TracingLog},
   extensions::Extensions,
   hints::{Hint, HintSink, Relay},
+  inherited::Inherited,
   known_device::{KnownDevice, KnownDevices},
 };
 
 pub const DEFAULT_GATEWAY_URL: &str = "ws://127.0.0.1:8892/";
 
 const GATEWAY_URL_ENV: &str = "BRIDGETHING_GATEWAY_URL";
+const PREFERRED_DEVICE_FILE: &str = "preferred-device.json";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShellError {
@@ -99,11 +101,13 @@ pub struct Shell {
   http: HttpExecutor,
   gateway_url: String,
   selected: Mutex<Option<String>>,
+  preferred: JsonFile<Option<String>>,
   hints: Arc<dyn HintSink>,
-  capabilities: Capabilities,
+  inherited: Mutex<Option<Inherited>>,
   known: Arc<KnownDevices>,
   declined: Mutex<HashSet<String>>,
   wake: Arc<Notify>,
+  online: Online,
   support: CapabilityFlags,
   geo: Option<Arc<dyn GeoProvider>>,
   log_streaming: AtomicBool,
@@ -146,6 +150,7 @@ impl Shell {
     let geo = platform.geo.clone();
     let models = platform.models.clone();
     let model_platform = platform.model_platform;
+    let online = Online::default();
 
     let extensions = Extensions::init(&config.paths.state_dir);
     let http: Arc<dyn HttpTransport> = Arc::new(NativeHttp::default());
@@ -170,14 +175,20 @@ impl Shell {
       transcoder: platform.transcoder,
       model_validator: platform.model_validator,
       transfer_policy: None,
-      connectivity: platform.connectivity,
+      connectivity: platform.connectivity.map(|monitor| online.tee(monitor)),
       device_waker: None,
       extensions: Some(extensions.clone() as Arc<dyn ExtensionHost>),
     };
 
     let support = capability_support(model_platform, &backends);
-    let capabilities = Capabilities::open(&config.paths.config_dir, support);
+    let inherited = Inherited::find(&config.paths.config_dir, support);
     let known = Arc::new(KnownDevices::open(&config.paths.config_dir));
+    let preferred_path = config.paths.config_dir.join(PREFERRED_DEVICE_FILE);
+    let preferred = JsonFile::new(
+      preferred_path.clone(),
+      "preferred device",
+      stored(&preferred_path).flatten(),
+    );
     let wake = Arc::new(Notify::new());
 
     let session = CompanionSession::create(
@@ -189,7 +200,7 @@ impl Shell {
           os_version: String::new(),
           host_identifier: host_identifier(&config.paths.config_dir),
         },
-        capabilities: capabilities.get(),
+        capabilities: support,
         state_dir: config.paths.state_dir.to_string_lossy().into_owned(),
         cache_dir: config.paths.cache_dir.to_string_lossy().into_owned(),
         model_platform,
@@ -210,11 +221,13 @@ impl Shell {
       http: HttpExecutor::new(Arc::new(ForeignHttp::new(http))),
       gateway_url: config.gateway_url,
       selected: Mutex::new(None),
+      preferred,
       hints,
-      capabilities,
+      inherited: Mutex::new(Some(inherited)),
       known,
       declined: Mutex::new(HashSet::new()),
       wake,
+      online,
       support,
       geo,
       log_streaming: AtomicBool::new(false),
@@ -244,8 +257,7 @@ impl Shell {
   }
 
   pub async fn set_capability_flags(&self, flags: CapabilityFlags) {
-    let woken = !self.capabilities.get().geo && flags.geo;
-    self.capabilities.set(flags);
+    let woken = !self.session.capability_flags().geo && flags.geo;
     self.session.set_capability_flags(flags).await;
     if woken && let Some(geo) = self.geo.clone() {
       let _ = tokio::task::spawn_blocking(move || geo.request_authorization()).await;
@@ -253,6 +265,10 @@ impl Shell {
   }
 
   pub async fn start(&self) {
+    let inherited = self.inherited.lock().unwrap().take();
+    if let Some(inherited) = inherited {
+      inherited.hand_to(&self.session).await;
+    }
     if let Err(error) = self.session.start().await {
       tracing::warn!(%error, "the companion session did not start cleanly");
     }
@@ -287,9 +303,19 @@ impl Shell {
     {
       return Some(device_id);
     }
-    match self.linked_ids().as_slice() {
-      [only] => Some(only.clone()),
-      _ => None,
+    let linked = self.linked_ids();
+    if let [only] = linked.as_slice() {
+      return Some(only.clone());
+    }
+    let preferred = self.preferred.read(Clone::clone)?;
+    linked
+      .into_iter()
+      .find(|device_id| self.session.device_identity(device_id.clone()).as_deref() == Some(preferred.as_str()))
+  }
+
+  fn prefer(&self, device_id: &str) {
+    if let Some(identity) = self.session.device_identity(device_id.to_owned()) {
+      self.preferred.set(Some(identity));
     }
   }
 
@@ -298,6 +324,9 @@ impl Shell {
   }
 
   pub fn select(&self, device_id: Option<String>) {
+    if let Some(device_id) = &device_id {
+      self.prefer(device_id);
+    }
     *self.selected.lock().unwrap() = device_id;
     self.hints.emit(Hint::bare(crate::hints::PEERS));
   }
@@ -311,6 +340,7 @@ impl Shell {
     let url = url.unwrap_or_else(|| self.gateway_url.clone());
     tracing::info!(%url, "the user asked the shell for a link");
     let device_id = self.dial(url, None).await?;
+    self.prefer(&device_id);
     *self.selected.lock().unwrap() = Some(device_id.clone());
     Ok(device_id)
   }
@@ -363,9 +393,14 @@ impl Shell {
       return;
     };
     self.hints.emit(Hint::bare(crate::hints::KNOWN_DEVICES));
+    self.session.forget_device(gone.id.clone());
     self.extensions.forget_device(&gone.id);
     if gone.id != gone.url {
+      self.session.forget_device(gone.url.clone());
       self.extensions.forget_address(&gone.url);
+    }
+    if self.preferred.read(Clone::clone).as_deref() == Some(gone.id.as_str()) {
+      self.preferred.set(None);
     }
   }
 
@@ -375,6 +410,10 @@ impl Shell {
 
   pub fn wake(&self) -> Arc<Notify> {
     Arc::clone(&self.wake)
+  }
+
+  pub fn online(&self) -> watch::Receiver<bool> {
+    self.online.watch()
   }
 
   pub fn resources(&self) -> Result<WebappResourceService, ShellError> {

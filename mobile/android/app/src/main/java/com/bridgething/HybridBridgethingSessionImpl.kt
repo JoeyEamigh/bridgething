@@ -93,7 +93,42 @@ public class HybridBridgethingSessionImpl(
         private const val AUTO_RESUME_PREFIX = "autoresume."
         private const val RESUME_TARGET_PREFIX = "resumetarget."
         private const val PROVIDER_PRIORITY_KEY = "providerPriority"
+        private val INHERITED_KEYS = listOf("caps.", "ota.", AUTO_RESUME_PREFIX, RESUME_TARGET_PREFIX, PROVIDER_PRIORITY_KEY)
         private const val DEV_LANE_DEVICE_ID = "dev-gateway"
+
+        internal suspend fun inheritHostSettings(context: Context, session: CompanionSession) {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val inherited = prefs.all.keys.filter { key -> INHERITED_KEYS.any { key.startsWith(it) } }
+            if (inherited.isEmpty()) return
+            if (prefs.getBoolean("caps.configured", false)) {
+                runCatching { session.setCapabilityFlags(toCoreCapabilityFlags(capabilityFlags(context))) }
+            }
+            if (prefs.getBoolean("ota.configured", false)) {
+                val root = prefs.getString("ota.rootUrl", null)
+                val config = BridgethingOtaPollConfig(
+                    intervalSeconds = prefs.getLong("ota.intervalSeconds", 3600L).toDouble(),
+                    autoPush = prefs.getBoolean("ota.autoPush", true),
+                    rootUrl = if (root.isNullOrEmpty()) null else root,
+                )
+                runCatching { session.setOtaPollConfig(toCoreOtaPollConfig(config)) }
+            }
+            for ((key, value) in prefs.all) {
+                if (key.startsWith(AUTO_RESUME_PREFIX) && value is Boolean) {
+                    runCatching { session.setDeviceAutoResume(key.removePrefix(AUTO_RESUME_PREFIX), value) }
+                }
+                if (key.startsWith(RESUME_TARGET_PREFIX) && value is String) {
+                    BridgethingResumeTarget.entries.firstOrNull { it.name == value }?.let { target ->
+                        runCatching {
+                            session.setDeviceResumeTarget(key.removePrefix(RESUME_TARGET_PREFIX), toCoreResumeTarget(target))
+                        }
+                    }
+                }
+            }
+            prefs.getString(PROVIDER_PRIORITY_KEY, null)?.let { joined ->
+                runCatching { session.setProviderPriority(joined.split(",").filter { it.isNotEmpty() }) }
+            }
+            prefs.edit().apply { inherited.forEach(::remove) }.apply()
+        }
 
         internal fun capabilityFlags(context: Context): BridgethingCapabilityFlags {
             val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -182,10 +217,6 @@ public class HybridBridgethingSessionImpl(
     @Volatile
     private var onResumed: ((BridgethingSessionSnapshot) -> Unit)? = null
 
-    private val prefs by lazy {
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    }
-
     init {
         CompanionHolder.onForeground = { resumeForeground() }
         CompanionHolder.onBackground = { foregroundGen.incrementAndGet() }
@@ -203,7 +234,6 @@ public class HybridBridgethingSessionImpl(
 
         if (localLogStreamingDesired) LogcatCapture.setInbox(c.session.logInbox())
         if (logStreamingDesired) c.session.setDeviceLogStreaming(true)
-        replayHostSettings(c.session)
 
         CompanionDevicePicker.startObservingPresence(context)
         if (CompanionDevicePicker.associations(context.applicationContext).isNotEmpty()) {
@@ -312,7 +342,6 @@ public class HybridBridgethingSessionImpl(
     }
 
     override suspend fun setProviderPriority(ids: Array<String>) {
-        prefs.edit().putString(PROVIDER_PRIORITY_KEY, ids.joinToString(",")).apply()
         requireSession().setProviderPriority(ids.toList())
     }
 
@@ -560,7 +589,6 @@ public class HybridBridgethingSessionImpl(
         plainly { requireSession().listWebappBlobs(deviceId, id).map(::toRnWebappBlob).toTypedArray() }
 
     override suspend fun setCapabilityFlags(flags: BridgethingCapabilityFlags) {
-        saveCapabilityFlags(flags)
         requireSession().setCapabilityFlags(toCoreCapabilityFlags(flags))
     }
 
@@ -572,27 +600,27 @@ public class HybridBridgethingSessionImpl(
     }
 
     override suspend fun setDeviceAutoResume(deviceId: String, enabled: Boolean) {
-        prefs.edit().putBoolean("$AUTO_RESUME_PREFIX$deviceId", enabled).apply()
         requireSession().setDeviceAutoResume(deviceId, enabled)
     }
 
     override suspend fun isDeviceAutoResumeEnabled(deviceId: String): Boolean =
-        prefs.getBoolean("$AUTO_RESUME_PREFIX$deviceId", true)
+        requireSession().deviceAutoResume(deviceId)
 
     override suspend fun setDeviceResumeTarget(deviceId: String, target: BridgethingResumeTarget) {
-        prefs.edit().putString("$RESUME_TARGET_PREFIX$deviceId", target.name).apply()
         requireSession().setDeviceResumeTarget(deviceId, toCoreResumeTarget(target))
     }
 
     override suspend fun deviceResumeTarget(deviceId: String): BridgethingResumeTarget =
-        prefs.getString("$RESUME_TARGET_PREFIX$deviceId", null)
-            ?.let { raw -> BridgethingResumeTarget.entries.firstOrNull { it.name == raw } }
-            ?: BridgethingResumeTarget.PHONEONLY
+        toRnResumeTarget(requireSession().deviceResumeTarget(deviceId))
 
     override suspend fun setOtaPollConfig(config: BridgethingOtaPollConfig?) {
-        saveOtaPollConfig(config)
         requireSession().setOtaPollConfig(config?.let(::toCoreOtaPollConfig))
     }
+
+    override suspend fun catalogSources(): List<String> = requireSession().catalogSources()
+
+    override suspend fun setCatalogSources(urls: List<String>): List<String> =
+        requireSession().setCatalogSources(urls)
 
     override suspend fun checkForOtaUpdate(rootUrl: String) {
         requireSession().checkForOtaUpdate(rootUrl)
@@ -698,6 +726,7 @@ public class HybridBridgethingSessionImpl(
 
     override suspend fun forgetCompanionDevice(mac: String) {
         val ctx = context.applicationContext
+        stateLock.withLock { companion }?.session?.forgetDevice(mac.uppercase())
         CompanionDevicePicker.forget(ctx, mac)
         runCatching { CompanionHolder.transport?.disconnect(mac.uppercase()) }
         if (CompanionDevicePicker.associations(ctx).isEmpty()) {
@@ -824,26 +853,6 @@ public class HybridBridgethingSessionImpl(
         if (CompanionHolder.foreground) onNowPlayingChanged?.invoke(np)
     }
 
-    private suspend fun replayHostSettings(session: CompanionSession) {
-        runCatching { session.setCapabilityFlags(toCoreCapabilityFlags(loadCapabilityFlags())) }
-        runCatching { session.setOtaPollConfig(loadOtaPollConfig()?.let(::toCoreOtaPollConfig)) }
-        for ((key, value) in prefs.all) {
-            if (key.startsWith(AUTO_RESUME_PREFIX) && value is Boolean) {
-                runCatching { session.setDeviceAutoResume(key.removePrefix(AUTO_RESUME_PREFIX), value) }
-            }
-            if (key.startsWith(RESUME_TARGET_PREFIX) && value is String) {
-                BridgethingResumeTarget.entries.firstOrNull { it.name == value }?.let { target ->
-                    runCatching { session.setDeviceResumeTarget(key.removePrefix(RESUME_TARGET_PREFIX), toCoreResumeTarget(target)) }
-                }
-            }
-        }
-        val priority = prefs.getString(PROVIDER_PRIORITY_KEY, null)
-            ?.split(",")
-            ?.filter { it.isNotEmpty() }
-            .orEmpty()
-        runCatching { session.setProviderPriority(priority) }
-    }
-
     private fun connectDevGateway(session: CompanionSession) {
         val url = BuildConfig.BRIDGETHING_DEV_GATEWAY
         if (url.isEmpty()) return
@@ -851,45 +860,6 @@ public class HybridBridgethingSessionImpl(
             runCatching { session.connectNetwork(url, LinkDevice(id = DEV_LANE_DEVICE_ID, name = "dev gateway")) }
                 .onFailure { android.util.Log.i("bridgething.session", "dev gateway $url: ${it.message}") }
         }
-    }
-
-    private fun loadCapabilityFlags(): BridgethingCapabilityFlags = capabilityFlags(context)
-
-    private fun saveCapabilityFlags(f: BridgethingCapabilityFlags) {
-        prefs.edit()
-            .putBoolean("caps.configured", true)
-            .putBoolean("caps.geo", f.geo)
-            .putBoolean("caps.notifications", f.notifications)
-            .putBoolean("caps.netFetch", f.netFetch)
-            .putBoolean("caps.netWs", f.netWs)
-            .putBoolean("caps.audioTts", f.audioTts)
-            .putBoolean(VOICE_MODEL_KEY, f.voiceModel)
-            .apply()
-    }
-
-    private fun loadOtaPollConfig(): BridgethingOtaPollConfig? {
-        if (!prefs.getBoolean("ota.configured", false)) {
-            return BridgethingOtaPollConfig(intervalSeconds = 3600.0, autoPush = true, rootUrl = null)
-        }
-        val root = prefs.getString("ota.rootUrl", null)
-        return BridgethingOtaPollConfig(
-            intervalSeconds = prefs.getLong("ota.intervalSeconds", 3600L).toDouble(),
-            autoPush = prefs.getBoolean("ota.autoPush", true),
-            rootUrl = if (root.isNullOrEmpty()) null else root,
-        )
-    }
-
-    private fun saveOtaPollConfig(config: BridgethingOtaPollConfig?) {
-        if (config == null) {
-            prefs.edit().putBoolean("ota.configured", false).apply()
-            return
-        }
-        prefs.edit()
-            .putBoolean("ota.configured", true)
-            .putLong("ota.intervalSeconds", config.intervalSeconds.toLong())
-            .putBoolean("ota.autoPush", config.autoPush)
-            .putString("ota.rootUrl", config.rootUrl)
-            .apply()
     }
 
     private inline fun safeEmit(block: () -> Unit) {

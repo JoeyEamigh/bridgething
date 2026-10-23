@@ -68,7 +68,7 @@ type Blend = {
 
 function blend(): Blend {
   const { installed, libVersion } = deviceContext();
-  const subscribed = subscribedUrls(catalogSources.data.value);
+  const subscribed = catalogSources.data.value;
   const catalogs = catalogsFor(subscribed);
   const directory = mergedApps();
   const snapshot = catalogs.data.value;
@@ -179,10 +179,6 @@ export function StoreRoute(): VNode {
   );
 }
 
-function subscribedUrls(held: string[] | undefined): string[] {
-  return [OFFICIAL_CATALOG_URL, ...(held ?? []).filter(url => url !== OFFICIAL_CATALOG_URL)];
-}
-
 function MySources({ subscribed, pending }: { subscribed: string[]; pending: boolean }): VNode {
   const session = useDesktop();
   const { route } = useLocation();
@@ -212,9 +208,7 @@ function MySources({ subscribed, pending }: { subscribed: string[]; pending: boo
               title={official ? 'the bridgething catalog' : url}
               subtitle={official ? url : undefined}
               trailing={
-                official ? (
-                  <Pill tone="neutral">built in</Pill>
-                ) : busy === url ? (
+                busy === url ? (
                   <Spinner />
                 ) : (
                   <Button
@@ -232,7 +226,7 @@ function MySources({ subscribed, pending }: { subscribed: string[]; pending: boo
           );
         })}
       </ListGroup>
-      <Hint>removing a source hides its apps</Hint>
+      <Hint>removing a source stops its apps from getting updates</Hint>
     </Section>
   );
 }
@@ -348,8 +342,7 @@ function SubscribeToggle({ url }: { url: string }): VNode {
   const session = useDesktop();
   const [busy, setBusy] = useState(false);
 
-  const official = url === OFFICIAL_CATALOG_URL;
-  const held = subscribedUrls(catalogSources.data.value).includes(url);
+  const held = catalogSources.data.value.includes(url);
 
   const toggle = async () => {
     setBusy(true);
@@ -361,8 +354,6 @@ function SubscribeToggle({ url }: { url: string }): VNode {
       setBusy(false);
     }
   };
-
-  if (official) return <Pill tone="neutral">built in</Pill>;
 
   return (
     <Button
@@ -384,7 +375,7 @@ function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; lo
   const [allVersions, setAllVersions] = useState(false);
 
   const { libVersion } = deviceContext();
-  const subscribed = subscribedUrls(catalogSources.data.value);
+  const subscribed = catalogSources.data.value;
 
   if (!listing) {
     return (

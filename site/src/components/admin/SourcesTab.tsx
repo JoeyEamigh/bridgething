@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
-import { fetchAdminSources, setSourceStatus, type AdminEntry, type SourceStatus } from '../../lib/directory-client';
-import { Empty, Group, INPUT, Loading, Notice, reason } from './shared';
+import { setSourceStatus, type AdminEntry, type SourceStatus } from '../../lib/directory-client';
+import { Empty, Group, INPUT, Notice, reason } from './shared';
 
-const STATUSES: SourceStatus[] = ['quarantined', 'listed', 'attested', 'rejected'];
+const STATUSES: SourceStatus[] = ['listed', 'attested', 'quarantined', 'rejected'];
+
+const NEW = 'new';
+
+function groupOf(entry: AdminEntry): SourceStatus | typeof NEW {
+  return entry.reviewed_at === null && entry.status !== 'rejected' ? NEW : entry.status;
+}
+
+function newestFirst(a: AdminEntry, b: AdminEntry): number {
+  return b.submitted_at.localeCompare(a.submitted_at) || a.url.localeCompare(b.url);
+}
 
 const PROMOTIONS: { status: SourceStatus; label: string }[] = [
   { status: 'attested', label: 'attest' },
@@ -79,6 +89,15 @@ function Row({
       )}
 
       <div class="flex flex-wrap gap-2">
+        {groupOf(entry) === NEW ? (
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            disabled={busy}
+            onClick={() => void onMove(entry.url, entry.status)}>
+            looks fine
+          </button>
+        ) : null}
         {PROMOTIONS.filter(promotion => promotion.status !== entry.status).map(promotion => (
           <button
             key={promotion.status}
@@ -94,21 +113,11 @@ function Row({
   );
 }
 
-export function SourcesTab({ token }: { token: string }) {
-  const [entries, setEntries] = useState<AdminEntry[] | null>(null);
+export function SourcesTab({ token, initial }: { token: string; initial: AdminEntry[] }) {
+  const [entries, setEntries] = useState<AdminEntry[]>(initial);
   const [filter, setFilter] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    fetchAdminSources(token)
-      .then(sources => live && setEntries(sources))
-      .catch(err => live && setError(reason(err)));
-    return () => {
-      live = false;
-    };
-  }, [token]);
 
   const onMove = useCallback(
     async (url: string, status: SourceStatus, note?: string | null) => {
@@ -116,7 +125,7 @@ export function SourcesTab({ token }: { token: string }) {
       setError(null);
       try {
         const updated = await setSourceStatus({ token, url, status, note });
-        setEntries(current => (current ?? []).map(entry => (entry.url === url ? updated : entry)));
+        setEntries(current => current.map(entry => (entry.url === url ? updated : entry)));
       } catch (err) {
         setError(reason(err));
       } finally {
@@ -128,13 +137,11 @@ export function SourcesTab({ token }: { token: string }) {
 
   const matching = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    if (!needle) return entries ?? [];
-    return (entries ?? []).filter(entry =>
-      `${entry.name} ${entry.url} ${entry.description ?? ''}`.toLowerCase().includes(needle),
-    );
+    const shown = needle
+      ? entries.filter(entry => `${entry.name} ${entry.url} ${entry.description ?? ''}`.toLowerCase().includes(needle))
+      : entries;
+    return [...shown].sort(newestFirst);
   }, [entries, filter]);
-
-  if (entries === null && error === null) return <Loading what="sources" />;
 
   return (
     <>
@@ -158,11 +165,11 @@ export function SourcesTab({ token }: { token: string }) {
       {matching.length === 0 ? (
         <Empty what={filter ? 'nothing matches that filter.' : 'nothing submitted yet.'} />
       ) : (
-        STATUSES.map(status => {
-          const rows = matching.filter(entry => entry.status === status);
+        [NEW, ...STATUSES].map(group => {
+          const rows = matching.filter(entry => groupOf(entry) === group);
           if (rows.length === 0) return null;
           return (
-            <Group key={status} title={status} count={rows.length}>
+            <Group key={group} title={group} count={rows.length}>
               <ul class="grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2">
                 {rows.map(entry => (
                   <Row key={entry.url} entry={entry} busy={busy} onMove={onMove} />

@@ -471,6 +471,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   deviceResumeTarget(deviceId: string): Promise<BridgethingResumeTarget>;
 
   setOtaPollConfig(config: BridgethingOtaPollConfig | null): Promise<void>;
+  catalogSources(): Promise<string[]>;
+  setCatalogSources(urls: string[]): Promise<string[]>;
   checkForOtaUpdate(rootUrl: string): Promise<void>;
   fetchOtaManifest(rootUrl: string): Promise<BridgethingOtaManifest>;
   applyOtaUpdate(deviceId: string, channel: string, version: string, rootUrl: string): Promise<void>;

@@ -41,7 +41,7 @@ use bridgething_companion::{
     ConnectivityInbox, ConnectivityMonitor, LinkDevice, LinkInbox, LinkTransport, MediaSessionBackend, PrepareSink,
     SecretStore, SpeechRecognizer, Transcription, TranscriptionSink,
   },
-  provider::{Provider, ProviderAuthState},
+  provider::{Provider, ProviderAuthState, ResumeTarget},
   session::Session,
   voice::{
     controller::ArmedModel,
@@ -100,6 +100,14 @@ impl HandLink {
         name: "hand".into(),
       });
     }
+    self.say(
+      device_id,
+      BridgeToGatewayMsg {
+        id: Uuid::now_v7(),
+        meta: MsgMeta::Event,
+        data: BridgeToGatewayMsgData::Version(Box::new(meta(device_id))),
+      },
+    );
   }
 
   fn drop_link(&self, device_id: &str) {
@@ -229,6 +237,27 @@ fn session_full(
   media_sessions: Option<Arc<dyn MediaSessionBackend>>,
 ) -> (Arc<Session>, Arc<Heard>, tempfile::TempDir) {
   let spool = tempfile::tempdir().expect("a scratch directory");
+  let (session, heard) = session_at(
+    spool.path(),
+    link,
+    secrets,
+    spotify,
+    apple_music,
+    speech,
+    media_sessions,
+  );
+  (session, heard, spool)
+}
+
+fn session_at(
+  spool: &std::path::Path,
+  link: Arc<HandLink>,
+  secrets: Arc<MemorySecrets>,
+  spotify: bool,
+  apple_music: Option<Arc<dyn AppleMusicBackend>>,
+  speech: Option<Arc<dyn SpeechRecognizer>>,
+  media_sessions: Option<Arc<dyn MediaSessionBackend>>,
+) -> (Arc<Session>, Arc<Heard>) {
   let heard = Arc::new(Heard::default());
   let backends = CompanionBackends {
     link: Some(link),
@@ -272,8 +301,8 @@ fn session_full(
         audio_tts: false,
         voice_model: false,
       },
-      state_dir: spool.path().to_string_lossy().into_owned(),
-      cache_dir: spool.path().to_string_lossy().into_owned(),
+      state_dir: spool.to_string_lossy().into_owned(),
+      cache_dir: spool.to_string_lossy().into_owned(),
       model_platform: None,
       spotify: spotify.then(|| SpotifyProviderConfig {
         worker_base: "https://worker.invalid/auth".into(),
@@ -284,7 +313,7 @@ fn session_full(
     heard.clone(),
     Arc::new(Offline),
   );
-  (session, heard, spool)
+  (session, heard)
 }
 
 struct SaidAloud(String);
@@ -680,6 +709,155 @@ async fn host_settings_are_session_state_and_project_into_the_snapshot() {
   assert!(snap.ota_poll_config.is_some());
 }
 
+fn relaunch(spool: &std::path::Path) -> Arc<Session> {
+  session_at(
+    spool,
+    Arc::new(HandLink::default()),
+    Arc::new(MemorySecrets::default()),
+    false,
+    None,
+    None,
+    None,
+  )
+  .0
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn host_settings_outlive_the_process_that_set_them() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  {
+    let first = relaunch(spool.path());
+    first.start();
+    first
+      .set_capability_flags(CapabilityFlags {
+        geo: false,
+        notifications: true,
+        net_fetch: true,
+        net_ws: false,
+        audio_tts: true,
+        voice_model: false,
+      })
+      .await;
+    first.set_device_auto_resume(DEVICE, false);
+    first.set_device_resume_target(DEVICE, ResumeTarget::PhoneOnly);
+    first
+      .set_provider_priority(vec!["applemusic".into(), "spotify".into()])
+      .await;
+    first
+      .set_ota_poll_config(Some(bridgething_companion::api::OtaPollConfig {
+        interval_seconds: 900,
+        auto_push: false,
+        root_url: Some("https://ota.invalid".into()),
+      }))
+      .await;
+    first.stop().await;
+  }
+
+  let relaunched = relaunch(spool.path());
+  relaunched.start();
+
+  assert!(
+    !relaunched.device_auto_resume(DEVICE),
+    "auto-resume turned off stays off across a relaunch"
+  );
+  assert!(
+    relaunched.device_auto_resume(OTHER),
+    "a device nobody configured keeps the default"
+  );
+  assert_eq!(relaunched.device_resume_target(DEVICE), ResumeTarget::PhoneOnly);
+  assert_eq!(
+    relaunched.device_resume_target(OTHER),
+    ResumeTarget::AnySpeaker,
+    "an unset device follows the host kind"
+  );
+  let snap = relaunched.snapshot().await;
+  assert_eq!(
+    snap.provider_priority,
+    vec!["applemusic".to_owned(), "spotify".to_owned()]
+  );
+  let flags = snap.capability_flags;
+  assert!(!flags.geo && flags.notifications && !flags.net_ws && flags.audio_tts);
+  let poll = snap.ota_poll_config.expect("the poll config survived");
+  assert_eq!(poll.interval_seconds, 900);
+  assert!(!poll.auto_push);
+  assert_eq!(poll.root_url.as_deref(), Some("https://ota.invalid"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fresh_host_polls_for_updates_and_a_disabled_poll_stays_disabled() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  {
+    let first = relaunch(spool.path());
+    let poll = first
+      .snapshot()
+      .await
+      .ota_poll_config
+      .expect("a host that never chose still polls");
+    assert!(poll.auto_push);
+    first.set_ota_poll_config(None).await;
+  }
+
+  assert_eq!(
+    relaunch(spool.path()).snapshot().await.ota_poll_config,
+    None,
+    "turning polling off is a choice, not an absence"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_capability_the_stored_settings_predate_takes_the_fresh_default() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  std::fs::write(
+    spool.path().join("host-settings.json"),
+    br#"{"capabilityChoices":{"geo":true,"notifications":true}}"#,
+  )
+  .expect("a settings file from an older build");
+
+  let flags = relaunch(spool.path()).capability_flags();
+
+  assert!(flags.geo && flags.notifications, "what the file does say is honored");
+  assert!(
+    !flags.audio_tts,
+    "what it does not say falls back to the host's fresh default"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_fresh_host_subscribes_to_the_official_catalog_and_an_unsubscribe_sticks() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  {
+    let first = relaunch(spool.path());
+    assert_eq!(
+      first.catalog_sources(),
+      vec![bridgething_delivery::catalog::OFFICIAL_CATALOG_URL.to_owned()],
+      "the official catalog is the default subscription"
+    );
+    first.set_catalog_sources(Vec::new());
+  }
+
+  assert_eq!(
+    relaunch(spool.path()).catalog_sources(),
+    Vec::<String>::new(),
+    "dropping the official catalog is a choice, not an absence"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn catalog_sources_keep_the_order_the_host_chose_across_a_relaunch() {
+  let spool = tempfile::tempdir().expect("a scratch directory");
+  let chosen = vec![
+    "https://other.example/catalog.json".to_owned(),
+    bridgething_delivery::catalog::OFFICIAL_CATALOG_URL.to_owned(),
+  ];
+  {
+    let first = relaunch(spool.path());
+    let held = first.set_catalog_sources(vec![chosen[0].clone(), chosen[1].clone(), chosen[0].clone()]);
+    assert_eq!(held, chosen, "a repeat is not a second subscription");
+  }
+
+  assert_eq!(relaunch(spool.path()).catalog_sources(), chosen);
+}
+
 // ---- more than one peer -------------------------------------------------------
 
 async fn two_peers(link: &Arc<HandLink>, session: &Arc<Session>) {
@@ -838,6 +1016,21 @@ async fn device_meta_is_attributed_to_the_peer_that_announced_it() {
   );
 }
 
+async fn both_announced(session: &Arc<Session>) {
+  let announced = |device_id: &str, serial: &str| {
+    session
+      .observer()
+      .device_metas()
+      .iter()
+      .any(|entry| entry.device_id == device_id && entry.meta.serial_number == serial)
+  };
+  assert!(
+    eventually(|| announced(DEVICE, "serial-one") && announced(OTHER, "serial-two")).await,
+    "both announces landed, saw {:?}",
+    session.observer().device_metas()
+  );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_gesture_change_rewrites_the_held_meta_for_that_peer_alone() {
   let link = Arc::new(HandLink::default());
@@ -864,6 +1057,7 @@ async fn a_gesture_change_rewrites_the_held_meta_for_that_peer_alone() {
       .find(|entry| entry.device_id == device_id)
       .map(|entry| entry.meta.launcher_gesture)
   };
+  both_announced(&session).await;
   assert!(
     eventually(|| gesture_of(DEVICE) == Some(LauncherGesture::FivePress)).await,
     "the announce seeds the gesture along with the rest of the meta, saw {:?}",
@@ -921,6 +1115,7 @@ async fn a_companion_launch_change_rewrites_the_held_meta_for_that_peer_alone() 
       .find(|entry| entry.device_id == device_id)
       .map(|entry| entry.meta.companion_launch)
   };
+  both_announced(&session).await;
   assert!(
     eventually(|| launch_of(DEVICE) == Some(true) && launch_of(OTHER) == Some(true)).await,
     "the announce seeds the setting along with the rest of the meta, saw {:?}",

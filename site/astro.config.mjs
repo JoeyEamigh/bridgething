@@ -48,7 +48,7 @@ export default defineConfig({
     }),
   ],
   trailingSlash: 'ignore',
-  redirects: { '/apps/store': '/apps' },
+  redirects: { '/apps/store': '/apps', '/appjam': '/apps' },
   build: {
     format: 'directory',
     inlineStylesheets: 'auto',

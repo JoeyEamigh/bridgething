@@ -363,6 +363,14 @@ export class BridgethingSession {
     await this.native.setOtaPollConfig(config);
   }
 
+  async catalogSources(): Promise<string[]> {
+    return this.native.catalogSources();
+  }
+
+  async setCatalogSources(urls: string[]): Promise<string[]> {
+    return this.native.setCatalogSources(urls);
+  }
+
   async checkForOtaUpdate(rootUrl: string): Promise<void> {
     await this.native.checkForOtaUpdate(rootUrl);
   }

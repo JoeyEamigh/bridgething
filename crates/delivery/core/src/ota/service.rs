@@ -24,8 +24,9 @@ use uuid::Uuid;
 use crate::{
   bundle::{
     ArtifactDigest,
-    fetch::{ArtifactFetch, DownloadRequest, FetchError},
+    fetch::{ArtifactFetch, DownloadRequest, FetchError, sha256_hex},
   },
+  catalog::{self, Catalog, CatalogUpdate},
   ota::{
     autopush::{AutoPushSchedule, MIN_POLL_INTERVAL_SECONDS, MIN_RESUME_DELAY_MS},
     event::{OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
@@ -57,6 +58,7 @@ pub const ABANDONED_REASON: &str = "update ended without reporting a result";
 pub const LINK_LOST_REASON: &str = "the link to the device dropped mid-update";
 
 const RESUME_READY_DEADLINE_MS: u64 = 60_000;
+const WEBAPP_INSTALL_DIR: &str = "webapp-install";
 const RESUME_READY_POLL_MS: u64 = 250;
 
 pub const ACK_TIMEOUT_MS: u64 = 15_000;
@@ -424,6 +426,8 @@ pub struct OtaService {
   idle: Notify,
   poll: Mutex<PollState>,
   wake: Notify,
+  catalog_sources: Mutex<Vec<String>>,
+  store_attempts: Mutex<BTreeSet<String>>,
 }
 
 impl OtaService {
@@ -449,6 +453,8 @@ impl OtaService {
       idle: Notify::new(),
       poll: Mutex::new(PollState::default()),
       wake: Notify::new(),
+      catalog_sources: Mutex::new(Vec::new()),
+      store_attempts: Mutex::new(BTreeSet::new()),
     })
   }
 
@@ -658,7 +664,7 @@ impl OtaService {
       .and_then(|link| link.meta.clone())
   }
 
-  pub async fn set_poll_config(self: &Arc<Self>, config: Option<OtaPollConfig>) {
+  pub fn set_poll_config(self: &Arc<Self>, config: Option<OtaPollConfig>) {
     let generation = {
       let mut poll = self.poll.lock().unwrap();
       poll.generation += 1;
@@ -671,6 +677,11 @@ impl OtaService {
       let service = self.clone();
       rt::spawn(async move { service.run_poll_loop(generation).await });
     }
+  }
+
+  pub fn set_catalog_sources(&self, sources: Vec<String>) {
+    *self.catalog_sources.lock().unwrap() = sources;
+    self.wake.notify_waiters();
   }
 
   pub async fn poll_now(&self) {
@@ -1138,21 +1149,23 @@ impl OtaService {
   }
 
   async fn poll(&self, config: &OtaPollConfig) -> Notified<'_> {
+    let woken = self.wake.notified();
     let manifest = match self.discover_manifest(&config.root_url).await {
-      Ok(manifest) => manifest,
+      Ok(manifest) => {
+        self.feed.emit(OtaPollEvent::ManifestPolled {
+          updated_at: manifest.updated_at.clone(),
+        });
+        Some(manifest)
+      }
       Err(e) => {
         self
           .feed
           .emit(OtaPollEvent::ManifestPollFailed { reason: e.to_string() });
         self.recheck_soon.store(true, Ordering::SeqCst);
-        return self.wake.notified();
+        None
       }
     };
-    self.feed.emit(OtaPollEvent::ManifestPolled {
-      updated_at: manifest.updated_at.clone(),
-    });
 
-    let woken = self.wake.notified();
     let announced: Vec<(String, BridgeThingMeta)> = self
       .links
       .lock()
@@ -1160,14 +1173,122 @@ impl OtaService {
       .iter()
       .filter_map(|(device_id, link)| link.meta.clone().map(|meta| (device_id.clone(), meta)))
       .collect();
+    let catalogs = if config.auto_push && !announced.is_empty() {
+      self.subscribed_catalogs().await
+    } else {
+      BTreeMap::new()
+    };
 
     for (device_id, meta) in announced {
-      let Some((latest, release)) = pushable_release(&manifest, &meta.channel) else {
-        continue;
+      let release = manifest
+        .as_ref()
+        .and_then(|manifest| pushable_release(manifest, &meta.channel));
+      let claimed = match release {
+        Some((latest, release)) => self.reconcile(&device_id, &meta, &latest, release, config).await,
+        None => false,
       };
-      self.reconcile(&device_id, &meta, &latest, release, config).await;
+      if !claimed && !catalogs.is_empty() {
+        self.update_store_apps(&device_id, &meta, &catalogs).await;
+      }
     }
     woken
+  }
+
+  async fn subscribed_catalogs(&self) -> BTreeMap<String, Catalog> {
+    let sources = self.catalog_sources.lock().unwrap().clone();
+    let fetched = futures::future::join_all(sources.into_iter().map(|url| async move {
+      let fetched = catalog::fetch_catalog(self.deps.fetch.as_ref(), &url).await;
+      (url, fetched)
+    }))
+    .await;
+    fetched
+      .into_iter()
+      .filter_map(|(url, fetched)| match fetched {
+        Ok(catalog) => Some((url, catalog)),
+        Err(e) => {
+          tracing::warn!(%url, %e, "a catalog source could not be read; its apps wait for the next poll");
+          None
+        }
+      })
+      .collect()
+  }
+
+  async fn update_store_apps(&self, device_id: &str, meta: &BridgeThingMeta, catalogs: &BTreeMap<String, Catalog>) {
+    if self.in_flight.lock().unwrap().contains(device_id) {
+      self.recheck_soon.store(true, Ordering::SeqCst);
+      return;
+    }
+    if !self.auto_push_ready(device_id) {
+      return;
+    }
+    let Some(installed) = self.installed_webapps(device_id).await else {
+      self.recheck_soon.store(true, Ordering::SeqCst);
+      return;
+    };
+    for update in catalog::updates(catalogs, &installed, &meta.libbridgething_version) {
+      let attempt = format!("{device_id}:{}@{}", update.app_id.to_lowercase(), update.target.version);
+      if !self.store_attempts.lock().unwrap().insert(attempt) {
+        continue;
+      }
+      self.install_store_update(device_id, update).await;
+      if self.link(device_id).is_none() {
+        return;
+      }
+    }
+  }
+
+  async fn install_store_update(&self, device_id: &str, update: CatalogUpdate) {
+    tracing::info!(
+      %device_id,
+      app = %update.name,
+      from = %update.installed_version,
+      to = %update.target.version,
+      "updating a store app"
+    );
+    let path = match self
+      .download_webapp(&update.target.download.url, Some(update.target.download.digest()))
+      .await
+    {
+      Ok(path) => path,
+      Err(e) => {
+        tracing::warn!(%device_id, app = %update.name, %e, "a store app update could not be downloaded");
+        return;
+      }
+    };
+    let label = WebappLabel {
+      id: update.app_id,
+      name: update.name.clone(),
+    };
+    let result = self
+      .install_webapp(
+        device_id,
+        Arc::new(FileSource::open(path.clone())),
+        Some(&update.source_url),
+        Some(label),
+      )
+      .await;
+    let _ = std::fs::remove_file(&path);
+    if let WebappInstallResult::Failed { reason } = result {
+      tracing::warn!(%device_id, app = %update.name, %reason, "a store app update was not installed");
+    }
+  }
+
+  pub async fn download_webapp(&self, url: &str, expected: Option<ArtifactDigest>) -> Result<PathBuf, FetchError> {
+    self
+      .deps
+      .fetch
+      .download(DownloadRequest {
+        filename: format!("{}.zip", sha256_hex(url.as_bytes())),
+        dir: self.deps.cache_dir.join(WEBAPP_INSTALL_DIR),
+        asset: url.to_owned(),
+        url: url.to_owned(),
+        expected: expected.map(|digest| ArtifactDigest {
+          size: digest.size,
+          sha256: digest.sha256.to_lowercase(),
+        }),
+        progress: None,
+      })
+      .await
   }
 
   async fn reconcile(
@@ -1177,10 +1298,10 @@ impl OtaService {
     latest: &OtaCompositeVersion,
     release: Option<&OtaManifestRelease>,
     config: &OtaPollConfig,
-  ) {
+  ) -> bool {
     if self.in_flight.lock().unwrap().contains(device_id) {
       self.recheck_soon.store(true, Ordering::SeqCst);
-      return;
+      return true;
     }
 
     let artifacts = release.and_then(|release| release.artifacts.as_ref());
@@ -1205,7 +1326,7 @@ impl OtaService {
       } else {
         self.recheck_soon.store(true, Ordering::SeqCst);
       }
-      return;
+      return false;
     }
 
     self.feed.emit(OtaPollEvent::UpdateAvailable {
@@ -1220,8 +1341,9 @@ impl OtaService {
         self
           .run_image_auto(device_id, &meta.channel, latest, &urls, artifacts, config)
           .await;
+        return true;
       }
-      return;
+      return false;
     }
 
     let mut batch = Vec::new();
@@ -1245,7 +1367,9 @@ impl OtaService {
       self
         .run_bandaid_batch_auto(device_id, batch, latest, &meta.channel, &config.root_url)
         .await;
+      return true;
     }
+    false
   }
 
   async fn builtin_webapp_drift(
@@ -1265,8 +1389,10 @@ impl OtaService {
       let Some(available) = release.builtin_webapps.get(slug) else {
         continue;
       };
-      let Some(current) = installed.get(&id) else { continue };
-      if current == available {
+      let Some(current) = installed.iter().find(|webapp| webapp.id == id) else {
+        continue;
+      };
+      if &current.version == available {
         continue;
       }
       drifted.push(BandaidPiece {
@@ -1285,7 +1411,7 @@ impl OtaService {
     Some(drifted)
   }
 
-  async fn installed_webapps(&self, device_id: &str) -> Option<BTreeMap<Uuid, String>> {
+  async fn installed_webapps(&self, device_id: &str) -> Option<Vec<WebappInfo>> {
     let link = self.link(device_id)?;
     let list = match link.gateway.webapp().list().await {
       Ok(list) => list,
@@ -1298,13 +1424,7 @@ impl OtaService {
       tracing::debug!(device_id, "webapp list came back empty; holding the ota verdict");
       return None;
     }
-    Some(
-      list
-        .webapps
-        .into_iter()
-        .map(|webapp| (webapp.id, webapp.version))
-        .collect(),
-    )
+    Some(list.webapps)
   }
 
   async fn run_image_auto(

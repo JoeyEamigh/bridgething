@@ -62,6 +62,7 @@ public object CompanionHolder {
             spotify = HybridBridgethingSessionImpl.spotifyConfig,
             events = { event -> eventSink?.invoke(event) },
         )
+        HybridBridgethingSessionImpl.inheritHostSettings(appCtx, c.session)
         c.start()
         companion = c
         transport = c.transport

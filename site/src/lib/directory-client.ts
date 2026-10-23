@@ -75,14 +75,14 @@ export {
   type MergedCatalog,
 } from '@bridgething/catalog';
 
-export async function submitSource(url: string): Promise<DirectoryEntry> {
+export async function submitSource(url: string): Promise<{ entry: DirectoryEntry; created: boolean }> {
   const response = await fetch('/api/sources', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ url }),
   });
   const body = await unwrap<{ source: DirectoryEntry }>(response);
-  return body.source;
+  return { entry: body.source, created: response.status === 201 };
 }
 
 export async function fetchAdminSources(token: string): Promise<AdminEntry[]> {

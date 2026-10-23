@@ -1,5 +1,6 @@
 pub mod blob;
 pub mod bundle;
+pub mod catalog;
 pub mod log;
 pub mod ota;
 pub mod seam;

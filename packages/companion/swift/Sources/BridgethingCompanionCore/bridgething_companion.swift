@@ -4243,6 +4243,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func cancelMediaImport(ticket: UInt64) 
     
+    func capabilityFlags()  -> CapabilityFlags
+    
     func checkForOtaUpdate(rootUrl: String) async 
     
     func companionDebug()  -> CompanionDebug
@@ -4265,7 +4267,13 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func deleteWebappDoc(deviceId: String, id: String, key: String) async throws 
     
+    func deviceAutoResume(deviceId: String)  -> Bool
+    
+    func deviceIdentity(deviceId: String)  -> String?
+    
     func deviceLogSnapshot(limit: UInt32)  -> [DeviceLogLine]
+    
+    func deviceResumeTarget(deviceId: String)  -> ResumeTarget
     
     func deviceSetNickname(deviceId: String, nickname: String) async throws 
     
@@ -4280,6 +4288,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     func downloadVoiceModel() async 
     
     func fetchOtaManifest(rootUrl: String) async throws  -> OtaDiscoverManifest
+    
+    func forgetDevice(deviceId: String) 
     
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
     
@@ -4346,6 +4356,10 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     func webappResource(deviceId: String, id: String, kind: WebappResourceKind, origin: WebappResourceOrigin?) async throws  -> WebappResourceFile
     
     func webappSlots(deviceId: String) async throws  -> WebappSlots
+    
+    func catalogSources()  -> [String]
+    
+    func setCatalogSources(urls: [String])  -> [String]
     
 }
 open class CompanionSession: CompanionSessionProtocol, @unchecked Sendable {
@@ -4486,6 +4500,15 @@ open func cancelMediaImport(ticket: UInt64)  {try! rustCall() {
         FfiConverterUInt64.lower(ticket),uniffiCallStatus
     )
 }
+}
+    
+open func capabilityFlags() -> CapabilityFlags  {
+    return try!  FfiConverterTypeCapabilityFlags_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_capability_flags(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
 }
     
 open func checkForOtaUpdate(rootUrl: String)async   {
@@ -4645,12 +4668,42 @@ open func deleteWebappDoc(deviceId: String, id: String, key: String)async throws
         )
 }
     
+open func deviceAutoResume(deviceId: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_device_auto_resume(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),uniffiCallStatus
+    )
+})
+}
+    
+open func deviceIdentity(deviceId: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_device_identity(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),uniffiCallStatus
+    )
+})
+}
+    
 open func deviceLogSnapshot(limit: UInt32) -> [DeviceLogLine]  {
     return try!  FfiConverterSequenceTypeDeviceLogLine.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_companionsession_device_log_snapshot(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(limit),uniffiCallStatus
+    )
+})
+}
+    
+open func deviceResumeTarget(deviceId: String) -> ResumeTarget  {
+    return try!  FfiConverterTypeResumeTarget_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_device_resume_target(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),uniffiCallStatus
     )
 })
 }
@@ -4769,6 +4822,15 @@ open func fetchOtaManifest(rootUrl: String)async throws  -> OtaDiscoverManifest 
             liftFunc: FfiConverterTypeOtaDiscoverManifest_lift,
             errorHandler: FfiConverterTypeCompanionError_lift
         )
+}
+    
+open func forgetDevice(deviceId: String)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_forget_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),uniffiCallStatus
+    )
+}
 }
     
 open func getWebappDoc(deviceId: String, id: String, key: String)async throws  -> String?  {
@@ -5281,6 +5343,25 @@ open func webappSlots(deviceId: String)async throws  -> WebappSlots  {
             liftFunc: FfiConverterTypeWebappSlots_lift,
             errorHandler: FfiConverterTypeCompanionError_lift
         )
+}
+    
+open func catalogSources() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_catalog_sources(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func setCatalogSources(urls: [String]) -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_set_catalog_sources(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(urls),uniffiCallStatus
+    )
+})
 }
     
 
@@ -31161,6 +31242,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_cancel_media_import() != 14729) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_capability_flags() != 49856) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_check_for_ota_update() != 64188) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -31194,7 +31278,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_delete_webapp_doc() != 62193) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_device_auto_resume() != 21368) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_device_identity() != 28922) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot() != 3371) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target() != 35275) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_device_set_nickname() != 14738) {
@@ -31216,6 +31309,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_forget_device() != 17085) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_get_webapp_doc() != 55247) {
@@ -31315,6 +31411,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_webapp_slots() != 15167) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_catalog_sources() != 33526) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_catalog_sources() != 7228) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_sessioneventsink_on_event() != 19676) {

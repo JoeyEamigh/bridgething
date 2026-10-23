@@ -5,7 +5,6 @@ import {
   fetchMergedApps,
   fetchSources,
   normalizeSourceUrl,
-  OFFICIAL_CATALOG_URL,
   aggregate,
   recommendedSources as resolveRecommended,
   reportInstalled,
@@ -35,13 +34,10 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { getSession } from './bridge';
-import { isRunning, useOtaStore } from './ota';
+import { storage } from './storage';
 import { connectedPeers, useSessionStore, type SessionState } from './session';
-import { DEFAULT_OTA_POLL_CONFIG, storage } from './storage';
 import { formatBytes } from './utils';
 import { useWebappsStore } from './webapps';
-
-const SOURCES_KEY = 'catalog.sources';
 
 type CatalogState = {
   sources: string[];
@@ -57,7 +53,7 @@ type CatalogState = {
 const PREVIEW_TTL_MS = 5 * 60 * 1000;
 
 export const useCatalogStore = create<CatalogState>(() => ({
-  sources: loadSources(),
+  sources: [],
   catalogs: [],
   directory: null,
   merged: [],
@@ -67,34 +63,73 @@ export const useCatalogStore = create<CatalogState>(() => ({
   previews: {},
 }));
 
-function loadSources(): string[] {
-  const raw = storage.getString(SOURCES_KEY);
-  if (!raw) return [OFFICIAL_CATALOG_URL];
+const INHERITED_SOURCES_KEY = 'catalog.sources';
+
+async function inheritStoredSources(): Promise<void> {
+  const raw = storage.getString(INHERITED_SOURCES_KEY);
+  if (raw === undefined) return;
+  let urls: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    const urls = Array.isArray(parsed)
-      ? parsed.filter((u): u is string => typeof u === 'string')
-      : [];
-    return urls.length > 0 ? urls : [OFFICIAL_CATALOG_URL];
+    urls = JSON.parse(raw);
   } catch {
-    return [OFFICIAL_CATALOG_URL];
+    urls = [];
+  }
+  if (Array.isArray(urls) && urls.length > 0) {
+    const held = await getSession().catalogSources();
+    const extra = urls.filter(
+      (url): url is string => typeof url === 'string' && !held.includes(url),
+    );
+    if (extra.length > 0)
+      await getSession().setCatalogSources([...held, ...extra]);
+  }
+  storage.remove(INHERITED_SOURCES_KEY);
+}
+
+let inheriting: Promise<void> | null = null;
+
+async function heldSources(): Promise<string[]> {
+  try {
+    inheriting ??= inheritStoredSources().catch(() => {
+      inheriting = null;
+    });
+    await inheriting;
+    const sources = await getSession().catalogSources();
+    useCatalogStore.setState({ sources });
+    return sources;
+  } catch {
+    return useCatalogStore.getState().sources;
   }
 }
 
-function saveSources(urls: string[]): void {
-  storage.set(SOURCES_KEY, JSON.stringify(urls));
+let sourceWrites: Promise<unknown> = Promise.resolve();
+
+function rewriteSources(
+  change: (held: string[]) => string[] | null,
+): Promise<boolean> {
+  const write = sourceWrites.then(async () => {
+    const next = change(await heldSources());
+    if (!next) return false;
+    const sources = await getSession().setCatalogSources(next);
+    useCatalogStore.setState(s => ({
+      sources,
+      catalogs: s.catalogs
+        .filter(e => sources.includes(e.url))
+        .sort((a, b) => sources.indexOf(a.url) - sources.indexOf(b.url)),
+    }));
+    return true;
+  });
+  sourceWrites = write.catch(() => undefined);
+  return write;
 }
 
 let refreshGeneration = 0;
 
 export async function refreshCatalog(): Promise<void> {
   const generation = ++refreshGeneration;
-  const {
-    sources,
-    merged: heldMerged,
-    installs: heldInstalls,
-  } = useCatalogStore.getState();
   useCatalogStore.setState({ refreshing: true });
+  const sources = await heldSources();
+  const { merged: heldMerged, installs: heldInstalls } =
+    useCatalogStore.getState();
 
   const [snapshot, merged] = await Promise.all([
     fetchSources(sources).catch(err => ({
@@ -153,41 +188,29 @@ export function parseSourceInput(raw: string): SourceInput {
 
 export async function addSource(url: string): Promise<string> {
   const normalized = normalizeSourceUrl(url);
-  const { sources } = useCatalogStore.getState();
-  if (sources.includes(normalized)) return normalized;
-  const next = [...sources, normalized];
-  saveSources(next);
-  useCatalogStore.setState({ sources: next });
-  await refreshCatalog();
+  const added = await rewriteSources(held =>
+    held.includes(normalized) ? null : [...held, normalized],
+  );
+  if (added) await refreshCatalog();
   return normalized;
 }
 
-export function moveSource(url: string, delta: number): void {
-  const { sources, catalogs } = useCatalogStore.getState();
-  const from = sources.indexOf(url);
-  const to = from + delta;
-  if (from === -1 || to < 0 || to >= sources.length) return;
-  const next = [...sources];
-  next.splice(to, 0, ...next.splice(from, 1));
-  saveSources(next);
-  useCatalogStore.setState({
-    sources: next,
-    catalogs: [...catalogs].sort(
-      (a, b) => next.indexOf(a.url) - next.indexOf(b.url),
-    ),
+export async function moveSource(url: string, delta: number): Promise<void> {
+  await rewriteSources(held => {
+    const from = held.indexOf(url);
+    const to = from + delta;
+    if (from === -1 || to < 0 || to >= held.length) return null;
+    const next = [...held];
+    next.splice(to, 0, ...next.splice(from, 1));
+    return next;
   });
 }
 
 export async function removeSource(url: string): Promise<void> {
-  const { sources, catalogs } = useCatalogStore.getState();
-  if (!sources.includes(url)) return;
-  const next = sources.filter(u => u !== url);
-  saveSources(next);
-  useCatalogStore.setState({
-    sources: next,
-    catalogs: catalogs.filter(e => e.url !== url),
-  });
-  await refreshCatalog();
+  const removed = await rewriteSources(held =>
+    held.includes(url) ? held.filter(u => u !== url) : null,
+  );
+  if (removed) await refreshCatalog();
 }
 
 function toInstalled(list: BridgethingWebappInfo[]): InstalledWebapp[] {
@@ -355,80 +378,6 @@ export function useCatalog<T>(selector: (state: CatalogState) => T): T {
   return useCatalogStore(useShallow(selector));
 }
 
-function pendingUpdates(deviceId: string): CatalogAppUpdate[] {
-  const { catalogs } = useCatalogStore.getState();
-  const installed = useWebappsStore.getState().byDevice[deviceId]?.list ?? [];
-  return resolveUpdates({
-    catalogs: new Map(catalogs.map(e => [e.url, e.catalog])),
-    installed: toInstalled(installed),
-    deviceLibVersion: deviceLibVersion(useSessionStore.getState(), deviceId),
-    extensions: 'omitted',
-  });
-}
-
-async function installUpdate(
-  deviceId: string,
-  update: CatalogAppUpdate,
-): Promise<void> {
-  const app = useCatalogStore
-    .getState()
-    .catalogs.find(c => c.url === update.sourceUrl)
-    ?.catalog.apps.find(a => a.id.toLowerCase() === update.appId);
-  await getSession().installWebappFromUrl(
-    deviceId,
-    update.target.download.url,
-    update.target.download.sha256,
-    update.target.download.size,
-    update.sourceUrl,
-    app?.id ?? update.appId,
-    update.name,
-  );
-}
-
-const attemptedAutoUpdates = new Set<string>();
-let autoUpdateRunning = false;
-let autoUpdateStarted = false;
-
-function nextAutoUpdate(): {
-  deviceId: string;
-  update: CatalogAppUpdate;
-  key: string;
-} | null {
-  const session = useSessionStore.getState();
-  const autoPush =
-    session.otaPollConfig?.autoPush ?? DEFAULT_OTA_POLL_CONFIG.autoPush;
-  if (!autoPush) return null;
-
-  for (const peer of connectedPeers(session.peers)) {
-    if (isRunning(useOtaStore.getState().runs[peer.id])) continue;
-    for (const update of pendingUpdates(peer.id)) {
-      const key = `${peer.id}:${update.appId}@${update.target.version}`;
-      if (attemptedAutoUpdates.has(key)) continue;
-      return { deviceId: peer.id, update, key };
-    }
-  }
-  return null;
-}
-
-async function sweepAutoUpdates(): Promise<void> {
-  if (autoUpdateRunning) return;
-  autoUpdateRunning = true;
-  try {
-    for (;;) {
-      const target = nextAutoUpdate();
-      if (!target) return;
-      attemptedAutoUpdates.add(target.key);
-      try {
-        await installUpdate(target.deviceId, target.update);
-      } catch {
-        continue;
-      }
-    }
-  } finally {
-    autoUpdateRunning = false;
-  }
-}
-
 function inventoryOf(deviceId: string): InstalledReport | null {
   const held = useWebappsStore.getState().byDevice[deviceId];
   const serial = deviceSerial(useSessionStore.getState(), deviceId);
@@ -462,17 +411,6 @@ export function startInstallCensus(): void {
   useWebappsStore.subscribe(sweep);
   useSessionStore.subscribe(sweep);
   sweep();
-}
-
-export function startWebappAutoUpdate(): void {
-  if (autoUpdateStarted) return;
-  autoUpdateStarted = true;
-  const check = () => void sweepAutoUpdates();
-  useCatalogStore.subscribe(check);
-  useWebappsStore.subscribe(check);
-  useSessionStore.subscribe(check);
-  useOtaStore.subscribe(check);
-  check();
 }
 
 export function settingsOrigin(

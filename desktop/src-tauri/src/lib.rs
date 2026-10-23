@@ -1,17 +1,17 @@
 pub mod autoconnect;
 pub mod backends;
-pub mod capabilities;
+pub mod clock;
 pub mod commands;
 pub mod extensions;
 pub mod hints;
+pub mod inherited;
 pub mod known_device;
 pub mod logs;
 pub mod process;
 pub mod route;
+pub mod self_update;
 pub mod settings;
 pub mod shell;
-pub mod sources;
-pub mod store;
 pub mod theme;
 pub mod tray;
 
@@ -19,14 +19,12 @@ use std::sync::Arc;
 
 use bridgething_delivery::discovery::Discovery;
 use tauri::Manager;
-use tracing_subscriber::{layer::SubscriberExt as _, util::SubscriberInitExt as _};
 
 use crate::{
   extensions::Deps,
   hints::{ENDPOINTS, Hint, HintSink, Visibility, WindowHints},
   route::Route,
   shell::{DesktopPaths, Shell, ShellConfig},
-  sources::Sources,
 };
 
 const AUTOSTART_ARG: &str = "--autostart";
@@ -128,20 +126,21 @@ macro_rules! desktop_commands {
       $crate::commands::remove_extension,
       $crate::commands::open_extension_data,
       $crate::commands::retry_extension_runtime,
-      $crate::commands::restart,
+      $crate::self_update::self_update,
+      $crate::self_update::check_self_update,
+      $crate::self_update::apply_self_update,
       $crate::commands::quit,
     ]
   };
 }
 
 pub fn run() {
-  let (filter, reload) = tracing_subscriber::reload::Layer::new(logs::filter(false));
-  tracing_subscriber::registry()
-    .with(filter)
-    .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
-    .with(logs::RingLayer)
-    .init();
-  let verbosity = Arc::new(logs::Verbosity::new(reload));
+  let verbosity = logs::install(
+    DesktopPaths::xdg()
+      .ok()
+      .as_ref()
+      .map(|paths| paths.config_dir.as_path()),
+  );
 
   let resident = std::env::args().any(|arg| arg == AUTOSTART_ARG);
 
@@ -158,6 +157,7 @@ pub fn run() {
     .plugin(tauri_plugin_clipboard_manager::init())
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_notification::init())
     .setup(move |app| {
       use tauri_plugin_deep_link::DeepLinkExt as _;
 
@@ -193,6 +193,12 @@ pub fn run() {
       });
       logs::attach(shell.session().log_inbox());
       tauri::async_runtime::block_on(shell.start());
+      let updates = self_update::Updates::new(self_update::TauriFeed::new(app.handle()), hints.clone(), {
+        let app = app.handle().clone();
+        let announced = self_update::Announced::open(&paths.state_dir);
+        move |ready| self_update::offer(&app, &announced, ready)
+      });
+      let online = shell.online();
       let wake = shell.wake();
       let discovery = Discovery::spawn(move |_| {
         hints.emit(Hint::bare(ENDPOINTS));
@@ -202,12 +208,15 @@ pub fn run() {
         let discovery = Arc::clone(&discovery);
         move || discovery.endpoints()
       });
+      clock::spawn(shell.clone(), Arc::clone(&updates));
       app.manage(shell);
       app.manage(extensions);
       app.manage(discovery);
-      app.manage(Sources::open(&paths.config_dir));
       app.manage(Route::open(&paths.config_dir));
       tray::install(app.handle())?;
+      self_update::listen(app.handle());
+      updates.spawn(online);
+      app.manage(updates);
       theme::sync(app.handle());
       if resident {
         tray::dismiss(app.handle());

@@ -1,271 +1,230 @@
 import { describe, expect, test } from 'bun:test';
-import type { Catalog } from '@bridgething/catalog';
-import { fakeKv } from './kv-fake.ts';
-import { recheckSource, setSourceStatus, submitSource } from './sources.ts';
-import { readSource } from './store.ts';
+import { fakeD1 } from './d1-fake.ts';
+import { admitAll, catalog, LATER, NOW, origin, seedSource } from './fixtures.ts';
+import { listSources, readSource, setSourceStatus, submitSource } from './sources.ts';
 
-const APP_ID = '019e6701-13f8-71b5-ba04-85d326630e98';
-const SHA = '0'.repeat(64);
-const NOW = '2026-07-24T12:00:00.000Z';
-const LATER = '2026-07-25T12:00:00.000Z';
 const CATALOG_URL = 'https://third.example/catalog.json';
-const DOWNLOAD_URL = 'https://third.example/r/app.zip';
-
-function catalog(overrides: Partial<Catalog> = {}): Catalog {
-  return {
-    schema: 'catalog.v1',
-    updated_at: '2026-07-01T00:00:00Z',
-    repo: { name: 'third party apps', description: 'some apps', homepage: null, icon: null },
-    apps: [
-      {
-        id: APP_ID,
-        name: 'Thing',
-        description: 'Does a thing.',
-        author: 'somebody',
-        icon: null,
-        homepage: null,
-        source: null,
-        versions: [
-          {
-            version: '1.0.0',
-            released_at: '2026-07-01T00:00:00Z',
-            download: { url: DOWNLOAD_URL, size: 10, sha256: SHA },
-            permissions: ['net.fetch'],
-            min_libbridgething_version: '0.4.0',
-            changelog: null,
-          },
-        ],
-      },
-    ],
-    recommended_sources: [],
-    ...overrides,
-  };
-}
-
-type StubOptions = {
-  body?: unknown;
-  status?: number;
-  cors?: boolean;
-  downloadCors?: boolean;
-  throws?: boolean;
-};
-
-function stubFetch(options: StubOptions = {}): typeof fetch {
-  const { body = catalog(), status = 200, cors = true, downloadCors = true, throws = false } = options;
-
-  return (async (input: string | URL | Request, init?: RequestInit) => {
-    if (throws) throw new TypeError('network down');
-
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-
-    if (init?.method === 'HEAD') {
-      return new Response(null, {
-        status: 200,
-        headers: downloadCors ? { 'access-control-allow-origin': '*' } : {},
-      });
-    }
-
-    if (url !== CATALOG_URL) return new Response('not found', { status: 404 });
-
-    const text = typeof body === 'string' ? body : JSON.stringify(body);
-    return new Response(text, {
-      status,
-      headers: {
-        'content-type': 'application/json',
-        ...(cors ? { 'access-control-allow-origin': '*' } : {}),
-      },
-    });
-  }) as typeof fetch;
-}
 
 describe('submitSource', () => {
-  test('auto-lists a valid source into quarantine', async () => {
-    const kv = fakeKv();
-    const outcome = await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
+  test('lists a valid source straight away', async () => {
+    const db = fakeD1();
+    const outcome = await submitSource({
+      db,
+      rawUrl: CATALOG_URL,
+      now: NOW,
+      admit: admitAll,
+      fetchImpl: origin({ [CATALOG_URL]: { body: catalog('third party apps') } }).fetch,
+    });
 
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.created).toBe(true);
-    expect(outcome.record.status).toBe('quarantined');
-    expect(outcome.record.name).toBe('third party apps');
-    expect(outcome.record.app_count).toBe(1);
-    expect(outcome.record.downloads_cors_ok).toBe(true);
+    expect(outcome.ok && outcome.created).toBe(true);
+    expect(outcome.ok && outcome.record).toMatchObject({
+      url: CATALOG_URL,
+      name: 'third party apps',
+      status: 'listed',
+      reviewed_at: null,
+      app_count: 1,
+      last_check_ok: true,
+      downloads_cors_ok: true,
+    });
   });
 
   test('refuses a source that does not send permissive cors', async () => {
-    const kv = fakeKv();
-    const outcome = await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch({ cors: false }) });
+    const db = fakeD1();
+    const outcome = await submitSource({
+      db,
+      rawUrl: CATALOG_URL,
+      now: NOW,
+      admit: admitAll,
+      fetchImpl: origin({ [CATALOG_URL]: { cors: false } }).fetch,
+    });
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.status).toBe(422);
-    expect(outcome.reason).toContain('Access-Control-Allow-Origin');
-    expect(await readSource(kv, CATALOG_URL)).toBeNull();
+    expect(outcome).toMatchObject({ ok: false, status: 422 });
+    expect(await readSource(db, CATALOG_URL)).toBeNull();
   });
 
   test('refuses a source that is not a valid catalog.v1', async () => {
-    const kv = fakeKv();
+    const db = fakeD1();
     const outcome = await submitSource({
-      kv,
+      db,
       rawUrl: CATALOG_URL,
       now: NOW,
-      fetchImpl: stubFetch({ body: { schema: 'catalog.v1' } }),
+      admit: admitAll,
+      fetchImpl: origin({ [CATALOG_URL]: { body: { schema: 'nope' } } }).fetch,
     });
 
     expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.status).toBe(422);
-    expect(outcome.reason).toContain('not a valid catalog.v1');
+    expect(!outcome.ok && outcome.reason).toContain('not a valid catalog.v1');
   });
 
   test('flags a source whose downloads are not browser-readable without refusing it', async () => {
-    const kv = fakeKv();
-    const outcome = await submitSource({
-      kv,
-      rawUrl: CATALOG_URL,
-      now: NOW,
-      fetchImpl: stubFetch({ downloadCors: false }),
-    });
+    const db = fakeD1();
+    const host = origin({ [CATALOG_URL]: {} });
+    host.downloadsCors = false;
 
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.record.downloads_cors_ok).toBe(false);
-    expect(outcome.record.status).toBe('quarantined');
+    const outcome = await submitSource({ db, rawUrl: CATALOG_URL, now: NOW, admit: admitAll, fetchImpl: host.fetch });
+
+    expect(outcome.ok && outcome.record.downloads_cors_ok).toBe(false);
   });
 
   test('a resubmit refreshes metadata but keeps the status an admin granted', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', reviewedBy: 'admin', now: NOW });
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'attested', catalog('old name'));
 
-    const renamed = catalog({ repo: { name: 'renamed', description: 'x', homepage: null, icon: null } });
     const outcome = await submitSource({
-      kv,
+      db,
       rawUrl: CATALOG_URL,
       now: LATER,
-      fetchImpl: stubFetch({ body: renamed }),
+      admit: admitAll,
+      fetchImpl: origin({ [CATALOG_URL]: { body: catalog('new name') } }).fetch,
     });
 
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.created).toBe(false);
-    expect(outcome.record.status).toBe('attested');
-    expect(outcome.record.name).toBe('renamed');
-    expect(outcome.record.submitted_at).toBe(NOW);
+    expect(outcome.ok && outcome.created).toBe(false);
+    expect(outcome.ok && outcome.record).toMatchObject({
+      name: 'new name',
+      status: 'attested',
+      submitted_at: NOW,
+      last_checked_at: LATER,
+    });
+  });
+
+  test('a resubmit refetches unconditionally, so an author can force a new version through', async () => {
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'listed');
+    const host = origin({ [CATALOG_URL]: { etag: '"v1"' } });
+
+    await submitSource({ db, rawUrl: CATALOG_URL, now: LATER, admit: admitAll, fetchImpl: host.fetch });
+
+    expect(host.requests[0]!.headers.get('if-none-match')).toBeNull();
   });
 
   test('a rejected source cannot resubmit itself back into the directory', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'rejected', reviewedBy: 'admin', now: NOW });
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'rejected');
+    const host = origin({ [CATALOG_URL]: {} });
 
-    const outcome = await submitSource({ kv, rawUrl: CATALOG_URL, now: LATER, fetchImpl: stubFetch() });
+    const outcome = await submitSource({ db, rawUrl: CATALOG_URL, now: LATER, admit: admitAll, fetchImpl: host.fetch });
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.status).toBe(403);
-    expect((await readSource(kv, CATALOG_URL))?.status).toBe('rejected');
+    expect(outcome).toMatchObject({ ok: false, status: 403 });
+    expect(host.requests).toEqual([]);
   });
 
   test('a source that is down leaves the existing record untouched', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'listed', reviewedBy: 'admin', now: NOW });
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'listed');
+    const before = await readSource(db, CATALOG_URL);
 
     const outcome = await submitSource({
-      kv,
+      db,
       rawUrl: CATALOG_URL,
       now: LATER,
-      fetchImpl: stubFetch({ throws: true }),
+      admit: admitAll,
+      fetchImpl: origin({ [CATALOG_URL]: { throws: true } }).fetch,
     });
 
     expect(outcome.ok).toBe(false);
-    const stored = await readSource(kv, CATALOG_URL);
-    expect(stored?.status).toBe('listed');
-    expect(stored?.last_check_ok).toBe(true);
+    expect(await readSource(db, CATALOG_URL)).toEqual(before);
   });
 
   test('rejects a non-https url before any network call', async () => {
-    const kv = fakeKv();
+    const host = origin();
     const outcome = await submitSource({
-      kv,
+      db: fakeD1(),
       rawUrl: 'http://third.example/catalog.json',
       now: NOW,
-      fetchImpl: stubFetch({ throws: true }),
+      admit: admitAll,
+      fetchImpl: host.fetch,
     });
 
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.status).toBe(400);
-  });
-});
-
-describe('recheckSource', () => {
-  test('records the failure without demoting a source that went dark', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({ kv, rawUrl: CATALOG_URL, status: 'attested', reviewedBy: 'admin', now: NOW });
-
-    const record = (await readSource(kv, CATALOG_URL))!;
-    const updated = await recheckSource({ kv, record, now: LATER, fetchImpl: stubFetch({ throws: true }) });
-
-    expect(updated.status).toBe('attested');
-    expect(updated.last_check_ok).toBe(false);
-    expect(updated.last_check_error).toContain('could not reach');
-    expect(updated.last_checked_at).toBe(LATER);
+    expect(outcome).toMatchObject({ ok: false, status: 400 });
+    expect(host.requests).toEqual([]);
   });
 
-  test('clears a prior failure when the source comes back', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
+  test('the admission check sees whether the source is new and stops the probe when it refuses', async () => {
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'listed');
+    const host = origin({ [CATALOG_URL]: {} });
+    const seen: (string | null)[] = [];
 
-    const record = (await readSource(kv, CATALOG_URL))!;
-    const down = await recheckSource({ kv, record, now: LATER, fetchImpl: stubFetch({ throws: true }) });
-    const back = await recheckSource({ kv, record: down, now: LATER, fetchImpl: stubFetch() });
+    const outcome = await submitSource({
+      db,
+      rawUrl: CATALOG_URL,
+      now: LATER,
+      admit: async existing => {
+        seen.push(existing?.url ?? null);
+        return { ok: false, status: 429, reason: 'slow down' };
+      },
+      fetchImpl: host.fetch,
+    });
 
-    expect(back.last_check_ok).toBe(true);
-    expect(back.last_check_error).toBeNull();
+    expect(seen).toEqual([CATALOG_URL]);
+    expect(outcome).toEqual({ ok: false, status: 429, reason: 'slow down' });
+    expect(host.requests).toEqual([]);
   });
 });
 
 describe('setSourceStatus', () => {
   test('404s an url nobody submitted', async () => {
     const outcome = await setSourceStatus({
-      kv: fakeKv(),
-      rawUrl: 'https://nobody.example/c.json',
-      status: 'listed',
-      reviewedBy: 'admin',
-      now: NOW,
-    });
-
-    expect(outcome.ok).toBe(false);
-    if (outcome.ok) return;
-    expect(outcome.status).toBe(404);
-  });
-
-  test('stamps the review time and keeps the note when none is given', async () => {
-    const kv = fakeKv();
-    await submitSource({ kv, rawUrl: CATALOG_URL, now: NOW, fetchImpl: stubFetch() });
-    await setSourceStatus({
-      kv,
+      db: fakeD1(),
       rawUrl: CATALOG_URL,
       status: 'listed',
       reviewedBy: 'admin',
-      note: 'looks fine',
       now: NOW,
     });
 
+    expect(outcome).toMatchObject({ ok: false, status: 404 });
+  });
+
+  test('stamps the review time and keeps the note when none is given', async () => {
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'listed');
+    await setSourceStatus({ db, rawUrl: CATALOG_URL, status: 'listed', reviewedBy: 'admin', note: 'fine', now: NOW });
+
     const outcome = await setSourceStatus({
-      kv,
+      db,
       rawUrl: CATALOG_URL,
       status: 'attested',
       reviewedBy: 'admin',
       now: LATER,
     });
 
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.record.note).toBe('looks fine');
-    expect(outcome.record.reviewed_at).toBe(LATER);
+    expect(outcome.ok && outcome.record).toMatchObject({
+      status: 'attested',
+      reviewed_at: LATER,
+      reviewed_by: 'admin',
+      note: 'fine',
+    });
+  });
+
+  test('a null note clears it', async () => {
+    const db = fakeD1();
+    await seedSource(db, CATALOG_URL, 'listed');
+    await setSourceStatus({ db, rawUrl: CATALOG_URL, status: 'listed', reviewedBy: 'admin', note: 'fine', now: NOW });
+
+    const outcome = await setSourceStatus({
+      db,
+      rawUrl: CATALOG_URL,
+      status: 'listed',
+      reviewedBy: 'admin',
+      note: null,
+      now: LATER,
+    });
+
+    expect(outcome.ok && outcome.record.note).toBeNull();
+  });
+});
+
+describe('listSources', () => {
+  test('reads the whole directory with one query', async () => {
+    const db = fakeD1();
+    await seedSource(db, 'https://a.example/catalog.json', 'listed');
+    await seedSource(db, 'https://b.example/catalog.json', 'quarantined');
+    db.statements.length = 0;
+
+    expect((await listSources(db)).map(record => record.url).sort()).toEqual([
+      'https://a.example/catalog.json',
+      'https://b.example/catalog.json',
+    ]);
+    expect(db.statements).toHaveLength(1);
   });
 });

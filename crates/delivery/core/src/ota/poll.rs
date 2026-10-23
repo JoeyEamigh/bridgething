@@ -222,7 +222,7 @@ mod tests {
     let mut rig = rig().await;
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
 
     let event = next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::ManifestPolled { .. })
@@ -238,7 +238,7 @@ mod tests {
   async fn a_failed_poll_keeps_the_last_good_timestamp() {
     let mut rig = rig().await;
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::ManifestPolled { .. })
     })
@@ -283,7 +283,7 @@ mod tests {
     hold_link_open().await;
 
     rig.service.release(DEVICE).await;
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       no_event(&mut rig.events, Duration::from_millis(500), |event| matches!(
@@ -307,7 +307,7 @@ mod tests {
     other_device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
 
     let event = next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::UpdateAvailable { .. })
@@ -326,7 +326,7 @@ mod tests {
     rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       no_event(&mut rig.events, Duration::from_millis(500), |event| matches!(
@@ -346,7 +346,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       no_event(&mut rig.events, Duration::from_millis(500), |event| matches!(
@@ -366,7 +366,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       no_event(&mut rig.events, Duration::from_millis(500), |event| matches!(
@@ -384,7 +384,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", "nightly"));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       no_event(&mut rig.events, Duration::from_millis(500), |event| matches!(
@@ -402,7 +402,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
 
     next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::UpdateAvailable { .. })
@@ -421,7 +421,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     tokio::time::advance(Duration::from_millis(LINK_STABILITY_MS / 2)).await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::UpdateAvailable { .. })
@@ -440,7 +440,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let planned = next_event(&mut rig.events, |event| matches!(event, OtaPollEvent::Planned { .. })).await;
     let OtaPollEvent::Planned { kind, ref steps, .. } = planned else {
@@ -475,7 +475,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (_, begin) = rig.device.await_ota_begin().await;
     assert_eq!(
@@ -504,7 +504,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (_, begin) = rig.device.await_ota_begin().await;
     assert_eq!(begin.kind, OtaKind::Daemon);
@@ -533,7 +533,7 @@ mod tests {
     rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
     rig
       .device
       .answer_webapp_list(vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.4.0")])
@@ -560,7 +560,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::UpdateAvailable { .. })
     })
@@ -590,7 +590,7 @@ mod tests {
     rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     rig
       .device
       .answer_webapp_list(vec![builtin_info(BROWSER_WEBAPP_ID, "browser", "0.4.0")])
@@ -628,7 +628,7 @@ mod tests {
     rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     rig.device.answer_webapp_list(Vec::new()).await;
     for _ in 0..64 {
       tokio::task::yield_now().await;
@@ -663,7 +663,7 @@ mod tests {
     rig.service.adopt(OTHER_DEVICE, other_gateway.clone()).await;
     route_into(&other_gateway, &rig.service, OTHER_DEVICE);
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     let listing = rig.device.await_webapp_list().await;
     rig
       .service
@@ -694,7 +694,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(false))).await;
+    rig.service.set_poll_config(Some(config(false)));
     next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::ManifestPollFailed { .. })
     })
@@ -754,7 +754,7 @@ mod tests {
       .announce_meta(meta_with_wakeword("0.9.0", "2026.06.0", Some("1.0.0")));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (_, begin) = rig.device.await_ota_begin().await;
     assert_eq!(begin.kind, OtaKind::WakewordModel);
@@ -781,7 +781,7 @@ mod tests {
       .announce_meta(meta_with_wakeword("0.9.0", "2026.06.0", Some("1.2.0")));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       rig.device.no_ota_begin(Duration::from_millis(500)).await,
@@ -798,7 +798,7 @@ mod tests {
     rig.device.announce_meta(meta_with_wakeword("0.9.0", "2026.06.0", None));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       rig.device.no_ota_begin(Duration::from_millis(500)).await,
@@ -817,7 +817,7 @@ mod tests {
       .announce_meta(meta_with_wakeword("0.9.0", "2026.06.0", Some("1.0.0")));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     assert!(
       rig.device.no_ota_begin(Duration::from_millis(500)).await,
@@ -836,7 +836,7 @@ mod tests {
       .announce_meta(meta_with_wakeword("0.8.0", "2026.06.0", Some("1.0.0")));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let planned = next_event(&mut rig.events, |event| matches!(event, OtaPollEvent::Planned { .. })).await;
     let OtaPollEvent::Planned { ref steps, .. } = planned else {
@@ -859,7 +859,7 @@ mod tests {
       .announce_meta(meta_with_wakeword("0.8.0", "2026.06.0", Some("1.0.0")));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let planned = next_event(&mut rig.events, |event| matches!(event, OtaPollEvent::Planned { .. })).await;
     let OtaPollEvent::Planned { kind, ref steps, .. } = planned else {
@@ -889,7 +889,7 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
 
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (_, begin) = rig.device.await_ota_begin().await;
     assert_eq!(
@@ -905,7 +905,7 @@ mod tests {
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
     rig.device.await_ota_begin().await;
 
     rig.service.poll_now().await;
@@ -922,7 +922,7 @@ mod tests {
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (request_id, _) = rig.device.await_ota_begin().await;
     rig.device.reject_begin(request_id, "slot busy");
@@ -941,7 +941,7 @@ mod tests {
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
     rig.device.announce_meta(meta("0.8.0", "2026.06.0", CHANNEL));
     hold_link_open().await;
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
 
     let (request_id, _) = rig.device.await_ota_begin().await;
     rig.device.reject_begin(request_id, "slot busy");
@@ -967,7 +967,7 @@ mod tests {
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
-    rig.service.set_poll_config(Some(config(true))).await;
+    rig.service.set_poll_config(Some(config(true)));
     rig.device.await_ota_begin().await;
 
     rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));

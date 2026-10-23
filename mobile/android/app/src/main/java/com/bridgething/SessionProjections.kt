@@ -487,6 +487,11 @@ internal fun toCoreResumeTarget(target: BridgethingResumeTarget): ResumeTarget =
     BridgethingResumeTarget.ANYSPEAKER -> ResumeTarget.ANY_SPEAKER
 }
 
+internal fun toRnResumeTarget(target: ResumeTarget): BridgethingResumeTarget = when (target) {
+    ResumeTarget.PHONE_ONLY -> BridgethingResumeTarget.PHONEONLY
+    ResumeTarget.ANY_SPEAKER -> BridgethingResumeTarget.ANYSPEAKER
+}
+
 internal const val DAEMON_LABEL: String = "daemon"
 
 internal fun toOriginName(origin: LogOrigin): String = when (origin) {

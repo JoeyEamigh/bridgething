@@ -13,17 +13,17 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use bridgething_companion::backend::{
-  ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
-  MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
+use bridgething_companion::{
+  backend::{
+    ImageTarget, MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend,
+    MediaSessionInbox, MediaSessionSnapshot, MediaSnapshotSink, sniff_and_scale,
+  },
+  store::{JsonFile, stored},
 };
 use serde::{Deserialize, Serialize};
 
 use super::{fnv::fingerprint, image::ImageIoScaler};
-use crate::{
-  backends::jpeg,
-  store::{JsonFile, stored},
-};
+use crate::backends::jpeg;
 
 const HELPER_NAME: &str = "libbridgething-mediaremote.dylib";
 const STAGE_RECORD: &str = "mediaremote-stages.json";

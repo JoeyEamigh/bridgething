@@ -31,6 +31,7 @@ pub const OTA_POLL: &str = "invalidate:ota-poll";
 pub const LOGS: &str = "invalidate:logs";
 pub const KNOWN_DEVICES: &str = "invalidate:known-devices";
 pub const EXTENSIONS: &str = "invalidate:extensions";
+pub const SELF_UPDATE: &str = "invalidate:self-update";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Invalidation {

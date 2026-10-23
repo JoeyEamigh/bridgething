@@ -38,12 +38,13 @@
     "just-bash": "^3.1.0",
     "marked": "^18.0.3",
     "preact": "^11.0.1",
+    "preact-render-to-string": "^6.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "yaml": "^2.8.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260724.1",
+    "@cloudflare/workers-types": "^5.20261023.1",
     "@types/bun": "^1.3.13",
     "@types/w3c-web-usb": "^1.0.14",
     "happy-dom": "^20.11.15",
@@ -52,6 +53,6 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "prettier-plugin-tailwindcss-canonical-classes": "^0.1.4",
     "vite": "^8.3.4",
-    "wrangler": "^4.90.0"
+    "wrangler": "^4.152.0"
   }
 }

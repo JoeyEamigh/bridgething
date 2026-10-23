@@ -254,7 +254,7 @@ function PollConfig({ config }: { config: OtaPollConfig | null }): VNode {
           icon={<Icon name="download" />}
           iconTint={held.autoPush ? 'accent' : 'default'}
           title="install updates automatically"
-          subtitle="off means every release waits for you to pick it"
+          subtitle="firmware and store apps. off means every release waits for you to pick it"
           trailing={
             <Switch
               checked={held.autoPush}

@@ -230,7 +230,7 @@ describe('fetchMergedApps', () => {
   test('install counts come back as the directory reported them', async () => {
     const counts = [{ app_id: APP_ID, source_url: THIRD_PARTY, count: 7, versions: {} }];
     const apps = await withFetch(
-      merged({ updated_at: 'now', catalogs: [], failures: [], skipped: [], installs: counts }),
+      merged({ updated_at: 'now', catalogs: [], failures: [], installs: counts }),
       () => fetchMergedApps(),
     );
 
@@ -238,7 +238,7 @@ describe('fetchMergedApps', () => {
   });
 
   test('a directory that reports no counts reads as no counts, not as a broken response', async () => {
-    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [], skipped: [] }), () =>
+    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [] }), () =>
       fetchMergedApps(),
     );
 
@@ -247,7 +247,7 @@ describe('fetchMergedApps', () => {
 
   test('a counts field of the wrong shape is discarded rather than passed to the store', async () => {
     const apps = await withFetch(
-      merged({ updated_at: 'now', catalogs: [], failures: [], skipped: [], installs: 'lots' }),
+      merged({ updated_at: 'now', catalogs: [], failures: [], installs: 'lots' }),
       () => fetchMergedApps(),
     );
 

@@ -5,7 +5,7 @@ appId: com.bridgething.gateway
     env:
       CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
 - runFlow: fresh-start.yaml
-- tapOn: ".*dev gateway.*"
+- tapOn: "settings"
 - scrollUntilVisible:
     element: ".*install updates automatically.*"
     direction: DOWN

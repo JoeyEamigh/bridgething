@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tauri::{
   AppHandle, Emitter, Manager, Runtime, Window, WindowEvent,
   image::Image,
-  menu::{Menu, MenuItem},
+  menu::{Menu, MenuItem, PredefinedMenuItem},
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 
@@ -27,17 +27,35 @@ const TRAY_ICON: &[u8] = include_bytes!("../icons/tray-linux.png");
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 const TRAY_ICON: &[u8] = include_bytes!("../icons/32x32.png");
 
-pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), TrayError> {
+const TRAY: &str = "main";
+
+fn menu<R: Runtime>(app: &AppHandle<R>, ready: Option<&str>) -> tauri::Result<Menu<R>> {
   let show = MenuItem::with_id(app, "show", "open bridgething", true, None::<&str>)?;
   let quit = MenuItem::with_id(app, "quit", "quit", true, None::<&str>)?;
-  let menu = Menu::with_items(app, &[&show, &quit])?;
+  match ready {
+    Some(version) => {
+      let update = MenuItem::with_id(
+        app,
+        "update",
+        format!("restart to update to v{version}"),
+        true,
+        None::<&str>,
+      )?;
+      Menu::with_items(app, &[&update, &PredefinedMenuItem::separator(app)?, &show, &quit])
+    }
+    None => Menu::with_items(app, &[&show, &quit]),
+  }
+}
 
-  TrayIconBuilder::with_id("main")
+pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), TrayError> {
+  TrayIconBuilder::with_id(TRAY)
     .icon(Image::from_bytes(TRAY_ICON)?)
     .icon_as_template(true)
-    .menu(&menu)
+    .tooltip("bridgething")
+    .menu(&menu(app, None)?)
     .show_menu_on_left_click(false)
     .on_menu_event(|app, event| match event.id.as_ref() {
+      "update" => crate::self_update::restart_into(app),
       "show" => present(app),
       "quit" => crate::process::leave(app),
       _ => {}
@@ -57,6 +75,23 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> Result<(), TrayError> {
   Ok(())
 }
 
+pub fn offer<R: Runtime>(app: &AppHandle<R>, ready: Option<&str>) {
+  let Some(tray) = app.tray_by_id(TRAY) else {
+    return;
+  };
+  let offered = menu(app, ready)
+    .and_then(|menu| tray.set_menu(Some(menu)))
+    .and_then(|()| {
+      tray.set_tooltip(Some(match ready {
+        Some(version) => format!("bridgething: v{version} is ready, restart to update"),
+        None => "bridgething".to_owned(),
+      }))
+    });
+  if let Err(error) = offered.and_then(|()| tray.set_title(ready.map(|_| "update"))) {
+    tracing::warn!(%error, "the tray did not take the update offer");
+  }
+}
+
 pub fn present<R: Runtime>(app: &AppHandle<R>) {
   let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
     return;
@@ -74,7 +109,6 @@ pub fn present<R: Runtime>(app: &AppHandle<R>) {
     let shell = Arc::clone(&shell);
     tauri::async_runtime::spawn(async move {
       shell.session().resumed().await;
-      shell.session().time_changed().await;
     });
   }
 }

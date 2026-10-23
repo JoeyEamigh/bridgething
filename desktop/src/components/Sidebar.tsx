@@ -3,13 +3,16 @@ import { Button, Wordmark, cx } from '@bridgething/ui';
 import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
 
+import { useDesktop } from '../desktop.ts';
 import { Icon } from '../lib/icons.tsx';
 import { SECTIONS, sectionFor } from '../routes.ts';
-import { applySelfUpdate, selfUpdate } from '../stores/self-update.ts';
+import { selfUpdate } from '../stores/session.ts';
 
 export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
   const { path, route } = useLocation();
   const current = sectionFor(path);
+  const session = useDesktop();
+  const update = selfUpdate.data.value;
 
   const linked = peers.filter(peer => peer.status === 'connected');
   const failed = peers.filter(peer => peer.status === 'linkFailed');
@@ -40,16 +43,20 @@ export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
         ))}
       </ul>
 
-      {selfUpdate.value.kind === 'ready' ? (
+      {update.kind === 'ready' ? (
         <div class="mt-auto flex flex-col gap-2 border-t border-rule px-5 py-4">
-          <span class="font-mono text-eyebrow text-accent uppercase">v{selfUpdate.value.update.version} ready</span>
-          <Button size="sm" variant="primary" icon={<Icon name="refresh" />} onClick={() => void applySelfUpdate()}>
+          <span class="font-mono text-eyebrow text-accent uppercase">v{update.version} ready</span>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<Icon name="refresh" />}
+            onClick={() => void session.applySelfUpdate()}>
             restart to update
           </Button>
         </div>
       ) : null}
 
-      <div class={cx(selfUpdate.value.kind === 'ready' ? '' : 'mt-auto', 'border-t border-rule px-5 py-4')}>
+      <div class={cx(update.kind === 'ready' ? '' : 'mt-auto', 'border-t border-rule px-5 py-4')}>
         <span class="flex items-center gap-2">
           <span
             aria-hidden="true"

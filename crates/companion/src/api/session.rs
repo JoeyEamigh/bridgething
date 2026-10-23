@@ -40,6 +40,30 @@ pub struct CapabilityFlags {
   pub voice_model: bool,
 }
 
+impl CapabilityFlags {
+  pub fn overlaid(self, stored: serde_json::Value) -> Self {
+    let (Ok(serde_json::Value::Object(mut merged)), serde_json::Value::Object(stored)) =
+      (serde_json::to_value(self), stored)
+    else {
+      return self;
+    };
+    merged.extend(stored);
+    serde_json::from_value(serde_json::Value::Object(merged)).unwrap_or(self)
+  }
+
+  pub fn departures_from(self, fresh: Self) -> serde_json::Map<String, serde_json::Value> {
+    let (Ok(serde_json::Value::Object(chosen)), Ok(serde_json::Value::Object(fresh))) =
+      (serde_json::to_value(self), serde_json::to_value(fresh))
+    else {
+      return serde_json::Map::new();
+    };
+    chosen
+      .into_iter()
+      .filter(|(key, value)| fresh.get(key) != Some(value))
+      .collect()
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]

@@ -79,7 +79,6 @@ export type MergedApps = {
   updated_at: string;
   catalogs: MergedCatalog[];
   failures: SourceFailure[];
-  skipped: string[];
   installs: InstallCount[];
 };
 

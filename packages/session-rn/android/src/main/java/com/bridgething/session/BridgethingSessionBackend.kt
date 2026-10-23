@@ -110,6 +110,8 @@ public interface BridgethingSessionBackend {
     public suspend fun deviceResumeTarget(deviceId: String): BridgethingResumeTarget
 
     public suspend fun setOtaPollConfig(config: BridgethingOtaPollConfig?)
+    public suspend fun catalogSources(): List<String>
+    public suspend fun setCatalogSources(urls: List<String>): List<String>
     public suspend fun checkForOtaUpdate(rootUrl: String)
     public suspend fun fetchOtaManifest(rootUrl: String): BridgethingOtaManifest
     public suspend fun applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String)

@@ -24,19 +24,20 @@ mod windows;
 use std::{
   collections::BTreeMap,
   path::{Path, PathBuf},
-  sync::{Arc, OnceLock},
+  sync::{Arc, Mutex, OnceLock},
 };
 
 use bridgething_companion::{
   api::{CompanionSession, ModelPlatform, VoiceModelPaths},
   backend::{
-    AudioBackend, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler, LogLevel, LogSink,
-    MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, SecretStore,
-    SpeechRecognizer, StreamBackend, VolumeBackend,
+    AudioBackend, ConnectivityInbox, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler,
+    LogLevel, LogSink, MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner,
+    NotificationBackend, SecretStore, SpeechRecognizer, StreamBackend, VolumeBackend,
   },
+  store::{JsonFile, stored},
 };
-
-use crate::store::{JsonFile, stored};
+use tauri::async_runtime::JoinHandle;
+use tokio::sync::watch;
 
 #[derive(Default)]
 pub struct Platform {
@@ -74,6 +75,65 @@ impl Platform {
     {
       let _ = config_dir;
       Self::default()
+    }
+  }
+}
+
+#[derive(Clone)]
+pub struct Online(watch::Sender<bool>);
+
+impl Default for Online {
+  fn default() -> Self {
+    Self(watch::Sender::new(true))
+  }
+}
+
+impl Online {
+  pub fn watch(&self) -> watch::Receiver<bool> {
+    self.0.subscribe()
+  }
+
+  pub fn tee(&self, monitor: Arc<dyn ConnectivityMonitor>) -> Arc<dyn ConnectivityMonitor> {
+    Arc::new(Teed {
+      monitor,
+      online: self.clone(),
+      pump: Mutex::new(None),
+    })
+  }
+
+  fn changed(&self, online: bool) {
+    self
+      .0
+      .send_if_modified(|held| std::mem::replace(held, online) != online);
+  }
+}
+
+struct Teed {
+  monitor: Arc<dyn ConnectivityMonitor>,
+  online: Online,
+  pump: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl ConnectivityMonitor for Teed {
+  fn start(&self, inbox: Arc<ConnectivityInbox>) {
+    let (tee, mut edges) = ConnectivityInbox::channel();
+    let online = self.online.clone();
+    let pump = tauri::async_runtime::spawn(async move {
+      while let Some(edge) = edges.recv().await {
+        online.changed(edge);
+        inbox.on_changed(edge);
+      }
+    });
+    if let Some(previous) = self.pump.lock().unwrap().replace(pump) {
+      previous.abort();
+    }
+    self.monitor.start(tee);
+  }
+
+  fn stop(&self) {
+    self.monitor.stop();
+    if let Some(pump) = self.pump.lock().unwrap().take() {
+      pump.abort();
     }
   }
 }
@@ -202,5 +262,53 @@ pub mod probe {
     let handle = ModelPaths::default();
     handle.answered_by(move || paths.clone());
     handle
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use std::time::Duration;
+
+  use super::*;
+
+  #[derive(Default)]
+  struct Radio(Mutex<Option<Arc<ConnectivityInbox>>>);
+
+  impl ConnectivityMonitor for Radio {
+    fn start(&self, inbox: Arc<ConnectivityInbox>) {
+      *self.0.lock().unwrap() = Some(inbox);
+    }
+
+    fn stop(&self) {
+      self.0.lock().unwrap().take();
+    }
+  }
+
+  #[tokio::test]
+  async fn the_companion_and_the_shell_both_hear_the_network_come_back() {
+    let radio = Arc::new(Radio::default());
+    let online = Online::default();
+    let mut watching = online.watch();
+    let teed = online.tee(radio.clone());
+    let (inbox, mut companion) = ConnectivityInbox::channel();
+    teed.start(inbox);
+    let edge = |up: bool| radio.0.lock().unwrap().as_ref().unwrap().on_changed(up);
+
+    edge(false);
+    edge(true);
+
+    for expected in [false, true] {
+      let heard = tokio::time::timeout(Duration::from_secs(5), companion.recv()).await;
+      assert_eq!(
+        heard.ok().flatten(),
+        Some(expected),
+        "the companion still gets every edge"
+      );
+    }
+    tokio::time::timeout(Duration::from_secs(5), watching.changed())
+      .await
+      .expect("the shell hears the edge")
+      .expect("the sender is alive");
+    assert!(*watching.borrow_and_update());
   }
 }

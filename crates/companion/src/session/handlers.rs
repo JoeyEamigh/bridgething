@@ -19,6 +19,7 @@ use crate::{
     library::LibraryDispatcher, lyrics::LyricsDispatcher, notifications::NotificationDispatcher,
     phone::PhoneDispatcher, player::PlayerDispatcher, system::SystemDispatcher, webapp::WebappDispatcher,
   },
+  hub::Hub,
   session::{observer::SessionObserver, ota::OtaLink},
   voice::dispatcher::VoiceDispatcher,
 };
@@ -42,6 +43,7 @@ pub struct Peer {
   pub(crate) receiver: Arc<TransferReceiver>,
   pub(crate) ota: Arc<OtaLink>,
   pub(crate) observer: Arc<SessionObserver>,
+  pub(crate) hub: Arc<Hub>,
 }
 
 impl Peer {
@@ -430,6 +432,7 @@ impl ForwardHandler for Peer {
 
 impl EnvelopeHandler for Peer {
   async fn version(&self, payload: BridgeThingMeta) -> Result<(), WireError> {
+    self.hub.identify(&self.device_id, &payload.serial_number);
     self.ota.device_meta(payload.clone());
     self.observer.device_meta(&self.device_id, payload);
     Ok(())

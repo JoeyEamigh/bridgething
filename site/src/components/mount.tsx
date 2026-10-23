@@ -3,7 +3,7 @@ import { render, type ComponentChild } from 'preact';
 
 const DOM_GLOBALS = ['window', 'document', 'Node', 'Event', 'FocusEvent', 'MouseEvent'] as const;
 
-const DEFAULT_URL = 'https://bridgething.com/appjam';
+const DEFAULT_URL = 'https://bridgething.com/';
 
 const EFFECT_POLL_TICKS = 200;
 const EFFECT_POLL_STEP_MS = 5;

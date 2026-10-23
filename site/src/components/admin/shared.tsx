@@ -20,10 +20,6 @@ export function Notice({ kind, children }: { kind: 'ok' | 'err'; children: Compo
   );
 }
 
-export function Loading({ what }: { what: string }) {
-  return <p class="m-0 font-mono text-sm text-white/40">loading {what}…</p>;
-}
-
 export function Empty({ what }: { what: string }) {
   return <p class="m-0 font-mono text-sm text-white/45">{what}</p>;
 }

@@ -2,6 +2,7 @@ import type { VNode } from 'preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect, useRef } from 'preact/hooks';
 
+import { SelfUpdatePrompt } from './components/SelfUpdate.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { WebappSettingsFrame } from './components/WebappSettingsFrame.tsx';
 import { useDesktop } from './desktop.ts';
@@ -53,7 +54,13 @@ function Shell(): VNode {
     void session.setRoute(url);
   }, [session, route, url]);
 
-  if (onboarding) return <OnboardingScreen onSkip={completeFirstRun} />;
+  if (onboarding)
+    return (
+      <>
+        <OnboardingScreen onSkip={completeFirstRun} />
+        <SelfUpdatePrompt />
+      </>
+    );
 
   return (
     <div class="flex h-full min-w-0">
@@ -75,6 +82,7 @@ function Shell(): VNode {
         </Router>
       </div>
       <WebappSettingsFrame open={open} />
+      <SelfUpdatePrompt />
     </div>
   );
 }

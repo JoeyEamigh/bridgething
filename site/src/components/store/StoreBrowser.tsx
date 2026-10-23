@@ -7,14 +7,15 @@ import {
   type DirectoryEntry,
   type InstallCount,
   type MergedCatalog,
+  type StoreData,
 } from '../../lib/directory-client';
 import { orderedByTrust, sourceMap, vouchedFor } from '../../lib/store-sources';
 import { AppSection } from './AppSection';
 import { SourceDirectory } from './SourceDirectory';
 import { SubmitSource } from './SubmitSource';
 
-export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
-  const seeded = useMemo(readStoreData, []);
+export function StoreBrowser({ initial, data }: { initial: MergedCatalog[]; data?: StoreData | null }) {
+  const [seeded] = useState(() => data ?? readStoreData());
 
   const [catalogs, setCatalogs] = useState<MergedCatalog[]>(seeded?.apps.catalogs ?? initial);
   const [installs, setInstalls] = useState<InstallCount[]>(seeded?.apps.installs ?? []);
@@ -24,6 +25,7 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
 
   useEffect(() => {
     if (seeded) return;
+
     const controller = new AbortController();
     fetchMergedApps({ origin: '', signal: controller.signal })
       .then(merged => {
@@ -35,12 +37,6 @@ export function StoreBrowser({ initial }: { initial: MergedCatalog[] }) {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
-    return () => controller.abort();
-  }, [seeded]);
-
-  useEffect(() => {
-    if (seeded) return;
-    const controller = new AbortController();
     fetchDirectory({ signal: controller.signal })
       .then(setDirectory)
       .catch(() => setDirectory([]));

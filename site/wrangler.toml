@@ -9,12 +9,14 @@ binding = "ASSETS"
 not_found_handling = "404-page"
 run_worker_first = ["/api/*", "/apps", "/apps/*", "/oauth/callback"]
 
-[[kv_namespaces]]
-binding = "SOURCES"
-id = "fa32c5307e1448e295e85bc07555f945"
+[[d1_databases]]
+binding = "DB"
+database_name = "bridgething-www"
+database_id = "916d56e2-3231-492e-b223-72ca9fda4de0"
+migrations_dir = "migrations"
 
 [triggers]
-crons = ["17 */6 * * *"]
+crons = ["*/10 * * * *"]
 
 [[routes]]
 pattern = "bridgething.com"

@@ -7,7 +7,6 @@ import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { ConfirmSheet } from '../components/ConfirmSheet';
-import { Field } from '../components/Field';
 import { LinkRecovery } from '../components/LinkRecovery';
 import { ListGroup } from '../components/ListGroup';
 import { ListRow } from '../components/ListRow';
@@ -21,18 +20,15 @@ import { SectionHeader } from '../components/SectionHeader';
 import { Segmented } from '../components/Segmented';
 import { Switch } from '../components/ui/switch';
 import { linkSummary } from '../lib/devices';
-import { rootUrlOf } from '../lib/ota';
 import {
   forgetKnownDevice,
   getSession,
   knownDevices,
-  patchOtaPollConfig,
   setCompanionLaunch,
   setDeviceName,
   setLauncherGesture,
   useSession,
 } from '../lib/session';
-import { DEFAULT_OTA_POLL_CONFIG, DEFAULT_OTA_ROOT_URL } from '../lib/storage';
 import type { AppsScreenProps } from '../navigation';
 
 type Props = AppsScreenProps<'DeviceDetail'>;
@@ -42,16 +38,11 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
   const ledger = useSession(s => s.ledger);
   const peers = useSession(s => s.peers);
   const meta = useSession(s => s.deviceMeta[deviceId]);
-  const pollConfig = useSession(s => s.otaPollConfig);
   const device = knownDevices(ledger, peers).find(d => d.id === deviceId);
 
   const [renameOpen, setRenameOpen] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [hostDraft, setHostDraft] = useState(pollConfig?.rootUrl ?? '');
-
-  const heldHost = pollConfig?.rootUrl ?? '';
-  useEffect(() => setHostDraft(heldHost), [heldHost]);
 
   if (!device) {
     return (
@@ -65,13 +56,6 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
   }
 
   const connected = device.peer?.status === 'connected';
-
-  const commitHost = (raw: string) => {
-    const next = raw.trim().replace(/\/+$/, '');
-    if (next === rootUrlOf(pollConfig)) return;
-    setHostDraft(next);
-    void patchOtaPollConfig({ rootUrl: next || undefined });
-  };
 
   const forget = () => {
     setForgetOpen(false);
@@ -158,19 +142,6 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
             })
           }
         />
-        <ListGroup className="mt-3">
-          <ListRow
-            icon="ArrowDownToLine"
-            title="install updates automatically"
-            subtitle="firmware and store apps"
-            trailing={
-              <Switch
-                value={pollConfig?.autoPush ?? DEFAULT_OTA_POLL_CONFIG.autoPush}
-                onValueChange={autoPush => patchOtaPollConfig({ autoPush })}
-              />
-            }
-          />
-        </ListGroup>
       </View>
 
       <View className="mb-8">
@@ -187,24 +158,6 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
           ) : null}
           {meta ? <ListRow title="release track" value={meta.channel} /> : null}
         </ListGroup>
-      </View>
-
-      <View className="mb-8">
-        <SectionHeader title="advanced" />
-        <Field
-          label="update host"
-          icon="Globe"
-          testID="update-host"
-          value={hostDraft}
-          onChangeText={setHostDraft}
-          onCommit={commitHost}
-          placeholder={DEFAULT_OTA_ROOT_URL}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          hint={`probably don't change this. leave empty for ${DEFAULT_OTA_ROOT_URL}.`}
-          clearable
-        />
       </View>
 
       <ListGroup>

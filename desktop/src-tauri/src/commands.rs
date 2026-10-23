@@ -29,7 +29,6 @@ use crate::{
   logs::Verbosity,
   route::Route,
   shell::{Shell, ShellError},
-  sources::Sources,
 };
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -170,37 +169,19 @@ pub async fn device_meta(shell: State<'_, Arc<Shell>>) -> Answer<Vec<DeviceMetaE
 
 #[tauri::command]
 pub async fn device_auto_resume(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
-  let Some(device_id) = shell.peer() else {
-    return Ok(true);
-  };
   Ok(
     shell
-      .session()
-      .companion_debug()
-      .auto_resume
-      .into_iter()
-      .find(|pref| pref.device_id == device_id)
-      .map(|pref| pref.enabled)
-      .unwrap_or(true),
+      .peer()
+      .is_none_or(|device_id| shell.session().device_auto_resume(device_id)),
   )
 }
 
 #[tauri::command]
 pub async fn device_resume_target(shell: State<'_, Arc<Shell>>) -> Answer<ResumeTarget> {
-  let unset = shell.session().default_resume_target();
-  let Some(device_id) = shell.peer() else {
-    return Ok(unset);
-  };
-  Ok(
-    shell
-      .session()
-      .companion_debug()
-      .resume_targets
-      .into_iter()
-      .find(|pref| pref.device_id == device_id)
-      .map(|pref| pref.target)
-      .unwrap_or(unset),
-  )
+  Ok(match shell.peer() {
+    Some(device_id) => shell.session().device_resume_target(device_id),
+    None => shell.session().default_resume_target(),
+  })
 }
 
 #[tauri::command]
@@ -334,18 +315,27 @@ pub async fn set_route(route: State<'_, Route>, path: String) -> Answer<()> {
 }
 
 #[tauri::command]
-pub async fn catalog_sources(sources: State<'_, Sources>) -> Answer<Vec<String>> {
-  Ok(sources.list())
+pub async fn catalog_sources(shell: State<'_, Arc<Shell>>) -> Answer<Vec<String>> {
+  Ok(shell.session().catalog_sources())
 }
 
 #[tauri::command]
-pub async fn add_catalog_source(sources: State<'_, Sources>, url: String) -> Answer<Vec<String>> {
-  Ok(sources.add(url))
+pub async fn add_catalog_source(shell: State<'_, Arc<Shell>>, url: String) -> Answer<Vec<String>> {
+  let session = shell.session();
+  let mut held = session.catalog_sources();
+  held.push(url);
+  Ok(session.set_catalog_sources(held))
 }
 
 #[tauri::command]
-pub async fn remove_catalog_source(sources: State<'_, Sources>, url: String) -> Answer<Vec<String>> {
-  Ok(sources.remove(&url))
+pub async fn remove_catalog_source(shell: State<'_, Arc<Shell>>, url: String) -> Answer<Vec<String>> {
+  let session = shell.session();
+  let held = session
+    .catalog_sources()
+    .into_iter()
+    .filter(|held| *held != url)
+    .collect();
+  Ok(session.set_catalog_sources(held))
 }
 
 #[tauri::command]
@@ -777,11 +767,6 @@ pub async fn ota_dismiss_run(shell: State<'_, Arc<Shell>>) -> Answer<()> {
   let device_id = peer(&shell)?;
   shell.ota().dismiss_run(&device_id).await;
   Ok(())
-}
-
-#[tauri::command]
-pub fn restart<R: Runtime>(app: AppHandle<R>) {
-  crate::process::restart(&app)
 }
 
 #[tauri::command]

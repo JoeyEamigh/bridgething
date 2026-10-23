@@ -9,7 +9,13 @@ import {
   type CatalogAppListing,
 } from '@bridgething/catalog';
 import { appIdFromPath } from '../../lib/app-routes';
-import { fetchMergedApps, readStoreData, type InstallCount, type MergedCatalog } from '../../lib/directory-client';
+import {
+  fetchMergedApps,
+  readStoreData,
+  type InstallCount,
+  type MergedCatalog,
+  type StoreData,
+} from '../../lib/directory-client';
 import { webHref } from '../../lib/href';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import { orderedByTrust, sourceMap, type StoreSource } from '../../lib/store-sources';
@@ -23,7 +29,7 @@ type Resolved = { listing: CatalogAppListing; source: StoreSource | null };
 function formatDate(raw: string): string {
   const at = Date.parse(raw);
   if (Number.isNaN(at)) return raw;
-  return new Date(at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return new Date(at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
 function bakedListing(baked: BakedApp): CatalogAppListing {
@@ -222,10 +228,14 @@ function Detail({ listing, source }: Resolved) {
   );
 }
 
-export function AppDetail({ baked }: { baked: BakedApp | null }) {
-  const seeded = useMemo(readStoreData, []);
+export function AppDetail({ baked, data, path }: { baked: BakedApp | null; data?: StoreData | null; path?: string }) {
+  const [seeded] = useState(() => data ?? readStoreData());
 
-  const [id, setId] = useState<string | null | undefined>(baked?.app.id);
+  const [id] = useState<string | null | undefined>(() => {
+    const at = path ?? (typeof window === 'undefined' ? null : window.location.pathname);
+    if (at === null) return baked?.app.id;
+    return appIdFromPath(at) ?? baked?.app.id ?? null;
+  });
   const [catalogs, setCatalogs] = useState<MergedCatalog[] | null>(
     seeded ? orderedByTrust(seeded.apps.catalogs) : null,
   );
@@ -233,7 +243,6 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    setId(appIdFromPath(window.location.pathname) ?? baked?.app.id ?? null);
     if (seeded) return;
 
     const controller = new AbortController();
@@ -246,7 +255,7 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
         if (!controller.signal.aborted) setFailed(true);
       });
     return () => controller.abort();
-  }, [seeded, baked]);
+  }, [seeded]);
 
   const resolved = useMemo<Resolved | null>(() => {
     if (catalogs) {
@@ -260,9 +269,9 @@ export function AppDetail({ baked }: { baked: BakedApp | null }) {
       const listing = listings.find(entry => entry.app.id === id);
       if (listing) return { listing, source: sourceMap(catalogs).get(listing.sourceUrl) ?? null };
     }
-    if (baked && baked.app.id === id) return { listing: bakedListing(baked), source: baked.source };
+    if (baked && baked.app.id === id && seeded === null) return { listing: bakedListing(baked), source: baked.source };
     return null;
-  }, [catalogs, installs, id, baked]);
+  }, [catalogs, installs, id, baked, seeded]);
 
   if (resolved) return <Detail listing={resolved.listing} source={resolved.source} />;
   if (id === undefined || (catalogs === null && !failed)) return <Notice>looking this app up…</Notice>;
