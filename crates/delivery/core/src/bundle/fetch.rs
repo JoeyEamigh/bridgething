@@ -10,8 +10,6 @@ use sha2::{Digest, Sha256};
 
 use crate::bundle::ArtifactDigest;
 
-pub const MEMORY_BODY_CAP: usize = 256 * 1024;
-
 const READ_CHUNK: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,8 +35,6 @@ pub enum FetchError {
   HttpStatus(u16),
   #[error("{asset} {field} does not match the manifest; refusing to install")]
   DigestMismatch { asset: String, field: DigestField },
-  #[error("response body exceeds the {limit} byte memory cap")]
-  TooLarge { limit: usize },
   #[error("{0}")]
   Decode(String),
   #[error("{0}")]
@@ -57,12 +53,12 @@ pub struct DownloadRequest {
 
 #[async_trait::async_trait]
 pub trait ArtifactFetch: Send + Sync {
-  async fn bytes(&self, url: &str, limit: usize) -> Result<Vec<u8>, FetchError>;
+  async fn bytes(&self, url: &str) -> Result<Vec<u8>, FetchError>;
   async fn download(&self, request: DownloadRequest) -> Result<PathBuf, FetchError>;
 }
 
 pub async fn fetch_json<T: DeserializeOwned>(fetch: &dyn ArtifactFetch, url: &str) -> Result<T, FetchError> {
-  let body = fetch.bytes(url, MEMORY_BODY_CAP).await?;
+  let body = fetch.bytes(url).await?;
   serde_json::from_slice(&body).map_err(|e| FetchError::Decode(e.to_string()))
 }
 
@@ -78,26 +74,18 @@ impl HttpArtifactFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for HttpArtifactFetch {
-  async fn bytes(&self, url: &str, limit: usize) -> Result<Vec<u8>, FetchError> {
-    let buffer = Arc::new(Mutex::new(MemoryBody::default()));
+  async fn bytes(&self, url: &str) -> Result<Vec<u8>, FetchError> {
+    let buffer = Arc::new(Mutex::new(Vec::new()));
     let outcome = self
       .http
-      .download(
-        get(url),
-        Box::new(MemoryWriter {
-          shared: buffer.clone(),
-          limit,
-        }),
-      )
-      .await;
+      .download(get(url), Box::new(MemoryWriter { shared: buffer.clone() }))
+      .await
+      .map_err(transport)?;
 
-    let mut held = buffer.lock().unwrap();
-    match outcome {
-      Ok(outcome) if !outcome.ok() => Err(FetchError::HttpStatus(outcome.status)),
-      Ok(_) => Ok(std::mem::take(&mut held.bytes)),
-      Err(_) if held.overflowed => Err(FetchError::TooLarge { limit }),
-      Err(e) => Err(transport(e)),
+    if !outcome.ok() {
+      return Err(FetchError::HttpStatus(outcome.status));
     }
+    Ok(std::mem::take(&mut *buffer.lock().unwrap()))
   }
 
   async fn download(&self, request: DownloadRequest) -> Result<PathBuf, FetchError> {
@@ -215,15 +203,8 @@ fn transport(e: HttpError) -> FetchError {
   }
 }
 
-#[derive(Default)]
-struct MemoryBody {
-  bytes: Vec<u8>,
-  overflowed: bool,
-}
-
 struct MemoryWriter {
-  shared: Arc<Mutex<MemoryBody>>,
-  limit: usize,
+  shared: Arc<Mutex<Vec<u8>>>,
 }
 
 impl DownloadBody for MemoryWriter {
@@ -232,12 +213,7 @@ impl DownloadBody for MemoryWriter {
   }
 
   fn write(&mut self, chunk: &[u8]) -> Result<(), String> {
-    let mut held = self.shared.lock().unwrap();
-    if held.bytes.len() + chunk.len() > self.limit {
-      held.overflowed = true;
-      return Err(format!("response body exceeds the {} byte memory cap", self.limit));
-    }
-    held.bytes.extend_from_slice(chunk);
+    self.shared.lock().unwrap().extend_from_slice(chunk);
     Ok(())
   }
 }

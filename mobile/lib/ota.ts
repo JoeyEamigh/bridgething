@@ -169,7 +169,9 @@ export function describeOtaOffer(input: OtaOfferInput): OtaOffer {
       ? `${version} available`
       : offered
         ? 'update available'
-        : 'up to date',
+        : input.error
+          ? 'check failed'
+          : 'up to date',
     detail: input.error
       ? describeError(input.error)
       : input.lastCheckedAt

@@ -10,8 +10,7 @@ use bridgething_delivery::{
   bundle::{
     ArtifactDigest, BundleManifest,
     fetch::{
-      ArtifactFetch, DigestField, DownloadRequest, FetchError, HttpArtifactFetch, MEMORY_BODY_CAP, fetch_json,
-      sha256_file, sha256_hex,
+      ArtifactFetch, DigestField, DownloadRequest, FetchError, HttpArtifactFetch, fetch_json, sha256_file, sha256_hex,
     },
   },
   ota::manifest::fetch_discover_manifest,
@@ -386,9 +385,9 @@ async fn progress_reports_the_received_byte_counts() {
 }
 
 #[tokio::test]
-async fn an_artifact_past_the_memory_cap_is_spooled_to_disk_as_it_arrives() {
+async fn a_multi_chunk_artifact_is_spooled_to_disk_as_it_arrives() {
   let scratch = TempDir::new().unwrap();
-  let bytes = payload(MEMORY_BODY_CAP * 4);
+  let bytes = payload(CHUNK * 16);
   let expected = digest(&bytes);
   let staged = scratch.path().join(format!("artifact-{}.download", expected.sha256));
   let observed: Arc<Mutex<Vec<(u64, u64)>>> = Arc::new(Mutex::new(Vec::new()));
@@ -414,18 +413,6 @@ async fn an_artifact_past_the_memory_cap_is_spooled_to_disk_as_it_arrives() {
     );
   }
   assert!(observed.first().unwrap().0 < bytes.len() as u64);
-}
-
-#[tokio::test]
-async fn a_manifest_body_past_the_memory_cap_is_refused() {
-  let oversize = payload(MEMORY_BODY_CAP + 1);
-
-  let err = fetcher(StubServer::serving(oversize))
-    .bytes("https://ota.example/nlu/stable/manifest.json", MEMORY_BODY_CAP)
-    .await
-    .unwrap_err();
-
-  assert!(matches!(err, FetchError::TooLarge { limit } if limit == MEMORY_BODY_CAP));
 }
 
 #[tokio::test]
@@ -480,27 +467,33 @@ async fn bytes_carry_the_body_through_verbatim() {
   let body = vec![0xff, 0x00, b' ', 0xfe, b'\n'];
   let fetch = fetcher(StubServer::serving(body.clone()));
 
-  let fetched = fetch
-    .bytes("https://ota.example/version", MEMORY_BODY_CAP)
-    .await
-    .unwrap();
+  let fetched = fetch.bytes("https://ota.example/version").await.unwrap();
 
   assert_eq!(fetched, body);
 }
 
 #[tokio::test]
-async fn a_body_past_the_callers_limit_is_refused_at_that_limit() {
-  let fetch = fetcher(StubServer::serving(payload(4097)));
+async fn a_discover_manifest_spanning_many_chunks_decodes_whole() {
+  let releases = (0..4000)
+    .map(|i| format!(r#""0.{i}.0":{{"version":"0.{i}.0","channel":"stable","yanked":null,"artifacts":null}}"#))
+    .collect::<Vec<_>>()
+    .join(",");
+  let body = format!(
+    r#"{{"manifest_version":1,"updated_at":"2026-10-25T00:00:00Z","channels":{{}},"releases":{{{releases}}}}}"#
+  );
+  assert!(body.len() > CHUNK * 4);
 
-  let err = fetch.bytes("https://ota.example/page.html", 4096).await.unwrap_err();
+  let manifest = fetch_discover_manifest(&fetcher(StubServer::serving(body.into_bytes())), "https://ota.example")
+    .await
+    .unwrap();
 
-  assert!(matches!(err, FetchError::TooLarge { limit: 4096 }), "{err}");
+  assert_eq!(manifest.releases.len(), 4000);
 }
 
 #[test]
 fn hashing_a_file_matches_the_digest_of_its_bytes() {
   let scratch = TempDir::new().unwrap();
-  let bytes = payload(MEMORY_BODY_CAP + 7);
+  let bytes = payload(CHUNK * 4 + 7);
   let blob: PathBuf = scratch.path().join("blob.bin");
   std::fs::write(&blob, &bytes).unwrap();
 

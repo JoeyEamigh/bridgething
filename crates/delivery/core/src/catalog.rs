@@ -13,8 +13,6 @@ pub const OFFICIAL_CATALOG_URL: &str = "https://apps.bridgething.com/catalog.jso
 
 pub const CATALOG_SCHEMA: &str = "catalog.v1";
 
-pub const CATALOG_BODY_CAP: usize = 4 * 1024 * 1024;
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Catalog {
   pub schema: String,
@@ -74,7 +72,7 @@ pub struct CatalogUpdate {
 }
 
 pub async fn fetch_catalog(fetch: &dyn ArtifactFetch, url: &str) -> Result<Catalog, FetchError> {
-  let body = fetch.bytes(url, CATALOG_BODY_CAP).await?;
+  let body = fetch.bytes(url).await?;
   let catalog: Catalog = serde_json::from_slice(&body).map_err(|e| FetchError::Decode(e.to_string()))?;
   if catalog.schema != CATALOG_SCHEMA {
     return Err(FetchError::Decode(format!(

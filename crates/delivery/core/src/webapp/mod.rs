@@ -203,7 +203,7 @@ impl WebappResourceService {
       tracing::warn!(%webapp_id, size = origin.size, "hosted resource is past the resource cap, refusing to fetch it");
       return None;
     }
-    let bytes = rt::timeout(self.timeout, fetch.bytes(&origin.url, origin.size as usize))
+    let bytes = rt::timeout(self.timeout, fetch.bytes(&origin.url))
       .await
       .inspect_err(|_| tracing::debug!(%webapp_id, url = %origin.url, "hosted resource did not answer in time"))
       .ok()?

@@ -193,7 +193,7 @@ impl StagedFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for StagedFetch {
-  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
+  async fn bytes(&self, url: &str) -> Result<Vec<u8>, FetchError> {
     self.manifest_reads.fetch_add(1, Ordering::SeqCst);
     let held = self.manifests.lock().unwrap();
     held

@@ -132,4 +132,25 @@ describe('the update check result', () => {
       }).detail,
     ).toBe('network unreachable');
   });
+
+  test('a failed check with nothing on offer does not claim the device is current', () => {
+    expect(
+      describeOtaOffer({
+        lastCheckedAt: null,
+        error: { kind: 'networkUnreachable' },
+        now: NOW,
+      }).value,
+    ).toBe('check failed');
+  });
+
+  test('a stale offer still reads as an offer when a later check fails', () => {
+    expect(
+      describeOtaOffer({
+        available: available({ releaseVersion: '1.4.2' }),
+        lastCheckedAt: null,
+        error: { kind: 'networkUnreachable' },
+        now: NOW,
+      }).value,
+    ).toBe('1.4.2 available');
+  });
 });

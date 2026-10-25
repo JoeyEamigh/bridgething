@@ -587,11 +587,8 @@ struct HostedPage {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for HostedPage {
-  async fn bytes(&self, _url: &str, limit: usize) -> Result<Vec<u8>, FetchError> {
+  async fn bytes(&self, _url: &str) -> Result<Vec<u8>, FetchError> {
     *self.hits.lock().unwrap() += 1;
-    if self.bytes.len() > limit {
-      return Err(FetchError::TooLarge { limit });
-    }
     Ok(self.bytes.clone())
   }
 
@@ -797,7 +794,7 @@ struct StuckOrigin;
 
 #[async_trait::async_trait]
 impl ArtifactFetch for StuckOrigin {
-  async fn bytes(&self, _url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
+  async fn bytes(&self, _url: &str) -> Result<Vec<u8>, FetchError> {
     std::future::pending().await
   }
 

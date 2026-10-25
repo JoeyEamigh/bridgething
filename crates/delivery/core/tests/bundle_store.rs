@@ -162,7 +162,7 @@ impl FakeFetch {
 
 #[async_trait::async_trait]
 impl ArtifactFetch for FakeFetch {
-  async fn bytes(&self, url: &str, _limit: usize) -> Result<Vec<u8>, FetchError> {
+  async fn bytes(&self, url: &str) -> Result<Vec<u8>, FetchError> {
     self.texts.fetch_add(1, Ordering::SeqCst);
     self.urls.lock().unwrap().push(url.to_string());
     if let Some(reason) = self.text_error.lock().unwrap().clone() {

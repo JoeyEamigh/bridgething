@@ -72,7 +72,7 @@
     },
     "mobile": {
       "name": "@bridgething/mobile",
-      "version": "0.14.1",
+      "version": "0.14.3",
       "dependencies": {
         "@bottom-tabs/react-navigation": "^1.4.0",
         "@bridgething/catalog": "workspace:*",
