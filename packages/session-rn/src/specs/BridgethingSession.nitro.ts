@@ -293,7 +293,7 @@ export type BridgethingBtDevice = {
   isCarThing: boolean;
 };
 
-export type BridgethingLauncherGesture = 'longPress' | 'fivePress';
+export type BridgethingLauncherGesture = 'longPress' | 'fivePress' | 'doublePress';
 
 export type BridgethingDeviceMeta = {
   daemonVersion: string;

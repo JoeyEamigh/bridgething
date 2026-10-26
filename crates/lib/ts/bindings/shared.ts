@@ -330,7 +330,7 @@ export type ItemRef = {
 /**
  * Which M-button gesture jumps to the launcher.
  */
-export type LauncherGesture = 'longPress' | 'fivePress';
+export type LauncherGesture = 'longPress' | 'fivePress' | 'doublePress';
 
 export type LibraryError =
   | { type: 'notFound'; data: { uri: string } }

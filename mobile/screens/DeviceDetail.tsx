@@ -362,6 +362,7 @@ const LAUNCHER_GESTURE_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'longPress', label: 'hold m' },
   { value: 'fivePress', label: 'press m 5x' },
+  { value: 'doublePress', label: 'press m 2x' },
 ];
 
 const RESUME_TARGET_OPTIONS: ReadonlyArray<{

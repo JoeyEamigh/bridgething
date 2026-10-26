@@ -1159,6 +1159,7 @@ private func toRNLauncherGesture(_ gesture: LauncherGesture) -> BridgethingLaunc
     switch gesture {
     case .longPress: .longpress
     case .fivePress: .fivepress
+    case .doublePress: .doublepress
     }
 }
 
@@ -1166,6 +1167,7 @@ private func toLauncherGesture(_ gesture: BridgethingLauncherGesture) -> Launche
     switch gesture {
     case .longpress: .longPress
     case .fivepress: .fivePress
+    case .doublepress: .doublePress
     }
 }
 

@@ -205,6 +205,7 @@ pub struct AncsAuthStatusEntry {
 pub enum LauncherGesture {
   LongPress,
   FivePress,
+  DoublePress,
 }
 
 impl From<libbridgething::LauncherGesture> for LauncherGesture {
@@ -212,6 +213,7 @@ impl From<libbridgething::LauncherGesture> for LauncherGesture {
     match gesture {
       libbridgething::LauncherGesture::LongPress => LauncherGesture::LongPress,
       libbridgething::LauncherGesture::FivePress => LauncherGesture::FivePress,
+      libbridgething::LauncherGesture::DoublePress => LauncherGesture::DoublePress,
     }
   }
 }
@@ -221,6 +223,7 @@ impl From<LauncherGesture> for libbridgething::LauncherGesture {
     match gesture {
       LauncherGesture::LongPress => libbridgething::LauncherGesture::LongPress,
       LauncherGesture::FivePress => libbridgething::LauncherGesture::FivePress,
+      LauncherGesture::DoublePress => libbridgething::LauncherGesture::DoublePress,
     }
   }
 }
@@ -587,6 +590,7 @@ mod tests {
     for wire in [
       libbridgething::LauncherGesture::LongPress,
       libbridgething::LauncherGesture::FivePress,
+      libbridgething::LauncherGesture::DoublePress,
     ] {
       let exposed: LauncherGesture = wire.into();
       assert_eq!(libbridgething::LauncherGesture::from(exposed), wire);

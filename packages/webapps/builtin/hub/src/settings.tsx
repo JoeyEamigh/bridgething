@@ -363,6 +363,7 @@ function GesturePanel({ client }: { client: BridgethingClient }) {
           options={[
             { value: 'longPress', label: 'hold m', hint: 'press and hold the m button for a moment' },
             { value: 'fivePress', label: 'press m 5 times', hint: 'tap the m button five times, quickly' },
+            { value: 'doublePress', label: 'press m twice', hint: 'tap the m button twice, quickly' },
           ]}
         />
       </Card>

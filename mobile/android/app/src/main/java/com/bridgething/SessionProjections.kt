@@ -225,11 +225,13 @@ internal fun toRnDeviceMeta(meta: DeviceMeta): BridgethingDeviceMeta = Bridgethi
 internal fun toRnLauncherGesture(gesture: LauncherGesture): BridgethingLauncherGesture = when (gesture) {
     LauncherGesture.LONG_PRESS -> BridgethingLauncherGesture.LONGPRESS
     LauncherGesture.FIVE_PRESS -> BridgethingLauncherGesture.FIVEPRESS
+    LauncherGesture.DOUBLE_PRESS -> BridgethingLauncherGesture.DOUBLEPRESS
 }
 
 internal fun toLauncherGesture(gesture: BridgethingLauncherGesture): LauncherGesture = when (gesture) {
     BridgethingLauncherGesture.LONGPRESS -> LauncherGesture.LONG_PRESS
     BridgethingLauncherGesture.FIVEPRESS -> LauncherGesture.FIVE_PRESS
+    BridgethingLauncherGesture.DOUBLEPRESS -> LauncherGesture.DOUBLE_PRESS
 }
 
 internal fun toRnCapabilityFlags(flags: CapabilityFlags): BridgethingCapabilityFlags = BridgethingCapabilityFlags(

@@ -107,6 +107,7 @@ function LauncherGestureRow({ meta }: { meta: DeviceMeta | null }): VNode {
           options={[
             { value: 'longPress', label: 'hold m' },
             { value: 'fivePress', label: 'press m 5x' },
+            { value: 'doublePress', label: 'press m 2x' },
           ]}
           value={meta?.launcherGesture ?? 'fivePress'}
           onChange={next => {

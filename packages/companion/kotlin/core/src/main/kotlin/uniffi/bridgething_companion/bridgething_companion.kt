@@ -36189,6 +36189,7 @@ public object FfiConverterTypeInitiateCallType : FfiConverterRustBuffer<Initiate
 enum class LauncherGesture {
     LONG_PRESS,
     FIVE_PRESS,
+    DOUBLE_PRESS,
     ;
 
     companion object

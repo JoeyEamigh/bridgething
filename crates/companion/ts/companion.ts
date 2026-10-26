@@ -103,7 +103,7 @@ export type HostInfo = {
   hostIdentifier: string;
 };
 
-export type LauncherGesture = 'longPress' | 'fivePress';
+export type LauncherGesture = 'longPress' | 'fivePress' | 'doublePress';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
