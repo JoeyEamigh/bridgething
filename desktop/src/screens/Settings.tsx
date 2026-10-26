@@ -549,6 +549,7 @@ function LauncherGestureRow(): VNode {
           options={[
             { value: 'longPress', label: 'hold m' },
             { value: 'fivePress', label: 'press m 5x' },
+            { value: 'doublePress', label: 'press m 2x' },
           ]}
           value={gesture}
           onChange={next => {

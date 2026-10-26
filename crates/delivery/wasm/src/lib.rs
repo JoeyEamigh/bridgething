@@ -461,7 +461,7 @@ impl WasmSession {
   #[wasm_bindgen(js_name = setLauncherGesture)]
   pub async fn set_launcher_gesture(
     &self,
-    #[wasm_bindgen(unchecked_param_type = "\"longPress\" | \"fivePress\"")] gesture: String,
+    #[wasm_bindgen(unchecked_param_type = "\"longPress\" | \"fivePress\" | \"doublePress\"")] gesture: String,
   ) -> Result<(), JsValue> {
     let gesture = serde_json::from_value(serde_json::Value::String(gesture.clone()))
       .map_err(|_| JsValue::from_str(&format!("unknown launcher gesture {gesture}")))?;

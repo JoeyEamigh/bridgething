@@ -63,6 +63,7 @@ pub enum LauncherGesture {
   LongPress,
   #[default]
   FivePress,
+  DoublePress,
 }
 
 /// What an update installs.

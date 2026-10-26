@@ -3,13 +3,16 @@ mod evdev_listener;
 
 use std::time::Duration;
 
+use libbridgething::LauncherGesture;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::{chrome::ChromeCommand, handler::gateway::webapp::navigate_url_for_active, state::State};
 
-const HUB_GESTURE_THRESHOLD: usize = 5;
-const HUB_GESTURE_WINDOW: Duration = Duration::from_millis(1500);
+const FIVE_PRESS_THRESHOLD: usize = 5;
+const FIVE_PRESS_WINDOW: Duration = Duration::from_millis(1500);
+const DOUBLE_PRESS_THRESHOLD: usize = 2;
+const DOUBLE_PRESS_WINDOW: Duration = Duration::from_millis(400);
 
 #[derive(Debug)]
 pub struct InputManager {
@@ -64,12 +67,11 @@ pub(crate) async fn trigger_hub_switch(state: &State) {
   }
 }
 
+/// How many presses of m, inside what window, fire a press gesture.
 #[cfg_attr(not(feature = "input"), allow(dead_code))]
-pub(crate) fn gesture_window() -> Duration {
-  HUB_GESTURE_WINDOW
-}
-
-#[cfg_attr(not(feature = "input"), allow(dead_code))]
-pub(crate) fn gesture_threshold() -> usize {
-  HUB_GESTURE_THRESHOLD
+pub(crate) fn press_gesture(gesture: LauncherGesture) -> (usize, Duration) {
+  match gesture {
+    LauncherGesture::DoublePress => (DOUBLE_PRESS_THRESHOLD, DOUBLE_PRESS_WINDOW),
+    LauncherGesture::FivePress | LauncherGesture::LongPress => (FIVE_PRESS_THRESHOLD, FIVE_PRESS_WINDOW),
+  }
 }

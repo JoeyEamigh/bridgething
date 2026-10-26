@@ -2755,6 +2755,9 @@
         },
         {
           "name": "FivePress"
+        },
+        {
+          "name": "DoublePress"
         }
       ]
     },

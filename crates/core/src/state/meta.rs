@@ -16,6 +16,7 @@ fn launcher_gesture_as_storage(gesture: LauncherGesture) -> &'static str {
   match gesture {
     LauncherGesture::LongPress => "longPress",
     LauncherGesture::FivePress => "fivePress",
+    LauncherGesture::DoublePress => "doublePress",
   }
 }
 
@@ -23,6 +24,7 @@ fn parse_launcher_gesture(stored: Option<&str>) -> LauncherGesture {
   match stored {
     Some("longPress") => LauncherGesture::LongPress,
     Some("fivePress") => LauncherGesture::FivePress,
+    Some("doublePress") => LauncherGesture::DoublePress,
     _ => LauncherGesture::default(),
   }
 }

@@ -23703,6 +23703,7 @@ public enum LauncherGesture: Equatable, Hashable {
     
     case longPress
     case fivePress
+    case doublePress
 
 
 
@@ -23728,6 +23729,8 @@ public struct FfiConverterTypeLauncherGesture: FfiConverterRustBuffer {
         
         case 2: return .fivePress
         
+        case 3: return .doublePress
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -23742,6 +23745,10 @@ public struct FfiConverterTypeLauncherGesture: FfiConverterRustBuffer {
         
         case .fivePress:
             writeInt(&buf, Int32(2))
+        
+        
+        case .doublePress:
+            writeInt(&buf, Int32(3))
         
         }
     }
