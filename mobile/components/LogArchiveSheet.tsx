@@ -11,7 +11,7 @@ import { ConfirmBody } from './ConfirmSheet';
 import { Icon } from './Icon';
 import { Note } from './Note';
 import { Press } from './Press';
-import { Sheet } from './Sheet';
+import { Sheet, SheetTitle } from './Sheet';
 import { Spinner } from './Spinner';
 
 export function LogArchiveSheet({
@@ -100,9 +100,7 @@ export function LogArchiveSheet({
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Text className="font-mono uppercase text-accent" style={TEXT.eyebrow}>
-        stored logs
-      </Text>
+      <SheetTitle>past launches</SheetTitle>
 
       {archives === null ? (
         <View className="items-center py-8">

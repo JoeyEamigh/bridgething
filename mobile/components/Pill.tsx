@@ -13,16 +13,24 @@ export function Pill({
   children: string;
 }) {
   return (
-    <View
-      className={`flex-row items-center gap-1.5 self-start px-2 py-0.5 ${TONE_BG[tone]}`}
-    >
-      {dot ? <View className={`h-1.5 w-1.5 ${TONE_DOT[tone]}`} /> : null}
-      <Text
-        className={`font-mono uppercase ${TONE_TEXT[tone]}`}
-        style={TEXT.eyebrow}
+    <View className="items-start">
+      <View
+        className={`flex-row items-center gap-1.5 px-2 py-0.5 ${TONE_BG[tone]}`}
       >
-        {children}
-      </Text>
+        {dot ? (
+          <View
+            className={`h-1.5 w-1.5 ${TONE_DOT[tone]}`}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        ) : null}
+        <Text
+          className={`font-mono uppercase ${TONE_TEXT[tone]}`}
+          style={TEXT.eyebrow}
+        >
+          {children}
+        </Text>
+      </View>
     </View>
   );
 }

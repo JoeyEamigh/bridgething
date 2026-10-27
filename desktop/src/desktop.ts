@@ -55,7 +55,7 @@ export interface DesktopSession extends CompanionSession {
   addCatalogSource(url: string): Promise<string[]>;
   removeCatalogSource(url: string): Promise<string[]>;
 
-  otaRunProgress(deviceId: string): Promise<api.OtaRunProgress | null>;
+  otaRunProgress(deviceId: string, lane: api.OtaLane): Promise<api.OtaRunProgress | null>;
 
   deviceAutoResume(): Promise<boolean>;
   deviceLogStreaming(): Promise<boolean>;

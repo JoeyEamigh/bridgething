@@ -18,6 +18,7 @@ import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
 import com.margelo.nitro.bridgething.session.BridgethingOtaQueue
+import com.margelo.nitro.bridgething.session.BridgethingOtaLane
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
@@ -116,9 +117,9 @@ public interface BridgethingSessionBackend {
     public suspend fun checkForOtaUpdate(rootUrl: String)
     public suspend fun fetchOtaManifest(rootUrl: String): BridgethingOtaManifest
     public suspend fun applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String)
-    public fun otaRunProgress(deviceId: String, nowMs: Double): BridgethingOtaProgress?
+    public fun otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double): BridgethingOtaProgress?
 
-    public suspend fun dismissOtaRun(deviceId: String)
+    public suspend fun dismissOtaRun(deviceId: String, lane: BridgethingOtaLane)
 
     public suspend fun installWebappFromUrl(
         deviceId: String,
@@ -162,7 +163,7 @@ public interface BridgethingSessionBackend {
     public fun setOnPeerLinkFailed(callback: (BridgethingSessionPeer) -> Unit)
     public fun setOnNowPlayingChanged(callback: (BridgethingNowPlaying?) -> Unit)
     public fun setOnAncsAuthStatusChanged(callback: (String, BridgethingAncsAuthStatus) -> Unit)
-    public fun setOnLog(callback: (String, String, String) -> Unit)
+    public fun setOnLog(callback: (String, String, String, Double) -> Unit)
     public fun setLogStreamingEnabled(enabled: Boolean)
     public fun setLocalLogStreamingEnabled(enabled: Boolean)
     public fun setOnWebappsChanged(callback: (BridgethingDeviceWebappsEntry) -> Unit)

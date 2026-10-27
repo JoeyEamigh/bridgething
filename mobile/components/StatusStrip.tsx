@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native';
 
+import { Chevron } from './Chevron';
 import { Press } from './Press';
 import { TEXT, type Tone } from '../lib/theme';
 import { TONE_BG, TONE_BORDER, TONE_DOT } from '../lib/tone';
@@ -34,11 +35,7 @@ export function StatusStrip({
           </Text>
         ) : null}
       </View>
-      {onPress ? (
-        <Text className="font-mono text-dim" style={TEXT.body}>
-          ›
-        </Text>
-      ) : null}
+      {onPress ? <Chevron /> : null}
     </View>
   );
 

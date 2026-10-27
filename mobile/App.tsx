@@ -9,11 +9,8 @@ import {
 } from '@react-navigation/native-stack';
 import { PortalHost } from '@rn-primitives/portal';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, StatusBar, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { ActivityIndicator, StatusBar, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CrashBoundary } from './components/CrashBoundary';
 import { SettingsHostView } from './components/SettingsHostView';
@@ -41,6 +38,7 @@ import { SettingsScreen } from './screens/Settings';
 import { SetupScreen } from './screens/Setup';
 import { StoreScreen } from './screens/Store';
 import { StoreAppScreen } from './screens/StoreApp';
+import { StoreBrowseScreen } from './screens/StoreBrowse';
 import { StoreSourceScreen } from './screens/StoreSource';
 import { StoreSourcesScreen } from './screens/StoreSources';
 import { WebappDetailScreen } from './screens/WebappDetail';
@@ -75,21 +73,6 @@ function useStackOptions(): NativeStackNavigationOptions {
   );
 }
 
-function useHeaderlessOptions(): NativeStackNavigationOptions {
-  const palette = usePalette();
-  const { top } = useSafeAreaInsets();
-  return useMemo(
-    () => ({
-      headerShown: false,
-      contentStyle: {
-        backgroundColor: palette.bg,
-        paddingTop: Platform.OS === 'android' ? top : 0,
-      },
-    }),
-    [palette, top],
-  );
-}
-
 function AppsTab() {
   const options = useStackOptions();
   return (
@@ -121,7 +104,7 @@ function AppsTab() {
       <AppsStack.Screen
         name="WebappSlots"
         component={WebappSlotsScreen}
-        options={{ title: 'home screen' }}
+        options={{ title: 'home screen and overlay' }}
       />
     </AppsStack.Navigator>
   );
@@ -129,42 +112,29 @@ function AppsTab() {
 
 function StoreTab() {
   const options = useStackOptions();
-  const headerless = useHeaderlessOptions();
+  const branded = useMemo(
+    () => ({ ...options, headerTitle: () => <Wordmark size="sm" /> }),
+    [options],
+  );
   return (
-    <StoreStack.Navigator screenOptions={options}>
-      <StoreStack.Screen
-        name="Store"
-        component={StoreScreen}
-        options={headerless}
-      />
-      <StoreStack.Screen
-        name="StoreSources"
-        component={StoreSourcesScreen}
-        options={{ title: 'sources' }}
-      />
-      <StoreStack.Screen
-        name="StoreSource"
-        component={StoreSourceScreen}
-        options={{ title: 'source' }}
-      />
-      <StoreStack.Screen
-        name="StoreApp"
-        component={StoreAppScreen}
-        options={{ title: '' }}
-      />
+    <StoreStack.Navigator screenOptions={branded}>
+      <StoreStack.Screen name="Store" component={StoreScreen} />
+      <StoreStack.Screen name="StoreBrowse" component={StoreBrowseScreen} />
+      <StoreStack.Screen name="StoreSources" component={StoreSourcesScreen} />
+      <StoreStack.Screen name="StoreSource" component={StoreSourceScreen} />
+      <StoreStack.Screen name="StoreApp" component={StoreAppScreen} />
     </StoreStack.Navigator>
   );
 }
 
 function SettingsTab() {
   const options = useStackOptions();
-  const headerless = useHeaderlessOptions();
   return (
     <SettingsStack.Navigator screenOptions={options}>
       <SettingsStack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={headerless}
+        options={{ headerTitle: () => <Wordmark size="sm" /> }}
       />
       <SettingsStack.Screen
         name="Logs"

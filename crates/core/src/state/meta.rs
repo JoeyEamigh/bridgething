@@ -11,6 +11,16 @@ const BRIDGETHING_APP_NAME: &str = env!("CARGO_PKG_NAME");
 const NICKNAME_KV_KEY: &str = "nickname";
 const LAUNCHER_GESTURE_KV_KEY: &str = "launcher_gesture";
 const COMPANION_LAUNCH_KV_KEY: &str = "companion_launch";
+#[cfg(feature = "test-tap")]
+const ENV_APP_VERSION: &str = "BRIDGETHING_APP_VERSION";
+
+fn app_version() -> String {
+  #[cfg(feature = "test-tap")]
+  if let Ok(version) = std::env::var(ENV_APP_VERSION) {
+    return version;
+  }
+  BRIDGETHING_VERSION.to_string()
+}
 
 fn launcher_gesture_as_storage(gesture: LauncherGesture) -> &'static str {
   match gesture {
@@ -258,15 +268,16 @@ fn build_meta(
   daemon_sha256: Option<String>,
   wakeword_model_version: Option<String>,
 ) -> BridgeThingMeta {
+  let app_version = app_version();
   BridgeThingMeta {
-    bridgething_version: format!("v{}", BRIDGETHING_VERSION),
+    bridgething_version: format!("v{app_version}"),
     libbridgething_version: BridgeThingMeta::libbridgething_version(),
     app_name: BRIDGETHING_APP_NAME.to_string(),
     nickname,
     bluetooth_name,
     launcher_gesture,
     companion_launch,
-    app_version: BRIDGETHING_VERSION.to_string(),
+    app_version,
     daemon_sha256,
     wakeword_model_version,
     os_name: meta.name.clone(),
@@ -286,5 +297,33 @@ fn build_meta(
     image_machine: meta.image_machine.clone(),
     discord: "https://tl.mt/d".to_string(),
     credits: "Joey Eamigh".to_string(),
+  }
+}
+
+#[cfg(all(test, feature = "test-tap"))]
+mod tests {
+  use libbridgething::LauncherGesture;
+
+  use super::{ENV_APP_VERSION, SuperbirdMeta, build_meta};
+
+  #[test]
+  fn a_test_daemon_told_its_version_announces_it() {
+    unsafe { std::env::set_var(ENV_APP_VERSION, "99.0.0") };
+
+    let meta = build_meta(
+      &SuperbirdMeta::default(),
+      None,
+      None,
+      LauncherGesture::default(),
+      true,
+      None,
+      None,
+    );
+
+    assert_eq!(
+      meta.app_version, "99.0.0",
+      "a restarted test daemon has to come back on the version it was updated to"
+    );
+    assert_eq!(meta.bridgething_version, "v99.0.0");
   }
 }

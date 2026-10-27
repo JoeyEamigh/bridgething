@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/mobile",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "private": true,
   "main": "index.js",
   "scripts": {

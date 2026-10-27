@@ -17,10 +17,22 @@ config.resolver.nodeModulesPaths = [
 ];
 
 const portalEntry = require.resolve('@rn-primitives/portal');
+const reactNativeDir = path.dirname(
+  require.resolve('react-native/package.json'),
+);
+const assetRegistry = require.resolve(
+  '@react-native/assets-registry/registry',
+  {
+    paths: [reactNativeDir],
+  },
+);
 const baseResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === '@rn-primitives/portal') {
     return { type: 'sourceFile', filePath: portalEntry };
+  }
+  if (moduleName === '@react-native/assets-registry/registry') {
+    return { type: 'sourceFile', filePath: assetRegistry };
   }
   return baseResolveRequest
     ? baseResolveRequest(context, moduleName, platform)

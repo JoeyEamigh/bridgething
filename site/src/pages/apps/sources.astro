@@ -1,0 +1,16 @@
+---
+import { SourcesPage } from '../../components/store/SourcesPage';
+import StorePage from '../../components/store/StorePage.astro';
+---
+
+<StorePage title="sources" description="the catalogs bridgething apps come from, and how to list yours">
+  <p class="m-0 mb-6 font-mono text-sm text-white/40"><a href="/apps">← apps</a></p>
+  <header class="mb-12 max-w-2xl">
+    <h1 class="mb-3">sources</h1>
+    <p class="m-0 text-white/60">
+      every app in the store comes from a <code>catalog.v1</code> source. anyone can publish one, and the{' '}
+      <a href="/docs/publishing-apps">publishing docs</a> cover the format.
+    </p>
+  </header>
+  <SourcesPage client:load />
+</StorePage>

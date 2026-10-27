@@ -340,6 +340,32 @@ impl From<OtaRunOutcome> for ota::run_store::OtaRunOutcome {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
+pub enum OtaLane {
+  Firmware,
+  Webapp,
+}
+
+impl From<ota::run_store::OtaLane> for OtaLane {
+  fn from(lane: ota::run_store::OtaLane) -> Self {
+    match lane {
+      ota::run_store::OtaLane::Firmware => Self::Firmware,
+      ota::run_store::OtaLane::Webapp => Self::Webapp,
+    }
+  }
+}
+
+impl From<OtaLane> for ota::run_store::OtaLane {
+  fn from(lane: OtaLane) -> Self {
+    match lane {
+      OtaLane::Firmware => Self::Firmware,
+      OtaLane::Webapp => Self::Webapp,
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
 pub enum OtaRunPhase {
   Idle,
   Downloading,
@@ -391,6 +417,7 @@ pub struct OtaRun {
   pub run_id: String,
   pub device_id: String,
   pub kind: OtaKind,
+  pub lane: OtaLane,
   pub phase: OtaRunPhase,
   pub steps: Vec<OtaPlanStep>,
   pub step_id: u32,
@@ -415,6 +442,7 @@ pub struct OtaRun {
 impl From<ota::run_store::OtaRun> for OtaRun {
   fn from(run: ota::run_store::OtaRun) -> Self {
     Self {
+      lane: run.lane().into(),
       run_id: run.run_id,
       device_id: run.device_id,
       kind: run.kind.into(),
@@ -634,12 +662,24 @@ impl OtaRunStore {
     self.inner.lock().unwrap().open_run_kind(&device_id).map(Into::into)
   }
 
-  pub fn dismiss(&self, device_id: String) -> Option<OtaRun> {
-    self.inner.lock().unwrap().dismiss(&device_id).map(Into::into)
+  pub fn dismiss(&self, device_id: String, lane: OtaLane) -> Option<OtaRun> {
+    self
+      .inner
+      .lock()
+      .unwrap()
+      .dismiss(&device_id, lane.into())
+      .map(Into::into)
   }
 
-  pub fn interrupt(&self, device_id: String) -> Option<OtaRun> {
-    self.inner.lock().unwrap().interrupt(&device_id).map(Into::into)
+  pub fn interrupt(&self, device_id: String) -> Vec<OtaRun> {
+    self
+      .inner
+      .lock()
+      .unwrap()
+      .interrupt(&device_id)
+      .into_iter()
+      .map(Into::into)
+      .collect()
   }
 
   pub fn annotate_webapp(

@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Image, ScrollView } from 'react-native';
+import { ScrollView, useWindowDimensions } from 'react-native';
 
+import { DeviceFrame, SCREEN_ASPECT } from './DeviceFrame';
 import { SPACE } from '../lib/theme';
 import { isHttpUrl } from '../lib/utils';
 
-const SHOT_HEIGHT = 190;
-const SHOT_WIDTH = Math.round((SHOT_HEIGHT * 800) / 480);
 const GAP = 10;
+const PEEK = 0.82;
 
-export const SHOT_ASPECT = SHOT_WIDTH / SHOT_HEIGHT;
+export const SHOT_ASPECT = SCREEN_ASPECT;
 
 export function visibleShots(
   urls: string[] | undefined,
@@ -25,17 +25,22 @@ export function Screenshots({
   name: string;
 }) {
   const [broken, setBroken] = useState<string[]>([]);
+  const { width: window } = useWindowDimensions();
   const shots = visibleShots(urls, broken);
 
   if (shots.length === 0) return null;
+
+  const content = window - SPACE.gutter * 2;
+  const width = shots.length === 1 ? content : Math.round(content * PEEK);
 
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       decelerationRate="fast"
-      snapToInterval={SHOT_WIDTH + GAP}
+      snapToInterval={width + GAP}
       snapToAlignment="start"
+      scrollEnabled={shots.length > 1}
       testID="app-screenshots"
       accessibilityLabel={`${name} screenshots`}
       style={{ marginHorizontal: -SPACE.gutter }}
@@ -43,13 +48,11 @@ export function Screenshots({
       className="mb-6"
     >
       {shots.map(url => (
-        <Image
+        <DeviceFrame
           key={url}
-          source={{ uri: url }}
-          style={{ width: SHOT_WIDTH, height: SHOT_HEIGHT }}
-          resizeMode="cover"
-          className="border border-rule bg-neutral-soft"
-          onError={() =>
+          uri={url}
+          width={width}
+          onBroken={() =>
             setBroken(prev => (prev.includes(url) ? prev : [...prev, url]))
           }
         />

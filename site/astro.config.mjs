@@ -5,10 +5,16 @@ import { defineConfig } from 'astro/config';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { APP_DETAIL_SHELL } from './src/lib/app-routes.ts';
+import { APP_DETAIL_SHELL, AUTHOR_SHELL, SEARCH_PATH } from './src/lib/app-routes.ts';
 import { FEATURES } from './src/lib/features.ts';
 
-const EXCLUDED = ['/admin', APP_DETAIL_SHELL, ...(FEATURES.browserFlasher ? [] : ['/install/flash'])];
+const EXCLUDED = [
+  '/admin',
+  APP_DETAIL_SHELL,
+  AUTHOR_SHELL,
+  SEARCH_PATH,
+  ...(FEATURES.browserFlasher ? [] : ['/install/flash']),
+];
 
 const WORKER_DEV_PORT = 8787;
 const WORKER_DEV_ORIGIN = `http://127.0.0.1:${WORKER_DEV_PORT}`;

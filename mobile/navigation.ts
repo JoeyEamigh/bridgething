@@ -1,3 +1,4 @@
+import type { BrowseQuery } from '@bridgething/catalog';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type {
   CompositeScreenProps,
@@ -20,6 +21,7 @@ export type StoreStackParamList = {
   StoreSources: { deviceId: string | null } | undefined;
   StoreSource: { deviceId: string | null; url: string; name: string };
   StoreApp: { deviceId: string | null; appId: string; sourceUrl: string };
+  StoreBrowse: { deviceId: string | null; query: BrowseQuery };
 };
 
 export type SettingsStackParamList = {

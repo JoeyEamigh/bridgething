@@ -133,6 +133,7 @@ export async function generate(
       author: app.meta.author,
       icon,
       ...(screenshots ? { screenshots } : {}),
+      ...(app.meta.categories.length ? { categories: app.meta.categories } : {}),
       homepage: app.meta.homepage,
       source: app.meta.source,
       versions: versions

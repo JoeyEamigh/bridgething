@@ -1,4 +1,5 @@
 ---
+import { CATEGORIES } from '@bridgething/catalog';
 import Snippet from '../../components/docs/Snippet.astro';
 import DocsLayout from '../../layouts/DocsLayout.astro';
 
@@ -24,6 +25,7 @@ const entrySnippet = `{
   "author": "you",
   "icon": "https://example.com/icons/calendar.svg",
   "screenshots": ["https://example.com/shots/calendar-1.png"],
+  "categories": ["productivity"],
   "homepage": "https://example.com",
   "source": "https://github.com/you/calendar",
   "versions": [
@@ -123,7 +125,13 @@ const newest = entry.versions[0];`;
       <code>screenshots</code> is up to six https urls of the app running on a device, 800x480. the store card uses the first
       one, and the listing shows the rest. with the thing plugged in, chromium answers CDP at
       <code>bridgething.local:9222</code>, so <code>Page.captureScreenshot</code> against the kiosk target gives you an exact
-      800x480 png. the scaffold wraps that as <code>bun run shot &lt;app&gt;</code>.
+      800x480 png. the scaffold wraps that as <code>bun run shot &lt;app&gt;</code>. an app with a screenshot can be
+      featured at the top of the store; an app without one never is.
+    </p>
+    <p class="text-white/70">
+      <code>categories</code> is one or two of <code>{CATEGORIES.join(', ')}</code>. an app without one still shows up
+      in popular, new and search, but on no category shelf. launchers and overlays get their own shelves from
+      <code>role</code> and <code>provides_overlay</code>, so they can skip it.
     </p>
     <p class="text-white/70">
       <code>min_libbridgething_version</code> is dotted semver, no leading <code>v</code>. the store installs the newest

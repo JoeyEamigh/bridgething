@@ -16,6 +16,7 @@ import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
 import { Progress } from '../components/Progress.tsx';
+import { ProviderMark } from '../components/ProviderMark.tsx';
 import { ErrorNote, Screen, Section } from '../components/Screen.tsx';
 import { SelfUpdate } from '../components/SelfUpdate.tsx';
 import { ServerLoginDialog } from '../components/ServerLoginDialog.tsx';
@@ -193,8 +194,7 @@ function ProviderRow({
     return (
       <>
         <ListRow
-          icon={<Icon name="signIn" />}
-          iconTint="accent"
+          icon={<ProviderMark id={provider.id} />}
           title={`sign in to ${provider.displayName}`}
           subtitle={healthLine(provider)}
           trailing={busy ? <Spinner /> : undefined}
@@ -209,8 +209,7 @@ function ProviderRow({
 
   return (
     <ListRow
-      icon={<Icon name="user" />}
-      iconTint="accent"
+      icon={<ProviderMark id={provider.id} />}
       title={provider.displayName}
       subtitle={healthLine(provider) ?? (browsing ? 'browsing' : 'signed in')}
       trailing={

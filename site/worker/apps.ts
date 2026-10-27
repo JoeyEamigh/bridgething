@@ -1,6 +1,8 @@
 import { OFFICIAL_CATALOG_URL, type SourceStatus } from '@bridgething/catalog';
+import categoryBackfill from './category-backfill.json' with { type: 'json' };
 import { byAttestedThenName, toDirectoryView } from './directory.ts';
-import { installCountsStatement, toInstallCounts } from './installs.ts';
+import { installCountsStatement, toInstallCounts, toTrending, trendingStatement } from './installs.ts';
+import { featuredPinStatement, toPin } from './pins.ts';
 import { listSourcesStatement, toRecords } from './sources.ts';
 
 type MergeRow = { url: string; body: string | null; name: string; status: SourceStatus; check_error: string | null };
@@ -16,7 +18,9 @@ function mergeStatement(db: D1Database): D1PreparedStatement {
     .bind(OFFICIAL_CATALOG_URL);
 }
 
-function merged(rows: MergeRow[], installRows: unknown[], now: string): string {
+type MergeInputs = { rows: MergeRow[]; installs: unknown[]; trending: unknown[]; pin: unknown[] };
+
+function merged({ rows, installs, trending, pin }: MergeInputs, now: string): string {
   const official = rows.find(row => row.url === OFFICIAL_CATALOG_URL);
   const community = rows.filter(row => row.url !== OFFICIAL_CATALOG_URL).sort(byAttestedThenName);
   const ordered = [...(official ? [official] : []), ...community];
@@ -36,24 +40,40 @@ function merged(rows: MergeRow[], installRows: unknown[], now: string): string {
     ...(official ? [] : [{ url: OFFICIAL_CATALOG_URL, reason: UNFETCHED }]),
     ...ordered.filter(row => row.body === null).map(row => ({ url: row.url, reason: row.check_error ?? UNFETCHED })),
   ];
-  const tail = JSON.stringify({ failures, installs: toInstallCounts(installRows) }).slice(1);
+  const tail = JSON.stringify({
+    failures,
+    installs: toInstallCounts(installs),
+    trending: toTrending(trending),
+    featured: toPin(pin),
+    category_backfill: categoryBackfill,
+  }).slice(1);
 
   return `{"updated_at":${JSON.stringify(now)},"catalogs":[${catalogs.join(',')}],${tail}`;
 }
 
+function mergeStatements(db: D1Database, now: string): D1PreparedStatement[] {
+  return [mergeStatement(db), installCountsStatement(db), trendingStatement(db, now), featuredPinStatement(db)];
+}
+
+function mergeInputs(results: D1Result[]): MergeInputs {
+  const [catalogs, installs, trending, pin] = results;
+  return {
+    rows: catalogs!.results as MergeRow[],
+    installs: installs!.results,
+    trending: trending!.results,
+    pin: pin!.results,
+  };
+}
+
 export async function mergedApps(args: { db: D1Database; now: string }): Promise<string> {
   const { db, now } = args;
-  const [catalogs, installs] = await db.batch([mergeStatement(db), installCountsStatement(db)]);
-  return merged(catalogs!.results as MergeRow[], installs!.results, now);
+  return merged(mergeInputs(await db.batch(mergeStatements(db, now))), now);
 }
 
 export async function storeData(args: { db: D1Database; now: string }): Promise<string> {
   const { db, now } = args;
-  const [catalogs, installs, sources] = await db.batch([
-    mergeStatement(db),
-    installCountsStatement(db),
-    listSourcesStatement(db),
-  ]);
-  const apps = merged(catalogs!.results as MergeRow[], installs!.results, now);
+  const results = await db.batch([...mergeStatements(db, now), listSourcesStatement(db)]);
+  const sources = results[4];
+  const apps = merged(mergeInputs(results), now);
   return `{"apps":${apps},"directory":${JSON.stringify(toDirectoryView(toRecords(sources!.results)))}}`;
 }

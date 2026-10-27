@@ -47,6 +47,7 @@ type Listing = {
   source: string | null;
   icon: string | null;
   screenshots: string[];
+  categories: string[];
   min_libbridgething_version: string;
 };
 
@@ -192,6 +193,7 @@ describe('the app it scaffolds', () => {
     expect(listing.source).toBe(`https://github.com/${REPO}`);
     expect(listing.min_libbridgething_version).toBe(pins.libbridgething);
     expect(listing.screenshots).toEqual([]);
+    expect(listing.categories).toEqual([]);
   });
 
   test('opens a changelog section for the version the manifest carries', () => {

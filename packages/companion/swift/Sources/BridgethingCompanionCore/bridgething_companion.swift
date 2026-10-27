@@ -4281,7 +4281,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func disconnectProvider(id: String) async 
     
-    func dismissOtaRun(deviceId: String) async 
+    func dismissOtaRun(deviceId: String, lane: OtaLane) async 
     
     func downloadCompanionUpdate(url: String, filename: String, expected: ArtifactDigest) async throws  -> String
     
@@ -4311,7 +4311,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func mediaImportTicket()  -> UInt64
     
-    func otaRunProgress(deviceId: String, nowMs: UInt64)  -> OtaRunProgress?
+    func otaRunProgress(deviceId: String, lane: OtaLane, nowMs: UInt64)  -> OtaRunProgress?
     
     func putWebappBlob(deviceId: String, id: String, key: String, handle: String, progress: BlobProgressSink?) async throws  -> WebappBlob
     
@@ -4758,12 +4758,12 @@ open func disconnectProvider(id: String)async   {
         )
 }
     
-open func dismissOtaRun(deviceId: String)async   {
+open func dismissOtaRun(deviceId: String, lane: OtaLane)async   {
     return
         try!  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_dismiss_ota_run(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterTypeOtaLane_lower(lane)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_void,
@@ -4979,12 +4979,13 @@ open func mediaImportTicket() -> UInt64  {
 })
 }
     
-open func otaRunProgress(deviceId: String, nowMs: UInt64) -> OtaRunProgress?  {
+open func otaRunProgress(deviceId: String, lane: OtaLane, nowMs: UInt64) -> OtaRunProgress?  {
     return try!  FfiConverterOptionTypeOtaRunProgress.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_companionsession_ota_run_progress(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(deviceId),
+        FfiConverterTypeOtaLane_lower(lane),
         FfiConverterUInt64.lower(nowMs),uniffiCallStatus
     )
 })
@@ -11091,11 +11092,11 @@ public protocol OtaRunStoreProtocol: AnyObject, Sendable {
     
     func available()  -> [OtaAvailable]
     
-    func dismiss(deviceId: String)  -> OtaRun?
+    func dismiss(deviceId: String, lane: OtaLane)  -> OtaRun?
     
     func ingest(event: OtaPollEvent)  -> [OtaStoreChange]
     
-    func interrupt(deviceId: String)  -> OtaRun?
+    func interrupt(deviceId: String)  -> [OtaRun]
     
     func openRunKind(deviceId: String)  -> OtaKind?
     
@@ -11186,12 +11187,13 @@ open func available() -> [OtaAvailable]  {
 })
 }
     
-open func dismiss(deviceId: String) -> OtaRun?  {
+open func dismiss(deviceId: String, lane: OtaLane) -> OtaRun?  {
     return try!  FfiConverterOptionTypeOtaRun.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_otarunstore_dismiss(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(deviceId),uniffiCallStatus
+        FfiConverterString.lower(deviceId),
+        FfiConverterTypeOtaLane_lower(lane),uniffiCallStatus
     )
 })
 }
@@ -11206,8 +11208,8 @@ open func ingest(event: OtaPollEvent) -> [OtaStoreChange]  {
 })
 }
     
-open func interrupt(deviceId: String) -> OtaRun?  {
-    return try!  FfiConverterOptionTypeOtaRun.lift(try! rustCall() {
+open func interrupt(deviceId: String) -> [OtaRun]  {
+    return try!  FfiConverterSequenceTypeOtaRun.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_otarunstore_interrupt(
             self.uniffiCloneHandle(),
@@ -19600,6 +19602,7 @@ public struct OtaRun: Equatable, Hashable {
     public var runId: String
     public var deviceId: String
     public var kind: OtaKind
+    public var lane: OtaLane
     public var phase: OtaRunPhase
     public var steps: [OtaPlanStep]
     public var stepId: UInt32
@@ -19622,10 +19625,11 @@ public struct OtaRun: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(runId: String, deviceId: String, kind: OtaKind, phase: OtaRunPhase, steps: [OtaPlanStep], stepId: UInt32, startedAtMs: UInt64, phaseStartedAtMs: UInt64, stageReceived: UInt64?, stageTotal: UInt64?, ratePerSec: Double?, writePercent: UInt32?, outcome: OtaRunOutcome?, error: String?, releaseVersion: String?, daemonVersion: String?, imageVersion: String?, channel: String?, rootUrl: String?, resumable: Bool, webappId: String?, webappName: String?) {
+    public init(runId: String, deviceId: String, kind: OtaKind, lane: OtaLane, phase: OtaRunPhase, steps: [OtaPlanStep], stepId: UInt32, startedAtMs: UInt64, phaseStartedAtMs: UInt64, stageReceived: UInt64?, stageTotal: UInt64?, ratePerSec: Double?, writePercent: UInt32?, outcome: OtaRunOutcome?, error: String?, releaseVersion: String?, daemonVersion: String?, imageVersion: String?, channel: String?, rootUrl: String?, resumable: Bool, webappId: String?, webappName: String?) {
         self.runId = runId
         self.deviceId = deviceId
         self.kind = kind
+        self.lane = lane
         self.phase = phase
         self.steps = steps
         self.stepId = stepId
@@ -19666,6 +19670,7 @@ public struct FfiConverterTypeOtaRun: FfiConverterRustBuffer {
                 runId: FfiConverterString.read(from: &buf), 
                 deviceId: FfiConverterString.read(from: &buf), 
                 kind: FfiConverterTypeOtaKind.read(from: &buf), 
+                lane: FfiConverterTypeOtaLane.read(from: &buf), 
                 phase: FfiConverterTypeOtaRunPhase.read(from: &buf), 
                 steps: FfiConverterSequenceTypeOtaPlanStep.read(from: &buf), 
                 stepId: FfiConverterUInt32.read(from: &buf), 
@@ -19692,6 +19697,7 @@ public struct FfiConverterTypeOtaRun: FfiConverterRustBuffer {
         FfiConverterString.write(value.runId, into: &buf)
         FfiConverterString.write(value.deviceId, into: &buf)
         FfiConverterTypeOtaKind.write(value.kind, into: &buf)
+        FfiConverterTypeOtaLane.write(value.lane, into: &buf)
         FfiConverterTypeOtaRunPhase.write(value.phase, into: &buf)
         FfiConverterSequenceTypeOtaPlanStep.write(value.steps, into: &buf)
         FfiConverterUInt32.write(value.stepId, into: &buf)
@@ -25899,6 +25905,72 @@ public func FfiConverterTypeOtaKind_lower(_ value: OtaKind) -> RustBuffer {
 
 
 
+
+public enum OtaLane: Equatable, Hashable {
+    
+    case firmware
+    case webapp
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension OtaLane: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOtaLane: FfiConverterRustBuffer {
+    typealias SwiftType = OtaLane
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtaLane {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .firmware
+        
+        case 2: return .webapp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OtaLane, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .firmware:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .webapp:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaLane_lift(_ buf: RustBuffer) throws -> OtaLane {
+    return try FfiConverterTypeOtaLane.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaLane_lower(_ value: OtaLane) -> RustBuffer {
+    return FfiConverterTypeOtaLane.lower(value)
+}
+
+
+
 public 
 enum OtaManifestError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
@@ -27479,7 +27551,7 @@ public enum SessionEvent: Equatable, Hashable {
     )
     case ancsAuthStatusChanged(deviceId: String, status: AncsAuthStatus
     )
-    case log(origin: LogOrigin, level: LogLevel, target: String, message: String
+    case log(origin: LogOrigin, level: LogLevel, target: String, message: String, tsUnixMs: UInt64
     )
     case webappsChanged(entry: DeviceWebappsEntry
     )
@@ -27541,7 +27613,7 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
         case 6: return .ancsAuthStatusChanged(deviceId: try FfiConverterString.read(from: &buf), status: try FfiConverterTypeAncsAuthStatus.read(from: &buf)
         )
         
-        case 7: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 7: return .log(origin: try FfiConverterTypeLogOrigin.read(from: &buf), level: try FfiConverterTypeLogLevel.read(from: &buf), target: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf), tsUnixMs: try FfiConverterUInt64.read(from: &buf)
         )
         
         case 8: return .webappsChanged(entry: try FfiConverterTypeDeviceWebappsEntry.read(from: &buf)
@@ -27615,12 +27687,13 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             FfiConverterTypeAncsAuthStatus.write(status, into: &buf)
             
         
-        case let .log(origin,level,target,message):
+        case let .log(origin,level,target,message,tsUnixMs):
             writeInt(&buf, Int32(7))
             FfiConverterTypeLogOrigin.write(origin, into: &buf)
             FfiConverterTypeLogLevel.write(level, into: &buf)
             FfiConverterString.write(target, into: &buf)
             FfiConverterString.write(message, into: &buf)
+            FfiConverterUInt64.write(tsUnixMs, into: &buf)
             
         
         case let .webappsChanged(entry):
@@ -31480,7 +31553,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_disconnect_provider() != 6432) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_dismiss_ota_run() != 20350) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_dismiss_ota_run() != 33043) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_download_companion_update() != 23445) {
@@ -31525,7 +31598,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_media_import_ticket() != 3957) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_ota_run_progress() != 5569) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_ota_run_progress() != 53525) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_put_webapp_blob() != 6884) {
@@ -31612,13 +31685,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_otarunstore_available() != 48407) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_otarunstore_dismiss() != 8630) {
+    if (uniffi_bridgething_companion_checksum_method_otarunstore_dismiss() != 39881) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_otarunstore_ingest() != 26158) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_otarunstore_interrupt() != 47469) {
+    if (uniffi_bridgething_companion_checksum_method_otarunstore_interrupt() != 25420) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_otarunstore_open_run_kind() != 10159) {

@@ -33,6 +33,12 @@ Raise `version` in `public/manifest.json` before you share an update. Keep `id`.
 
 ## Publish to the store
 
+Before the first publish, set `categories` in `apps/<slug>/catalog.json` to one
+or two of `music`, `clocks-weather`, `dashboards`, `home-control`,
+`productivity`, `ambient`, `games`, `travel`, `tools`, most fitting first. The
+store files apps by it, and `bun run check` warns when it is missing. Take at
+least one screenshot with `bun run shot <slug>`: only apps with one get featured.
+
 From the repo root, `bun run bump <slug> <major | minor | patch>` moves the
 version, then a push to main runs the publish workflow. It builds every new
 version into `catalog.v1.json` on the `gh-pages` branch. GitHub Pages has to

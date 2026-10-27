@@ -1,5 +1,5 @@
 {
-  "version": "0.13.1",
+  "version": "0.15.1",
   "surfaces": [
     {
       "name": "asset",
@@ -2755,6 +2755,9 @@
         },
         {
           "name": "FivePress"
+        },
+        {
+          "name": "DoublePress"
         }
       ]
     },
@@ -4506,11 +4509,13 @@
         },
         {
           "name": "dwlPercent",
-          "type": "number"
+          "type": "number",
+          "description": "Mirrors `percent`."
         },
         {
           "name": "dwlBytes",
-          "type": "number"
+          "type": "number",
+          "description": "Always 0."
         },
         {
           "name": "etaMs",

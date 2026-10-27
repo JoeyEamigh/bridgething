@@ -32,6 +32,7 @@ const DEV_PIDFILE = join(DEV_DIR, 'dev-daemon.pid');
 const DEVICE_TRANSFERS = join(DEV_DIR, 'state', 'transfers');
 const DEVICE_META = join(DEV_DIR, 'superbird.json');
 const DEVICE_META_TEMPLATE = join(ROOT, 'resources', 'superbird.json');
+const DEVICE_DAEMON_FILE = join(DEV_DIR, 'daemon-version');
 
 function pattern(bytes: number): Uint8Array {
   const out = new Uint8Array(bytes);
@@ -175,6 +176,7 @@ function storeCatalog(host: string) {
         author: 'e2e',
         icon: null,
         screenshots: [`http://${host}/store/shot.png`, `http://${host}/store/shot.png?two`],
+        categories: ['productivity'],
         homepage: null,
         source: 'https://github.com/JoeyEamigh/bridgething',
         versions: [
@@ -299,6 +301,31 @@ async function bounceDaemon<T>(downMs: number, next: Mode | null, stop: () => Pr
   return stopped;
 }
 
+const RESTART_ASKS = ['image write complete; rebooting', 'bandaid batch committed; restarting service'];
+const RESTART_WAIT_MS = 60_000;
+
+async function restartAsked(): Promise<boolean> {
+  const deadline = Date.now() + RESTART_WAIT_MS;
+  while (Date.now() < deadline) {
+    const log = existsSync(DEV_LOG) ? readFileSync(DEV_LOG, 'utf8') : '';
+    if (RESTART_ASKS.some(ask => log.includes(ask))) return true;
+    await sleep(100);
+  }
+  return false;
+}
+
+function deviceDaemon(): string {
+  return existsSync(DEVICE_DAEMON_FILE) ? readFileSync(DEVICE_DAEMON_FILE, 'utf8').trim() : DEVICE_DAEMON;
+}
+
+function installDeviceDaemon(daemon: string) {
+  if (daemon === DEVICE_DAEMON) {
+    rmSync(DEVICE_DAEMON_FILE, { force: true });
+    return;
+  }
+  writeFileSync(DEVICE_DAEMON_FILE, `${daemon}\n`);
+}
+
 function deviceImage(): string {
   return existsSync(DEVICE_META) ? JSON.parse(readFileSync(DEVICE_META, 'utf8')).imageVersion : DEVICE_IMAGE;
 }
@@ -313,7 +340,11 @@ function flashDeviceImage(image: string) {
 }
 
 function deviceDirty(): boolean {
-  return deviceImage() !== DEVICE_IMAGE || (existsSync(DEVICE_TRANSFERS) && readdirSync(DEVICE_TRANSFERS).length > 0);
+  return (
+    deviceImage() !== DEVICE_IMAGE ||
+    deviceDaemon() !== DEVICE_DAEMON ||
+    (existsSync(DEVICE_TRANSFERS) && readdirSync(DEVICE_TRANSFERS).length > 0)
+  );
 }
 
 function otaRoute(mode: Mode, path: string): Response {
@@ -382,21 +413,29 @@ Bun.serve({
       if (!deviceDirty()) return Response.json({ reset: false, image: DEVICE_IMAGE });
       await daemonCtl('stop');
       flashDeviceImage(DEVICE_IMAGE);
+      installDeviceDaemon(DEVICE_DAEMON);
       rmSync(DEVICE_TRANSFERS, { recursive: true, force: true });
       interruptedAt = null;
       interruption = null;
       await daemonCtl('start');
-      console.log(`[e2e-fixtures] device reset to image ${DEVICE_IMAGE} with no retained transfers`);
-      return Response.json({ reset: true, image: DEVICE_IMAGE });
+      console.log(
+        `[e2e-fixtures] device reset to image ${DEVICE_IMAGE} and daemon ${DEVICE_DAEMON} with no retained transfers`,
+      );
+      return Response.json({ reset: true, image: DEVICE_IMAGE, daemon: DEVICE_DAEMON });
     }
 
     if (pathname === '/control/daemon/reboot') {
-      const image = searchParams.get('image') ?? DEVICE_IMAGE;
+      if (!(await restartAsked())) {
+        return new Response('the device never asked to restart', { status: 409 });
+      }
+      const image = searchParams.get('image') ?? deviceImage();
+      const daemon = searchParams.get('daemon') ?? deviceDaemon();
       await daemonCtl('stop');
       flashDeviceImage(image);
+      installDeviceDaemon(daemon);
       await daemonCtl('start');
-      console.log(`[e2e-fixtures] device rebooted onto image ${image}`);
-      return Response.json({ rebooted: true, image });
+      console.log(`[e2e-fixtures] device rebooted onto image ${image} and daemon ${daemon}`);
+      return Response.json({ rebooted: true, image, daemon });
     }
 
     if (pathname === '/control/ota/resumed') {

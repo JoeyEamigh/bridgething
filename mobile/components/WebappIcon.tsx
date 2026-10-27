@@ -48,7 +48,7 @@ export function WebappIcon({
         cache.set(key, next);
         if (!cancelled) setIcon(next);
       } catch {
-        // icon load failure is non-fatal; the fallback renders.
+        return;
       }
     })();
     return () => {
@@ -62,6 +62,8 @@ export function WebappIcon({
     <View
       className="items-center justify-center overflow-hidden border border-rule bg-neutral-soft"
       style={dims}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
     >
       {icon?.svg ? (
         <SvgXml xml={icon.svg} width={size} height={size} />

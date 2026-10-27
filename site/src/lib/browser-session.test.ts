@@ -61,6 +61,7 @@ function run(overrides: Partial<OtaRun> = {}): OtaRun {
     runId: 'browser-1',
     deviceId: 'device',
     kind: 'image',
+    lane: 'firmware',
     phase: 'downloading',
     steps: [],
     stepId: 0,

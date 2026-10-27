@@ -6,25 +6,39 @@ repo:
 apps:
   - slug: calendar
     author: JoeyEamigh
+    categories:
+      - productivity
     screenshots:
       - https://bridgething.com/screenshots/device-calendar.png
     homepage: https://bridgething.com/apps
     source: https://github.com/JoeyEamigh/bridgething
   - slug: weather
     author: JoeyEamigh
+    categories:
+      - clocks-weather
     screenshots:
       - https://bridgething.com/screenshots/device-weather.png
     homepage: https://bridgething.com/apps
     source: https://github.com/JoeyEamigh/bridgething
   - slug: home-assistant
     author: JoeyEamigh
+    categories:
+      - home-control
     screenshots:
       - https://bridgething.com/screenshots/device-home-assistant.png
     homepage: https://bridgething.com/apps
     source: https://github.com/JoeyEamigh/bridgething
   - slug: system-info
     author: JoeyEamigh
+    categories:
+      - dashboards
     screenshots:
       - https://bridgething.com/screenshots/device-system-info.png
+    homepage: https://bridgething.com/apps
+    source: https://github.com/JoeyEamigh/bridgething
+  - slug: voice-debug
+    author: JoeyEamigh
+    categories:
+      - tools
     homepage: https://bridgething.com/apps
     source: https://github.com/JoeyEamigh/bridgething

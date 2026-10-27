@@ -20,7 +20,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         private var pendingPeerLinkFailed: ((BridgethingSessionPeer) -> Unit)? = null
         private var pendingNowPlayingChanged: ((BridgethingNowPlaying?) -> Unit)? = null
         private var pendingAncsAuthStatusChanged: ((String, BridgethingAncsAuthStatus) -> Unit)? = null
-        private var pendingLog: ((String, String, String) -> Unit)? = null
+        private var pendingLog: ((String, String, String, Double) -> Unit)? = null
         private var pendingWebappsChanged: ((BridgethingDeviceWebappsEntry) -> Unit)? = null
         private var pendingWebappDocChanged: ((String, String, String, String?) -> Unit)? = null
         private var pendingDeviceMetaChanged: ((String, BridgethingDeviceMeta) -> Unit)? = null
@@ -111,7 +111,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         val peerLinkFailed: ((BridgethingSessionPeer) -> Unit)?,
         val nowPlaying: ((BridgethingNowPlaying?) -> Unit)?,
         val ancs: ((String, BridgethingAncsAuthStatus) -> Unit)?,
-        val log: ((String, String, String) -> Unit)?,
+        val log: ((String, String, String, Double) -> Unit)?,
         val webapps: ((BridgethingDeviceWebappsEntry) -> Unit)?,
         val webappDoc: ((String, String, String, String?) -> Unit)?,
         val deviceMeta: ((String, BridgethingDeviceMeta) -> Unit)?,
@@ -356,16 +356,16 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         require().fetchOtaManifest(rootUrl)
     }
 
-    override fun dismissOtaRun(deviceId: String): Promise<Unit> = Promise.async {
-        require().dismissOtaRun(deviceId)
+    override fun dismissOtaRun(deviceId: String, lane: BridgethingOtaLane): Promise<Unit> = Promise.async {
+        require().dismissOtaRun(deviceId, lane)
     }
 
     override fun applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String): Promise<Unit> = Promise.async {
         backend?.applyOtaUpdate(deviceId, channel, version, rootUrl)
     }
 
-    override fun otaRunProgress(deviceId: String, nowMs: Double): Variant_NullType_BridgethingOtaProgress {
-        val progress = backend?.otaRunProgress(deviceId, nowMs)
+    override fun otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double): Variant_NullType_BridgethingOtaProgress {
+        val progress = backend?.otaRunProgress(deviceId, lane, nowMs)
         return if (progress != null) Variant_NullType_BridgethingOtaProgress.Second(progress)
         else Variant_NullType_BridgethingOtaProgress.First(NullType.NULL)
     }
@@ -479,7 +479,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         forwardOrBuffer(callback, BridgethingSessionBackend::setOnAncsAuthStatusChanged) { pendingAncsAuthStatusChanged = it }
     }
 
-    override fun setOnLog(callback: (origin: String, level: String, message: String) -> Unit) {
+    override fun setOnLog(callback: (origin: String, level: String, message: String, ts: Double) -> Unit) {
         forwardOrBuffer(callback, BridgethingSessionBackend::setOnLog) { pendingLog = it }
     }
 

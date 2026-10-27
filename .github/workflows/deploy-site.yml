@@ -73,5 +73,5 @@ jobs:
           rm "$RUNNER_TEMP/rootfs.zck"
           bun run shell-fs:build "$ext4"
       - run: bun run build
-      - name: deploy
-        run: bunx wrangler deploy
+      - name: migrate and deploy
+        run: bun run ship

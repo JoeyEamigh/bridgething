@@ -1,28 +1,8 @@
 ---
-import catalog from '../../../apps/catalog.json';
-import type { Catalog } from '@bridgething/catalog';
-import Footer from '../../components/Footer.astro';
-import Header from '../../components/Header.astro';
-import { StoreBrowser } from '../../components/store/StoreBrowser';
-import Layout from '../../layouts/Layout.astro';
-import { SITE } from '../../lib/site.ts';
-
-const initial = [{ url: SITE.officialCatalog, official: true, attested: true, catalog: catalog as Catalog }];
+import { Storefront } from '../../components/store/Storefront';
+import StorePage from '../../components/store/StorePage.astro';
 ---
 
-<Layout title="apps" description="browse installable webapps for bridgething">
-  <Header />
-  <main class="container-site w-full flex-1 py-12 md:py-16">
-    <header class="mb-12 max-w-2xl">
-      <h1 class="mb-1">apps</h1>
-      <p class="text-white/60">bridgething apps from the community</p>
-      <p class="mt-4 font-mono text-sm text-white/40">
-        install from the bridgething app or the <a href="/device">device</a> page.
-      </p>
-    </header>
-
-    <script id="store-data" type="application/json" is:inline>null</script>
-    <StoreBrowser client:load initial={initial} />
-  </main>
-  <Footer />
-</Layout>
+<StorePage title="apps" description="browse installable webapps for bridgething">
+  <Storefront client:load />
+</StorePage>

@@ -6,8 +6,8 @@ use bridgething_companion::{
     NowPlayingTrack, OtaPollConfig, PeerLinkStatus, ProviderInfo, RepeatMode, ServiceHealth, ServiceHealthKind,
     SessionEvent, SessionHostInfo, SessionPeer, SessionSnapshot, SignInMethod, VoiceModelState, VoiceModelStatus,
     ota::{
-      OtaApplyPhase, OtaAvailable, OtaKind, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaPollStatus, OtaQueue,
-      OtaQueuedInstall, OtaRun, OtaRunPhase, OtaStepKind, OtaStoreChange,
+      OtaApplyPhase, OtaAvailable, OtaKind, OtaLane, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaPollStatus,
+      OtaQueue, OtaQueuedInstall, OtaRun, OtaRunPhase, OtaStepKind, OtaStoreChange,
     },
   },
   backend::LogLevel,
@@ -156,6 +156,7 @@ fn run() -> OtaRun {
     run_id: "run".into(),
     device_id: "device".into(),
     kind: OtaKind::Image,
+    lane: OtaLane::Firmware,
     phase: OtaRunPhase::Streaming,
     steps: vec![OtaPlanStep {
       id: 1,
@@ -261,6 +262,7 @@ fn an_event_carrying_a_backend_type_round_trips_with_it() {
     level: LogLevel::Warn,
     target: "bridgething".into(),
     message: "hello".into(),
+    ts_unix_ms: 1_754_700_000_000,
   };
 
   let json = serde_json::to_string(&event).expect("the event serializes");

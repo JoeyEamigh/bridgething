@@ -26,6 +26,7 @@ import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingLogArchive
 import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
 import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
+import com.margelo.nitro.bridgething.session.BridgethingOtaLane
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
@@ -186,7 +187,7 @@ public class HybridBridgethingSessionImpl(
     private var onAncsAuthStatusChanged: ((String, BridgethingAncsAuthStatus) -> Unit)? = null
 
     @Volatile
-    private var onLog: ((String, String, String) -> Unit)? = null
+    private var onLog: ((String, String, String, Double) -> Unit)? = null
 
     @Volatile
     private var onWebappsChanged: ((BridgethingDeviceWebappsEntry) -> Unit)? = null
@@ -276,7 +277,7 @@ public class HybridBridgethingSessionImpl(
                 if (event.origin == LogOrigin.DEVICE) {
                     CompanionLogs.store?.record(toStoreLevel(event.level), DAEMON_LABEL, line)
                 }
-                if (foreground) onLog?.invoke(toOriginName(event.origin), level, line)
+                if (foreground) onLog?.invoke(toOriginName(event.origin), level, line, event.tsUnixMs.toDouble())
             }
             is SessionEvent.WebappsChanged ->
                 if (foreground) onWebappsChanged?.invoke(toRnWebappsEntry(event.entry))
@@ -639,13 +640,15 @@ public class HybridBridgethingSessionImpl(
         requireSession().applyOtaUpdate(deviceId, channel, version, rootUrl)
     }
 
-    override fun otaRunProgress(deviceId: String, nowMs: Double): BridgethingOtaProgress? {
+    override fun otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double): BridgethingOtaProgress? {
         val c = companion ?: return null
-        return c.session.otaRunProgress(deviceId, nowMs.toLong().coerceAtLeast(0L).toULong())?.let(::toRnOtaProgress)
+        return c.session
+            .otaRunProgress(deviceId, fromRnOtaLane(lane), nowMs.toLong().coerceAtLeast(0L).toULong())
+            ?.let(::toRnOtaProgress)
     }
 
-    override suspend fun dismissOtaRun(deviceId: String) {
-        requireSession().dismissOtaRun(deviceId)
+    override suspend fun dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) {
+        requireSession().dismissOtaRun(deviceId, fromRnOtaLane(lane))
     }
 
     override suspend fun reconnectPeer(deviceId: String) {
@@ -802,7 +805,7 @@ public class HybridBridgethingSessionImpl(
         onAncsAuthStatusChanged = callback
     }
 
-    override fun setOnLog(callback: (String, String, String) -> Unit) { onLog = callback }
+    override fun setOnLog(callback: (String, String, String, Double) -> Unit) { onLog = callback }
 
     override fun setLogStreamingEnabled(enabled: Boolean) {
         logStreamingDesired = enabled

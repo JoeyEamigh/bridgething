@@ -48,10 +48,7 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
   if (!device) {
     return (
       <ScrollScreen>
-        <ScreenHeader
-          title="not paired"
-          subtitle="this phone no longer knows this car thing."
-        />
+        <ScreenHeader title="not paired" />
       </ScrollScreen>
     );
   }
@@ -69,7 +66,6 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
       <RenameSheet
         visible={renameOpen}
         title="rename your car thing"
-        message="this renames the device and shows on its screen."
         initialValue={device.nickname ?? ''}
         placeholder={device.peer?.name ?? device.displayName}
         onSubmit={value => {
@@ -116,12 +112,12 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
           <ResumeTargetRow deviceId={deviceId} />
           <LauncherGestureRow
             deviceId={deviceId}
-            gesture={meta?.launcherGesture ?? 'fivePress'}
+            gesture={meta?.launcherGesture ?? null}
           />
           {Platform.OS === 'ios' ? (
             <CompanionLaunchRow
               deviceId={deviceId}
-              enabled={meta?.companionLaunch ?? true}
+              enabled={meta?.companionLaunch ?? null}
             />
           ) : null}
         </ListGroup>
@@ -186,7 +182,7 @@ function AutoResumeRow({ deviceId }: { deviceId: string }) {
         const value = await session.isDeviceAutoResumeEnabled(deviceId);
         if (!cancelled) setEnabled(value);
       } catch {
-        if (!cancelled) setEnabled(true);
+        if (!cancelled) setEnabled(null);
       }
     })();
     return () => {
@@ -209,14 +205,12 @@ function AutoResumeRow({ deviceId }: { deviceId: string }) {
         icon="Play"
         iconTint={enabled ? 'accent' : 'default'}
         title="resume playback on connect"
-        subtitle="wake your music app and pick up where you left off"
         trailing={
-          <Switch
-            value={enabled ?? true}
-            onValueChange={toggle}
-            disabled={enabled == null}
-          />
+          enabled == null ? undefined : (
+            <Switch value={enabled} onValueChange={toggle} />
+          )
         }
+        disabled={enabled == null}
       />
       <RowNote notice={failure} />
     </View>
@@ -235,7 +229,7 @@ function ResumeTargetRow({ deviceId }: { deviceId: string }) {
         const value = await session.deviceResumeTarget(deviceId);
         if (!cancelled) setTarget(value);
       } catch {
-        if (!cancelled) setTarget('phoneOnly');
+        if (!cancelled) setTarget(null);
       }
     })();
     return () => {
@@ -258,13 +252,13 @@ function ResumeTargetRow({ deviceId }: { deviceId: string }) {
       <ListRow
         icon="Smartphone"
         title="resume on"
-        subtitle="any speaker lets playback start on whatever spotify last used"
-        trailing={
+        below={
           <Segmented
             size="sm"
             options={RESUME_TARGET_OPTIONS}
-            value={target ?? 'phoneOnly'}
+            value={target}
             onChange={pick}
+            disabled={target == null}
           />
         }
       />
@@ -278,7 +272,7 @@ function LauncherGestureRow({
   gesture,
 }: {
   deviceId: string;
-  gesture: BridgethingLauncherGesture;
+  gesture: BridgethingLauncherGesture | null;
 }) {
   const [pending, setPending] = useState<BridgethingLauncherGesture | null>(
     null,
@@ -301,14 +295,18 @@ function LauncherGestureRow({
       <ListRow
         icon="LayoutGrid"
         title="jump back to apps"
-        subtitle="the m button gesture that opens the launcher from any app"
-        trailing={
-          <Segmented
-            size="sm"
-            options={LAUNCHER_GESTURE_OPTIONS}
-            value={pending ?? gesture}
-            onChange={pick}
-          />
+        subtitle="m button"
+        value={gesture == null ? 'not connected' : undefined}
+        disabled={gesture == null}
+        below={
+          gesture == null ? undefined : (
+            <Segmented
+              size="sm"
+              options={LAUNCHER_GESTURE_OPTIONS}
+              value={pending ?? gesture}
+              onChange={pick}
+            />
+          )
         }
       />
       <RowNote notice={failure} />
@@ -321,7 +319,7 @@ function CompanionLaunchRow({
   enabled,
 }: {
   deviceId: string;
-  enabled: boolean;
+  enabled: boolean | null;
 }) {
   const [pending, setPending] = useState<boolean | null>(null);
   const [failure, setFailure] = useState<RowNotice | null>(null);
@@ -343,13 +341,16 @@ function CompanionLaunchRow({
         icon="AppWindow"
         iconTint={(pending ?? enabled) ? 'accent' : 'default'}
         title="open bridgething on reconnect"
-        subtitle="off leaves it closed. iOS reconnects it in the background, on its own schedule"
+        value={enabled == null ? 'not connected' : undefined}
+        disabled={enabled == null}
         trailing={
-          <Switch
-            testID="companion-launch"
-            value={pending ?? enabled}
-            onValueChange={toggle}
-          />
+          enabled == null ? undefined : (
+            <Switch
+              testID="companion-launch"
+              value={pending ?? enabled}
+              onValueChange={toggle}
+            />
+          )
         }
       />
       <RowNote notice={failure} />

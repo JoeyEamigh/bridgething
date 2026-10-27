@@ -47,6 +47,7 @@ function run(over: Partial<BridgethingOtaRun> = {}) {
     runId: 'r1',
     deviceId: 'AA:BB:CC',
     otaKind: 'image',
+    lane: 'firmware',
     phase: 'failed',
     steps: [],
     stepId: 0,
@@ -136,6 +137,21 @@ describe('conditions', () => {
         },
       }),
     ).toEqual(['updateFailed', 'voiceModelFailed']);
+  });
+
+  test('a failed store install is not a failed update', () => {
+    expect(
+      ids({
+        otaRuns: [
+          run({
+            otaKind: 'installedWebapp',
+            lane: 'webapp',
+            outcome: 'failed',
+            error: 'no room',
+          }),
+        ],
+      }),
+    ).toEqual([]);
   });
 
   test('a succeeded update is not a condition', () => {

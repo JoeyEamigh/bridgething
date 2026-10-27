@@ -6,10 +6,13 @@ import { Note } from '../Note';
 import { PendingAuth } from '../PendingAuth';
 import { Pill } from '../Pill';
 import { SectionHeader } from '../SectionHeader';
+import { ProviderMark } from './ProviderMark';
 import { ServerLoginSheet } from './ServerLoginSheet';
 import { SignOutSheet } from './SignOutSheet';
 import { useAccounts } from './useAccounts';
 import { TEXT } from '../../lib/theme';
+
+const MARK_SIZE = 22;
 
 export function AccountsSection() {
   const accounts = useAccounts();
@@ -22,8 +25,7 @@ export function AccountsSection() {
           p.connected ? (
             <ListRow
               key={p.id}
-              icon="UserRound"
-              iconTint="accent"
+              icon={<ProviderMark id={p.id} size={MARK_SIZE} />}
               title={p.displayName}
               subtitle={
                 accounts.libraryProvider === p.id
@@ -40,8 +42,7 @@ export function AccountsSection() {
           ) : (
             <ListRow
               key={p.id}
-              icon="LogIn"
-              iconTint="accent"
+              icon={<ProviderMark id={p.id} size={MARK_SIZE} />}
               title={`sign in to ${p.displayName}`}
               chevron
               onPress={() => accounts.signIn(p.id)}
@@ -61,7 +62,7 @@ export function AccountsSection() {
         ))}
       </ListGroup>
 
-      {accounts.providers.length > 1 ? (
+      {accounts.connected.length > 1 ? (
         <Text className="mt-2 px-1 font-sans text-muted" style={TEXT.hint}>
           tap an account to prefer it for browsing and when nothing is playing.
         </Text>

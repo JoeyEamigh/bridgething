@@ -1,9 +1,21 @@
 ---
+import { DEVICE_FRAME } from '@bridgething/ui/tokens';
+
 export type Props = {
   class?: string;
 };
 
 const { class: className } = Astro.props;
+
+const BOX = { width: 1400, height: 1000 };
+const OFFSET = { left: 6, top: 147 };
+const pct = (value: number, of: number) => `${((value / of) * 100).toFixed(3)}%`;
+const device = {
+  left: pct(OFFSET.left, BOX.width),
+  top: pct(OFFSET.top, BOX.height),
+  width: pct(DEVICE_FRAME.width, BOX.width),
+  height: pct(DEVICE_FRAME.height, BOX.height),
+};
 ---
 
 <div class:list={['relative aspect-7/5 w-full', className]}>
@@ -11,6 +23,6 @@ const { class: className } = Astro.props;
     class="bg-screen absolute top-[21.8%] left-[7%] flex h-[58.5%] w-[71%] flex-col gap-[0.7cqw] overflow-hidden p-[2.6cqw] font-mono text-[1.95cqw] leading-tight whitespace-nowrap">
     <slot />
   </div>
-  <img src="/car-thing-frame.png" alt="" class="pointer-events-none absolute inset-0 h-full w-full" />
+  <img src="/car-thing-frame.webp" alt="" class="pointer-events-none absolute" style={device} />
   <slot name="callouts" />
 </div>

@@ -4,7 +4,10 @@ tags:
   - ios-only
 ---
 - runFlow: ../common/fresh-start.yaml
-- tapOn: ".*Weather.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Weather
 - tapOn: "open Weather settings"
 - extendedWaitUntil:
     visible: "(?i).*location as lat,lon.*"
@@ -32,6 +35,6 @@ tags:
 - extendedWaitUntil:
     visible: "(?i).*location as lat,lon.*"
     timeout: 3000
-- tapOn: "‹ back"
+- tapOn: "Back|Navigate up"
 - assertVisible: "open Weather settings"
 - assertNotVisible: "(?i).*location as lat,lon.*"

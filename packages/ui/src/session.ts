@@ -10,6 +10,7 @@ import type {
   NowPlaying,
   OtaAvailable,
   OtaDiscoverManifest,
+  OtaLane,
   OtaPollConfig,
   OtaPollStatus,
   OtaRun,
@@ -115,7 +116,7 @@ export interface DeviceSession {
   setOtaPollConfig(config: OtaPollConfig | null): Promise<void>;
   applyOtaUpdate(channel: string, version: string, rootUrl: string): Promise<void>;
   checkForOtaUpdate(rootUrl: string): Promise<void>;
-  dismissOtaRun(): Promise<void>;
+  dismissOtaRun(lane: OtaLane): Promise<void>;
 
   deviceLogs(limit: number): Promise<DeviceLogLine[]>;
   setDeviceLogStreaming(enabled: boolean): Promise<void>;

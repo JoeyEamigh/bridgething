@@ -7,10 +7,12 @@
     ".": "./src/index.ts",
     "./errors": "./src/errors.ts",
     "./launcher-gesture": "./src/launcher-gesture.ts",
+    "./provider-marks": "./src/provider-marks.ts",
     "./settings-host": "./src/settings-host.ts",
     "./tokens": "./src/tokens.ts",
     "./theme.css": "./src/theme.css",
-    "./fonts.css": "./src/fonts.css"
+    "./fonts.css": "./src/fonts.css",
+    "./car-thing-frame.webp": "./assets/car-thing-frame.webp"
   },
   "scripts": {
     "test": "bun test",

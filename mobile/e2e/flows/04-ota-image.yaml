@@ -6,9 +6,17 @@ name: streams an image release to the device and lands it through swupdate
     env:
       MODE: image
 - extendedWaitUntil:
-    visible: ".*99.9.9 available.*"
+    visible: ".*install [0-9.]+\\+image.99.9.9.*"
     timeout: 180000
 - tapOn: ".*install [0-9.]+\\+image.99.9.9.*"
+- extendedWaitUntil:
+    visible: ".*rebooting.*"
+    timeout: 180000
+- runScript:
+    file: ../scripts/ota-reboot.js
+    env:
+      CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
+      IMAGE: "99.9.9"
 - extendedWaitUntil:
     visible: ".*update installed.*"
     timeout: 180000

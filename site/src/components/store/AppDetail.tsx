@@ -1,30 +1,33 @@
 import type { ComponentChildren } from 'preact';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import {
-  aggregate,
+  alsoAvailableLabel,
+  appCategories,
+  changelogText,
   extensionOf,
+  listingKindLabel,
+  moreFromAuthor,
   newestCompatible,
+  OFFICIAL_CATALOG_URL,
+  permissionLabel,
   sortNewestFirst,
+  sourceLine,
   type AppEntry,
+  type AppVersion,
   type CatalogAppListing,
+  type StoreSource,
   webHref,
 } from '@bridgething/catalog';
-import { appIdFromPath } from '../../lib/app-routes';
-import {
-  fetchMergedApps,
-  readStoreData,
-  type InstallCount,
-  type MergedCatalog,
-  type StoreData,
-} from '../../lib/directory-client';
-import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
-import { orderedByTrust, sourceMap, type StoreSource } from '../../lib/store-sources';
+import { filterPath, storeRoute, STORE_PATH } from '../../lib/app-routes';
+import type { StoreData } from '../../lib/directory-client';
+import { installListing } from '../../lib/pending-install';
+import { currentHref, useStore } from '../../lib/use-store';
 import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
-import { hideOnError } from '../../lib/img';
+import { AppFrame, AppIcon, IconTile, installable, Notice, Row, screenshots, ShelfHeader } from './parts';
 
 export type BakedApp = { app: AppEntry; source: StoreSource };
 
-type Resolved = { listing: CatalogAppListing; source: StoreSource | null };
+type Resolved = { listing: CatalogAppListing; source: StoreSource | null; more: CatalogAppListing[] };
 
 function formatDate(raw: string): string {
   const at = Date.parse(raw);
@@ -32,256 +35,303 @@ function formatDate(raw: string): string {
   return new Date(at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
-function bakedListing(baked: BakedApp): CatalogAppListing {
+function formatSize(bytes: number): string {
+  if (bytes <= 0) return 'pending';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function bakedListing(app: AppEntry, sourceUrl: string): CatalogAppListing {
   return {
-    app: baked.app,
-    sourceUrl: baked.source.url,
-    newestCompatible: newestCompatible(baked.app, null),
+    app,
+    sourceUrl,
+    newestCompatible: newestCompatible(app, null),
     installedVersion: null,
     updateAvailable: false,
     alsoAvailableFrom: [],
     installs: 0,
+    trending: 0,
+    official: sourceUrl === OFFICIAL_CATALOG_URL,
   };
 }
 
-function Notice({ children }: { children: ComponentChildren }) {
+function Section({
+  title,
+  aside,
+  children,
+}: {
+  title: string;
+  aside?: ComponentChildren;
+  children: ComponentChildren;
+}) {
   return (
-    <div class="border border-dashed border-white/25 p-16 text-center">
-      <p class="m-0 text-white/60">{children}</p>
+    <section class="mb-10">
+      <header class="mb-3 flex items-baseline justify-between gap-3 border-b border-white/20 pb-2">
+        <h2 class="m-0 text-base">{title}</h2>
+        {aside ? <span class="font-mono text-sm text-white/40">{aside}</span> : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function Stat({ value, label, href }: { value: string; label: string; href?: string | null }) {
+  return (
+    <div class="min-w-0 px-4 py-3">
+      <p class="m-0 truncate font-medium">
+        {href ? (
+          <a href={href} class="border-b-0 hover:text-white">
+            {value}
+          </a>
+        ) : (
+          value
+        )}
+      </p>
+      <p class="m-0 font-mono text-xs text-white/40">{label}</p>
     </div>
   );
 }
 
-function Trust({ source }: { source: StoreSource | null }) {
-  if (!source) return <p class="m-0 font-mono text-sm text-white/40">source: unknown</p>;
+const RECENT_VERSIONS = 5;
 
-  const href = webHref(source.url);
-
+function Versions({ versions, newest }: { versions: AppVersion[]; newest: AppVersion | null }) {
   return (
-    <>
-      <p class="m-0 font-mono text-sm break-all text-white/40">
-        source: {href ? <a href={href}>{source.name}</a> : source.name}
-      </p>
-      {source.official || source.attested ? null : (
-        <p class="m-0 mt-2 text-sm text-white/50">this source is unreviewed</p>
-      )}
-    </>
+    <ul class="m-0 flex list-none flex-col p-0 [&>li+li]:border-t [&>li+li]:border-white/10">
+      {versions.map(v => {
+        const notes = v === newest ? null : changelogText(v.changelog);
+        return (
+          <li key={v.version} class="py-3">
+            <p class="m-0 flex flex-wrap items-baseline gap-x-3 font-mono text-sm">
+              <span class="text-white/85">{v.version}</span>
+              <time class="text-white/45" datetime={v.released_at}>
+                {formatDate(v.released_at)}
+              </time>
+              <span class="text-white/35">
+                lib {v.min_libbridgething_version} · {formatSize(v.download.size)}
+              </span>
+            </p>
+            {notes ? (
+              <p class="m-0 mt-1 line-clamp-3 max-w-[90ch] text-sm whitespace-pre-line text-white/55">{notes}</p>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function Detail({ listing, source }: Resolved) {
+function Detail({ listing, source, more }: Resolved) {
   const app = listing.app;
   const versions = sortNewestFirst(app.versions);
   const newest = listing.newestCompatible ?? versions[0] ?? null;
   const extension = extensionOf(newest);
-  const unpublished = newest === null || isPlaceholderDownload(newest.download);
   const homepage = webHref(app.homepage);
   const repo = webHref(app.source);
-  const shots = (app.screenshots ?? []).map(webHref).filter((url): url is string => url !== null);
+  const shots = screenshots(app);
+  const kind = listingKindLabel(listing);
+  const category = appCategories(app)[0];
+  const kindHref =
+    newest?.role === 'launcher'
+      ? filterPath({ kind: 'launchers' })
+      : newest?.provides_overlay
+        ? filterPath({ kind: 'overlays' })
+        : category
+          ? filterPath({ kind: 'category', category })
+          : null;
+  const permissions = [...new Set((newest?.permissions ?? []).map(permissionLabel))];
+  const provides = [
+    newest?.role === 'launcher' ? 'home screen' : null,
+    newest?.provides_overlay ? 'system overlay' : null,
+  ].filter((entry): entry is string => entry !== null);
+  const author = filterPath({ kind: 'author', author: app.author });
+  const also = alsoAvailableLabel(listing.alsoAvailableFrom);
 
   return (
     <>
-      <header class="mb-10 flex flex-wrap items-start gap-5">
-        <div class="size-16 shrink-0 border border-dashed border-white/25" aria-hidden="true">
-          {app.icon ? (
-            <img src={app.icon} alt="" width="64" height="64" class="size-full" onError={hideOnError} />
-          ) : null}
-        </div>
+      <header class="mb-6 flex flex-wrap items-center gap-5">
+        <AppIcon app={app} size={88} />
         <div class="min-w-0 flex-1">
-          <h1 class="mb-1">{app.name.toLowerCase()}</h1>
-          <p class="m-0 text-white/60">{app.description}</p>
+          <h1 class="m-0 break-words">{app.name}</h1>
+          <p class="m-0 mt-1 font-mono text-sm text-white/50">
+            <a href={author}>{app.author}</a>
+          </p>
           {extension ? (
             <div class="mt-3 flex">
               <ExtensionBadge />
             </div>
           ) : null}
-          <p class="m-0 mt-3 flex flex-wrap items-baseline gap-2 font-mono text-sm text-white/45">
-            <span>{app.author}</span>
-            {newest ? (
-              <>
-                <span class="opacity-50">·</span>
-                <span>{newest.version}</span>
-                <span class="opacity-50">·</span>
-                <time datetime={newest.released_at}>{formatDate(newest.released_at)}</time>
-              </>
-            ) : null}
-          </p>
+        </div>
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          {installable(listing) ? (
+            <button type="button" class="btn btn-primary btn-lg justify-center" onClick={() => installListing(listing)}>
+              install {newest!.version}
+            </button>
+          ) : (
+            <p class="text-warn m-0 font-mono text-sm">this version has no installable download yet</p>
+          )}
+          <p class="m-0 font-mono text-xs text-white/40">from the bridgething app or this browser</p>
         </div>
       </header>
 
+      <div class="bg-screen mb-8 grid grid-cols-3 divide-x divide-white/10 border border-white/15">
+        <Stat value={String(listing.installs)} label={listing.installs === 1 ? 'install' : 'installs'} />
+        <Stat value={kind ?? 'app'} label="category" href={kindHref} />
+        <Stat value={newest ? formatSize(newest.download.size) : 'pending'} label="size" />
+      </div>
+
       {shots.length > 0 ? (
-        <section class="mb-12">
-          <ul class="m-0 flex list-none gap-4 overflow-x-auto p-0">
-            {shots.map(shot => (
-              <li key={shot} class="aspect-5/3 h-48 shrink-0 border border-white/15 sm:h-64">
-                <img
-                  src={shot}
-                  alt={`${app.name} running on a car thing`}
-                  width="800"
-                  height="480"
-                  loading="lazy"
-                  class="size-full object-cover"
-                  onError={hideOnError}
-                />
-              </li>
+        <div class="mb-10">
+          <Row>
+            {shots.map((shot, index) => (
+              <div key={shot} class="w-72 shrink-0 snap-start sm:w-96 lg:w-[calc((100%-3rem)/3)]">
+                <AppFrame app={app} shot={shot} size="md" eager={index === 0} />
+              </div>
             ))}
-          </ul>
-        </section>
+          </Row>
+        </div>
       ) : null}
 
-      {extension ? (
-        <section class="mb-12">
-          <h2 class="mb-3 border-b border-white/20 pb-2 text-base">native extension</h2>
-          <ExtensionNote extension={extension} source={app.source} />
-        </section>
-      ) : null}
+      <div class="grid grid-cols-1 gap-x-12 lg:grid-cols-[3fr_2fr]">
+        <div class="min-w-0">
+          <p class="m-0 mb-10 max-w-[65ch] text-lg text-white/75">{app.description}</p>
 
-      <section class="mb-12 grid grid-cols-1 gap-8 md:grid-cols-2">
-        <div>
-          <h2 class="mb-3 border-b border-white/20 pb-2 text-base">install</h2>
-          {unpublished ? (
-            <p class="mb-4 text-white/65">this version is in the catalog but has no installation candidate</p>
-          ) : (
-            <>
-              <p class="mb-4 text-white/65">install from the bridgething app or your browser</p>
-              <button type="button" class="btn btn-primary mb-4" onClick={() => installListing(listing)}>
-                install {newest!.version}
-              </button>
-            </>
-          )}
-          <Trust source={source} />
-          {listing.alsoAvailableFrom.length > 0 ? (
-            <p class="m-0 mt-2 font-mono text-sm text-white/35">
-              also offered by {listing.alsoAvailableFrom.length} other source
-              {listing.alsoAvailableFrom.length === 1 ? '' : 's'}. this is unusual
-            </p>
+          {extension ? (
+            <Section title="native extension">
+              <ExtensionNote extension={extension} source={app.source} />
+            </Section>
+          ) : null}
+
+          {newest ? (
+            <Section
+              title={`new in ${newest.version}`}
+              aside={<time datetime={newest.released_at}>{formatDate(newest.released_at)}</time>}>
+              <p class="m-0 max-w-[65ch] whitespace-pre-line text-white/60">
+                {changelogText(newest.changelog) ?? 'no release notes'}
+              </p>
+            </Section>
           ) : null}
         </div>
 
-        <div>
-          <h2 class="mb-3 border-b border-white/20 pb-2 text-base">details</h2>
-          <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm">
-            <dt class="text-white/40">id</dt>
-            <dd class="m-0 break-all">{app.id}</dd>
-            {newest ? (
-              <>
-                <dt class="text-white/40">needs</dt>
-                <dd class="m-0">libbridgething {newest.min_libbridgething_version}</dd>
-                <dt class="text-white/40">permissions</dt>
-                <dd class="m-0">{newest.permissions.length > 0 ? newest.permissions.join(', ') : 'none'}</dd>
-                {newest.role === 'launcher' || newest.provides_overlay ? (
-                  <>
-                    <dt class="text-white/40">provides</dt>
-                    <dd class="m-0">
-                      {[
-                        newest.role === 'launcher' ? 'home screen' : null,
-                        newest.provides_overlay ? 'system overlay' : null,
-                      ]
-                        .filter(Boolean)
-                        .join(', ')}
-                      <span class="block text-white/40">
-                        assign it on <a href="/device">device</a> after installing
-                      </span>
-                    </dd>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            {app.homepage ? (
-              <>
-                <dt class="text-white/40">homepage</dt>
-                <dd class="m-0 break-all">{homepage ? <a href={homepage}>{app.homepage}</a> : app.homepage}</dd>
-              </>
-            ) : null}
-            {app.source ? (
-              <>
-                <dt class="text-white/40">source</dt>
-                <dd class="m-0 break-all">{repo ? <a href={repo}>{app.source}</a> : app.source}</dd>
-              </>
-            ) : null}
-          </dl>
-        </div>
-      </section>
+        <div class="min-w-0">
+          <Section title="permissions">
+            {permissions.length > 0 ? (
+              <ul class="bg-screen m-0 list-none border border-white/15 p-0 [&>li+li]:border-t [&>li+li]:border-white/10">
+                {permissions.map(permission => (
+                  <li key={permission} class="px-4 py-2.5">
+                    {permission}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="m-0 text-white/50">no permissions</p>
+            )}
+          </Section>
 
-      <section>
-        <h2 class="mb-4 border-b border-white/20 pb-2 text-base">versions</h2>
-        <ul class="m-0 flex list-none flex-col gap-4 p-0">
-          {versions.map(v => (
-            <li key={v.version} class="border border-white/15 p-5">
-              <div class="mb-1 flex flex-wrap items-baseline gap-3">
-                <h3 class="m-0 font-mono text-base/none font-medium">{v.version}</h3>
-                <time class="font-mono text-sm text-white/45" datetime={v.released_at}>
-                  {formatDate(v.released_at)}
-                </time>
-              </div>
-              <p class="m-0 mb-2 font-mono text-sm text-white/45">
-                needs lib {v.min_libbridgething_version}
-                {v.download.size > 0 ? ` · ${(v.download.size / 1024).toFixed(0)} KB` : ' · size pending'}
-                {v.download.sha256.replaceAll('0', '') === '' ? '' : ` · ${v.download.sha256.slice(0, 12)}`}
+          {provides.length > 0 ? (
+            <Section title="provides">
+              <p class="m-0 text-white/75">{provides.join(', ')}</p>
+              <p class="m-0 mt-1 font-mono text-sm text-white/40">
+                assign it on <a href="/device">device</a> after installing
               </p>
-              {v.changelog ? <p class="m-0 text-white/70">{v.changelog}</p> : null}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </Section>
+          ) : null}
+
+          <Section title="details">
+            <dl class="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-sm">
+              <dt class="text-white/40">id</dt>
+              <dd class="m-0 break-all">{app.id}</dd>
+              {newest ? (
+                <>
+                  <dt class="text-white/40">needs</dt>
+                  <dd class="m-0">libbridgething {newest.min_libbridgething_version}</dd>
+                </>
+              ) : null}
+              {app.homepage ? (
+                <>
+                  <dt class="text-white/40">homepage</dt>
+                  <dd class="m-0 break-all">{homepage ? <a href={homepage}>{app.homepage}</a> : app.homepage}</dd>
+                </>
+              ) : null}
+              {app.source ? (
+                <>
+                  <dt class="text-white/40">source</dt>
+                  <dd class="m-0 break-all">{repo ? <a href={repo}>{app.source}</a> : app.source}</dd>
+                </>
+              ) : null}
+            </dl>
+          </Section>
+        </div>
+      </div>
+
+      <Section title="versions" aside={versions.length}>
+        <Versions versions={versions.slice(0, RECENT_VERSIONS)} newest={newest} />
+        {versions.length > RECENT_VERSIONS ? (
+          <details class="mt-2 border-t border-white/10 pt-3">
+            <summary class="cursor-pointer font-mono text-sm text-white/50 hover:text-white">
+              {versions.length - RECENT_VERSIONS} older
+            </summary>
+            <Versions versions={versions.slice(RECENT_VERSIONS)} newest={newest} />
+          </details>
+        ) : null}
+      </Section>
+      {more.length > 0 ? (
+        <section class="mb-10">
+          <ShelfHeader title={`more from ${app.author}`} href={author} />
+          <Row>
+            {more.map(other => (
+              <IconTile key={other.app.id} listing={other} />
+            ))}
+          </Row>
+        </section>
+      ) : null}
+
+      <footer class="flex flex-col gap-1 border-t border-white/15 pt-4 font-mono text-xs text-white/40">
+        <p class="m-0 break-all" title={source?.url}>
+          {sourceLine(source)}
+        </p>
+        {also ? <p class="m-0">{also}</p> : null}
+      </footer>
     </>
   );
 }
 
-export function AppDetail({ baked, data, path }: { baked: BakedApp | null; data?: StoreData | null; path?: string }) {
-  const [seeded] = useState(() => data ?? readStoreData());
+function idOf(href: string | null, baked: BakedApp | null): string | null | undefined {
+  if (href === null) return baked?.app.id;
+  const url = new URL(href, 'https://bridgething.com');
+  const route = storeRoute(url.pathname);
+  return route?.page === 'app' ? route.id : (baked?.app.id ?? null);
+}
 
-  const [id] = useState<string | null | undefined>(() => {
-    const at = path ?? (typeof window === 'undefined' ? null : window.location.pathname);
-    if (at === null) return baked?.app.id;
-    return appIdFromPath(at) ?? baked?.app.id ?? null;
-  });
-  const [catalogs, setCatalogs] = useState<MergedCatalog[] | null>(
-    seeded ? orderedByTrust(seeded.apps.catalogs) : null,
-  );
-  const [installs, setInstalls] = useState<InstallCount[]>(seeded?.apps.installs ?? []);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (seeded) return;
-
-    const controller = new AbortController();
-    fetchMergedApps({ signal: controller.signal })
-      .then(merged => {
-        setCatalogs(orderedByTrust(merged.catalogs));
-        setInstalls(merged.installs);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setFailed(true);
-      });
-    return () => controller.abort();
-  }, [seeded]);
+export function AppDetail({ baked, data, href }: { baked: BakedApp | null; data?: StoreData | null; href?: string }) {
+  const { catalog, failed, seeded } = useStore(data);
+  const [id] = useState(() => idOf(href ?? currentHref(), baked));
 
   const resolved = useMemo<Resolved | null>(() => {
-    if (catalogs) {
-      const listings = aggregate({
-        orderedCatalogs: catalogs,
-        installed: [],
-        deviceLibVersion: null,
-        installs,
-        extensions: 'listed',
-      });
-      const listing = listings.find(entry => entry.app.id === id);
-      if (listing) return { listing, source: sourceMap(catalogs).get(listing.sourceUrl) ?? null };
+    if (catalog) {
+      const listing = catalog.listings.find(entry => entry.app.id === id);
+      if (listing) {
+        return {
+          listing,
+          source: catalog.sources[listing.sourceUrl] ?? null,
+          more: moreFromAuthor(catalog.listings, listing),
+        };
+      }
     }
-    if (baked && baked.app.id === id && seeded === null) return { listing: bakedListing(baked), source: baked.source };
+    if (baked && baked.app.id === id && !seeded) {
+      return { listing: bakedListing(baked.app, baked.source.url), source: baked.source, more: [] };
+    }
     return null;
-  }, [catalogs, installs, id, baked, seeded]);
+  }, [catalog, id, baked, seeded]);
 
-  if (resolved) return <Detail listing={resolved.listing} source={resolved.source} />;
-  if (id === undefined || (catalogs === null && !failed)) return <Notice>looking this app up…</Notice>;
-  if (id === null)
+  if (resolved) return <Detail {...resolved} />;
+  if (id === undefined || (catalog === null && !failed)) return <Notice>looking this app up…</Notice>;
+  if (id === null) {
     return (
       <Notice>
-        no app id in this url. pick one from the <a href="/apps">apps page</a>.
+        no app id in this url. pick one from the <a href={STORE_PATH}>apps page</a>.
       </Notice>
     );
+  }
   if (failed) return <Notice>could not reach the catalog. try reloading the page.</Notice>;
-
   return <Notice>no source in the directory lists an app with this id.</Notice>;
 }

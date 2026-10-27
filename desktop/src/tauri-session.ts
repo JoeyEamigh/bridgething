@@ -154,7 +154,8 @@ export class TauriSession implements CompanionSession {
   voiceModel = () => invoke<api.VoiceModelState>('voice_model');
 
   otaRuns = () => invoke<api.OtaRun[]>('ota_runs');
-  otaRunProgress = (deviceId: string) => invoke<api.OtaRunProgress | null>('ota_run_progress', { deviceId });
+  otaRunProgress = (deviceId: string, lane: api.OtaLane) =>
+    invoke<api.OtaRunProgress | null>('ota_run_progress', { deviceId, lane });
   otaAvailable = () => invoke<api.OtaAvailable[]>('ota_available');
   otaPoll = () => invoke<api.OtaPollStatus>('ota_poll');
   otaManifest = (rootUrl: string) => invoke<api.OtaDiscoverManifest>('ota_manifest', { rootUrl });
@@ -162,7 +163,7 @@ export class TauriSession implements CompanionSession {
   applyOtaUpdate = (channel: string, version: string, rootUrl: string) =>
     invoke<void>('apply_ota_update', { channel, version, rootUrl });
   checkForOtaUpdate = (rootUrl: string) => invoke<void>('ota_check_now', { rootUrl });
-  dismissOtaRun = () => invoke<void>('ota_dismiss_run');
+  dismissOtaRun = (lane: api.OtaLane) => invoke<void>('ota_dismiss_run', { lane });
 
   otaPushDaemon = (artifact: string) => invoke<OtaOutcome>('ota_push_daemon', { artifact });
   otaInstallWebapp = (bundle: string, provenance?: string, confirmed?: string[]) =>

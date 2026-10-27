@@ -4,7 +4,10 @@ tags:
   - ios-only
 ---
 - runFlow: ../common/fresh-start.yaml
-- tapOn: ".*Blob Picker.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Blob Picker
 - tapOn: "open Blob Picker settings"
 - extendedWaitUntil:
     visible: "pick a gif"

@@ -32,7 +32,7 @@ const RELEASES_SHOWN = 5;
 export function UpdatesScreen(): VNode {
   const session = useSession();
   const active = otaRuns.value.filter(run => run.outcome !== 'succeeded');
-  const firmware = otaRuns.value.find(run => !run.outcome && (run.kind === 'image' || run.kind === 'daemon')) ?? null;
+  const firmware = otaRuns.value.find(run => !run.outcome && run.lane === 'firmware') ?? null;
   const poll = otaPoll.value;
 
   const config = otaPollConfig.value;
@@ -76,7 +76,7 @@ export function UpdatesScreen(): VNode {
                 key={run.runId}
                 run={run}
                 onDismiss={() => {
-                  void session.dismissOtaRun();
+                  void session.dismissOtaRun(run.lane);
                 }}
               />
             ))}

@@ -6,7 +6,7 @@ use bridgething_companion::{
     DocEntry, LauncherGesture, MediaCover, MediaPickKind, NowPlaying, OtaPollConfig, PickedMedia, ProviderCredentials,
     ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappBlob, WebappInfo,
     WebappInstallRequest, WebappSlot, WebappSlots,
-    ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun, OtaRunProgress},
+    ota::{OtaAvailable, OtaDiscoverManifest, OtaLane, OtaPollStatus, OtaRun, OtaRunProgress},
   },
   provider::ResumeTarget,
 };
@@ -205,11 +205,15 @@ pub async fn ota_runs(shell: State<'_, Arc<Shell>>) -> Answer<Vec<OtaRun>> {
 }
 
 #[tauri::command]
-pub async fn ota_run_progress(shell: State<'_, Arc<Shell>>, device_id: String) -> Answer<Option<OtaRunProgress>> {
+pub async fn ota_run_progress(
+  shell: State<'_, Arc<Shell>>,
+  device_id: String,
+  lane: OtaLane,
+) -> Answer<Option<OtaRunProgress>> {
   let now_ms = std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .map_or(0, |since| since.as_millis() as u64);
-  Ok(shell.session().ota_run_progress(device_id, now_ms))
+  Ok(shell.session().ota_run_progress(device_id, lane, now_ms))
 }
 
 #[tauri::command]
@@ -771,9 +775,9 @@ pub async fn ota_check_now(shell: State<'_, Arc<Shell>>, root_url: String) -> An
 }
 
 #[tauri::command]
-pub async fn ota_dismiss_run(shell: State<'_, Arc<Shell>>) -> Answer<()> {
+pub async fn ota_dismiss_run(shell: State<'_, Arc<Shell>>, lane: OtaLane) -> Answer<()> {
   let device_id = peer(&shell)?;
-  shell.ota().dismiss_run(&device_id).await;
+  shell.ota().dismiss_run(&device_id, lane.into()).await;
   Ok(())
 }
 

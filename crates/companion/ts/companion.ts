@@ -203,6 +203,8 @@ export type OtaDiscoverManifest = {
 
 export type OtaKind = 'image' | 'daemon' | 'builtinWebapp' | 'installedWebapp' | 'wakewordModel';
 
+export type OtaLane = 'firmware' | 'webapp';
+
 export type OtaManifestChannel = {
   name: string;
   stability: string;
@@ -275,6 +277,7 @@ export type OtaRun = {
   runId: string;
   deviceId: string;
   kind: OtaKind;
+  lane: OtaLane;
   phase: OtaRunPhase;
   steps: Array<OtaPlanStep>;
   stepId: number;
@@ -366,7 +369,7 @@ export type SessionEvent =
   | { peerLinkFailed: { peer: SessionPeer } }
   | { nowPlayingChanged: { nowPlaying: NowPlaying | null } }
   | { ancsAuthStatusChanged: { deviceId: string; status: AncsAuthStatus } }
-  | { log: { origin: LogOrigin; level: LogLevel; target: string; message: string } }
+  | { log: { origin: LogOrigin; level: LogLevel; target: string; message: string; tsUnixMs: number } }
   | { webappsChanged: { entry: DeviceWebappsEntry } }
   | { webappDocChanged: { deviceId: string; webappId: string; key: string; value: string | null } }
   | { deviceMetaChanged: { deviceId: string; meta: DeviceMeta } }

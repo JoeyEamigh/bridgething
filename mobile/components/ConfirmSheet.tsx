@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 
 import { Button } from './Button';
 import { Note } from './Note';
-import { Sheet } from './Sheet';
+import { Sheet, SheetTitle } from './Sheet';
 import { TEXT } from '../lib/theme';
 
 type ConfirmProps = {
@@ -32,13 +32,7 @@ export function ConfirmBody({
   return (
     <>
       <View className="gap-2">
-        <Text
-          className="font-mono uppercase text-accent"
-          style={TEXT.eyebrow}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
+        <SheetTitle>{title}</SheetTitle>
         {body ? (
           <Text className="font-sans text-fg" style={TEXT.body}>
             {body}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { fetchAdminSources, type AdminEntry } from '../../lib/directory-client';
 import { INPUT, Notice, reason } from './shared';
+import { FeaturedPin } from './FeaturedPin';
 import { SourcesTab } from './SourcesTab';
 
 const TOKEN_KEY = 'bridgething:admin-token';
@@ -83,6 +84,7 @@ export function AdminConsole() {
         </button>
       </p>
 
+      <FeaturedPin token={token} />
       <SourcesTab token={token} initial={entries} />
     </>
   );

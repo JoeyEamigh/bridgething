@@ -195,7 +195,7 @@ fi
 "${PLATFORM}_device"
 
 echo "== host daemon (seeded from ${E2E_DIR}/examples) =="
-rm -rf "${E2E_DIR}/state" "${E2E_DIR}/webapps" "${E2E_DIR}/webapp-blobs" "${E2E_DIR}/.seeded" "${E2E_DIR}/superbird.json"
+rm -rf "${E2E_DIR}/state" "${E2E_DIR}/webapps" "${E2E_DIR}/webapp-blobs" "${E2E_DIR}/.seeded" "${E2E_DIR}/superbird.json" "${E2E_DIR}/daemon-version"
 BRIDGETHING_DEV_DIR="$E2E_DIR" "${ROOT}/scripts/dev-daemon.sh" start
 
 echo "== fixture server :${FIXTURE_PORT} =="

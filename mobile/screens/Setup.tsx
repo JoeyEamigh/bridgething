@@ -106,13 +106,11 @@ export function SetupScreen({ navigation, route }: Props) {
   const steps = useMemo(() => setupSteps(paired), [paired]);
   const pages = steps.length + 1;
 
-  const page = (step: SetupStep, index: number, total: number) => {
+  const page = (step: SetupStep) => {
     switch (step) {
       case 'signIn':
         return (
           <SignInPage
-            index={index}
-            total={total}
             onContinue={advance}
             signedIn={signedIn}
             advancing={advancing}
@@ -121,8 +119,6 @@ export function SetupScreen({ navigation, route }: Props) {
       case 'pair':
         return (
           <PairPage
-            index={index}
-            total={total}
             paired={paired}
             busy={pairBusy}
             notice={pairNotice}
@@ -133,8 +129,6 @@ export function SetupScreen({ navigation, route }: Props) {
       case 'voice':
         return (
           <VoicePage
-            index={index}
-            total={total}
             state={voiceIntroState(lastVoiceTurn)}
             transcript={lastVoiceTurn?.transcript ?? null}
             onSettled={outcome => {
@@ -144,9 +138,7 @@ export function SetupScreen({ navigation, route }: Props) {
           />
         );
       case 'permissions':
-        return (
-          <PermissionsPage index={index} total={total} onContinue={advance} />
-        );
+        return <PermissionsPage onContinue={advance} />;
     }
   };
 
@@ -185,9 +177,9 @@ export function SetupScreen({ navigation, route }: Props) {
           className="flex-1 flex-row"
           style={[{ width: width * pages }, pagesStyle]}
         >
-          {steps.map((step, index) => (
+          {steps.map(step => (
             <Page width={width} key={step}>
-              {page(step, index, steps.length)}
+              {page(step)}
             </Page>
           ))}
           <Page width={width} key="finish">
@@ -214,35 +206,15 @@ function PageBody({ children }: { children: ReactNode }) {
   );
 }
 
-function StepHeader({
-  index,
-  total,
-  title,
-  subtitle,
-}: {
-  index: number;
-  total: number;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <ScreenHeader
-      eyebrow={`step ${index + 1} of ${total}`}
-      title={title}
-      subtitle={subtitle}
-    />
-  );
+function StepHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return <ScreenHeader title={title} subtitle={subtitle} />;
 }
 
 function SignInPage({
-  index,
-  total,
   onContinue,
   signedIn,
   advancing,
 }: {
-  index: number;
-  total: number;
   onContinue: () => void;
   signedIn: boolean;
   advancing: boolean;
@@ -250,12 +222,7 @@ function SignInPage({
   return (
     <PageBody>
       <View>
-        <StepHeader
-          index={index}
-          total={total}
-          title="sign in to your music"
-          subtitle="your car thing plays music via your phone or spotify connect"
-        />
+        <StepHeader title="sign in to your music" />
         <ProviderTiles />
       </View>
 
@@ -278,16 +245,12 @@ function SignInPage({
 }
 
 function PairPage({
-  index,
-  total,
   paired,
   busy,
   notice,
   onPair,
   onContinue,
 }: {
-  index: number;
-  total: number;
   paired: boolean;
   busy: boolean;
   notice: PairNotice | null;
@@ -299,13 +262,11 @@ function PairPage({
     <PageBody>
       <View>
         <StepHeader
-          index={index}
-          total={total}
           title={pairing ? 'pairing your car thing' : 'pair your car thing'}
           subtitle={
             pairing
-              ? 'when the bluetooth pairing prompt appears, tap pair to continue. hang tight while your car thing connects.'
-              : 'turn on your car thing and tap pair. it can take a few seconds for your car thing to appear. it can take a few tries on ios.'
+              ? 'when the bluetooth pairing prompt appears, tap pair to continue.'
+              : 'turn on your car thing and tap pair. it can take a few seconds for your car thing to appear.'
           }
         />
 
@@ -343,14 +304,10 @@ function PairPage({
 }
 
 function VoicePage({
-  index,
-  total,
   state,
   transcript,
   onSettled,
 }: {
-  index: number;
-  total: number;
   state: VoiceIntroState;
   transcript: string | null;
   onSettled: (outcome: VoiceIntroOutcome) => void;
@@ -379,12 +336,7 @@ function VoicePage({
   return (
     <PageBody>
       <View>
-        <StepHeader
-          index={index}
-          total={total}
-          title="say hey bridgething"
-          subtitle={blurb}
-        />
+        <StepHeader title="say hey bridgething" subtitle={blurb} />
 
         <View className="my-10 items-center">
           {heard ? (
@@ -428,15 +380,7 @@ function VoicePage({
   );
 }
 
-function PermissionsPage({
-  index,
-  total,
-  onContinue,
-}: {
-  index: number;
-  total: number;
-  onContinue: () => void;
-}) {
+function PermissionsPage({ onContinue }: { onContinue: () => void }) {
   const [status, setStatus] = useState<PermissionState>('denied');
 
   useEffect(() => {
@@ -462,10 +406,8 @@ function PermissionsPage({
     <PageBody>
       <View>
         <StepHeader
-          index={index}
-          total={total}
           title="share your location with your car thing"
-          subtitle="some car thing apps (weather, maps) work better with your location. never leaves your phone (other than to go to your car thing i guess)."
+          subtitle="some car thing apps (weather, maps) work better with your location."
         />
 
         <View className="my-10 items-center">
@@ -511,11 +453,7 @@ function FinishPage({
   return (
     <PageBody>
       <View>
-        <ScreenHeader
-          eyebrow="finish"
-          title={pending.length === 0 ? 'all set' : 'almost there'}
-          subtitle={pendingSummary(pending.length)}
-        />
+        <ScreenHeader title={pendingSummary(pending.length)} />
         <ConditionList
           conditions={pending}
           action={condition => {

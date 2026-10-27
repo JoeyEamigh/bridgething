@@ -1,3 +1,4 @@
+import { CATEGORIES, isCategory, MAX_CATEGORIES } from '@bridgething/catalog';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -27,6 +28,7 @@ export interface AppMeta {
   source: string | null;
   icon: string | null;
   screenshots: string[];
+  categories: string[];
   min_libbridgething_version: string;
 }
 
@@ -138,6 +140,14 @@ export async function readApp(slug: string): Promise<App> {
   const raw = await readJson<Partial<AppMeta>>(metaPath);
   if (!raw.author) fail(`apps/${slug}/catalog.json is missing "author"`);
   if (!raw.min_libbridgething_version) fail(`apps/${slug}/catalog.json is missing "min_libbridgething_version"`);
+  const categories = raw.categories ?? [];
+  const unknown = categories.filter(slug => !isCategory(slug));
+  if (unknown.length) {
+    fail(`apps/${slug}/catalog.json has unknown categories ${unknown.join(', ')}; pick from ${CATEGORIES.join(', ')}`);
+  }
+  if (categories.length > MAX_CATEGORIES) {
+    fail(`apps/${slug}/catalog.json lists ${categories.length} categories; the store takes at most ${MAX_CATEGORIES}`);
+  }
 
   return {
     slug,
@@ -149,6 +159,7 @@ export async function readApp(slug: string): Promise<App> {
       source: raw.source ?? null,
       icon: raw.icon ?? null,
       screenshots: raw.screenshots ?? [],
+      categories: [...new Set(categories)],
       min_libbridgething_version: raw.min_libbridgething_version,
     },
   };

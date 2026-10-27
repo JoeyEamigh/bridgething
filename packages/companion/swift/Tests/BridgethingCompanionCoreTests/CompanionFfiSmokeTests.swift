@@ -194,13 +194,14 @@ final class CompanionFfiSmokeTests: XCTestCase {
 
         session.logInbox().push(level: .warn, target: "platform", message: "hello from swift")
 
-        let line = try XCTUnwrap(sink.waitFor { event -> (LogOrigin, LogLevel, String, String)? in
-            guard case let .log(origin, level, target, message) = event else { return nil }
-            return (origin, level, target, message)
+        let line = try XCTUnwrap(sink.waitFor { event -> (LogOrigin, LogLevel, String, String, UInt64)? in
+            guard case let .log(origin, level, target, message, tsUnixMs) = event else { return nil }
+            return (origin, level, target, message, tsUnixMs)
         })
         XCTAssertEqual(line.0, .host)
         XCTAssertEqual(line.1, .warn)
         XCTAssertEqual(line.2, "platform")
         XCTAssertEqual(line.3, "hello from swift")
+        XCTAssertGreaterThan(line.4, 0, "the line carries the moment the ring stamped it")
     }
 }

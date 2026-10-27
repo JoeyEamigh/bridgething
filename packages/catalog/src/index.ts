@@ -8,7 +8,11 @@ export type {
   RecommendedSource,
   Repo,
   SourceCatalog,
+  StorePin,
+  TrendingCount,
 } from './types.ts';
+
+export { CATEGORIES, CATEGORY_LABELS, MAX_CATEGORIES, appCategories, isCategory, type Category } from './categories.ts';
 
 export { CatalogValidationError, validate, validateInvariants, validateSchema } from './validate.ts';
 
@@ -26,6 +30,8 @@ export {
 export { releasedAtInstant, sortNewestFirst } from './versions.ts';
 
 export { webHref } from './href.ts';
+
+export { changelogText } from './changelog.ts';
 
 export {
   SETTINGS_PAGE_MIME,
@@ -51,9 +57,36 @@ export {
   type WebappSlotName,
 } from './resolve.ts';
 
-export { blendStoreListings, type StoreListings } from './blend.ts';
+export { reviewed, storeCatalog, type SourceTrust, type StoreCatalog, type StoreSource } from './store.ts';
 
-export { STORE_COPY, alsoAvailableLabel, countLine, failureLine, installsLabel, listingTraits } from './copy.ts';
+export {
+  SHELF_SIZE,
+  SORT_LABELS,
+  browse,
+  featuredListing,
+  filterLabel,
+  firstReleasedAt,
+  hasScreenshot,
+  isLauncher,
+  isOverlay,
+  lastReleasedAt,
+  listingKindLabel,
+  matchesFilter,
+  moreFromAuthor,
+  queryTitle,
+  search,
+  storefront,
+  type BrowseQuery,
+  type CategoryCount,
+  type Shelf,
+  type ShelfId,
+  type StoreFilter,
+  type StoreKind,
+  type StoreSort,
+  type Storefront,
+} from './storefront.ts';
+
+export { STORE_COPY, alsoAvailableLabel, failureLine, installsLabel, permissionLabel, sourceLine } from './copy.ts';
 
 export {
   CATALOG_FETCH_TIMEOUT_MS,

@@ -14,6 +14,7 @@ import type {
   BridgethingLogArchive,
   BridgethingNowPlaying,
   BridgethingOtaAvailable,
+  BridgethingOtaLane,
   BridgethingOtaManifest,
   BridgethingOtaPollConfig,
   BridgethingOtaPollStatus,
@@ -64,6 +65,7 @@ export type {
   BridgethingOtaAvailable,
   BridgethingOtaChannelInfo,
   BridgethingOtaKind,
+  BridgethingOtaLane,
   BridgethingOtaManifest,
   BridgethingOtaOutcome,
   BridgethingOtaPhase,
@@ -125,7 +127,7 @@ export type SessionEvent =
   | { type: 'otaQueueChanged'; queue: BridgethingOtaQueue }
   | { type: 'companionUpdateProgress'; received: number; total: number }
   | { type: 'resumed'; snapshot: BridgethingSessionSnapshot }
-  | { type: 'log'; origin: string; level: string; message: string };
+  | { type: 'log'; origin: string; level: string; message: string; ts: number };
 
 export class BridgethingSession {
   private readonly native: NativeBridgethingSession;
@@ -387,12 +389,12 @@ export class BridgethingSession {
     await this.native.applyOtaUpdate(deviceId, channel, version, rootUrl);
   }
 
-  otaRunProgress(deviceId: string, nowMs: number): BridgethingOtaProgress | null {
-    return this.native.otaRunProgress(deviceId, nowMs);
+  otaRunProgress(deviceId: string, lane: BridgethingOtaLane, nowMs: number): BridgethingOtaProgress | null {
+    return this.native.otaRunProgress(deviceId, lane, nowMs);
   }
 
-  async dismissOtaRun(deviceId: string): Promise<void> {
-    await this.native.dismissOtaRun(deviceId);
+  async dismissOtaRun(deviceId: string, lane: BridgethingOtaLane): Promise<void> {
+    await this.native.dismissOtaRun(deviceId, lane);
   }
 
   async installWebappFromUrl(
@@ -543,8 +545,8 @@ export class BridgethingSession {
     this.native.setOnResumed(snapshot => {
       this.dispatch({ type: 'resumed', snapshot });
     });
-    this.native.setOnLog((origin, level, message) => {
-      this.dispatch({ type: 'log', origin, level, message });
+    this.native.setOnLog((origin, level, message, ts) => {
+      this.dispatch({ type: 'log', origin, level, message, ts });
     });
   }
 }

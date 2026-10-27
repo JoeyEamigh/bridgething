@@ -73,8 +73,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func checkForOtaUpdate(rootUrl: String) async
     func fetchOtaManifest(rootUrl: String) async throws -> BridgethingOtaManifest
     func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String) async throws
-    func otaRunProgress(deviceId: String, nowMs: Double) -> BridgethingOtaProgress?
-    func dismissOtaRun(deviceId: String) async throws
+    func otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double) -> BridgethingOtaProgress?
+    func dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) async throws
 
     func installWebappFromUrl(
         deviceId: String,
@@ -118,7 +118,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setOnPeerLinkFailed(_ callback: @escaping @Sendable (BridgethingSessionPeer) -> Void)
     func setOnNowPlayingChanged(_ callback: @escaping @Sendable (BridgethingNowPlaying?) -> Void)
     func setOnAncsAuthStatusChanged(_ callback: @escaping @Sendable (String, BridgethingAncsAuthStatus) -> Void)
-    func setOnLog(_ callback: @escaping @Sendable (String, String, String) -> Void)
+    func setOnLog(_ callback: @escaping @Sendable (String, String, String, Double) -> Void)
     func setLogStreamingEnabled(_ enabled: Bool)
     func setLocalLogStreamingEnabled(_ enabled: Bool)
 
@@ -145,7 +145,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     private static var pendingPeerLinkFailed: (@Sendable (BridgethingSessionPeer) -> Void)?
     private static var pendingNowPlayingChanged: (@Sendable (BridgethingNowPlaying?) -> Void)?
     private static var pendingAncsAuthStatusChanged: (@Sendable (String, BridgethingAncsAuthStatus) -> Void)?
-    private static var pendingLog: (@Sendable (String, String, String) -> Void)?
+    private static var pendingLog: (@Sendable (String, String, String, Double) -> Void)?
     private static var pendingWebappsChanged: (@Sendable (BridgethingDeviceWebappsEntry) -> Void)?
     private static var pendingWebappDocChanged: (@Sendable (String, String, String, String?) -> Void)?
     private static var pendingDeviceMetaChanged: (@Sendable (String, BridgethingDeviceMeta) -> Void)?
@@ -605,8 +605,8 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         }
     }
 
-    public func dismissOtaRun(deviceId: String) throws -> Promise<Void> {
-        Promise.async { try await Self.backend().dismissOtaRun(deviceId: deviceId) }
+    public func dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) throws -> Promise<Void> {
+        Promise.async { try await Self.backend().dismissOtaRun(deviceId: deviceId, lane: lane) }
     }
 
     public func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String) throws -> Promise<Void> {
@@ -615,11 +615,11 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         }
     }
 
-    public func otaRunProgress(deviceId: String, nowMs: Double) throws -> Variant_NullType_BridgethingOtaProgress {
+    public func otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double) throws -> Variant_NullType_BridgethingOtaProgress {
         Self.stateLock.lock()
         let backend = Self._backend
         Self.stateLock.unlock()
-        let progress = backend.flatMap { $0.otaRunProgress(deviceId: deviceId, nowMs: nowMs) }
+        let progress = backend.flatMap { $0.otaRunProgress(deviceId: deviceId, lane: lane, nowMs: nowMs) }
         return progress.map { .second($0) } ?? .first(NullType.null)
     }
 
@@ -790,8 +790,10 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         backend?.setOnAncsAuthStatusChanged(wrapped)
     }
 
-    public func setOnLog(callback: @escaping (String, String, String) -> Void) throws {
-        let wrapped: @Sendable (String, String, String) -> Void = { origin, level, msg in callback(origin, level, msg) }
+    public func setOnLog(callback: @escaping (String, String, String, Double) -> Void) throws {
+        let wrapped: @Sendable (String, String, String, Double) -> Void = { origin, level, msg, ts in
+            callback(origin, level, msg, ts)
+        }
         Self.stateLock.lock()
         let backend = Self._backend
         if backend == nil { Self.pendingLog = wrapped }

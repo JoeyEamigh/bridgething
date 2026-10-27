@@ -197,6 +197,8 @@ export type BridgethingOtaPollConfig = {
 
 export type BridgethingOtaKind = 'image' | 'daemon' | 'builtinWebapp' | 'installedWebapp' | 'wakewordModel';
 
+export type BridgethingOtaLane = 'firmware' | 'webapp';
+
 export type BridgethingOtaPhase =
   | 'idle'
   | 'downloading'
@@ -223,6 +225,7 @@ export type BridgethingOtaRun = {
   runId: string;
   deviceId: string;
   otaKind: BridgethingOtaKind;
+  lane: BridgethingOtaLane;
   phase: BridgethingOtaPhase;
   steps: BridgethingOtaStep[];
   stepId: number;
@@ -488,7 +491,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   checkForOtaUpdate(rootUrl: string): Promise<void>;
   fetchOtaManifest(rootUrl: string): Promise<BridgethingOtaManifest>;
   applyOtaUpdate(deviceId: string, channel: string, version: string, rootUrl: string): Promise<void>;
-  otaRunProgress(deviceId: string, nowMs: number): BridgethingOtaProgress | null;
+  otaRunProgress(deviceId: string, lane: BridgethingOtaLane, nowMs: number): BridgethingOtaProgress | null;
 
   installWebappFromUrl(
     deviceId: string,
@@ -532,7 +535,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   setOnPeerLinkFailed(callback: (peer: BridgethingSessionPeer) => void): void;
   setOnNowPlayingChanged(callback: (now: BridgethingNowPlaying | null) => void): void;
   setOnAncsAuthStatusChanged(callback: (deviceId: string, status: BridgethingAncsAuthStatus) => void): void;
-  setOnLog(callback: (origin: string, level: string, message: string) => void): void;
+  setOnLog(callback: (origin: string, level: string, message: string, ts: number) => void): void;
   setLogStreamingEnabled(enabled: boolean): void;
   setLocalLogStreamingEnabled(enabled: boolean): void;
 
@@ -544,7 +547,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   setOnVoiceModelStateChanged(callback: (state: BridgethingVoiceModelState) => void): void;
   setOnVoiceTurnChanged(callback: (turn: BridgethingVoiceTurn) => void): void;
 
-  dismissOtaRun(deviceId: string): Promise<void>;
+  dismissOtaRun(deviceId: string, lane: BridgethingOtaLane): Promise<void>;
 
   setOnOtaRunChanged(callback: (run: BridgethingOtaRun) => void): void;
   setOnOtaAvailableChanged(callback: (available: BridgethingOtaAvailable) => void): void;

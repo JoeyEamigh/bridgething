@@ -47,7 +47,6 @@ export function VoiceSection() {
     <View className="mb-8">
       <SectionHeader
         title="voice"
-        hint="what your car thing understands when you talk to it."
         action={action}
         onAction={() => void download()}
         pending={starting}

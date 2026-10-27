@@ -145,12 +145,13 @@ impl LogInbox {
 #[uniffi::export]
 impl LogInbox {
   pub fn push(&self, level: LogLevel, target: String, message: String) {
-    self.ring.push(RingOrigin::Host, ring_level(level), &target, &message);
+    let record = self.ring.push(RingOrigin::Host, ring_level(level), &target, &message);
     self.events.on_event(SessionEvent::Log {
       origin: LogOrigin::Host,
       level,
       target,
       message,
+      ts_unix_ms: record.ts_unix_ms,
     });
   }
 }

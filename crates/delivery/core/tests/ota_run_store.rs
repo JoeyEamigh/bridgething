@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bridgething_delivery::ota::{
   event::{CANCELLED_REASON, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
-  run_store::{OtaRun, OtaRunOutcome, OtaRunPhase, OtaRunStore, OtaStoreChange, RESUMABLE_REASON},
+  run_store::{OtaLane, OtaRun, OtaRunOutcome, OtaRunPhase, OtaRunStore, OtaStoreChange, RESUMABLE_REASON},
 };
 use libbridgething::{OtaKind, OtaPhase};
 use support::TestClock;
@@ -152,17 +152,102 @@ fn planned_with_no_versions_leaves_them_unset_rather_than_empty() {
 }
 
 #[test]
-fn a_second_plan_replaces_the_first_for_the_same_device() {
+fn a_second_plan_replaces_the_first_in_its_lane() {
   let (clock, mut store) = store_at(at(0));
   store.ingest(planned_image(), None);
   let first = store.runs()[0].run_id.clone();
 
   clock.set(at(1));
+  store.ingest(planned_image_targeting("0.9.1", "2026.07.0"), None);
+
+  assert_eq!(store.runs().len(), 1, "the store keys one firmware run per device");
+  assert_ne!(store.runs()[0].run_id, first);
+}
+
+#[test]
+fn a_store_install_runs_beside_the_firmware_run_instead_of_replacing_it() {
+  let (clock, mut store) = store_at(at(0));
+  store.ingest(planned_image(), None);
+  store.ingest(progress(2, applying(OtaPhase::Reboot, 100)), None);
+  let firmware = store
+    .run(DEVICE, OtaLane::Firmware)
+    .expect("the image run")
+    .run_id
+    .clone();
+
+  clock.set(at(1));
+  store.ingest(planned_webapp(), None);
+  store.ingest(updated(OtaKind::InstalledWebapp, "1.4.0"), None);
+
+  let image = store.run(DEVICE, OtaLane::Firmware).expect("the image run survives");
+  assert_eq!(image.run_id, firmware);
+  assert_eq!(
+    image.phase,
+    OtaRunPhase::Reboot,
+    "it is still waiting for the device to come back"
+  );
+  assert_eq!(
+    store.run(DEVICE, OtaLane::Webapp).expect("the store install").outcome,
+    Some(OtaRunOutcome::Succeeded)
+  );
+}
+
+#[test]
+fn a_store_install_landing_keeps_the_firmware_offer() {
+  let (clock, mut store) = store_at(at(0));
+  store.ingest(
+    OtaPollEvent::UpdateAvailable {
+      device_id: DEVICE.into(),
+      release: "r".into(),
+      daemon_version: "0.9.1".into(),
+      image_version: "2026.07.0".into(),
+    },
+    None,
+  );
+
+  clock.set(at(1));
+  store.ingest(planned_webapp(), None);
+  store.ingest(updated(OtaKind::InstalledWebapp, "1.4.0"), None);
+
+  assert_eq!(
+    store.available().len(),
+    1,
+    "an app landing says nothing about the firmware"
+  );
+}
+
+#[test]
+fn a_link_loss_interrupts_both_lanes() {
+  let (_clock, mut store) = store_at(at(0));
+  store.ingest(planned_image(), None);
+  store.ingest(progress(0, downloading(40, 100, None)), None);
+  store.ingest(
+    OtaPollEvent::Planned {
+      device_id: OTHER.into(),
+      kind: OtaKind::InstalledWebapp,
+      release: String::new(),
+      daemon_version: String::new(),
+      image_version: String::new(),
+      channel: String::new(),
+      root_url: String::new(),
+      steps: vec![plan_step(0, OtaStepKind::Stream)],
+    },
+    None,
+  );
   store.ingest(planned_webapp(), None);
 
-  assert_eq!(store.runs().len(), 1, "the store keys one run per device");
-  assert_ne!(store.runs()[0].run_id, first);
-  assert_eq!(store.runs()[0].kind, OtaKind::InstalledWebapp);
+  let interrupted = store.interrupt(DEVICE);
+
+  assert_eq!(interrupted.len(), 2);
+  assert!(interrupted.iter().all(|run| run.outcome == Some(OtaRunOutcome::Failed)));
+  assert!(
+    store
+      .run(OTHER, OtaLane::Webapp)
+      .expect("the other device")
+      .outcome
+      .is_none(),
+    "only the device that dropped is interrupted"
+  );
 }
 
 // -- progress --
@@ -400,26 +485,18 @@ fn an_empty_plan_accepts_any_step_id() {
 }
 
 #[test]
-fn a_progress_tick_does_not_relabel_the_run_kind() {
+fn a_progress_tick_for_the_other_lane_leaves_the_run_alone() {
   let (clock, mut store) = store_at(at(0));
   store.ingest(planned_webapp(), None);
 
   clock.set(at(1));
   let changes = store.ingest(progress(0, OtaPhaseSnapshot::Staged), None);
-  let run = only_run(&changes).expect("run");
 
-  assert_eq!(
-    run.kind,
-    OtaKind::InstalledWebapp,
-    "the plan names what is installing, so a tick carrying another kind cannot relabel the card"
-  );
-  assert_eq!(run.phase, OtaRunPhase::Writing, "the tick's progress still applies");
-  assert_eq!(run.phase_started_at_ms, at(1));
-  assert_eq!(
-    store.open_run_kind(DEVICE),
-    Some(OtaKind::InstalledWebapp),
-    "the backstop terminal is reported for the kind that was planned"
-  );
+  assert!(changes.is_empty(), "a firmware tick has no firmware run to move");
+  let run = store.run(DEVICE, OtaLane::Webapp).expect("the store install");
+  assert_eq!(run.kind, OtaKind::InstalledWebapp);
+  assert_eq!(run.phase, OtaRunPhase::Idle);
+  assert_eq!(store.open_run_kind(DEVICE), Some(OtaKind::InstalledWebapp));
 }
 
 #[test]
@@ -459,7 +536,10 @@ fn a_completed_snapshot_is_not_a_succeeded_outcome() {
 
   assert_eq!(run.phase, OtaRunPhase::Completed);
   assert!(run.outcome.is_none());
-  assert!(store.dismiss(DEVICE).is_none(), "and so it is not dismissable yet");
+  assert!(
+    store.dismiss(DEVICE, OtaLane::Firmware).is_none(),
+    "and so it is not dismissable yet"
+  );
 }
 
 #[test]
@@ -687,7 +767,7 @@ fn a_link_that_dies_mid_download_ends_the_run() {
   store.ingest(progress(0, downloading(40, 100, Some(20.0))), None);
 
   clock.set(at(2));
-  let interrupted = store.interrupt(DEVICE).expect("an open run is interruptible");
+  let interrupted = store.interrupt(DEVICE).pop().expect("an open run is interruptible");
 
   assert_eq!(interrupted.outcome, Some(OtaRunOutcome::Failed));
   assert_eq!(interrupted.phase, OtaRunPhase::Failed);
@@ -698,7 +778,10 @@ fn a_link_that_dies_mid_download_ends_the_run() {
     at(1),
     "the interrupt reports the run, it does not restart its clock"
   );
-  assert!(store.dismiss(DEVICE).is_some(), "so the card can be cleared");
+  assert!(
+    store.dismiss(DEVICE, OtaLane::Firmware).is_some(),
+    "so the card can be cleared"
+  );
 }
 
 #[test]
@@ -706,7 +789,7 @@ fn an_interrupted_run_hands_its_drive_parameters_over_exactly_once() {
   let (_clock, mut store) = store_at(at(0));
   store.ingest(planned_image(), None);
   store.ingest(progress(0, downloading(40, 100, None)), None);
-  store.interrupt(DEVICE).expect("an open run is interruptible");
+  store.interrupt(DEVICE).pop().expect("an open run is interruptible");
 
   let resume = store.take_resume(DEVICE).expect("the parameters it was driven with");
   assert_eq!(resume.channel, "stable");
@@ -743,7 +826,7 @@ fn a_link_that_dies_while_the_device_reboots_leaves_the_run_alone() {
   store.ingest(progress(2, applying(OtaPhase::Reboot, 100)), None);
 
   assert!(
-    store.interrupt(DEVICE).is_none(),
+    store.interrupt(DEVICE).is_empty(),
     "the run is what asked the device to go away, so its disconnect is not a failure"
   );
   assert!(store.runs()[0].outcome.is_none());
@@ -757,7 +840,7 @@ fn a_link_that_dies_while_the_device_confirms_leaves_the_run_alone() {
   clock.set(at(1));
   store.ingest(progress(1, applying(OtaPhase::Confirming, 100)), None);
 
-  assert!(store.interrupt(DEVICE).is_none());
+  assert!(store.interrupt(DEVICE).is_empty());
   assert!(store.runs()[0].outcome.is_none());
 }
 
@@ -769,7 +852,7 @@ fn interrupt_leaves_a_finished_run_alone() {
   clock.set(at(1));
   store.ingest(updated(OtaKind::Image, "2026.06.0"), None);
 
-  assert!(store.interrupt(DEVICE).is_none());
+  assert!(store.interrupt(DEVICE).is_empty());
   assert_eq!(store.runs()[0].outcome, Some(OtaRunOutcome::Succeeded));
 }
 
@@ -777,8 +860,8 @@ fn interrupt_leaves_a_finished_run_alone() {
 fn interrupt_and_dismiss_and_annotate_on_an_unknown_device_are_no_ops() {
   let (_clock, mut store) = store_at(at(0));
 
-  assert!(store.interrupt(DEVICE).is_none());
-  assert!(store.dismiss(DEVICE).is_none());
+  assert!(store.interrupt(DEVICE).is_empty());
+  assert!(store.dismiss(DEVICE, OtaLane::Firmware).is_none());
   assert!(store.annotate_webapp(DEVICE, Some("abc"), Some("Weather")).is_none());
   assert!(store.open_run_kind(DEVICE).is_none());
   assert!(store.runs().is_empty());
@@ -794,7 +877,9 @@ fn dismiss_clears_a_finished_run() {
   clock.set(at(1));
   store.ingest(updated(OtaKind::Image, "2026.06.0"), None);
 
-  let dismissed = store.dismiss(DEVICE).expect("a finished run is dismissable");
+  let dismissed = store
+    .dismiss(DEVICE, OtaLane::Firmware)
+    .expect("a finished run is dismissable");
   assert_eq!(dismissed.phase, OtaRunPhase::Idle, "the card is told to go quiet");
   assert!(store.runs().is_empty());
 }
@@ -805,7 +890,7 @@ fn dismiss_refuses_a_run_still_in_flight() {
   store.ingest(planned_image(), None);
 
   assert!(
-    store.dismiss(DEVICE).is_none(),
+    store.dismiss(DEVICE, OtaLane::Firmware).is_none(),
     "dismissing a card must not make the update it describes invisible"
   );
   assert_eq!(store.runs().len(), 1);
@@ -821,7 +906,7 @@ fn an_abandoned_run_is_reported_and_then_dismissable() {
     "a planned run has not ended"
   );
   assert!(
-    store.dismiss(DEVICE).is_none(),
+    store.dismiss(DEVICE, OtaLane::Firmware).is_none(),
     "and cannot be dismissed while it is open"
   );
 
@@ -829,7 +914,10 @@ fn an_abandoned_run_is_reported_and_then_dismissable() {
   store.ingest(failed(OtaKind::Image, "abandoned"), None);
 
   assert!(store.open_run_kind(DEVICE).is_none(), "the run has ended");
-  assert!(store.dismiss(DEVICE).is_some(), "so the card can be cleared");
+  assert!(
+    store.dismiss(DEVICE, OtaLane::Firmware).is_some(),
+    "so the card can be cleared"
+  );
   assert!(store.runs().is_empty());
 }
 
@@ -866,7 +954,7 @@ fn dismiss_does_not_clear_the_available_offer() {
   clock.set(at(2));
   store.ingest(failed(OtaKind::Image, "write failed"), None);
 
-  assert!(store.dismiss(DEVICE).is_some());
+  assert!(store.dismiss(DEVICE, OtaLane::Firmware).is_some());
   assert_eq!(
     store.available().len(),
     1,

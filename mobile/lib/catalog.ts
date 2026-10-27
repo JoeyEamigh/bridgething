@@ -1,15 +1,16 @@
 import {
-  blendStoreListings,
+  aggregate,
   compareVersions,
   fetchCatalog,
   fetchMergedApps,
   fetchSources,
   normalizeSourceUrl,
-  aggregate,
   recommendedSources as resolveRecommended,
   reportInstalled,
   SETTINGS_PAGE_MIME,
   settingsOriginFor,
+  storeCatalog,
+  storefront,
   updates as resolveUpdates,
   type AppVersion,
   type Catalog,
@@ -22,7 +23,11 @@ import {
   type RecommendedSource,
   type SourceCatalog,
   type SourceFailure,
-  type StoreListings,
+  type StoreCatalog,
+  type Storefront,
+  type StorePin,
+  type StoreSource,
+  type TrendingCount,
 } from '@bridgething/catalog';
 import type {
   BridgethingResourceOrigin,
@@ -45,6 +50,10 @@ type CatalogState = {
   directory: Catalog | null;
   merged: MergedCatalog[];
   installs: InstallCount[];
+  trending: TrendingCount[];
+  featured: StorePin | null;
+  categoryBackfill: Record<string, string[]>;
+  directoryLoaded: boolean;
   failures: SourceFailure[];
   refreshing: boolean;
   previews: Record<string, { catalog: Catalog; fetchedAt: number }>;
@@ -58,6 +67,10 @@ export const useCatalogStore = create<CatalogState>(() => ({
   directory: null,
   merged: [],
   installs: [],
+  trending: [],
+  featured: null,
+  categoryBackfill: {},
+  directoryLoaded: false,
   failures: [],
   refreshing: false,
   previews: {},
@@ -123,33 +136,53 @@ function rewriteSources(
 }
 
 let refreshGeneration = 0;
+let inflight: { key: string; done: Promise<void> } | null = null;
 
 export async function refreshCatalog(): Promise<void> {
-  const generation = ++refreshGeneration;
-  useCatalogStore.setState({ refreshing: true });
   const sources = await heldSources();
-  const { merged: heldMerged, installs: heldInstalls } =
-    useCatalogStore.getState();
+  const key = JSON.stringify(sources);
+  if (inflight?.key === key) return inflight.done;
+  const generation = ++refreshGeneration;
+  const done = runRefresh(sources, generation).finally(() => {
+    if (inflight?.done === done) inflight = null;
+  });
+  inflight = { key, done };
+  return done;
+}
 
-  const [snapshot, merged] = await Promise.all([
-    fetchSources(sources).catch(err => ({
+async function runRefresh(sources: string[], generation: number) {
+  const current = () => generation === refreshGeneration;
+  useCatalogStore.setState({ refreshing: true });
+
+  const directory = fetchMergedApps().then(
+    merged => {
+      if (!current()) return;
+      useCatalogStore.setState({
+        merged: merged.catalogs,
+        installs: merged.installs,
+        trending: merged.trending,
+        featured: merged.featured,
+        categoryBackfill: merged.category_backfill,
+        directoryLoaded: true,
+      });
+    },
+    () => {
+      if (current()) useCatalogStore.setState({ directoryLoaded: true });
+    },
+  );
+
+  const subscribed = fetchSources(sources)
+    .catch(err => ({
       catalogs: [],
       directory: null,
       failures: sources.map(url => ({ url, reason: describeError(err) })),
-    })),
-    fetchMergedApps().catch(() => ({
-      catalogs: heldMerged,
-      installs: heldInstalls,
-    })),
-  ]);
+    }))
+    .then(snapshot => {
+      if (current()) useCatalogStore.setState(snapshot);
+    });
 
-  if (generation !== refreshGeneration) return;
-  useCatalogStore.setState({
-    ...snapshot,
-    merged: merged.catalogs,
-    installs: merged.installs,
-    refreshing: false,
-  });
+  await Promise.all([directory, subscribed]);
+  if (current()) useCatalogStore.setState({ refreshing: false });
 }
 
 export async function previewSource(url: string): Promise<Catalog> {
@@ -231,7 +264,7 @@ export function deviceLibVersion(
   return state.ledger[deviceId]?.libVersion ?? null;
 }
 
-export function deviceSerial(
+function deviceSerial(
   state: SessionState,
   deviceId: string | null,
 ): string | null {
@@ -248,25 +281,93 @@ function useDerivedInputs(deviceId: string | null) {
   return { catalogs, installed, deviceLibVersion: libVersion };
 }
 
-export function useStoreListings(deviceId: string | null): StoreListings {
+export type StoreInputs = Pick<
+  CatalogState,
+  'catalogs' | 'merged' | 'installs' | 'trending' | 'categoryBackfill'
+> & {
+  installed: BridgethingWebappInfo[];
+  deviceLibVersion: string | null;
+};
+
+export function buildStoreCatalog(inputs: StoreInputs): StoreCatalog {
+  return storeCatalog({
+    subscribed: inputs.catalogs,
+    merged: inputs.merged,
+    installed: toInstalled(inputs.installed),
+    deviceLibVersion: inputs.deviceLibVersion,
+    installs: inputs.installs,
+    trending: inputs.trending,
+    categoryBackfill: inputs.categoryBackfill,
+    extensions: 'omitted',
+  });
+}
+
+export function useStoreCatalog(deviceId: string | null): StoreCatalog {
   const { catalogs, installed, deviceLibVersion } = useDerivedInputs(deviceId);
   const merged = useCatalogStore(s => s.merged);
   const installs = useCatalogStore(s => s.installs);
-  const sources = useCatalogStore(s => s.sources);
+  const trending = useCatalogStore(s => s.trending);
+  const categoryBackfill = useCatalogStore(s => s.categoryBackfill);
 
   return useMemo(
     () =>
-      blendStoreListings({
+      buildStoreCatalog({
         catalogs,
         merged,
-        installed: toInstalled(installed),
-        deviceLibVersion,
         installs,
-        subscribed: sources,
-        extensions: 'omitted',
+        trending,
+        categoryBackfill,
+        installed,
+        deviceLibVersion,
       }),
-    [catalogs, merged, installs, sources, installed, deviceLibVersion],
+    [
+      catalogs,
+      merged,
+      installs,
+      trending,
+      categoryBackfill,
+      installed,
+      deviceLibVersion,
+    ],
   );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function useStorefront(listings: CatalogAppListing[]): Storefront {
+  const pin = useCatalogStore(s => s.featured);
+  const day = Math.floor(Date.now() / DAY_MS);
+  return useMemo(
+    () => storefront({ listings, pin, now: new Date(day * DAY_MS) }),
+    [listings, pin, day],
+  );
+}
+
+export function useStoreReady(): boolean {
+  return useCatalogStore(s => s.directoryLoaded);
+}
+
+export function useStoreSource(
+  url: string,
+  sources: Record<string, StoreSource>,
+): StoreSource {
+  const preview = usePreview(url);
+  const known = sources[url];
+  if (known) return known;
+  return {
+    url,
+    name: preview?.repo.name ?? sourceHost(url),
+    icon: preview?.repo.icon ?? null,
+    trust: 'unlisted',
+  };
+}
+
+export function sourceHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
 export function useSourceListings(
@@ -276,6 +377,7 @@ export function useSourceListings(
   const preview = usePreview(url);
   const merged = useCatalogStore(s => s.merged);
   const installs = useCatalogStore(s => s.installs);
+  const trending = useCatalogStore(s => s.trending);
   const { catalogs, installed, deviceLibVersion } = useDerivedInputs(deviceId);
   return useMemo(() => {
     if (!url) return [];
@@ -289,9 +391,19 @@ export function useSourceListings(
       installed: toInstalled(installed),
       deviceLibVersion,
       installs,
+      trending,
       extensions: 'omitted',
     });
-  }, [url, preview, catalogs, merged, installs, installed, deviceLibVersion]);
+  }, [
+    url,
+    preview,
+    catalogs,
+    merged,
+    installs,
+    trending,
+    installed,
+    deviceLibVersion,
+  ]);
 }
 
 export function useUpdates(deviceId: string | null): CatalogAppUpdate[] {

@@ -17,22 +17,22 @@ name: an installed app's settings page comes from the catalog's hosted copy, not
 - tapOn:
     id: "source-url"
 - inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}/store/catalog.json"
-- hideKeyboard
+- pressKey: Enter
 - tapOn: "add this source"
 - extendedWaitUntil:
     visible: ".*Fixture Calendar.*"
     timeout: 60000
 - tapOn: ".*Fixture Calendar.*"
 - extendedWaitUntil:
-    visible: ".*install v1.0.0.*|.*installed v1.0.0.*"
+    visible: ".*install 1.0.0.*|.*installed 1.0.0.*"
     timeout: 60000
 - runFlow:
     when:
-      visible: ".*install v1.0.0.*"
+      visible: ".*install 1.0.0.*"
     commands:
-      - tapOn: ".*install v1.0.0.*"
+      - tapOn: ".*install 1.0.0.*"
 - extendedWaitUntil:
-    visible: ".*installed v1.0.0.*"
+    visible: ".*installed 1.0.0.*"
     timeout: 180000
 
 - runScript:
@@ -49,7 +49,7 @@ name: an installed app's settings page comes from the catalog's hosted copy, not
 - repeat:
     times: 5
     while:
-      notVisible: "uninstall"
+      notVisible: ".*open Fixture Calendar settings.*"
     commands:
       - tapOn:
           id: "webapp-row-Fixture Calendar"
@@ -69,7 +69,7 @@ name: an installed app's settings page comes from the catalog's hosted copy, not
       CONTROL: "http://127.0.0.1:${FIXTURE_PORT}"
       PHASE: after
 
-- tapOn: "‹ back"
+- tapOn: "Back|Navigate up"
 - assertVisible: ".*open Fixture Calendar settings.*"
 - tapOn: ".*open Fixture Calendar settings.*"
 - extendedWaitUntil:

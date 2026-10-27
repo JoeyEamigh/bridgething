@@ -1,0 +1,20 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../Footer.astro';
+import Header from '../Header.astro';
+
+export type Props = { title: string; description: string; noindex?: boolean };
+
+const { title, description, noindex = false } = Astro.props;
+---
+
+<Layout title={title} description={description} noindex={noindex}>
+  <Header />
+  <main class="container-site w-full flex-1 py-12 md:py-16">
+    <script id="store-data" type="application/json" is:inline>
+      null
+    </script>
+    <slot />
+  </main>
+  <Footer />
+</Layout>

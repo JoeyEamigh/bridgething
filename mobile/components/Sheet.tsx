@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text } from 'react-native';
 import Animated, {
   runOnJS,
   useAnimatedKeyboard,
@@ -10,7 +10,19 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { usePalette } from '../lib/theme';
+import { TEXT, usePalette } from '../lib/theme';
+
+export function SheetTitle({ children }: { children: string }) {
+  return (
+    <Text
+      className="font-sans text-fg"
+      style={TEXT.title}
+      accessibilityRole="header"
+    >
+      {children}
+    </Text>
+  );
+}
 
 export function Sheet({
   visible,
@@ -41,11 +53,14 @@ export function Sheet({
   const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
   const cardStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * 18 }],
+    transform: [{ translateY: (1 - progress.value) * 48 }],
   }));
   const frameStyle = useAnimatedStyle(() => ({
     paddingTop: insets.top + 16,
-    paddingBottom: keyboard.height.value + 16,
+    paddingBottom: keyboard.height.value,
+  }));
+  const bodyStyle = useAnimatedStyle(() => ({
+    paddingBottom: 24 + Math.max(insets.bottom - keyboard.height.value, 0),
   }));
 
   if (!render) return null;
@@ -59,7 +74,7 @@ export function Sheet({
       onRequestClose={onClose}
     >
       <Animated.View
-        className="flex-1 items-center justify-center px-4"
+        className="flex-1 items-center justify-end"
         style={frameStyle}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose}>
@@ -71,10 +86,13 @@ export function Sheet({
             ]}
           />
         </Pressable>
-        <Animated.View className="w-full max-w-[440px]" style={cardStyle}>
-          <View className="gap-4 border border-rule-strong bg-bg p-6">
+        <Animated.View className="w-full max-w-[560px]" style={cardStyle}>
+          <Animated.View
+            className="gap-4 border-t border-rule-strong bg-bg px-6 pt-6"
+            style={bodyStyle}
+          >
             {children}
-          </View>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
     </Modal>

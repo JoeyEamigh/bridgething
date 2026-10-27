@@ -96,10 +96,9 @@ export function AppsRoute(): VNode {
 }
 
 function installedListings(): Map<string, CatalogAppListing> {
-  const { vouched, community } = storeListings();
   return new Map(
-    [...vouched, ...community]
-      .filter(listing => listing.installedVersion !== null)
+    storeListings()
+      .listings.filter(listing => listing.installedVersion !== null)
       .map(listing => [listing.app.id.toLowerCase(), listing]),
   );
 }

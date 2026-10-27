@@ -233,7 +233,7 @@ impl SessionObserver {
   fn ingest(&self, entry: LogEntry, stamped: Option<u64>) {
     let level = level(entry.level);
     let ring_level = ring_level(level);
-    match stamped {
+    let record = match stamped {
       Some(at) => self
         .log_ring
         .push_at(RingOrigin::Device, ring_level, at, &entry.target, &entry.message),
@@ -246,6 +246,7 @@ impl SessionObserver {
       level,
       target: entry.target,
       message: entry.message,
+      ts_unix_ms: record.ts_unix_ms,
     });
   }
 }

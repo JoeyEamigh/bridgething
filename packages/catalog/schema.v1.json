@@ -160,6 +160,17 @@
           },
           "description": "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array."
         },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z-]{0,31}$"
+          },
+          "description": "Store categories, at most two, from the vocabulary in @bridgething/catalog (CATEGORIES). Clients ignore slugs they do not know, so a newer category never breaks an older client. Omit the key rather than sending an empty array."
+        },
         "homepage": {
           "type": [
             "string",

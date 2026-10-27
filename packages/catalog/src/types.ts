@@ -21,6 +21,7 @@ export type AppEntry = {
   author: string;
   icon: string | null;
   screenshots?: string[];
+  categories?: string[];
   homepage: string | null;
   source: string | null;
   versions: AppVersion[];
@@ -64,4 +65,15 @@ export type InstallCount = {
   source_url: string;
   count: number;
   versions: Record<string, number>;
+};
+
+export type TrendingCount = {
+  app_id: string;
+  source_url: string;
+  count: number;
+};
+
+export type StorePin = {
+  app_id: string;
+  source_url: string;
 };

@@ -6,7 +6,7 @@ use std::{
 };
 
 use bridgething_companion::{
-  api::MediaPickKind,
+  api::{MediaPickKind, ota::OtaLane},
   provider::{ResumeTarget, spotify, subsonic},
 };
 use bridgething_desktop::{
@@ -855,7 +855,9 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
     assert!(object.contains_key("id"));
   }
 
-  commands::ota_dismiss_run(app.state()).await.expect("dismiss");
+  commands::ota_dismiss_run(app.state(), OtaLane::Firmware)
+    .await
+    .expect("dismiss");
   commands::disconnect(app.state(), None).await.expect("disconnect");
   assert!(
     commands::webapps(app.state()).await.is_err(),

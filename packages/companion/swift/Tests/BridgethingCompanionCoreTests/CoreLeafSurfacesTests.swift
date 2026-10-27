@@ -60,15 +60,16 @@ final class CoreLeafSurfacesTests: XCTestCase {
             snapshot: .downloading(asset: "update.swu", received: 500, total: 1000, ratePerSec: nil)
         ))
         let run = store.runs()[0]
+        XCTAssertEqual(run.lane, .firmware)
         let progress = otaRunProgress(run: run, nowMs: run.phaseStartedAtMs)
         XCTAssertTrue((1 ... 99).contains(progress.percent), "mid-download percent, got \(progress.percent)")
-        XCTAssertNil(store.dismiss(deviceId: "dev-1"), "an unfinished run must refuse dismissal")
+        XCTAssertNil(store.dismiss(deviceId: "dev-1", lane: .firmware), "an unfinished run must refuse dismissal")
 
         let changes = store.ingest(event: .updated(deviceId: "dev-1", kind: .image, version: "1+image.2"))
         XCTAssertTrue(changes.contains { change in
             if case let .run(run) = change { return run.outcome == .succeeded }
             return false
         })
-        XCTAssertNotNil(store.dismiss(deviceId: "dev-1"))
+        XCTAssertNotNil(store.dismiss(deviceId: "dev-1", lane: .firmware))
     }
 }

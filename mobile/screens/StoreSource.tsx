@@ -3,18 +3,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
-import { CatalogRow } from '../components/CatalogRow';
 import { ListGroup } from '../components/ListGroup';
 import { Note } from '../components/Note';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { Spinner } from '../components/Spinner';
+import { ListingRow } from '../components/store/listing';
 import {
   addSource,
   previewSource,
   removeSource,
   useIsSubscribed,
+  usePreview,
   useSourceListings,
 } from '../lib/catalog';
 import { TEXT } from '../lib/theme';
@@ -26,6 +27,7 @@ export function StoreSourceScreen({ route, navigation }: Props) {
   const { deviceId, url, name } = route.params;
   const subscribed = useIsSubscribed(url);
   const listings = useSourceListings(url, deviceId);
+  const title = usePreview(url)?.repo.name ?? name;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,7 @@ export function StoreSourceScreen({ route, navigation }: Props) {
 
   return (
     <ScrollScreen>
-      <ScreenHeader title={name} subtitle={url} />
+      <ScreenHeader title={title} subtitle={url} />
 
       <View className="mb-8">
         <Button
@@ -79,7 +81,7 @@ export function StoreSourceScreen({ route, navigation }: Props) {
         </Button>
         <Text className="mt-2 px-1 font-sans text-muted" style={TEXT.hint}>
           {subscribed
-            ? 'its apps show up in the store and get checked for updates.'
+            ? 'its apps get checked for updates.'
             : 'you can install from here without adding it.'}
         </Text>
       </View>
@@ -96,10 +98,11 @@ export function StoreSourceScreen({ route, navigation }: Props) {
       ) : listings.length > 0 ? (
         <ListGroup>
           {listings.map(listing => (
-            <CatalogRow
+            <ListingRow
               key={listing.app.id}
               listing={listing}
-              onPress={() =>
+              deviceId={deviceId}
+              onOpen={() =>
                 navigation.navigate('StoreApp', {
                   deviceId,
                   appId: listing.app.id,

@@ -13,11 +13,10 @@ function attention(): Set<string> {
   const device = selectedDevice.data.value;
   const flagged = new Set<string>();
   const firmware =
-    otaRuns.value.some(run => run.outcome === null) ||
+    otaRuns.value.some(run => run.outcome === null && run.lane === 'firmware') ||
     otaAvailable.value.some(entry => entry.deviceId === device && entry.releaseVersion);
   if (firmware) flagged.add(PATHS.updates);
-  const { vouched, community } = storeListings();
-  if ([...vouched, ...community].some(listing => listing.updateAvailable)) flagged.add(PATHS.apps);
+  if (storeListings().listings.some(listing => listing.updateAvailable)) flagged.add(PATHS.apps);
   return flagged;
 }
 

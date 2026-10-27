@@ -5,7 +5,8 @@ import { DirectoryApiError, submitSource, type DirectoryEntry } from '../../lib/
 type Outcome = { kind: 'ok' | 'err'; message: string } | null;
 
 function submitted(entry: DirectoryEntry, created: boolean): string {
-  if (created) return `${entry.name} is listed. it shows up here and in the phone app's suggested sources.`;
+  if (created)
+    return `${entry.name} is listed. its apps are in the store and it is in the phone app's suggested sources.`;
   if (entry.status === 'quarantined') return `${entry.name} is refreshed and held for review.`;
   return `${entry.name} is refreshed. it is ${entry.status} in the directory.`;
 }
@@ -47,10 +48,12 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
   }
 
   return (
-    <details class="mb-10 border border-white/15 p-4">
-      <summary class="cursor-pointer font-medium">submit a source</summary>
+    <section class="mb-16">
+      <header class="mb-4 border-b border-white/20 pb-2">
+        <h2 class="m-0 text-xl">submit a source</h2>
+      </header>
 
-      <p class="mt-2 mb-4 max-w-2xl text-sm text-white/60">
+      <p class="mb-4 max-w-2xl text-sm text-white/60">
         the https url of your <code>catalog.v1</code> document. it must be reachable, parse, and send{' '}
         <code>Access-Control-Allow-Origin</code>. resubmit it to pick up a new version right away.{' '}
         <a href="/docs/publishing-apps">publishing docs</a>.
@@ -76,6 +79,6 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
       {outcome ? (
         <p class={`mt-3 text-sm ${outcome.kind === 'ok' ? 'text-ok' : 'text-warn'}`}>{outcome.message}</p>
       ) : null}
-    </details>
+    </section>
   );
 }

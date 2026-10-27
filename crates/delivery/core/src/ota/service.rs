@@ -38,7 +38,9 @@ use crate::{
     progress::{OtaRunProgress, ota_progress},
     range::RangeServer,
     rate::RateTracker,
-    run_store::{OtaAvailable, OtaPollStatus, OtaQueue, OtaRun, OtaRunPhase, OtaRunStore, OtaStoreChange, WebappLabel},
+    run_store::{
+      OtaAvailable, OtaLane, OtaPollStatus, OtaQueue, OtaRun, OtaRunPhase, OtaRunStore, OtaStoreChange, WebappLabel,
+    },
     stream::{Artifact, ArtifactStreamer, FileSource},
     watchdog::{IDLE_DEADLINE_MS, IDLE_POLL_MS, ProgressClock, stalled_reason},
   },
@@ -579,7 +581,7 @@ impl OtaService {
       .store
       .lock()
       .unwrap()
-      .run(device_id)
+      .run(device_id, OtaLane::Firmware)
       .is_some_and(|run| run.resumable);
     if armed {
       let service = self.clone();
@@ -598,7 +600,7 @@ impl OtaService {
       .store
       .lock()
       .unwrap()
-      .run(device_id)
+      .run(device_id, OtaLane::Firmware)
       .and_then(|run| run.identity.clone());
     let live = self.meta(device_id).await.map(|meta| meta.serial_number);
     if let (Some(held), Some(live)) = (held.as_deref(), live.as_deref())
@@ -729,7 +731,7 @@ impl OtaService {
 
   fn interrupt_run(&self, device_id: &str) {
     let interrupted = self.feed.store.lock().unwrap().interrupt(device_id);
-    if let Some(run) = interrupted {
+    for run in interrupted {
       let _ = self.feed.store_changes.send(OtaStoreChange::Run(Box::new(run)));
     }
   }
@@ -854,13 +856,13 @@ impl OtaService {
     self.feed.store.lock().unwrap().runs().into_iter().cloned().collect()
   }
 
-  pub fn run_progress(&self, device_id: &str, now_ms: u64) -> Option<OtaRunProgress> {
+  pub fn run_progress(&self, device_id: &str, lane: OtaLane, now_ms: u64) -> Option<OtaRunProgress> {
     self
       .feed
       .store
       .lock()
       .unwrap()
-      .run(device_id)
+      .run(device_id, lane)
       .map(|run| ota_progress(run, now_ms))
   }
 
@@ -884,8 +886,8 @@ impl OtaService {
     self.feed.store.lock().unwrap().queues()
   }
 
-  pub async fn dismiss_run(&self, device_id: &str) {
-    let cleared = self.feed.store.lock().unwrap().dismiss(device_id);
+  pub async fn dismiss_run(&self, device_id: &str, lane: OtaLane) {
+    let cleared = self.feed.store.lock().unwrap().dismiss(device_id, lane);
     if let Some(run) = cleared {
       let _ = self.feed.store_changes.send(OtaStoreChange::Run(Box::new(run)));
     }
@@ -1092,6 +1094,7 @@ impl OtaService {
 
     if let Some(target) = restarted {
       self.settle_restart(device_id, target, &meta);
+      self.idle.notify_waiters();
     }
     if first_announce {
       self.wake.notify_waiters();
@@ -1127,7 +1130,7 @@ impl OtaService {
       .store
       .lock()
       .unwrap()
-      .run(device_id)
+      .run(device_id, OtaLane::of(target.kind))
       .is_some_and(|run| run.run_id == target.run_id);
     if !current {
       return;
@@ -1171,7 +1174,8 @@ impl OtaService {
   async fn claim_device(&self, device_id: &str) {
     loop {
       let freed = self.idle.notified();
-      if self.try_begin_in_flight(device_id) {
+      let rebooting = self.restarts.lock().unwrap().contains_key(device_id);
+      if !rebooting && self.try_begin_in_flight(device_id) {
         return;
       }
       freed.await;
@@ -1187,14 +1191,16 @@ impl OtaService {
       .unwrap()
       .get(device_id)
       .map(|target| target.run_id.clone());
-    let open = {
-      let store = self.feed.store.lock().unwrap();
-      let awaited = store
-        .run(device_id)
-        .is_some_and(|run| Some(&run.run_id) == awaiting.as_ref());
-      store.open_run_kind(device_id).filter(|_| !awaited)
-    };
-    if let Some(kind) = open {
+    let abandoned: Vec<OtaKind> = self
+      .feed
+      .store
+      .lock()
+      .unwrap()
+      .device_runs(device_id)
+      .filter(|run| run.outcome.is_none() && Some(&run.run_id) != awaiting.as_ref())
+      .map(|run| run.kind)
+      .collect();
+    for kind in abandoned {
       self.fail(device_id, kind, ABANDONED_REASON);
     }
     self.sweep_cache();
@@ -1841,7 +1847,7 @@ impl OtaService {
           .store
           .lock()
           .unwrap()
-          .run(device_id)
+          .run(device_id, OtaLane::of(kind))
           .map(|run| run.run_id.clone())
           .unwrap_or_default();
         self.await_restart(
@@ -2199,7 +2205,7 @@ mod tests {
         route_into,
       },
       manifest::{OtaArtifactUrls, OtaPatchDigest, OtaReleaseArtifacts},
-      run_store::{OtaRun, OtaRunOutcome, OtaRunPhase, OtaStoreChange, RUNS_FILE},
+      run_store::{OtaLane, OtaRun, OtaRunOutcome, OtaRunPhase, OtaStoreChange, RUNS_FILE},
       stream::FileSource,
       watchdog::stalled_reason,
     },
@@ -3567,13 +3573,17 @@ mod tests {
     tokio::spawn(async move { service.apply_version(DEVICE, CHANNEL, TO_RELEASE, ROOT).await });
   }
 
-  async fn run_of(service: &Arc<OtaService>) -> crate::ota::run_store::OtaRun {
+  async fn lane_run(service: &Arc<OtaService>, lane: OtaLane) -> crate::ota::run_store::OtaRun {
     service
       .retained_runs()
       .await
       .into_iter()
-      .find(|run| run.device_id == DEVICE)
+      .find(|run| run.device_id == DEVICE && run.lane() == lane)
       .expect("a run for the device")
+  }
+
+  async fn run_of(service: &Arc<OtaService>) -> crate::ota::run_store::OtaRun {
+    lane_run(service, OtaLane::Firmware).await
   }
 
   #[tokio::test(start_paused = true)]
@@ -3928,6 +3938,53 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
+  async fn a_store_install_waits_out_the_image_reboot_beside_the_image_run() {
+    let mut rig = rig().await;
+    drive_image_to_reboot(&mut rig).await;
+    let image = run_of(&rig.service).await;
+    let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
+
+    let waiting = {
+      let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("app", "App"));
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, Some(reservation))
+          .await
+      })
+    };
+
+    assert!(
+      rig.device.no_ota_begin(Duration::from_millis(500)).await,
+      "the daemon still linked is on its way out, so nothing streams into it"
+    );
+    assert_eq!(queued_ids(&rig.service).await, vec!["app".to_string()]);
+
+    let mut back = restart(&rig.service, TO_VERSION, "1.1.0").await;
+    let settled = run_reaches(&rig.service, OtaRunOutcome::Succeeded).await;
+    assert_eq!(
+      settled.run_id, image.run_id,
+      "the image run is the one the reboot settles"
+    );
+
+    stream_through(&mut back).await;
+    back.webapp_installed(installed_info("0.1.0"));
+    assert!(matches!(
+      waiting.await.expect("the queued install task"),
+      WebappInstallResult::Installed(_)
+    ));
+    assert_eq!(
+      run_of(&rig.service).await.run_id,
+      image.run_id,
+      "the store install did not take the firmware run's place"
+    );
+    assert_eq!(
+      lane_run(&rig.service, OtaLane::Webapp).await.outcome,
+      Some(OtaRunOutcome::Succeeded)
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
   async fn a_restart_the_app_died_during_is_confirmed_on_the_next_launch() {
     let cache = Spool::new();
     let killed = Spool::new();
@@ -3978,7 +4035,7 @@ mod tests {
     rig.device.webapp_installed(installed_info("0.1.0"));
     driving.await.expect("the install task");
 
-    let run = run_of(&rig.service).await;
+    let run = lane_run(&rig.service, OtaLane::Webapp).await;
     assert_eq!(
       run.outcome,
       Some(OtaRunOutcome::Succeeded),

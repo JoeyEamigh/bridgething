@@ -1,0 +1,15 @@
+---
+import { queryTitle } from '@bridgething/catalog';
+import { storeRoute } from '../../lib/app-routes.ts';
+import { StoreBrowse } from './StoreBrowse';
+import StorePage from './StorePage.astro';
+
+const route = storeRoute(Astro.url.pathname);
+const view = route?.page === 'browse' ? route.view : null;
+const query = view?.kind === 'query' && view.query.filter?.kind !== 'author' ? view.query : null;
+const title = query ? queryTitle(query) : view?.kind === 'search' ? 'search' : 'apps';
+---
+
+<StorePage title={title} description={`${title} apps for bridgething`} noindex={query === null}>
+  <StoreBrowse client:load />
+</StorePage>

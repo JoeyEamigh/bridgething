@@ -11,7 +11,7 @@ name: drops a stale update offer once the device reconnects and turns out to be 
       env:
           MODE: bounce
 - extendedWaitUntil:
-      visible: ".*99.9.9 available.*"
+      visible: ".*install [0-9.]+\\+image.99.9.9.*"
       timeout: 180000
 - runScript:
       file: ../scripts/ota-bounce.js
@@ -23,6 +23,6 @@ name: drops a stale update offer once the device reconnects and turns out to be 
       visible: ".*dev gateway, connected.*"
       timeout: 180000
 - extendedWaitUntil:
-      notVisible: ".*\\+image\\..* available.*"
+      notVisible: ".*install [0-9.]+\\+image\\..*"
       timeout: 60000
 - assertNotVisible: ".*install [0-9.]+\\+image.99.9.9.*"

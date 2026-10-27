@@ -52,18 +52,12 @@ export function SettingsScreen({ navigation }: Props) {
 
   return (
     <ScrollScreen>
-      <ScreenHeader
-        title="settings"
-        subtitle="dials and knobs to turn and tweak"
-      />
+      <ScreenHeader title="settings" />
 
       <AccountsSection />
 
       <View className="mb-8">
-        <SectionHeader
-          title="connections"
-          hint="what this phone has to allow for your car thing."
-        />
+        <SectionHeader title="connections" />
         <ListGroup>
           {android ? (
             <NotificationAccessRow
@@ -88,10 +82,7 @@ export function SettingsScreen({ navigation }: Props) {
       </View>
 
       <View className="mb-8">
-        <SectionHeader
-          title="app access"
-          hint="what your phone lends the apps on your car thing."
-        />
+        <SectionHeader title="app access" />
         <ListGroup>
           <LocationRow value={flags.geo} onChange={setFlag('geo')} />
           <CapabilityRow
@@ -124,7 +115,6 @@ export function SettingsScreen({ navigation }: Props) {
             icon="Activity"
             iconTint="accent"
             title="debug inspector"
-            subtitle="internal state, useful for filing a bug"
             chevron
             onPress={() => navigation.navigate('Debug')}
           />
@@ -132,7 +122,6 @@ export function SettingsScreen({ navigation }: Props) {
             icon="TerminalSquare"
             iconTint="accent"
             title="logs"
-            subtitle="stream device or phone logs"
             chevron
             onPress={() => navigation.navigate('Logs')}
           />
@@ -154,7 +143,7 @@ export function SettingsScreen({ navigation }: Props) {
               icon="RadioTower"
               iconTint="accent"
               title="protocol"
-              subtitle={`lib ${host.libVersion} · wire ${host.libbridgethingVersion} · diagnostic detail`}
+              subtitle={`lib ${host.libVersion} · wire ${host.libbridgethingVersion}`}
               value={host.adapterVersion}
             />
           ) : null}

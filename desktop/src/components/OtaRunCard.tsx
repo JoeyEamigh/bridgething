@@ -18,7 +18,7 @@ function useRunProgress(run: OtaRun): OtaRunProgress | null {
   useEffect(() => {
     let current = true;
     const read = () => {
-      void session.otaRunProgress(run.deviceId).then(next => {
+      void session.otaRunProgress(run.deviceId, run.lane).then(next => {
         if (current) setProgress(next);
       });
     };

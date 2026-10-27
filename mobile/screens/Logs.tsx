@@ -47,6 +47,11 @@ const SEVERITY: Record<string, number> = {
 
 const TAIL_SLOP_PX = 24;
 
+const TAIL_POSITION = {
+  minIndexForVisible: 0,
+  autoscrollToTopThreshold: TAIL_SLOP_PX,
+};
+
 const NO_LINES: DeviceLogLine[] = [];
 
 const MESSAGE_TEXT = { fontSize: TYPE.hint, lineHeight: 16 };
@@ -134,7 +139,7 @@ export function LogsScreen(_: Props) {
     try {
       if (await getSession().shareLogs(archive?.id ?? null)) return;
     } catch {
-      // fall through to the in-memory path
+      setNotice(null);
     }
     if (source.length === 0) {
       setNotice({ tone: 'neutral', text: 'no lines to share yet' });
@@ -210,7 +215,7 @@ export function LogsScreen(_: Props) {
             <ToolbarBtn icon="Share2" onPress={() => void share()} />
             {archive ? null : (
               <ArmedButton
-                label="clear"
+                label="clear view"
                 confirmLabel="tap again"
                 icon="Trash2"
                 size="sm"
@@ -247,9 +252,8 @@ export function LogsScreen(_: Props) {
             hitSlop={8}
             className="self-start"
           >
-            <Text className="font-mono text-muted" style={TEXT.eyebrow}>
-              {formatBytes(storedBytes)} on disk ·{' '}
-              <Text className="text-err">clear</Text>
+            <Text className="font-mono text-err" style={TEXT.eyebrow}>
+              delete saved · {formatBytes(storedBytes)}
             </Text>
           </Press>
         ) : null}
@@ -287,6 +291,7 @@ export function LogsScreen(_: Props) {
             renderItem={renderRow}
             onScroll={onScroll}
             scrollEventThrottle={64}
+            maintainVisibleContentPosition={TAIL_POSITION}
             removeClippedSubviews
             initialNumToRender={24}
             maxToRenderPerBatch={24}
@@ -296,7 +301,8 @@ export function LogsScreen(_: Props) {
           {atTail ? null : (
             <Press
               onPress={jumpToTail}
-              className="absolute bottom-4 self-center flex-row items-center gap-1.5 border border-accent bg-accent-soft px-3 py-1.5"
+              className="absolute bottom-4 self-center flex-row items-center gap-1.5 border border-accent bg-screen px-3 py-1.5"
+              accessibilityRole="button"
             >
               <Icon name="ArrowDown" tone="accent" size={12} />
               <Text
@@ -319,9 +325,9 @@ export function LogsScreen(_: Props) {
 
       <ConfirmSheet
         visible={clearOpen}
-        title="clear stored logs?"
-        body="deletes all logs kept on disk, including error logs."
-        confirmLabel="clear"
+        title="delete saved logs?"
+        body="includes error logs from past launches."
+        confirmLabel="delete"
         destructive
         onConfirm={clearStored}
         onClose={() => setClearOpen(false)}
@@ -415,7 +421,7 @@ function emptyMessage(
     if (archived) return 'nothing was recorded in this launch';
     return streaming
       ? 'streaming; no log lines yet'
-      : 'press device or phone to stream logs. fair warning: streaming device logs will tank performance. turn off when done.';
+      : 'streaming device logs slows the car thing';
   }
   if (query.trim()) return `no lines match "${query.trim()}"`;
   return `no lines at ${filter} or above`;

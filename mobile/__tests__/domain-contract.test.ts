@@ -17,9 +17,11 @@ describe('disconnect contract', () => {
       otaRuns: [otaRun({ phase: 'failed', outcome: 'failed' })],
     });
 
-    expect(r.ota.isRunning(r.ota.useOtaStore.getState().runs[DEVICE])).toBe(
-      false,
-    );
+    expect(
+      r.ota.isRunning(
+        r.ota.runOf(r.ota.useOtaStore.getState(), DEVICE, 'firmware'),
+      ),
+    ).toBe(false);
   });
 
   test('an install queued behind an update is still queued after a foreground', () => {

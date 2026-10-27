@@ -34,7 +34,12 @@ type DiagState = {
   localLogStreaming: boolean;
   logs: Record<LogOrigin, DeviceLogLine[]>;
 
-  ingestDeviceLog(origin: string, level: string, message: string): void;
+  ingestDeviceLog(
+    origin: string,
+    level: string,
+    message: string,
+    ts: number,
+  ): void;
   seedLogs(origin: LogOrigin, lines: BridgethingDeviceLogLine[]): void;
   setDeviceLogStreaming(on: boolean): void;
   setLocalLogStreaming(on: boolean): void;
@@ -52,6 +57,19 @@ function capped(lines: DeviceLogLine[]): DeviceLogLine[] {
     : lines;
 }
 
+function appended(
+  held: DeviceLogLine[],
+  batch: DeviceLogLine[],
+): DeviceLogLine[] {
+  const out = held.concat(batch);
+  for (let i = held.length; i < out.length; i++) {
+    if (i > 0 && out[i].ts < out[i - 1].ts) {
+      return capped(out.sort((a, b) => a.ts - b.ts));
+    }
+  }
+  return capped(out);
+}
+
 function flushPending(): void {
   flushTimer = null;
   if (pending.device.length === 0 && pending.local.length === 0) return;
@@ -59,8 +77,8 @@ function flushPending(): void {
   pending = { device: [], local: [] };
   useDiagnosticsStore.setState(s => ({
     logs: {
-      device: capped(s.logs.device.concat(batch.device)),
-      local: capped(s.logs.local.concat(batch.local)),
+      device: appended(s.logs.device, batch.device),
+      local: appended(s.logs.local, batch.local),
     },
   }));
 }
@@ -86,12 +104,12 @@ export const useDiagnosticsStore = create<DiagState>((set, get) => ({
   localLogStreaming: false,
   logs: { device: [], local: [] },
 
-  ingestDeviceLog: (origin, level, message) => {
+  ingestDeviceLog: (origin, level, message, ts) => {
     const s = get();
     if (!s.deviceLogStreaming && !s.localLogStreaming) return;
     const bucket: LogOrigin = origin === 'device' ? 'device' : 'local';
     const held = pending[bucket];
-    held.push({ id: `l${logCounter++}`, ts: Date.now(), level, message });
+    held.push({ id: `l${logCounter++}`, ts, level, message });
     if (held.length > LOG_LIMIT) held.splice(0, held.length - LOG_LIMIT);
     scheduleFlush();
   },
@@ -138,7 +156,7 @@ async function seedCurrentLaunch(): Promise<void> {
     const lines = await session.logArchiveLines(current.id, LOG_LIMIT);
     useDiagnosticsStore.getState().seedLogs('local', lines);
   } catch {
-    // a launch with nothing on disk yet just starts empty
+    return;
   }
 }
 
@@ -170,7 +188,7 @@ export async function startDiagnostics(): Promise<void> {
       if (event.type === 'log')
         useDiagnosticsStore
           .getState()
-          .ingestDeviceLog(event.origin, event.level, event.message);
+          .ingestDeviceLog(event.origin, event.level, event.message, event.ts);
     });
     AppState.addEventListener('change', next => {
       if (next !== 'active') return;

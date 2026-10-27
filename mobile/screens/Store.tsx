@@ -1,20 +1,39 @@
-import { countLine, failureLine, STORE_COPY } from '@bridgething/catalog';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  failureLine,
+  search,
+  STORE_COPY,
+  type BrowseQuery,
+  type CatalogAppListing,
+} from '@bridgething/catalog';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
-import { CatalogRow } from '../components/CatalogRow';
 import { ListGroup } from '../components/ListGroup';
 import { Note } from '../components/Note';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { Spinner } from '../components/Spinner';
-import { refreshCatalog, useCatalog, useStoreListings } from '../lib/catalog';
+import { ListingRow } from '../components/store/listing';
+import {
+  ChipRow,
+  FeaturedHero,
+  SearchField,
+  StoreShelf,
+  type Chip,
+} from '../components/store/storefront';
+import {
+  refreshCatalog,
+  useCatalog,
+  useStoreCatalog,
+  useStorefront,
+  useStoreReady,
+} from '../lib/catalog';
 import { useReachable } from '../lib/reachability';
 import { connectedPeers, useSession } from '../lib/session';
 import { TEXT, usePalette } from '../lib/theme';
 import type { StoreScreenProps } from '../navigation';
-import { ScreenHeader } from '../components/ScreenHeader';
 
 type Props = StoreScreenProps<'Store'>;
 
@@ -22,13 +41,16 @@ export function StoreScreen({ navigation }: Props) {
   const peers = useSession(s => s.peers);
   const deviceId = connectedPeers(peers)[0]?.id ?? null;
 
-  const { vouched, community, sourceNames } = useStoreListings(deviceId);
+  const { listings } = useStoreCatalog(deviceId);
+  const { featured, shelves, categories } = useStorefront(listings);
+  const ready = useStoreReady();
   const refreshing = useCatalog(s => s.refreshing);
   const failures = useCatalog(s => s.failures);
   const reachable = useReachable();
   const palette = usePalette();
 
   const [pulled, setPulled] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     void refreshCatalog();
@@ -43,17 +65,88 @@ export function StoreScreen({ navigation }: Props) {
     void refreshCatalog();
   }, []);
 
-  const openApp = (appId: string, sourceUrl: string) =>
-    navigation.navigate('StoreApp', { deviceId, appId, sourceUrl });
-
-  const openSource = (url: string) =>
-    navigation.navigate('StoreSource', {
+  const open = (listing: CatalogAppListing) =>
+    navigation.navigate('StoreApp', {
       deviceId,
-      url,
-      name: sourceNames[url] ?? url,
+      appId: listing.app.id,
+      sourceUrl: listing.sourceUrl,
     });
 
-  const empty = vouched.length === 0 && community.length === 0;
+  const browseTo = (next: BrowseQuery) =>
+    navigation.navigate('StoreBrowse', { deviceId, query: next });
+
+  const results = useMemo(() => search(listings, query), [listings, query]);
+  const searching = query.trim().length > 0;
+
+  const chips: Chip[] = [
+    { key: 'all', label: 'all' },
+    ...shelves
+      .filter(shelf => shelf.id === 'launchers' || shelf.id === 'overlays')
+      .map(shelf => ({
+        key: shelf.id,
+        label: shelf.title,
+        onPress: () => browseTo(shelf.more),
+      })),
+    ...categories.map(entry => ({
+      key: entry.category,
+      label: entry.label,
+      onPress: () =>
+        browseTo({
+          filter: { kind: 'category', category: entry.category },
+          sort: 'popular',
+        }),
+    })),
+  ];
+
+  const body = searching ? (
+    <View className="mb-8">
+      <SectionHeader title="results" />
+      {results.length > 0 ? (
+        <ListGroup>
+          {results.map(listing => (
+            <ListingRow
+              key={listing.app.id}
+              listing={listing}
+              deviceId={deviceId}
+              onOpen={() => open(listing)}
+            />
+          ))}
+        </ListGroup>
+      ) : (
+        <SectionEmpty>{STORE_COPY.noMatches}</SectionEmpty>
+      )}
+    </View>
+  ) : ready && listings.length > 0 ? (
+    <>
+      <ChipRow chips={chips} active="all" />
+      {featured ? (
+        <FeaturedHero
+          listing={featured}
+          deviceId={deviceId}
+          onOpen={() => open(featured)}
+        />
+      ) : null}
+      {shelves.map(shelf => (
+        <StoreShelf
+          key={shelf.id}
+          shelf={shelf}
+          deviceId={deviceId}
+          onOpen={open}
+          onSeeAll={() => browseTo(shelf.more)}
+        />
+      ))}
+    </>
+  ) : !reachable ? (
+    <Note tone="warn" action="retry" onAction={() => void refreshCatalog()}>
+      this phone is offline · the store needs a connection
+    </Note>
+  ) : !ready || refreshing ? (
+    <View className="items-center py-10">
+      <Spinner />
+    </View>
+  ) : (
+    <SectionEmpty>{STORE_COPY.empty}</SectionEmpty>
+  );
 
   return (
     <ScrollScreen
@@ -67,66 +160,17 @@ export function StoreScreen({ navigation }: Props) {
         />
       }
     >
-      <ScreenHeader title="store" subtitle="get your apps here" />
+      <ScreenHeader title="store" />
+      <SearchField value={query} onChangeText={setQuery} />
+      {body}
 
-      <SectionHeader
-        title={STORE_COPY.appsTitle}
-        hint={countLine(vouched.length, Object.keys(sourceNames).length)}
-      />
-
-      {vouched.length > 0 ? (
-        <ListGroup>
-          {vouched.map(listing => (
-            <CatalogRow
-              key={listing.app.id}
-              listing={listing}
-              sourceName={sourceNames[listing.sourceUrl]}
-              onPressSource={() => openSource(listing.sourceUrl)}
-              onPress={() => openApp(listing.app.id, listing.sourceUrl)}
-            />
-          ))}
-        </ListGroup>
-      ) : empty && !reachable ? (
-        <Note tone="warn" action="retry" onAction={() => void refreshCatalog()}>
-          this phone is offline · the store needs a connection
-        </Note>
-      ) : empty && refreshing ? (
-        <View className="items-center py-10">
-          <Spinner />
-        </View>
-      ) : (
-        <SectionEmpty>{STORE_COPY.appsEmpty}</SectionEmpty>
-      )}
-
-      <View className="mt-4">
-        <Button
-          onPress={() => navigation.navigate('StoreSources', { deviceId })}
-          variant="secondary"
-          icon="Link"
-        >
-          manage sources
-        </Button>
-      </View>
-
-      {community.length > 0 ? (
-        <View className="mt-8">
-          <SectionHeader
-            title={STORE_COPY.communityTitle}
-            hint={STORE_COPY.communityHint}
-          />
-          <ListGroup>
-            {community.map(listing => (
-              <CatalogRow
-                key={listing.app.id}
-                listing={listing}
-                sourceName={sourceNames[listing.sourceUrl]}
-                onPressSource={() => openSource(listing.sourceUrl)}
-                onPress={() => openApp(listing.app.id, listing.sourceUrl)}
-              />
-            ))}
-          </ListGroup>
-        </View>
-      ) : null}
+      <Button
+        onPress={() => navigation.navigate('StoreSources', { deviceId })}
+        variant="secondary"
+        icon="Link"
+      >
+        manage sources
+      </Button>
 
       {failures.length > 0 ? (
         <Text className="mt-3 px-1 font-sans text-muted" style={TEXT.hint}>

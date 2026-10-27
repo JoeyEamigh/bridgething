@@ -1,21 +1,34 @@
 import {
-  blendStoreListings,
+  aggregate,
   fetchCatalog,
   fetchMergedApps,
   fetchSources,
+  storeCatalog,
   type Catalog,
   type CatalogAppListing,
   type CatalogSnapshot,
   type InstalledWebapp,
   type MergedApps,
+  type StoreCatalog,
+  type StorePin,
+  type StoreSource,
 } from '@bridgething/catalog';
+import type { WebappInfo } from '@bridgething/companion-types';
 
 import { toInstalled } from '../lib/catalog.ts';
 import { keyed, type Store } from './resource.ts';
 import { catalogSources, selectedMeta, webapps } from './session.ts';
 
 const EMPTY: CatalogSnapshot = { catalogs: [], directory: null, failures: [] };
-const NO_DIRECTORY: MergedApps = { updated_at: '', catalogs: [], failures: [], installs: [] };
+const NO_DIRECTORY: MergedApps = {
+  updated_at: '',
+  catalogs: [],
+  failures: [],
+  installs: [],
+  trending: [],
+  featured: null,
+  category_backfill: {},
+};
 
 const snapshots = keyed<CatalogSnapshot>(EMPTY);
 const single = keyed<Catalog | null>(null);
@@ -38,8 +51,9 @@ export function deviceContext(): { installed: InstalledWebapp[]; libVersion: str
 }
 
 export type StoreListings = {
-  vouched: CatalogAppListing[];
-  community: CatalogAppListing[];
+  listings: CatalogAppListing[];
+  sources: Record<string, StoreSource>;
+  pin: StorePin | null;
   subscribed: string[];
   snapshot: CatalogSnapshot;
   pending: boolean;
@@ -47,34 +61,79 @@ export type StoreListings = {
   refresh: () => void;
 };
 
+type Inputs = { snapshot: CatalogSnapshot; merged: MergedApps; installed: WebappInfo[]; libVersion: string | null };
+
+let held: { inputs: Inputs; catalog: StoreCatalog } | null = null;
+
+function blended(inputs: Inputs): StoreCatalog {
+  const last = held?.inputs;
+  if (
+    held &&
+    last?.snapshot === inputs.snapshot &&
+    last.merged === inputs.merged &&
+    last.installed === inputs.installed &&
+    last.libVersion === inputs.libVersion
+  ) {
+    return held.catalog;
+  }
+
+  const catalog = storeCatalog({
+    subscribed: inputs.snapshot.catalogs,
+    merged: inputs.merged.catalogs,
+    installed: toInstalled(inputs.installed),
+    deviceLibVersion: inputs.libVersion,
+    installs: inputs.merged.installs,
+    trending: inputs.merged.trending,
+    categoryBackfill: inputs.merged.category_backfill,
+    extensions: 'listed',
+  });
+  held = { inputs, catalog };
+  return catalog;
+}
+
 export function storeListings(): StoreListings {
-  const { installed, libVersion } = deviceContext();
   const subscribed = catalogSources.data.value;
   const catalogs = catalogsFor(subscribed);
   const directory = mergedApps();
   const snapshot = catalogs.data.value;
   const merged = directory.data.value;
 
-  const { vouched, community } = blendStoreListings({
-    catalogs: snapshot.catalogs,
-    merged: merged.catalogs,
-    installed,
-    deviceLibVersion: libVersion,
-    installs: merged.installs,
-    subscribed,
-    extensions: 'listed',
+  const { listings, sources } = blended({
+    snapshot,
+    merged,
+    installed: webapps.data.value,
+    libVersion: selectedMeta.value?.libbridgethingVersion ?? null,
   });
 
   return {
-    vouched,
-    community,
+    listings,
+    sources,
+    pin: merged.featured,
     subscribed,
     snapshot,
     pending: catalogs.pending.value || directory.pending.value,
-    error: catalogs.error.value,
+    error: catalogs.error.value ?? directory.error.value,
     refresh: () => {
       void catalogs.refresh();
       void directory.refresh();
     },
   };
+}
+
+export function sourceListings(url: string): { listings: CatalogAppListing[]; catalog: Store<Catalog | null> } {
+  const catalog = catalogFor(url);
+  const held = catalog.data.value;
+  const merged = mergedApps().data.value;
+  const { installed, libVersion } = deviceContext();
+  const listings = held
+    ? aggregate({
+        orderedCatalogs: [{ url, catalog: held }],
+        installed,
+        deviceLibVersion: libVersion,
+        installs: merged.installs,
+        trending: merged.trending,
+        extensions: 'listed',
+      })
+    : [];
+  return { listings, catalog };
 }

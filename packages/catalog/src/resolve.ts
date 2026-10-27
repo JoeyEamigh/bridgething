@@ -1,4 +1,5 @@
 import { declaresExtension } from './extension.ts';
+import { OFFICIAL_CATALOG_URL } from './sources.ts';
 import type {
   AppEntry,
   AppVersion,
@@ -7,6 +8,7 @@ import type {
   InstallCount,
   RecommendedSource,
   SourceCatalog,
+  TrendingCount,
 } from './types.ts';
 import { sortNewestFirst } from './versions.ts';
 
@@ -32,6 +34,8 @@ export type CatalogAppListing = {
   updateAvailable: boolean;
   alsoAvailableFrom: string[];
   installs: number;
+  trending: number;
+  official: boolean;
 };
 
 export type CatalogAppUpdate = {
@@ -109,7 +113,7 @@ export function slotCandidates<T extends SlotCandidate>(list: T[], slot: WebappS
   return list.filter(webapp => fillsSlot(webapp, slot));
 }
 
-function installsById(counts: InstallCount[]): Map<string, number> {
+function tallyById(counts: (InstallCount | TrendingCount)[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const entry of counts) {
     const tally = Number(entry.count);
@@ -125,11 +129,13 @@ export function aggregate(args: {
   installed: InstalledWebapp[];
   deviceLibVersion: string | null;
   installs?: InstallCount[];
+  trending?: TrendingCount[];
   extensions: ExtensionOffering;
 }): CatalogAppListing[] {
   const { orderedCatalogs, installed, deviceLibVersion, extensions } = args;
   const installedById = new Map(installed.map(i => [i.id.toLowerCase(), i]));
-  const tallies = installsById(args.installs ?? []);
+  const tallies = tallyById(args.installs ?? []);
+  const recent = tallyById(args.trending ?? []);
   const pins = pinsFrom(installed);
 
   const offerings = new Map<string, { url: string; app: AppEntry }[]>();
@@ -160,6 +166,8 @@ export function aggregate(args: {
       updateAvailable: installedVersion !== null && newest !== null && isUpgrade(newest.version, installedVersion),
       alsoAvailableFrom,
       installs: tallies.get(id) ?? 0,
+      trending: recent.get(id) ?? 0,
+      official: primary.url === OFFICIAL_CATALOG_URL,
     });
   }
 

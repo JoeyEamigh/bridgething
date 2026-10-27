@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { Chevron } from '../components/Chevron';
 import { Field } from '../components/Field';
 import { Icon } from '../components/Icon';
 import { ListGroup } from '../components/ListGroup';
@@ -16,8 +17,10 @@ import {
   addSource,
   moveSource,
   parseSourceInput,
+  sourceHost,
   useCatalog,
   useQuickAddSources,
+  useStoreCatalog,
 } from '../lib/catalog';
 import { TEXT } from '../lib/theme';
 import type { StoreScreenProps } from '../navigation';
@@ -28,6 +31,7 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
   const deviceId = route.params?.deviceId ?? null;
 
   const sources = useCatalog(s => s.sources);
+  const names = useStoreCatalog(deviceId).sources;
   const suggested = useQuickAddSources();
 
   const [draft, setDraft] = useState('');
@@ -68,10 +72,7 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
 
   return (
     <ScrollScreen>
-      <ScreenHeader
-        title="sources"
-        subtitle="every app in the store comes from one."
-      />
+      <ScreenHeader title="sources" />
 
       <View className="mb-8">
         <SectionHeader title="add a source" />
@@ -112,15 +113,12 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
             browse it first
           </Button>
         </View>
-        <Text className="mt-2 px-1 font-sans text-muted" style={TEXT.hint}>
-          a source gives you more apps to choose from. nothing here is reviewed.
-        </Text>
       </View>
 
       <View className="mb-8">
         <SectionHeader
           title="your sources"
-          hint={sources.length > 1 ? 'higher wins' : 'tap one to browse it'}
+          hint={sources.length > 1 ? 'first listed wins updates' : undefined}
         />
         {sources.length === 0 ? (
           <SectionEmpty>no sources yet</SectionEmpty>
@@ -130,10 +128,11 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
               <SourceRow
                 key={url}
                 url={url}
+                name={names[url]?.name ?? sourceHost(url)}
                 first={index === 0}
                 last={index === sources.length - 1}
                 reorderable={sources.length > 1}
-                onPress={() => open(url, url)}
+                onPress={() => open(url, names[url]?.name ?? sourceHost(url))}
               />
             ))}
           </ListGroup>
@@ -175,9 +174,7 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
                         {source.description ?? source.url}
                       </Text>
                     </View>
-                    <Text className="font-mono text-dim" style={TEXT.body}>
-                      ›
-                    </Text>
+                    <Chevron />
                   </View>
                 </Press>
                 <Press
@@ -192,9 +189,6 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
               </View>
             ))}
           </ListGroup>
-          <Text className="mt-2 px-1 font-sans text-muted" style={TEXT.hint}>
-            listed in the bridgething directory. apps are not reviewed.
-          </Text>
         </View>
       ) : null}
     </ScrollScreen>
@@ -203,12 +197,14 @@ export function StoreSourcesScreen({ route, navigation }: Props) {
 
 function SourceRow({
   url,
+  name,
   first,
   last,
   reorderable,
   onPress,
 }: {
   url: string;
+  name: string;
   first: boolean;
   last: boolean;
   reorderable: boolean;
@@ -218,16 +214,23 @@ function SourceRow({
     <View className="flex-row items-center gap-3 px-4 py-3">
       <Press onPress={onPress} className="flex-1">
         <View className="flex-row items-center gap-3">
-          <Text
-            className="flex-1 font-mono text-fg"
-            style={TEXT.hint}
-            numberOfLines={1}
-          >
-            {url}
-          </Text>
-          <Text className="font-mono text-dim" style={TEXT.body}>
-            ›
-          </Text>
+          <View className="min-w-0 flex-1">
+            <Text
+              className="font-sans text-fg"
+              style={TEXT.row}
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
+            <Text
+              className="mt-0.5 font-mono text-dim"
+              style={TEXT.hint}
+              numberOfLines={1}
+            >
+              {sourceHost(url)}
+            </Text>
+          </View>
+          <Chevron />
         </View>
       </Press>
       {reorderable ? (

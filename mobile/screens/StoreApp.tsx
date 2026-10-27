@@ -1,9 +1,20 @@
 import {
+  appCategories,
+  changelogText,
   compareVersions,
   fillsSlot,
+  installsLabel,
+  isLauncher,
+  isOverlay,
+  listingKindLabel,
+  moreFromAuthor,
+  permissionLabel,
+  releasedAtInstant,
   sortNewestFirst,
+  sourceLine,
   versionCompatible,
   type AppVersion,
+  type CatalogAppListing,
 } from '@bridgething/catalog';
 import { describeError } from '@bridgething/ui/errors';
 import { useState } from 'react';
@@ -24,52 +35,36 @@ import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { SlotAction } from '../components/SlotAction';
 import { Spinner } from '../components/Spinner';
+import { useStoreInstall } from '../components/store/install';
+import { ListingTile } from '../components/store/listing';
+import { HorizontalRail } from '../components/store/storefront';
+import { SwitchWebappButton } from '../components/SwitchWebappButton';
 import {
   describeVersionInstall,
   deviceLibVersion,
-  installApp,
   useSourceListings,
+  useStoreCatalog,
+  useStoreSource,
 } from '../lib/catalog';
-import { useOtaProgress, useQueuedInstall } from '../lib/ota';
 import {
   describePairOutcome,
   type PairNotice,
   presentPairWithGuidance,
   useSession,
 } from '../lib/session';
-import { TEXT } from '../lib/theme';
-import { formatBytes } from '../lib/utils';
+import { TEXT, TYPE } from '../lib/theme';
+import { formatBytes, relativeTime } from '../lib/utils';
 import { humanizePermission } from '../lib/webapp-permissions';
-import { useWebapps } from '../lib/webapps';
+import { hasSettings, useWebapps } from '../lib/webapps';
 import type { StoreScreenProps } from '../navigation';
 
 type Props = StoreScreenProps<'StoreApp'>;
 
 export function StoreAppScreen({ navigation, route }: Props) {
   const { deviceId, appId, sourceUrl } = route.params;
-  const listings = useSourceListings(sourceUrl, deviceId);
-  const listing = listings.find(l => l.app.id === appId) ?? null;
-  const libVersion = useSession(s => deviceLibVersion(s, deviceId));
-  const installed =
-    useWebapps(deviceId).list.find(
-      w => w.id.toLowerCase() === appId.toLowerCase(),
-    ) ?? null;
-
-  const progress = useOtaProgress(deviceId);
-  const installingThis =
-    progress && !progress.run.outcome && progress.run.webappId === appId
-      ? progress
-      : null;
-  const deviceBusyElsewhere =
-    progress != null && !progress.run.outcome && !installingThis;
-  const waiting = useQueuedInstall(deviceId, appId);
-
-  const [failed, setFailed] = useState<string | null>(null);
-  const [asking, setAsking] = useState<AppVersion | null>(null);
-  const [asked, setAsked] = useState<AppVersion | null>(null);
-  const [pairing, setPairing] = useState(false);
-  const [pairNotice, setPairNotice] = useState<PairNotice | null>(null);
-  const [showAllVersions, setShowAllVersions] = useState(false);
+  const listing =
+    useSourceListings(sourceUrl, deviceId).find(l => l.app.id === appId) ??
+    null;
 
   if (!listing) {
     return (
@@ -88,20 +83,47 @@ export function StoreAppScreen({ navigation, route }: Props) {
     );
   }
 
-  const { app, newestCompatible, installedVersion, updateAvailable } = listing;
-  const incompatible = !newestCompatible;
-  const canAct =
-    deviceId != null && !incompatible && (!installedVersion || updateAvailable);
+  return (
+    <StoreAppPage
+      listing={listing}
+      deviceId={deviceId}
+      navigation={navigation}
+    />
+  );
+}
 
-  const install = async (version: AppVersion) => {
-    if (!deviceId) return;
-    setFailed(null);
-    try {
-      await installApp(deviceId, listing, version);
-    } catch (err) {
-      setFailed(describeError(err));
-    }
-  };
+function StoreAppPage({
+  listing,
+  deviceId,
+  navigation,
+}: {
+  listing: CatalogAppListing;
+  deviceId: string | null;
+  navigation: Props['navigation'];
+}) {
+  const { app, newestCompatible, installedVersion, updateAvailable } = listing;
+  const libVersion = useSession(s => deviceLibVersion(s, deviceId));
+  const installed =
+    useWebapps(deviceId).list.find(
+      w => w.id.toLowerCase() === app.id.toLowerCase(),
+    ) ?? null;
+  const store = useStoreCatalog(deviceId);
+  const source = useStoreSource(listing.sourceUrl, store.sources);
+  const more = moreFromAuthor(store.listings, listing);
+  const { installing, waiting, queued, failed, install } = useStoreInstall(
+    deviceId,
+    listing,
+  );
+
+  const [asking, setAsking] = useState<AppVersion | null>(null);
+  const [asked, setAsked] = useState<AppVersion | null>(null);
+  const [pairing, setPairing] = useState(false);
+  const [pairNotice, setPairNotice] = useState<PairNotice | null>(null);
+  const [showAllVersions, setShowAllVersions] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const ordered = sortNewestFirst(app.versions);
+  const shown = newestCompatible ?? ordered[0] ?? null;
 
   const start = (version: AppVersion) => {
     if (newestCompatible && version.version !== newestCompatible.version) {
@@ -127,8 +149,22 @@ export function StoreAppScreen({ navigation, route }: Props) {
     }
   };
 
-  const ordered = sortNewestFirst(app.versions);
-  const visibleVersions = showAllVersions ? ordered : ordered.slice(0, 1);
+  const openAuthor = () =>
+    navigation.push('StoreBrowse', {
+      deviceId,
+      query: {
+        filter: { kind: 'author', author: app.author },
+        sort: 'popular',
+      },
+    });
+
+  const openListing = (other: CatalogAppListing) =>
+    navigation.push('StoreApp', {
+      deviceId,
+      appId: other.app.id,
+      sourceUrl: other.sourceUrl,
+    });
+
   const question = asked
     ? describeVersionInstall({
         version: asked,
@@ -136,6 +172,29 @@ export function StoreAppScreen({ navigation, route }: Props) {
         installedVersion,
       })
     : null;
+
+  const released = shown ? releasedAtInstant(shown.released_at) : null;
+  const notes = changelogText(shown?.changelog);
+  const category =
+    appCategories(app).length > 0 &&
+    !isLauncher(listing) &&
+    !isOverlay(listing);
+
+  const installButton = (
+    <Button
+      onPress={() => void install(newestCompatible)}
+      disabled={!deviceId || !newestCompatible || waiting != null}
+      loading={waiting != null && !queued}
+    >
+      {!newestCompatible
+        ? 'needs newer firmware'
+        : queued
+          ? 'queued'
+          : updateAvailable
+            ? `update to ${newestCompatible.version}`
+            : `install ${newestCompatible.version}`}
+    </Button>
+  );
 
   return (
     <ScrollScreen contentContainerStyle={{ paddingTop: 12 }}>
@@ -154,183 +213,249 @@ export function StoreAppScreen({ navigation, route }: Props) {
         onClose={() => setAsking(null)}
       />
 
-      <View className="mb-6 flex-row items-center gap-4 border border-rule bg-screen p-4">
-        <CatalogIcon url={app.icon} name={app.name} size={64} />
+      <View className="mb-4 flex-row items-center gap-3.5">
+        <CatalogIcon url={app.icon} name={app.name} size={72} />
         <View className="min-w-0 flex-1">
           <Text
             className="font-display text-fg"
-            style={TEXT.title}
+            style={TEXT.hero}
             numberOfLines={2}
           >
             {app.name}
           </Text>
-          <Text className="mt-0.5 font-sans text-muted" style={TEXT.hint}>
-            {app.author}
-          </Text>
-          <View className="mt-2 flex-row flex-wrap gap-1.5">
-            {installedVersion ? (
-              <Pill tone="accent">{`installed v${installedVersion}`}</Pill>
-            ) : null}
-            {newestCompatible?.role === 'launcher' ? (
-              <Pill tone="neutral">home screen</Pill>
-            ) : null}
-            {newestCompatible?.provides_overlay ? (
-              <Pill tone="neutral">overlay</Pill>
-            ) : null}
-          </View>
+          <Press onPress={openAuthor} hitSlop={6} className="self-start">
+            <Text className="mt-0.5 font-sans text-muted" style={TEXT.body}>
+              {app.author}
+            </Text>
+          </Press>
+          {installedVersion ? (
+            <View className="mt-1.5">
+              <Pill tone="ok">{`installed ${installedVersion}`}</Pill>
+            </View>
+          ) : null}
         </View>
+      </View>
+
+      <View className="mb-4 gap-2">
+        {installing ? (
+          <View className="border border-rule bg-screen p-4">
+            <View className="flex-row items-baseline justify-between">
+              <Text className="font-sans text-fg" style={TEXT.hint}>
+                {installing.stepLabel ?? 'installing'}
+              </Text>
+              <Text className="font-mono text-soft" style={TEXT.hint}>
+                {installing.percent}%
+              </Text>
+            </View>
+            <Progress percent={installing.percent} className="mt-2" />
+          </View>
+        ) : deviceId && installed ? (
+          <>
+            {updateAvailable ? installButton : null}
+            <SwitchWebappButton
+              deviceId={deviceId}
+              id={installed.id}
+              onError={setActionError}
+            />
+            {fillsSlot(installed, 'launcher') ? (
+              <SlotAction
+                deviceId={deviceId}
+                id={installed.id}
+                slot="launcher"
+              />
+            ) : null}
+            {fillsSlot(installed, 'overlay') ? (
+              <SlotAction
+                deviceId={deviceId}
+                id={installed.id}
+                slot="overlay"
+              />
+            ) : null}
+            {hasSettings(installed) ? (
+              <Button
+                variant="secondary"
+                icon="SlidersHorizontal"
+                onPress={() =>
+                  navigation.navigate('apps', {
+                    screen: 'WebappSettings',
+                    params: {
+                      deviceId,
+                      id: installed.id,
+                      name: installed.name,
+                    },
+                    initial: false,
+                  })
+                }
+              >
+                open {installed.name} settings
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          installButton
+        )}
+        {deviceId == null ? (
+          <Note tone="warn" action="pair" onAction={() => void pair()}>
+            connect a car thing to install
+          </Note>
+        ) : null}
+        <PairNote notice={pairNotice} />
+        {failed ? <Note tone="err">{failed}</Note> : null}
+        {actionError ? <Note tone="err">{actionError}</Note> : null}
+      </View>
+
+      <View className="mb-4 flex-row border border-rule bg-screen">
+        <Stat value={String(listing.installs)} label="installs" />
+        <Stat
+          value={listingKindLabel(listing) ?? 'app'}
+          label={category ? 'category' : 'kind'}
+        />
+        <Stat
+          value={shown ? formatBytes(shown.download.size) : '-'}
+          label="size"
+          last
+        />
       </View>
 
       <Screenshots urls={app.screenshots} name={app.name} />
 
-      {newestCompatible?.provides_overlay ? (
-        <Text className="mb-6 px-1 font-sans text-muted" style={TEXT.hint}>
-          an overlay app draws on top of whatever else is on the screen.
-        </Text>
-      ) : null}
-
-      {installingThis ? (
-        <View className="mb-6 border border-rule bg-screen p-4">
-          <View className="flex-row items-baseline justify-between">
-            <Text className="font-sans text-fg" style={TEXT.hint}>
-              {installingThis.stepLabel ?? 'installing'}
-            </Text>
-            <Text className="font-mono text-soft" style={TEXT.hint}>
-              {installingThis.percent}%
-            </Text>
-          </View>
-          <Progress percent={installingThis.percent} className="mt-2" />
-        </View>
-      ) : (
-        <View className="mb-6 gap-2">
-          <Button
-            onPress={() => {
-              if (newestCompatible) void install(newestCompatible);
-            }}
-            disabled={!canAct || waiting != null}
-            loading={waiting?.version === newestCompatible?.version}
-          >
-            {incompatible
-              ? 'needs a newer firmware'
-              : waiting != null && deviceBusyElsewhere
-                ? 'queued'
-                : updateAvailable
-                  ? `update to v${newestCompatible?.version}`
-                  : installedVersion
-                    ? 'installed'
-                    : `install v${newestCompatible?.version}`}
-          </Button>
-          {deviceId == null ? (
-            <Note tone="warn" action="pair" onAction={() => void pair()}>
-              connect a car thing to install
-            </Note>
-          ) : null}
-          <PairNote notice={pairNotice} />
-        </View>
-      )}
-
-      {failed ? (
-        <View className="mb-6">
-          <Note tone="err">{failed}</Note>
-        </View>
-      ) : null}
-
-      {deviceId && installed ? (
-        <View className="mb-6 gap-2">
-          {fillsSlot(installed, 'launcher') ? (
-            <SlotAction deviceId={deviceId} id={installed.id} slot="launcher" />
-          ) : null}
-          {fillsSlot(installed, 'overlay') ? (
-            <SlotAction deviceId={deviceId} id={installed.id} slot="overlay" />
-          ) : null}
-        </View>
-      ) : null}
-
-      <Text className="mb-6 px-1 font-sans text-fg" style={TEXT.body}>
+      <Text className="mb-8 font-sans text-near" style={TEXT.body}>
         {app.description}
       </Text>
 
-      {newestCompatible ? (
+      {shown && notes ? (
         <View className="mb-8">
-          <SectionHeader title="what this app can do" />
-          {newestCompatible.permissions.length === 0 ? (
-            <SectionEmpty>nothing beyond drawing on the screen</SectionEmpty>
-          ) : (
-            <ListGroup>
-              {newestCompatible.permissions.map(p => {
-                const meta = humanizePermission(p);
-                return (
-                  <ListRow
-                    key={p}
-                    icon={meta.icon}
-                    title={meta.title}
-                    subtitle={meta.subtitle}
-                  />
-                );
-              })}
-            </ListGroup>
-          )}
+          <SectionHeader
+            title={`new in ${shown.version}`}
+            action={released === null ? undefined : relativeTime(released)}
+          />
+          <Text className="font-sans text-muted" style={TEXT.body}>
+            {notes}
+          </Text>
         </View>
       ) : null}
 
       <View className="mb-8">
-        <SectionHeader title="versions" />
-        <ListGroup>
-          {visibleVersions.map(v => (
-            <VersionRow
-              key={v.version}
-              version={v}
-              installedVersion={installedVersion}
-              libVersion={libVersion}
-              busy={waiting?.version ?? null}
-              blocked={deviceId == null || installingThis != null}
-              onInstall={() => start(v)}
-            />
-          ))}
-        </ListGroup>
-        {app.versions.length > 1 ? (
-          <Press
-            onPress={() => setShowAllVersions(v => !v)}
-            className="mt-2 self-start px-1 py-1"
-          >
-            <Text
-              className="font-mono uppercase text-accent"
-              style={TEXT.eyebrow}
-            >
-              {showAllVersions
-                ? 'show fewer'
-                : `show all ${app.versions.length} versions`}
-            </Text>
-          </Press>
-        ) : null}
+        <SectionHeader title="permissions" />
+        {!shown || shown.permissions.length === 0 ? (
+          <SectionEmpty>no permissions</SectionEmpty>
+        ) : (
+          <ListGroup>
+            {shown.permissions.map(p => (
+              <ListRow
+                key={p}
+                icon={humanizePermission(p).icon}
+                title={permissionLabel(p)}
+              />
+            ))}
+          </ListGroup>
+        )}
       </View>
 
-      <View>
-        <SectionHeader title="where this came from" />
-        <ListGroup>
-          <ListRow icon="LayoutGrid" title="source" subtitle={sourceUrl} />
-          {app.homepage ? (
-            <ListRow
-              icon="Globe"
-              title="homepage"
-              subtitle={app.homepage}
-              onPress={() => void Linking.openURL(app.homepage as string)}
-            />
+      {more.length > 0 ? (
+        <View className="mb-8">
+          <SectionHeader
+            title={`more from ${app.author}`}
+            action="see all"
+            onAction={openAuthor}
+          />
+          <HorizontalRail>
+            {more.map(other => (
+              <ListingTile
+                key={other.app.id}
+                listing={other}
+                caption={
+                  listingKindLabel(other) ?? installsLabel(other.installs)
+                }
+                onOpen={() => openListing(other)}
+              />
+            ))}
+          </HorizontalRail>
+        </View>
+      ) : null}
+
+      {ordered.length > 1 ? (
+        <View className="mb-8">
+          <SectionHeader
+            title="versions"
+            action={showAllVersions ? 'hide' : `show all ${ordered.length}`}
+            onAction={() => setShowAllVersions(v => !v)}
+          />
+          {showAllVersions ? (
+            <ListGroup>
+              {ordered.map(v => (
+                <VersionRow
+                  key={v.version}
+                  version={v}
+                  installedVersion={installedVersion}
+                  libVersion={libVersion}
+                  busy={waiting?.version ?? null}
+                  blocked={deviceId == null || installing != null}
+                  onInstall={() => start(v)}
+                />
+              ))}
+            </ListGroup>
           ) : null}
-          {app.source ? (
-            <ListRow
-              icon="Globe"
-              title="source code"
-              subtitle={app.source}
-              onPress={() => void Linking.openURL(app.source as string)}
-            />
-          ) : null}
-        </ListGroup>
-        <Text className="mt-2 px-1 font-sans text-muted" style={TEXT.hint}>
-          apps are not reviewed. buyer beware.
+        </View>
+      ) : null}
+
+      {app.homepage || app.source ? (
+        <View className="mb-3 flex-row gap-4">
+          {app.homepage ? <Link label="homepage" url={app.homepage} /> : null}
+          {app.source ? <Link label="source code" url={app.source} /> : null}
+        </View>
+      ) : null}
+
+      <Press
+        testID="store-app-source"
+        onPress={() =>
+          navigation.push('StoreSource', {
+            deviceId,
+            url: source.url,
+            name: source.name,
+          })
+        }
+        hitSlop={8}
+        className="self-start"
+      >
+        <Text className="font-mono text-dim" style={{ fontSize: TYPE.eyebrow }}>
+          {sourceLine(source)}
         </Text>
-      </View>
+      </Press>
     </ScrollScreen>
+  );
+}
+
+function Stat({
+  value,
+  label,
+  last = false,
+}: {
+  value: string;
+  label: string;
+  last?: boolean;
+}) {
+  return (
+    <View
+      className={`flex-1 px-3 py-2.5 ${last ? '' : 'border-r border-rule'}`}
+    >
+      <Text className="font-sans text-fg" style={TEXT.row} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text className="font-mono uppercase text-dim" style={TEXT.eyebrow}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function Link({ label, url }: { label: string; url: string }) {
+  return (
+    <Press onPress={() => void Linking.openURL(url)} hitSlop={8}>
+      <Text className="font-mono text-soft" style={TEXT.hint}>
+        {label} ↗
+      </Text>
+    </Press>
   );
 }
 
@@ -356,32 +481,31 @@ function VersionRow({
     compareVersions(version.version, installedVersion) < 0;
   const actionable = !installed && compatible && !blocked;
   const running = busy === version.version;
+  const released = releasedAtInstant(version.released_at);
+  const notes = changelogText(version.changelog);
 
   return (
     <Press onPress={onInstall} disabled={!actionable || busy != null}>
       <View className="px-4 py-3">
         <View className="flex-row items-center gap-2">
           <Text className="font-mono text-fg" style={TEXT.hint}>
-            v{version.version}
+            {version.version}
           </Text>
           {installed ? <Pill tone="ok">installed</Pill> : null}
           {!installed && !compatible ? (
             <Pill tone="warn">needs newer firmware</Pill>
           ) : null}
-          <Text className="ml-auto font-mono text-dim" style={TEXT.eyebrow}>
-            {new Date(version.released_at).toLocaleDateString()}
+          <Text className="ml-auto font-sans text-dim" style={TEXT.hint}>
+            {released === null ? '' : relativeTime(released)}
           </Text>
         </View>
-        {version.changelog ? (
+        {notes ? (
           <Text className="mt-1 font-sans text-muted" style={TEXT.hint}>
-            {version.changelog}
+            {notes}
           </Text>
         ) : null}
         <View className="mt-1 flex-row items-center gap-2">
-          <Text
-            className="min-w-0 flex-1 font-mono text-dim"
-            style={TEXT.eyebrow}
-          >
+          <Text className="min-w-0 flex-1 font-sans text-dim" style={TEXT.hint}>
             needs firmware {version.min_libbridgething_version} ·{' '}
             {formatBytes(version.download.size)}
           </Text>

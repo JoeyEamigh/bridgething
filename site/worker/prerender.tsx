@@ -1,36 +1,32 @@
 import { renderToString } from 'preact-render-to-string';
 import { AppDetail } from '../src/components/store/AppDetail.tsx';
-import { StoreBrowser } from '../src/components/store/StoreBrowser.tsx';
-import { appIdFromPath } from '../src/lib/app-routes.ts';
+import { SourcesPage } from '../src/components/store/SourcesPage.tsx';
+import { StoreBrowse } from '../src/components/store/StoreBrowse.tsx';
+import { Storefront } from '../src/components/store/Storefront.tsx';
+import type { StoreRoute } from '../src/lib/app-routes.ts';
 import type { StoreData } from '../src/lib/directory-client.ts';
 
 export const STORE_DATA_ID = 'store-data';
 
-const STORE_ROUTES = ['/apps', '/apps/'];
-
 const ISLAND_END = '<!--astro:end-->';
 
-export function wantsStoreData(pathname: string): boolean {
-  return STORE_ROUTES.includes(pathname) || appIdFromPath(pathname) !== null;
-}
-
-function island(pathname: string, data: StoreData): { selector: string; html: string } {
-  if (STORE_ROUTES.includes(pathname)) {
-    return {
-      selector: 'astro-island[component-export="StoreBrowser"]',
-      html: renderToString(<StoreBrowser initial={[]} data={data} />),
-    };
+function island(route: StoreRoute, href: string, data: StoreData): { component: string; html: string } {
+  switch (route.page) {
+    case 'front':
+      return { component: 'Storefront', html: renderToString(<Storefront data={data} />) };
+    case 'browse':
+      return { component: 'StoreBrowse', html: renderToString(<StoreBrowse data={data} href={href} />) };
+    case 'app':
+      return { component: 'AppDetail', html: renderToString(<AppDetail baked={null} data={data} href={href} />) };
+    case 'sources':
+      return { component: 'SourcesPage', html: renderToString(<SourcesPage data={data} />) };
   }
-  return {
-    selector: 'astro-island[component-export="AppDetail"]',
-    html: renderToString(<AppDetail baked={null} data={data} path={pathname} />),
-  };
 }
 
-export function injectStoreData(asset: Response, pathname: string, data: string): Response {
+export function injectStoreData(asset: Response, route: StoreRoute, href: string, data: string): Response {
   const response = new Response(asset.body, asset);
   response.headers.set('cache-control', 'public, max-age=0, s-maxage=60');
-  const rendered = island(pathname, JSON.parse(data) as StoreData);
+  const rendered = island(route, href, JSON.parse(data) as StoreData);
 
   return new HTMLRewriter()
     .on(`script#${STORE_DATA_ID}`, {
@@ -38,7 +34,7 @@ export function injectStoreData(asset: Response, pathname: string, data: string)
         element.setInnerContent(data.replace(/</g, '\\u003c'), { html: true });
       },
     })
-    .on(rendered.selector, {
+    .on(`astro-island[component-export="${rendered.component}"]`, {
       element(element) {
         element.setInnerContent(rendered.html + ISLAND_END, { html: true });
       },

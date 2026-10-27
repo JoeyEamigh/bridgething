@@ -210,12 +210,13 @@ var require_validator = __commonJS(function(exports, module) {
   var formats0 = require_formats().fullFormats.uri;
   var formats2 = require_formats().fullFormats["date-time"];
   var func1 = require_ucs2length().default;
-  var schema33 = { type: "object", additionalProperties: true, description: "One installable webapp. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["id", "name", "description", "author", "icon", "homepage", "source", "versions"], properties: { id: { $ref: "#/$defs/Uuid" }, name: { type: "string", minLength: 1, maxLength: 100, description: "Display name." }, description: { type: "string", minLength: 1, maxLength: 300, description: "One-line tagline for store cards." }, author: { type: "string", minLength: 1, maxLength: 100 }, icon: { type: ["string", "null"], format: "uri", description: "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then." }, screenshots: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", format: "uri" }, description: "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array." }, homepage: { type: ["string", "null"], format: "uri" }, source: { type: ["string", "null"], format: "uri", description: "Repository or source URL, for users who want to check it themselves." }, versions: { type: "array", minItems: 1, items: { $ref: "#/$defs/AppVersion" }, description: "Published versions, newest-first. The companion installs the newest version compatible with the connected device." } } };
+  var schema33 = { type: "object", additionalProperties: true, description: "One installable webapp. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["id", "name", "description", "author", "icon", "homepage", "source", "versions"], properties: { id: { $ref: "#/$defs/Uuid" }, name: { type: "string", minLength: 1, maxLength: 100, description: "Display name." }, description: { type: "string", minLength: 1, maxLength: 300, description: "One-line tagline for store cards." }, author: { type: "string", minLength: 1, maxLength: 100 }, icon: { type: ["string", "null"], format: "uri", description: "Hosted square icon. The publish step extracts the bundle's icon and uploads it; null until then." }, screenshots: { type: "array", minItems: 1, maxItems: 6, items: { type: "string", format: "uri" }, description: "Captures of the app running on a device, 800x480 landscape. The store shows the first one on the listing. Omit the key entirely rather than sending an empty array." }, categories: { type: "array", minItems: 1, maxItems: 2, uniqueItems: true, items: { type: "string", pattern: "^[a-z][a-z-]{0,31}$" }, description: "Store categories, at most two, from the vocabulary in @bridgething/catalog (CATEGORIES). Clients ignore slugs they do not know, so a newer category never breaks an older client. Omit the key rather than sending an empty array." }, homepage: { type: ["string", "null"], format: "uri" }, source: { type: ["string", "null"], format: "uri", description: "Repository or source URL, for users who want to check it themselves." }, versions: { type: "array", minItems: 1, items: { $ref: "#/$defs/AppVersion" }, description: "Published versions, newest-first. The companion installs the newest version compatible with the connected device." } } };
   var formats8 = /^(?:urn:uuid:)?[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+  var pattern4 = new RegExp("^[a-z][a-z-]{0,31}$", "u");
   var schema35 = { type: "object", additionalProperties: true, description: "One published version. Unknown keys are tolerated so a catalog that carries a property added after a client shipped still validates; every key defined here is still checked strictly.", required: ["version", "released_at", "download", "permissions", "min_libbridgething_version", "changelog"], properties: { version: { $ref: "#/$defs/Version" }, released_at: { type: "string", format: "date-time" }, download: { $ref: "#/$defs/Download" }, settings: { $ref: "#/$defs/Download", description: "The bundle's settings page, hosted separately so a companion can fetch it over the internet instead of pulling it off the device over Bluetooth. Its sha256 MUST be the digest of the same bytes the bundle ships, which is what the device reports as settings_hash; a client verifies against the device's hash and falls back to the device when they disagree. Absent when the version ships no settings page." }, permissions: { type: "array", items: { type: "string", minLength: 1 }, uniqueItems: true, description: "Permission catalog keys this version requests (net.fetch, geo, ...). Shown at install, informational, never a gate." }, role: { enum: ["standard", "launcher"], description: "Mirrors the bundle manifest's role. A launcher can take the device's launcher slot and replace the built-in hub. Absent means standard." }, provides_overlay: { type: "boolean", description: "Whether this version ships an overlay the device can inject over every webapp. Absent means it does not." }, extension: { $ref: "#/$defs/Extension" }, min_libbridgething_version: { $ref: "#/$defs/Semver" }, changelog: { type: ["string", "null"], description: "Markdown changelog for this version." } } };
-  var pattern4 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$", "u");
-  var pattern6 = new RegExp("^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$", "u");
-  var pattern5 = new RegExp("^[a-f0-9]{64}$", "u");
+  var pattern5 = new RegExp("^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$", "u");
+  var pattern7 = new RegExp("^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$", "u");
+  var pattern6 = new RegExp("^[a-f0-9]{64}$", "u");
   function validate23(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
     let vErrors = null;
     let errors = 0;
@@ -313,7 +314,7 @@ var require_validator = __commonJS(function(exports, module) {
       if (data.sha256 !== undefined) {
         let data2 = data.sha256;
         if (typeof data2 === "string") {
-          if (!pattern5.test(data2)) {
+          if (!pattern6.test(data2)) {
             const err8 = { instancePath: instancePath + "/sha256", schemaPath: "#/$defs/Sha256/pattern", keyword: "pattern", params: { pattern: "^[a-f0-9]{64}$" }, message: 'must match pattern "' + "^[a-f0-9]{64}$" + '"' };
             if (vErrors === null) {
               vErrors = [err8];
@@ -431,7 +432,7 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-          if (!pattern4.test(data0)) {
+          if (!pattern5.test(data0)) {
             const err8 = { instancePath: instancePath + "/version", schemaPath: "#/$defs/Version/pattern", keyword: "pattern", params: { pattern: "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" }, message: 'must match pattern "' + "^[A-Za-z0-9](?:[A-Za-z0-9.+\\-]*[A-Za-z0-9])?$" + '"' };
             if (vErrors === null) {
               vErrors = [err8];
@@ -681,7 +682,7 @@ var require_validator = __commonJS(function(exports, module) {
       if (data.min_libbridgething_version !== undefined) {
         let data12 = data.min_libbridgething_version;
         if (typeof data12 === "string") {
-          if (!pattern6.test(data12)) {
+          if (!pattern7.test(data12)) {
             const err27 = { instancePath: instancePath + "/min_libbridgething_version", schemaPath: "#/$defs/Semver/pattern", keyword: "pattern", params: { pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" }, message: 'must match pattern "' + "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[.+\\-][0-9A-Za-z.\\-]+)?$" + '"' };
             if (vErrors === null) {
               vErrors = [err27];
@@ -1000,20 +1001,20 @@ var require_validator = __commonJS(function(exports, module) {
           errors++;
         }
       }
-      if (data.homepage !== undefined) {
-        let data7 = data.homepage;
-        if (typeof data7 !== "string" && data7 !== null) {
-          const err26 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/type", keyword: "type", params: { type: schema33.properties.homepage.type }, message: "must be string,null" };
-          if (vErrors === null) {
-            vErrors = [err26];
-          } else {
-            vErrors.push(err26);
+      if (data.categories !== undefined) {
+        let data7 = data.categories;
+        if (Array.isArray(data7)) {
+          if (data7.length > 2) {
+            const err26 = { instancePath: instancePath + "/categories", schemaPath: "#/properties/categories/maxItems", keyword: "maxItems", params: { limit: 2 }, message: "must NOT have more than 2 items" };
+            if (vErrors === null) {
+              vErrors = [err26];
+            } else {
+              vErrors.push(err26);
+            }
+            errors++;
           }
-          errors++;
-        }
-        if (typeof data7 === "string") {
-          if (!formats0(data7)) {
-            const err27 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+          if (data7.length < 1) {
+            const err27 = { instancePath: instancePath + "/categories", schemaPath: "#/properties/categories/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
             if (vErrors === null) {
               vErrors = [err27];
             } else {
@@ -1021,52 +1022,54 @@ var require_validator = __commonJS(function(exports, module) {
             }
             errors++;
           }
-        }
-      }
-      if (data.source !== undefined) {
-        let data8 = data.source;
-        if (typeof data8 !== "string" && data8 !== null) {
-          const err28 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/type", keyword: "type", params: { type: schema33.properties.source.type }, message: "must be string,null" };
-          if (vErrors === null) {
-            vErrors = [err28];
-          } else {
-            vErrors.push(err28);
-          }
-          errors++;
-        }
-        if (typeof data8 === "string") {
-          if (!formats0(data8)) {
-            const err29 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
-            if (vErrors === null) {
-              vErrors = [err29];
-            } else {
-              vErrors.push(err29);
-            }
-            errors++;
-          }
-        }
-      }
-      if (data.versions !== undefined) {
-        let data9 = data.versions;
-        if (Array.isArray(data9)) {
-          if (data9.length < 1) {
-            const err30 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
-            if (vErrors === null) {
-              vErrors = [err30];
-            } else {
-              vErrors.push(err30);
-            }
-            errors++;
-          }
-          const len1 = data9.length;
+          const len1 = data7.length;
           for (let i1 = 0;i1 < len1; i1++) {
-            if (!validate22(data9[i1], { instancePath: instancePath + "/versions/" + i1, parentData: data9, parentDataProperty: i1, rootData, dynamicAnchors })) {
-              vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
-              errors = vErrors.length;
+            let data8 = data7[i1];
+            if (typeof data8 === "string") {
+              if (!pattern4.test(data8)) {
+                const err28 = { instancePath: instancePath + "/categories/" + i1, schemaPath: "#/properties/categories/items/pattern", keyword: "pattern", params: { pattern: "^[a-z][a-z-]{0,31}$" }, message: 'must match pattern "' + "^[a-z][a-z-]{0,31}$" + '"' };
+                if (vErrors === null) {
+                  vErrors = [err28];
+                } else {
+                  vErrors.push(err28);
+                }
+                errors++;
+              }
+            } else {
+              const err29 = { instancePath: instancePath + "/categories/" + i1, schemaPath: "#/properties/categories/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+              if (vErrors === null) {
+                vErrors = [err29];
+              } else {
+                vErrors.push(err29);
+              }
+              errors++;
+            }
+          }
+          let i2 = data7.length;
+          let j0;
+          if (i2 > 1) {
+            const indices0 = {};
+            for (;i2--; ) {
+              let item0 = data7[i2];
+              if (typeof item0 !== "string") {
+                continue;
+              }
+              if (typeof indices0[item0] == "number") {
+                j0 = indices0[item0];
+                const err30 = { instancePath: instancePath + "/categories", schemaPath: "#/properties/categories/uniqueItems", keyword: "uniqueItems", params: { i: i2, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i2 + " are identical)" };
+                if (vErrors === null) {
+                  vErrors = [err30];
+                } else {
+                  vErrors.push(err30);
+                }
+                errors++;
+                break;
+              }
+              indices0[item0] = i2;
             }
           }
         } else {
-          const err31 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+          const err31 = { instancePath: instancePath + "/categories", schemaPath: "#/properties/categories/type", keyword: "type", params: { type: "array" }, message: "must be array" };
           if (vErrors === null) {
             vErrors = [err31];
           } else {
@@ -1075,12 +1078,87 @@ var require_validator = __commonJS(function(exports, module) {
           errors++;
         }
       }
+      if (data.homepage !== undefined) {
+        let data9 = data.homepage;
+        if (typeof data9 !== "string" && data9 !== null) {
+          const err32 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/type", keyword: "type", params: { type: schema33.properties.homepage.type }, message: "must be string,null" };
+          if (vErrors === null) {
+            vErrors = [err32];
+          } else {
+            vErrors.push(err32);
+          }
+          errors++;
+        }
+        if (typeof data9 === "string") {
+          if (!formats0(data9)) {
+            const err33 = { instancePath: instancePath + "/homepage", schemaPath: "#/properties/homepage/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+            if (vErrors === null) {
+              vErrors = [err33];
+            } else {
+              vErrors.push(err33);
+            }
+            errors++;
+          }
+        }
+      }
+      if (data.source !== undefined) {
+        let data10 = data.source;
+        if (typeof data10 !== "string" && data10 !== null) {
+          const err34 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/type", keyword: "type", params: { type: schema33.properties.source.type }, message: "must be string,null" };
+          if (vErrors === null) {
+            vErrors = [err34];
+          } else {
+            vErrors.push(err34);
+          }
+          errors++;
+        }
+        if (typeof data10 === "string") {
+          if (!formats0(data10)) {
+            const err35 = { instancePath: instancePath + "/source", schemaPath: "#/properties/source/format", keyword: "format", params: { format: "uri" }, message: 'must match format "' + "uri" + '"' };
+            if (vErrors === null) {
+              vErrors = [err35];
+            } else {
+              vErrors.push(err35);
+            }
+            errors++;
+          }
+        }
+      }
+      if (data.versions !== undefined) {
+        let data11 = data.versions;
+        if (Array.isArray(data11)) {
+          if (data11.length < 1) {
+            const err36 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+            if (vErrors === null) {
+              vErrors = [err36];
+            } else {
+              vErrors.push(err36);
+            }
+            errors++;
+          }
+          const len2 = data11.length;
+          for (let i3 = 0;i3 < len2; i3++) {
+            if (!validate22(data11[i3], { instancePath: instancePath + "/versions/" + i3, parentData: data11, parentDataProperty: i3, rootData, dynamicAnchors })) {
+              vErrors = vErrors === null ? validate22.errors : vErrors.concat(validate22.errors);
+              errors = vErrors.length;
+            }
+          }
+        } else {
+          const err37 = { instancePath: instancePath + "/versions", schemaPath: "#/properties/versions/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+          if (vErrors === null) {
+            vErrors = [err37];
+          } else {
+            vErrors.push(err37);
+          }
+          errors++;
+        }
+      }
     } else {
-      const err32 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+      const err38 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
       if (vErrors === null) {
-        vErrors = [err32];
+        vErrors = [err38];
       } else {
-        vErrors.push(err32);
+        vErrors.push(err38);
       }
       errors++;
     }

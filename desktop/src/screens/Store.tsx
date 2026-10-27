@@ -1,23 +1,24 @@
 import {
-  aggregate,
-  compareVersions,
-  describeExtensionPermissions,
-  extensionOf,
+  browse,
+  changelogText,
   failureLine,
   installsLabel,
+  isLauncher,
+  isOverlay,
+  listingKindLabel,
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
+  queryTitle,
   recommendedSources,
-  sortNewestFirst,
+  search,
+  SORT_LABELS,
   STORE_COPY,
-  versionCompatible,
-  webHref,
+  storefront,
   type AppExtension,
-  type AppVersion,
-  type Catalog,
   type CatalogAppListing,
   type CatalogSnapshot,
-  type InstalledWebapp,
+  type Shelf,
+  type StoreSort,
 } from '@bridgething/catalog';
 import {
   Button,
@@ -29,37 +30,53 @@ import {
   ScreenHeader,
   SectionEmpty,
   SectionHeader,
+  Segmented,
   Spinner,
 } from '@bridgething/ui';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 
 import { ConfirmInstall, InstallButton, useInstaller } from '../components/Install.tsx';
 import { BackButton, Disclosure, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
+import {
+  AppList,
+  AppTiles,
+  CardGrid,
+  Chips,
+  Featured,
+  RankedList,
+  RefreshAction,
+  ShelfCards,
+} from '../components/Storefront.tsx';
 import { useDesktop } from '../desktop.ts';
 import { sideloadConsent } from '../lib/extension.ts';
-import { bytes, day } from '../lib/format.ts';
+import { since } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
-import { humanizePermission } from '../lib/permissions.ts';
 import { pickArtifact } from '../lib/picker.ts';
 import { CatalogIcon } from '../lib/webapp-icon.tsx';
-import { PATHS } from '../routes.ts';
-import { catalogFor, deviceContext, mergedApps, storeListings } from '../stores/catalog.ts';
+import { browseQuery, PATHS } from '../routes.ts';
+import { sourceListings, storeListings, type StoreListings } from '../stores/catalog.ts';
 import { catalogSources } from '../stores/session.ts';
 
-export function StoreRoute(): VNode {
-  const { route } = useLocation();
-  const { vouched, community, subscribed, snapshot, pending, error, refresh } = storeListings();
-  const [query, setQuery] = useState('');
+type Meta = (listing: CatalogAppListing) => string | null;
 
+const META: Record<StoreSort, Meta> = {
+  popular: listing => installsLabel(listing.installs) ?? listingKindLabel(listing),
+  trending: listing => installsLabel(listing.installs) ?? listingKindLabel(listing),
+  new: listing => listingKindLabel(listing),
+  updated: listing =>
+    listing.newestCompatible
+      ? `v${listing.newestCompatible.version} · ${since(listing.newestCompatible.released_at)}`
+      : listingKindLabel(listing),
+};
+
+const SORT_OPTIONS = (['popular', 'new', 'updated'] as const).map(value => ({ value, label: SORT_LABELS[value] }));
+
+export function StoreRoute(): VNode {
+  const store = storeListings();
+  const [query, setQuery] = useState('');
   const searching = query.trim().length > 0;
-  const matches = (listing: CatalogAppListing) => matchesQuery(listing, query);
-  const apps = vouched.filter(matches);
-  const others = community.filter(matches);
-  const updates = [...vouched, ...community].filter(listing => listing.updateAvailable);
-  const open = (listing: CatalogAppListing) => route(PATHS.storeApp(listing.app.id));
 
   return (
     <Screen>
@@ -77,133 +94,137 @@ export function StoreRoute(): VNode {
         }
       />
 
-      {updates.length > 0 && !searching ? (
-        <Section>
-          <SectionHeader title="updates" />
-          <ListGroup>
-            {updates.map(listing => (
-              <UpdateRow key={listing.app.id} listing={listing} />
-            ))}
-          </ListGroup>
-        </Section>
-      ) : null}
+      {searching ? <SearchResults listings={store.listings} query={query} /> : <StoreHome store={store} />}
 
-      {searching && apps.length === 0 ? (
-        others.length === 0 ? (
-          <SectionEmpty class="mb-9">no matches</SectionEmpty>
-        ) : null
-      ) : (
-        <Section>
-          <SectionHeader title={STORE_COPY.appsTitle} action="refresh" pending={pending} onAction={refresh} />
-          {pending && vouched.length === 0 ? (
-            <SectionEmpty>
-              <Spinner class="mx-auto" />
-            </SectionEmpty>
-          ) : apps.length === 0 ? (
-            <SectionEmpty>{STORE_COPY.appsEmpty}</SectionEmpty>
-          ) : (
-            <CardGrid listings={apps} onOpen={open} />
-          )}
-          {snapshot.failures.length > 0 ? <Hint>{failureLine(snapshot.failures.length)}</Hint> : null}
-          {error ? <ErrorNote>{error}</ErrorNote> : null}
-        </Section>
-      )}
+      {store.snapshot.failures.length > 0 ? <Hint>{failureLine(store.snapshot.failures.length)}</Hint> : null}
+      {store.error ? <ErrorNote>{store.error}</ErrorNote> : null}
 
-      {others.length > 0 ? (
-        <Section>
-          <SectionHeader title={STORE_COPY.communityTitle} hint={STORE_COPY.communityNote} />
-          <CardGrid listings={others} onOpen={open} />
-        </Section>
-      ) : null}
+      <div class="mt-12">
+        <Disclosure title="sources">
+          <MySources subscribed={store.subscribed} pending={catalogSources.pending.value} />
+          <SuggestedSources snapshot={store.snapshot} subscribed={store.subscribed} />
+          <BrowseByUrl />
+        </Disclosure>
 
-      <Disclosure title="sources">
-        <MySources subscribed={subscribed} pending={catalogSources.pending.value} />
-        <SuggestedSources snapshot={snapshot} subscribed={subscribed} />
-        <BrowseByUrl />
-      </Disclosure>
-
-      <Disclosure title="install from a file">
-        <SideloadBundle />
-      </Disclosure>
+        <Disclosure title="install from a file">
+          <SideloadBundle />
+        </Disclosure>
+      </div>
     </Screen>
   );
 }
 
-function matchesQuery(listing: CatalogAppListing, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (needle.length === 0) return true;
-  const { name, description, author } = listing.app;
-  return [name, description, author].some(field => field.toLowerCase().includes(needle));
-}
+function StoreHome({ store }: { store: StoreListings }): VNode {
+  const { listings, pin, pending, refresh } = store;
+  const front = useMemo(() => storefront({ listings, pin, now: new Date() }), [listings, pin]);
+  const updates = listings.filter(listing => listing.updateAvailable);
 
-function CardGrid({
-  listings,
-  onOpen,
-}: {
-  listings: CatalogAppListing[];
-  onOpen: (listing: CatalogAppListing) => void;
-}): VNode {
   return (
-    <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-      {listings.map(listing => (
-        <StoreCard key={`${listing.sourceUrl}:${listing.app.id}`} listing={listing} onOpen={() => onOpen(listing)} />
-      ))}
-    </div>
+    <>
+      <Chips
+        active={null}
+        categories={front.categories}
+        launchers={listings.some(isLauncher)}
+        overlays={listings.some(isOverlay)}
+        action={<RefreshAction pending={pending} onRefresh={refresh} />}
+      />
+
+      {listings.length === 0 ? (
+        <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : STORE_COPY.empty}</SectionEmpty>
+      ) : (
+        <>
+          {front.featured ? <Featured key={front.featured.app.id} listing={front.featured} /> : null}
+
+          {updates.length > 0 ? (
+            <Section>
+              <SectionHeader title="updates" />
+              <ListGroup>
+                {updates.map(listing => (
+                  <UpdateRow key={listing.app.id} listing={listing} />
+                ))}
+              </ListGroup>
+            </Section>
+          ) : null}
+
+          {front.shelves.map(shelf => (
+            <ShelfSection key={shelf.id} shelf={shelf} />
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
-function StoreCard({ listing, onOpen }: { listing: CatalogAppListing; onOpen: () => void }): VNode {
-  const installer = useInstaller(listing);
-  const { app, newestCompatible } = listing;
-  const shot = webHref(app.screenshots?.[0]);
-  const traits = [
-    newestCompatible?.role === 'launcher' ? 'home screen' : null,
-    newestCompatible?.provides_overlay ? 'overlay' : null,
-    extensionOf(newestCompatible) ? 'extension' : null,
-  ].filter(Boolean);
-  const byline = [app.author, installsLabel(listing.installs)].filter(Boolean).join(' · ');
+function ShelfSection({ shelf }: { shelf: Shelf }): VNode {
+  const { route } = useLocation();
 
   return (
-    <article class="flex min-w-0 flex-col border border-rule bg-screen">
-      <button
-        type="button"
-        class="flex min-w-0 flex-1 flex-col text-left transition-colors duration-150 hover:bg-neutral-soft focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2"
-        onClick={onOpen}>
-        {shot ? (
-          <img
-            src={shot}
-            alt=""
-            loading="lazy"
-            class="aspect-5/3 w-full border-b border-rule bg-bg object-cover"
-            onError={event => {
-              (event.currentTarget as HTMLImageElement).style.display = 'none';
-            }}
-          />
-        ) : (
-          <div class="flex aspect-5/3 w-full items-center justify-center border-b border-rule bg-bg">
-            <CatalogIcon url={app.icon} name={app.name} size="lg" />
-          </div>
-        )}
-        <div class="flex min-w-0 flex-1 flex-col gap-1.5 px-4 pt-3 pb-2">
-          <div class="flex min-w-0 items-center gap-2.5">
-            <CatalogIcon url={app.icon} name={app.name} size="sm" />
-            <div class="flex min-w-0 flex-col">
-              <span class="truncate text-row text-off-white">{app.name}</span>
-              <span class="truncate text-hint text-muted">{byline}</span>
-            </div>
-          </div>
-          <p class="m-0 line-clamp-2 text-hint leading-relaxed text-soft">{app.description}</p>
-        </div>
-      </button>
-      <div class="flex items-center justify-between gap-2 px-4 pb-3">
-        <span class="truncate font-mono text-eyebrow text-dim uppercase">{traits.join(' · ')}</span>
-        <InstallButton listing={listing} installer={installer} size="sm" />
-      </div>
-      {installer.failure ? (
-        <p class="m-0 border-t border-rule px-4 py-2 text-hint text-err">{installer.failure}</p>
+    <Section>
+      <SectionHeader title={shelf.title} action="see all" onAction={() => route(PATHS.storeBrowse(shelf.more))} />
+      {shelf.id === 'essentials' ? (
+        <AppTiles listings={shelf.listings} />
+      ) : shelf.id === 'popular' ? (
+        <RankedList listings={shelf.listings} />
+      ) : (
+        <ShelfCards listings={shelf.listings} meta={META[shelf.more.sort]} />
+      )}
+    </Section>
+  );
+}
+
+function SearchResults({ listings, query }: { listings: CatalogAppListing[]; query: string }): VNode {
+  const results = search(listings, query);
+
+  return (
+    <Section>
+      <SectionHeader title="results" />
+      {results.length === 0 ? <SectionEmpty>{STORE_COPY.noMatches}</SectionEmpty> : <AppList listings={results} />}
+    </Section>
+  );
+}
+
+export function StoreBrowseRoute({ query }: { query: Record<string, string> }): VNode {
+  const { route } = useLocation();
+  const { listings, pending } = storeListings();
+  const browsing = browseQuery(query);
+  const { filter, sort } = browsing;
+  const categories = useMemo(() => storefront({ listings, pin: null, now: new Date() }).categories, [listings]);
+  const shown = browse(listings, browsing);
+  const narrowed = filter !== null && filter.kind !== 'author';
+
+  return (
+    <Screen>
+      <BackButton>back</BackButton>
+      <ScreenHeader
+        title={queryTitle(browsing)}
+        trailing={
+          narrowed ? (
+            <Segmented<StoreSort>
+              label="sort"
+              size="sm"
+              options={SORT_OPTIONS}
+              value={sort}
+              onChange={next => route(PATHS.storeBrowse({ filter, sort: next }), true)}
+            />
+          ) : undefined
+        }
+      />
+
+      {narrowed ? (
+        <Chips
+          active={filter}
+          categories={categories}
+          launchers={listings.some(isLauncher)}
+          overlays={listings.some(isOverlay)}
+        />
       ) : null}
-      {installer.dialog}
-    </article>
+
+      {shown.length === 0 ? (
+        <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : STORE_COPY.empty}</SectionEmpty>
+      ) : (
+        <CardGrid listings={shown} meta={META[sort]} />
+      )}
+    </Screen>
   );
 }
 
@@ -216,7 +237,7 @@ function UpdateRow({ listing }: { listing: CatalogAppListing }): VNode {
       <ListRow
         icon={<CatalogIcon url={app.icon} name={app.name} size="sm" />}
         title={app.name}
-        subtitle={installer.failure ?? newestCompatible?.changelog ?? undefined}
+        subtitle={installer.failure ?? changelogText(newestCompatible?.changelog) ?? undefined}
         value={`${installedVersion} → ${newestCompatible?.version}`}
         trailing={<InstallButton listing={listing} installer={installer} size="sm" />}
       />
@@ -286,12 +307,9 @@ function MySources({ subscribed, pending }: { subscribed: string[]; pending: boo
 
 export function SourceRoute({ source }: { source: string }): VNode {
   const url = decodeURIComponent(source);
-  const { route } = useLocation();
-  const { installed, libVersion } = deviceContext();
-  const catalog = catalogFor(url);
+  const { listings, catalog } = sourceListings(url);
   const held = catalog.data.value;
   const pending = catalog.pending.value;
-  const listings = listingsFor(url, held, installed, libVersion);
 
   return (
     <Screen>
@@ -311,47 +329,17 @@ export function SourceRoute({ source }: { source: string }): VNode {
             <Spinner class="mx-auto" />
           </SectionEmpty>
         ) : listings.length === 0 ? (
-          <SectionEmpty>no apps</SectionEmpty>
+          <SectionEmpty>{STORE_COPY.empty}</SectionEmpty>
         ) : (
-          <CardGrid listings={listings} onOpen={listing => route(PATHS.storeSourceApp(url, listing.app.id))} />
+          <CardGrid
+            listings={listings}
+            meta={META.popular}
+            href={listing => PATHS.storeSourceApp(url, listing.app.id)}
+          />
         )}
       </Section>
     </Screen>
   );
-}
-
-export function SourceAppRoute({ source, appId }: { source: string; appId: string }): VNode {
-  const url = decodeURIComponent(source);
-  const id = decodeURIComponent(appId);
-  const { installed, libVersion } = deviceContext();
-  const catalog = catalogFor(url);
-  const listings = listingsFor(url, catalog.data.value, installed, libVersion);
-
-  return <AppScreen listing={listings.find(entry => entry.app.id === id) ?? null} loading={catalog.pending.value} />;
-}
-
-export function CatalogAppRoute({ appId }: { appId: string }): VNode {
-  const id = decodeURIComponent(appId);
-  const { vouched, community, pending } = storeListings();
-  const listings = [...vouched, ...community];
-
-  return <AppScreen listing={listings.find(entry => entry.app.id === id) ?? null} loading={pending} />;
-}
-
-function listingsFor(
-  url: string,
-  catalog: Catalog | null,
-  installed: InstalledWebapp[],
-  libVersion: string | null,
-): CatalogAppListing[] {
-  if (!catalog) return [];
-  return aggregate({
-    orderedCatalogs: [{ url, catalog }],
-    installed,
-    deviceLibVersion: libVersion,
-    installs: mergedApps().data.value.installs,
-    extensions: 'listed',
-  });
 }
 
 function SubscribeToggle({ url }: { url: string }): VNode {
@@ -380,194 +368,6 @@ function SubscribeToggle({ url }: { url: string }): VNode {
       onClick={() => void toggle()}>
       {held ? 'remove source' : 'add source'}
     </Button>
-  );
-}
-
-function AppScreen({ listing, loading }: { listing: CatalogAppListing | null; loading: boolean }): VNode {
-  if (!listing) {
-    return (
-      <Screen>
-        <BackButton>back</BackButton>
-        <SectionEmpty>{loading ? <Spinner class="mx-auto" /> : 'no longer listed'}</SectionEmpty>
-      </Screen>
-    );
-  }
-
-  return <AppDetail key={`${listing.sourceUrl}:${listing.app.id}`} listing={listing} />;
-}
-
-function AppDetail({ listing }: { listing: CatalogAppListing }): VNode {
-  const installer = useInstaller(listing);
-  const [allVersions, setAllVersions] = useState(false);
-  const { libVersion } = deviceContext();
-
-  const { app, sourceUrl, newestCompatible, installedVersion } = listing;
-  const extension = extensionOf(newestCompatible);
-  const ordered = sortNewestFirst(app.versions);
-  const newest = newestCompatible ?? ordered[0] ?? null;
-  const shown = allVersions ? ordered : ordered.slice(0, 3);
-  const shots = (app.screenshots ?? []).map(webHref).filter((url): url is string => url !== null);
-  const homepage = webHref(app.homepage);
-  const code = webHref(app.source);
-  const facts = [
-    app.author,
-    newest ? `v${newest.version}` : null,
-    newest ? day(newest.released_at) : null,
-    newest && newest.download.size > 0 ? bytes(newest.download.size) : null,
-    installsLabel(listing.installs),
-  ].filter(Boolean);
-
-  return (
-    <Screen>
-      <BackButton>back</BackButton>
-
-      <div class="mb-6 flex items-center gap-4">
-        <CatalogIcon url={app.icon} name={app.name} size="lg" />
-        <div class="flex min-w-0 flex-1 flex-col gap-1.5">
-          <h1 class="m-0 font-display text-hero font-medium tracking-display wrap-break-word">{app.name}</h1>
-          <span class="font-mono text-hint wrap-break-word text-muted">{facts.join(' · ')}</span>
-          <div class="flex flex-wrap items-center gap-1.5">
-            {installedVersion ? <Pill tone="ok">{`installed v${installedVersion}`}</Pill> : null}
-            {newestCompatible?.role === 'launcher' ? <Pill tone="neutral">home screen</Pill> : null}
-            {newestCompatible?.provides_overlay ? <Pill tone="neutral">overlay</Pill> : null}
-            {extension ? <Pill tone="accent">native extension</Pill> : null}
-          </div>
-        </div>
-        <div class="flex shrink-0 items-center gap-2">
-          {homepage ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Icon name="globe" size={13} />}
-              onClick={() => void openUrl(homepage)}>
-              homepage
-            </Button>
-          ) : null}
-          {code && code !== homepage ? (
-            <Button variant="ghost" size="sm" icon={<Icon name="file" size={13} />} onClick={() => void openUrl(code)}>
-              code
-            </Button>
-          ) : null}
-          <InstallButton listing={listing} installer={installer} />
-        </div>
-      </div>
-
-      {installer.failure ? <ErrorNote>{installer.failure}</ErrorNote> : null}
-
-      {shots.length > 0 ? (
-        <div class="mb-6 flex gap-3 overflow-x-auto pb-1">
-          {shots.map(shot => (
-            <img
-              key={shot}
-              src={shot}
-              alt=""
-              loading="lazy"
-              class="aspect-5/3 h-56 shrink-0 border border-rule bg-bg object-cover"
-            />
-          ))}
-        </div>
-      ) : null}
-
-      <p class="mb-8 text-body leading-relaxed text-off-white">{app.description}</p>
-
-      {newest?.changelog ? (
-        <Section>
-          <SectionHeader title="what's new" />
-          <p class="m-0 text-body leading-relaxed whitespace-pre-wrap text-soft">{newest.changelog}</p>
-        </Section>
-      ) : null}
-
-      {newestCompatible && newestCompatible.permissions.length > 0 ? (
-        <Section>
-          <SectionHeader title="permissions" />
-          <ListGroup>
-            {newestCompatible.permissions.map(permission => {
-              const copy = humanizePermission(permission);
-              return <ListRow key={permission} icon={<Icon name={copy.icon} />} title={copy.title} />;
-            })}
-          </ListGroup>
-        </Section>
-      ) : null}
-
-      {extension ? (
-        <Section>
-          <SectionHeader title="native extension" hint="runs on this computer" />
-          <ListGroup>
-            {describeExtensionPermissions(extension).map(grant => (
-              <ListRow key={grant} icon={<Icon name="shield" />} iconTint="accent" title={grant} />
-            ))}
-          </ListGroup>
-        </Section>
-      ) : null}
-
-      <Section>
-        <SectionHeader
-          title="versions"
-          action={app.versions.length > 3 ? (allVersions ? 'fewer' : `all ${app.versions.length}`) : undefined}
-          onAction={() => setAllVersions(open => !open)}
-        />
-        <ListGroup>
-          {shown.map(version => (
-            <VersionRow
-              key={version.version}
-              version={version}
-              installedVersion={installedVersion}
-              libVersion={libVersion}
-              installing={installer.waitingVersion}
-              busy={installer.busy}
-              onInstall={() => installer.start(version)}
-            />
-          ))}
-        </ListGroup>
-        <Hint>{sourceUrl}</Hint>
-      </Section>
-
-      {installer.dialog}
-    </Screen>
-  );
-}
-
-function VersionRow({
-  version,
-  installedVersion,
-  libVersion,
-  installing,
-  busy,
-  onInstall,
-}: {
-  version: AppVersion;
-  installedVersion: string | null;
-  libVersion: string | null;
-  installing: string | null;
-  busy: boolean;
-  onInstall: () => void;
-}): VNode {
-  const here = version.version === installedVersion;
-  const older = installedVersion !== null && compareVersions(version.version, installedVersion) < 0;
-
-  return (
-    <ListRow
-      title={`v${version.version}`}
-      subtitle={version.changelog ?? undefined}
-      value={day(version.released_at)}
-      trailing={
-        here ? (
-          <Pill tone="ok">installed</Pill>
-        ) : !versionCompatible(version, libVersion) ? (
-          <Pill tone="warn">{STORE_COPY.needsFirmware}</Pill>
-        ) : (
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<Icon name="download" size={13} />}
-            loading={installing === version.version}
-            disabled={busy}
-            onClick={onInstall}>
-            {older ? 'roll back' : 'install'}
-          </Button>
-        )
-      }
-    />
   );
 }
 

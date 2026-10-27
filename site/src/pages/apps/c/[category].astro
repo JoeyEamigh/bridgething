@@ -1,0 +1,10 @@
+---
+import { CATEGORIES } from '@bridgething/catalog';
+import BrowsePage from '../../../components/store/BrowsePage.astro';
+
+export function getStaticPaths() {
+  return CATEGORIES.map(category => ({ params: { category } }));
+}
+---
+
+<BrowsePage />

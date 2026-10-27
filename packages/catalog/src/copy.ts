@@ -1,25 +1,17 @@
-import type { CatalogAppListing } from './resolve.ts';
+import type { StoreSource } from './store.ts';
 
 export const STORE_COPY = {
-  appsTitle: 'apps',
-  appsEmpty: 'no apps',
-  communityTitle: 'community',
-  communityNote: 'unreviewed',
-  communityHint: 'from sources you have not added',
-  communityEmpty: 'nothing here',
-  suggestedTitle: 'suggested sources',
-  suggestedHint: 'listed in the bridgething directory',
-  suggestedEmpty: 'none',
+  empty: 'no apps',
+  noMatches: 'no matches',
   needsFirmware: 'needs newer firmware',
   unpublished: 'not published yet',
+  unreviewed: 'not reviewed by bridgething',
+  suggestedTitle: 'suggested sources',
+  suggestedEmpty: 'none',
 } as const;
 
 function plural(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? '' : 's'}`;
-}
-
-export function countLine(listings: number, sources: number): string {
-  return `${listings} across ${plural(sources, 'source')}`;
 }
 
 export function failureLine(failures: number): string {
@@ -34,12 +26,24 @@ export function alsoAvailableLabel(alsoAvailableFrom: readonly string[]): string
   return alsoAvailableFrom.length > 0 ? `also offered by ${plural(alsoAvailableFrom.length, 'other source')}` : null;
 }
 
-export function listingTraits(listing: CatalogAppListing): string[] {
-  const newest = listing.newestCompatible;
-  return [
-    newest ? `lib ${newest.min_libbridgething_version}` : null,
-    newest?.role === 'launcher' ? 'launcher' : null,
-    newest?.provides_overlay ? 'overlay' : null,
-    installsLabel(listing.installs),
-  ].filter((trait): trait is string => trait !== null);
+const PERMISSION_LABELS: Record<string, string> = {
+  'net.fetch': 'internet',
+  'net.ws': 'websockets',
+  'net.proxy': 'TCP tunnel',
+  geo: 'location',
+  notifications: 'notifications',
+  audio: 'sound',
+  'audio.tts': 'sound',
+  mic: 'microphone',
+};
+
+export function permissionLabel(permission: string): string {
+  return PERMISSION_LABELS[permission] ?? permission;
+}
+
+export function sourceLine(source: StoreSource | null | undefined): string {
+  if (!source) return STORE_COPY.unreviewed;
+  if (source.trust === 'official') return 'from bridgething';
+  if (source.trust === 'attested') return `from ${source.name}`;
+  return `from ${source.name} · ${STORE_COPY.unreviewed}`;
 }

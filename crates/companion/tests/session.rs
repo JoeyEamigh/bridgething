@@ -1608,7 +1608,7 @@ async fn opening_the_log_stream_seeds_the_session_so_far_ahead_of_the_lines_it_o
 #[tokio::test(flavor = "multi_thread")]
 async fn history_keeps_the_time_the_device_logged_it_and_live_lines_keep_their_arrival() {
   let link = Arc::new(HandLink::default());
-  let (session, _heard, _spool) = session(link.clone());
+  let (session, heard, _spool) = session(link.clone());
   session.start();
   link.connect(DEVICE).await;
   assert!(
@@ -1660,6 +1660,23 @@ async fn history_keeps_the_time_the_device_logged_it_and_live_lines_keep_their_a
   assert!(
     stamps[2].1 > 1_700_000_042_000,
     "a live line is stamped when it arrived, got {stamps:?}"
+  );
+  let announced = heard
+    .events()
+    .into_iter()
+    .filter_map(|event| match event {
+      SessionEvent::Log {
+        origin: LogOrigin::Device,
+        message,
+        ts_unix_ms,
+        ..
+      } => Some((message, ts_unix_ms)),
+      _ => None,
+    })
+    .collect::<Vec<_>>();
+  assert_eq!(
+    announced, stamps,
+    "the live event carries the same stamp the ring kept, so a seeded burst does not read as one instant"
   );
 }
 

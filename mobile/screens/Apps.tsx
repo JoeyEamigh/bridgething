@@ -5,6 +5,8 @@ import { Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
 import { Caret } from '../components/Caret';
+import { Chevron } from '../components/Chevron';
+import { CompanionUpdateBanner } from '../components/CompanionUpdateBanner';
 import { LinkRecovery } from '../components/LinkRecovery';
 import { ListGroup } from '../components/ListGroup';
 import { ListRow } from '../components/ListRow';
@@ -12,14 +14,14 @@ import { OtaCard } from '../components/OtaCard';
 import { PairNote } from '../components/PairNote';
 import { Pill } from '../components/Pill';
 import { Press } from '../components/Press';
-import { CompanionUpdateBanner } from '../components/CompanionUpdateBanner';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { SideloadSheet } from '../components/SideloadSheet';
+import { Spinner } from '../components/Spinner';
 import { WebappIcon } from '../components/WebappIcon';
 import { useUpdates } from '../lib/catalog';
 import { linkSummary } from '../lib/devices';
-import { useOta, useOtaProgress } from '../lib/ota';
+import { useOta, useOtaRun } from '../lib/ota';
 import {
   describePairOutcome,
   knownDevices,
@@ -37,11 +39,8 @@ export function AppsScreen({ navigation }: Props) {
   const peers = useSession(s => s.peers);
   const ledger = useSession(s => s.ledger);
   const known = knownDevices(ledger, peers);
-  const primary = known[0] ?? null;
-  const deviceId = primary?.id ?? null;
-  const connected = primary?.peer?.status === 'connected';
 
-  const [sideloadOpen, setSideloadOpen] = useState(false);
+  const [sideloadFor, setSideloadFor] = useState<string | null>(null);
 
   if (known.length === 0) {
     return (
@@ -53,13 +52,14 @@ export function AppsScreen({ navigation }: Props) {
   }
 
   const broken = known.find(d => d.peer?.status === 'linkFailed');
+  const many = known.length > 1;
 
   return (
     <ScrollScreen>
       <SideloadSheet
-        visible={sideloadOpen}
-        deviceId={deviceId}
-        onClose={() => setSideloadOpen(false)}
+        visible={sideloadFor != null}
+        deviceId={sideloadFor}
+        onClose={() => setSideloadFor(null)}
       />
 
       <CompanionUpdateBanner className="mb-4" />
@@ -81,6 +81,7 @@ export function AppsScreen({ navigation }: Props) {
               }
             />
           ))}
+          <PairRow />
         </ListGroup>
         {broken?.peer ? (
           <View className="mt-3">
@@ -89,41 +90,40 @@ export function AppsScreen({ navigation }: Props) {
         ) : null}
       </View>
 
-      {deviceId ? <FirmwareAttention deviceId={deviceId} /> : null}
-
-      <InstalledApps
-        deviceId={deviceId}
-        connected={connected}
-        navigation={navigation}
-      />
-
-      <Press onPress={() => setSideloadOpen(true)} className="mt-4">
-        <View className="flex-row items-center justify-between px-1 py-3">
-          <Text className="font-mono uppercase text-dim" style={TEXT.eyebrow}>
-            install from url or file
-          </Text>
-          <Text className="font-mono text-dim" style={TEXT.body}>
-            ›
-          </Text>
+      {known.map(device => (
+        <View key={device.id} className="mb-8">
+          <FirmwareAttention
+            deviceId={device.id}
+            title={many ? `firmware · ${device.displayName}` : 'firmware'}
+          />
+          <InstalledApps
+            deviceId={device.id}
+            title={many ? `on ${device.displayName}` : 'on your car thing'}
+            connected={device.peer?.status === 'connected'}
+            navigation={navigation}
+            onSideload={() => setSideloadFor(device.id)}
+          />
         </View>
-      </Press>
-
-      <View className="mt-4">
-        <PairButton label="pair another car thing" variant="secondary" />
-      </View>
+      ))}
     </ScrollScreen>
   );
 }
 
-function FirmwareAttention({ deviceId }: { deviceId: string }) {
+function FirmwareAttention({
+  deviceId,
+  title,
+}: {
+  deviceId: string;
+  title: string;
+}) {
   const available = useOta(s => s.available[deviceId]);
-  const progress = useOtaProgress(deviceId);
+  const run = useOtaRun(deviceId, 'firmware');
 
-  if (!available?.releaseVersion && !progress) return null;
+  if (!available?.releaseVersion && !run) return null;
 
   return (
     <View className="mb-8">
-      <SectionHeader title="firmware" />
+      <SectionHeader title={title} />
       <OtaCard deviceId={deviceId} />
     </View>
   );
@@ -131,14 +131,18 @@ function FirmwareAttention({ deviceId }: { deviceId: string }) {
 
 function InstalledApps({
   deviceId,
+  title,
   connected,
   navigation,
+  onSideload,
 }: {
-  deviceId: string | null;
+  deviceId: string;
+  title: string;
   connected: boolean;
   navigation: Props['navigation'];
+  onSideload: () => void;
 }) {
-  const { list, active } = useWebapps(deviceId);
+  const { list, active, listed } = useWebapps(deviceId);
   const { slots } = useSlots(deviceId);
   const updates = useUpdates(deviceId);
 
@@ -152,21 +156,18 @@ function InstalledApps({
 
   return (
     <View>
-      <SectionHeader title="on your car thing" />
-      {tiles.length === 0 ? (
-        <SectionEmpty>
-          {connected
-            ? 'waiting for your car thing to list its apps'
-            : 'connect your car thing to see what is on it'}
-        </SectionEmpty>
-      ) : (
+      <SectionHeader title={title} />
+      {tiles.length > 0 ? (
         <ListGroup>
           {tiles.map(tile => (
             <Press
               key={tile.id}
               testID={`webapp-row-${tile.name}`}
+              accessibilityRole="button"
+              accessibilityLabel={
+                tile.state ? `${tile.name}, ${tile.state.label}` : tile.name
+              }
               onPress={() =>
-                deviceId &&
                 navigation.navigate('WebappDetail', { deviceId, id: tile.id })
               }
             >
@@ -188,28 +189,36 @@ function InstalledApps({
                 {tile.state ? (
                   <Pill tone={tile.state.tone}>{tile.state.label}</Pill>
                 ) : null}
-                <Text className="font-mono text-dim" style={TEXT.body}>
-                  ›
-                </Text>
+                <Chevron />
               </View>
             </Press>
           ))}
         </ListGroup>
+      ) : connected && !listed ? (
+        <View className="items-center border border-rule bg-screen py-6">
+          <Spinner />
+        </View>
+      ) : (
+        <SectionEmpty>{connected ? 'no apps' : 'not connected'}</SectionEmpty>
       )}
 
-      {deviceId ? (
-        <View className="mt-4">
-          <ListGroup>
-            <ListRow
-              icon="LayoutGrid"
-              title="home screen"
-              subtitle={launcherName(list, launcherId)}
-              chevron
-              onPress={() => navigation.navigate('WebappSlots', { deviceId })}
-            />
-          </ListGroup>
-        </View>
-      ) : null}
+      <View className="mt-4">
+        <ListGroup>
+          <ListRow
+            icon="LayoutGrid"
+            title="home screen and overlay"
+            subtitle={launcherName(list, launcherId)}
+            chevron
+            onPress={() => navigation.navigate('WebappSlots', { deviceId })}
+          />
+          <ListRow
+            icon="Link"
+            title="install from url or file"
+            chevron
+            onPress={onSideload}
+          />
+        </ListGroup>
+      </View>
     </View>
   );
 }
@@ -222,13 +231,7 @@ function launcherName(
   return list.find(w => w.id === launcherId)?.name ?? 'an installed app';
 }
 
-function PairButton({
-  label,
-  variant,
-}: {
-  label: string;
-  variant: 'primary' | 'secondary';
-}) {
+function usePair() {
   const [pairing, setPairing] = useState(false);
   const [notice, setNotice] = useState<PairNotice | null>(null);
 
@@ -247,10 +250,35 @@ function PairButton({
     }
   };
 
+  return { pairing, notice, pair };
+}
+
+function PairRow() {
+  const { pairing, notice, pair } = usePair();
+  return (
+    <View>
+      <ListRow
+        icon="Plus"
+        iconTint="accent"
+        title="pair another car thing"
+        onPress={pair}
+        loading={pairing}
+      />
+      {notice ? (
+        <View className="px-4 pb-3">
+          <PairNote notice={notice} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PairButton() {
+  const { pairing, notice, pair } = usePair();
   return (
     <View className="gap-2">
-      <Button onPress={pair} loading={pairing} icon="Cable" variant={variant}>
-        {label}
+      <Button onPress={pair} loading={pairing} icon="Cable">
+        pair a car thing
       </Button>
       <PairNote notice={notice} />
     </View>
@@ -266,11 +294,8 @@ function NoDeviceHero({ onBrowseStore }: { onBrowseStore: () => void }) {
         </Text>
         <Caret />
       </View>
-      <Text className="mt-3 font-sans text-muted" style={TEXT.body}>
-        pair one to get started, or look through the store
-      </Text>
       <View className="mt-6 gap-2">
-        <PairButton label="pair a car thing" variant="primary" />
+        <PairButton />
         <Button onPress={onBrowseStore} icon="Store" variant="secondary">
           browse the store
         </Button>

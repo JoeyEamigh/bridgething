@@ -121,8 +121,8 @@ describe('phone log backfill', () => {
     r.diagnostics.useDiagnosticsStore.getState().setLocalLogStreaming(true);
     await settle();
 
-    r.emit('log', 'device', 'warn', 'from the car thing');
-    r.emit('log', 'local', 'info', 'from the phone');
+    r.emit('log', 'device', 'warn', 'from the car thing', 1000);
+    r.emit('log', 'local', 'info', 'from the phone', 2000);
     jest.advanceTimersByTime(200);
 
     const state = r.diagnostics.useDiagnosticsStore.getState();
@@ -133,13 +133,33 @@ describe('phone log backfill', () => {
     expect(messages(r)).toEqual(['from the car thing', 'from the phone']);
   });
 
+  it('a replayed burst keeps the times the device logged it, in order', async () => {
+    const r = rig();
+    await streaming(r);
+    r.native.__returns.set('deviceLogSnapshot', []);
+    r.diagnostics.useDiagnosticsStore.getState().setDeviceLogStreaming(true);
+    await settle();
+
+    r.emit('log', 'device', 'info', 'live after the toggle', 5000);
+    r.emit('log', 'device', 'info', 'an hour of history', 1000);
+    r.emit('log', 'device', 'info', 'a minute of history', 3000);
+    jest.advanceTimersByTime(200);
+
+    const device = r.diagnostics.useDiagnosticsStore.getState().logs.device;
+    expect(device.map(l => [l.message, l.ts])).toEqual([
+      ['an hour of history', 1000],
+      ['a minute of history', 3000],
+      ['live after the toggle', 5000],
+    ]);
+  });
+
   it('clearing the view empties both origins', async () => {
     const r = rig();
     await streaming(r);
     r.diagnostics.useDiagnosticsStore.getState().setLocalLogStreaming(true);
     await settle();
-    r.emit('log', 'device', 'info', 'from the car thing');
-    r.emit('log', 'local', 'info', 'from the phone');
+    r.emit('log', 'device', 'info', 'from the car thing', 1000);
+    r.emit('log', 'local', 'info', 'from the phone', 2000);
     jest.advanceTimersByTime(200);
     expect(messages(r)).toHaveLength(2);
 

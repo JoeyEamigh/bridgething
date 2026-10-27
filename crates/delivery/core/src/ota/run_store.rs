@@ -27,6 +27,24 @@ pub enum OtaRunOutcome {
   Cancelled,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OtaLane {
+  Firmware,
+  Webapp,
+}
+
+impl OtaLane {
+  pub const ALL: [OtaLane; 2] = [OtaLane::Firmware, OtaLane::Webapp];
+
+  pub fn of(kind: OtaKind) -> Self {
+    match kind {
+      OtaKind::InstalledWebapp => OtaLane::Webapp,
+      _ => OtaLane::Firmware,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum OtaRunPhase {
@@ -69,6 +87,18 @@ pub struct OtaRun {
   pub resumable: bool,
   pub webapp_id: Option<String>,
   pub webapp_name: Option<String>,
+}
+
+impl OtaRun {
+  pub fn lane(&self) -> OtaLane {
+    OtaLane::of(self.kind)
+  }
+}
+
+type RunKey = (String, OtaLane);
+
+fn key(device_id: &str, lane: OtaLane) -> RunKey {
+  (device_id.to_owned(), lane)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,7 +154,7 @@ pub struct OtaRunStore {
   clock: Arc<dyn Clock>,
   file: Option<PathBuf>,
   wrote_at_ms: u64,
-  runs: BTreeMap<String, OtaRun>,
+  runs: BTreeMap<RunKey, OtaRun>,
   available: BTreeMap<String, OtaAvailable>,
   poll: OtaPollStatus,
   queued: BTreeMap<String, Vec<(u64, WebappLabel)>>,
@@ -172,8 +202,14 @@ impl OtaRunStore {
     self.runs.values().collect()
   }
 
-  pub fn run(&self, device_id: &str) -> Option<&OtaRun> {
-    self.runs.get(device_id)
+  pub fn run(&self, device_id: &str, lane: OtaLane) -> Option<&OtaRun> {
+    self.runs.get(&key(device_id, lane))
+  }
+
+  pub fn device_runs(&self, device_id: &str) -> impl Iterator<Item = &OtaRun> {
+    OtaLane::ALL
+      .into_iter()
+      .filter_map(move |lane| self.runs.get(&key(device_id, lane)))
   }
 
   pub fn available(&self) -> Vec<&OtaAvailable> {
@@ -222,15 +258,14 @@ impl OtaRunStore {
 
   pub fn open_run_kind(&self, device_id: &str) -> Option<OtaKind> {
     self
-      .runs
-      .get(device_id)
-      .filter(|run| run.outcome.is_none())
+      .device_runs(device_id)
+      .find(|run| run.outcome.is_none())
       .map(|run| run.kind)
   }
 
-  pub fn dismiss(&mut self, device_id: &str) -> Option<OtaRun> {
-    self.runs.get(device_id)?.outcome?;
-    let mut cleared = self.runs.remove(device_id)?;
+  pub fn dismiss(&mut self, device_id: &str, lane: OtaLane) -> Option<OtaRun> {
+    self.runs.get(&key(device_id, lane))?.outcome?;
+    let mut cleared = self.runs.remove(&key(device_id, lane))?;
     cleared.phase = OtaRunPhase::Idle;
     self.persist();
     Some(cleared)
@@ -246,19 +281,26 @@ impl OtaRunStore {
     }))
   }
 
-  pub fn interrupt(&mut self, device_id: &str) -> Option<OtaRun> {
-    let run = self.runs.get_mut(device_id)?;
-    if run.outcome.is_some() || matches!(run.phase, OtaRunPhase::Reboot | OtaRunPhase::Confirming) {
-      return None;
+  pub fn interrupt(&mut self, device_id: &str) -> Vec<OtaRun> {
+    let mut interrupted = Vec::new();
+    for lane in OtaLane::ALL {
+      let Some(run) = self.runs.get_mut(&key(device_id, lane)) else {
+        continue;
+      };
+      if run.outcome.is_some() || matches!(run.phase, OtaRunPhase::Reboot | OtaRunPhase::Confirming) {
+        continue;
+      }
+      strand(run);
+      interrupted.push(run.clone());
     }
-    strand(run);
-    let interrupted = run.clone();
-    self.persist();
-    Some(interrupted)
+    if !interrupted.is_empty() {
+      self.persist();
+    }
+    interrupted
   }
 
   pub fn take_resume(&mut self, device_id: &str) -> Option<OtaResume> {
-    let run = self.runs.get_mut(device_id)?;
+    let run = self.runs.get_mut(&key(device_id, OtaLane::Firmware))?;
     if !run.resumable {
       return None;
     }
@@ -274,7 +316,7 @@ impl OtaRunStore {
     webapp_id: Option<&str>,
     webapp_name: Option<&str>,
   ) -> Option<OtaRun> {
-    let run = self.runs.get_mut(device_id)?;
+    let run = self.runs.get_mut(&key(device_id, OtaLane::Webapp))?;
     run.webapp_id = webapp_id.map(str::to_owned);
     run.webapp_name = webapp_name.map(str::to_owned);
     let annotated = run.clone();
@@ -292,7 +334,7 @@ impl OtaRunStore {
         continue;
       }
       run.identity = Some(identity.to_owned());
-      if let Some(held) = self.runs.get_mut(&run.device_id) {
+      if let Some(held) = self.runs.get_mut(&key(&run.device_id, run.lane())) {
         held.identity = Some(identity.to_owned());
         moved = true;
       }
@@ -386,17 +428,17 @@ impl OtaRunStore {
           webapp_id: None,
           webapp_name: None,
         };
-        self.runs.insert(device_id, run.clone());
+        self.runs.insert(key(&device_id, OtaLane::of(kind)), run.clone());
         vec![OtaStoreChange::Run(Box::new(run))]
       }
 
       OtaPollEvent::Progress {
         device_id,
+        kind,
         step_id,
         snapshot,
-        ..
       } => {
-        let Some(run) = self.runs.get_mut(&device_id) else {
+        let Some(run) = self.runs.get_mut(&key(&device_id, OtaLane::of(kind))) else {
           return Vec::new();
         };
         let before = run.phase;
@@ -410,8 +452,13 @@ impl OtaRunStore {
         vec![OtaStoreChange::Run(Box::new(run.clone()))]
       }
 
-      OtaPollEvent::Updated { device_id, version, .. } => {
-        let Some(run) = self.runs.get_mut(&device_id) else {
+      OtaPollEvent::Updated {
+        device_id,
+        kind,
+        version,
+      } => {
+        let lane = OtaLane::of(kind);
+        let Some(run) = self.runs.get_mut(&key(&device_id, lane)) else {
           return Vec::new();
         };
         run.phase = OtaRunPhase::Completed;
@@ -426,6 +473,9 @@ impl OtaRunStore {
           run.release_version = unset_if_empty(version);
         }
         let run = run.clone();
+        if lane == OtaLane::Webapp {
+          return vec![OtaStoreChange::Run(Box::new(run))];
+        }
         self.available.remove(&device_id);
 
         vec![
@@ -449,31 +499,34 @@ impl OtaRunStore {
         } else {
           OtaRunOutcome::Failed
         };
-        let run = self.runs.entry(device_id.clone()).or_insert_with(|| OtaRun {
-          run_id: Uuid::now_v7().to_string(),
-          device_id,
-          identity: None,
-          kind,
-          phase: OtaRunPhase::Failed,
-          steps: Vec::new(),
-          step_id: 0,
-          started_at_ms: now,
-          phase_started_at_ms: now,
-          stage_received: None,
-          stage_total: None,
-          rate_per_sec: None,
-          write_percent: None,
-          outcome: None,
-          error: None,
-          release_version: None,
-          daemon_version: None,
-          image_version: None,
-          channel: None,
-          root_url: None,
-          resumable: false,
-          webapp_id: None,
-          webapp_name: None,
-        });
+        let run = self
+          .runs
+          .entry(key(&device_id, OtaLane::of(kind)))
+          .or_insert_with(|| OtaRun {
+            run_id: Uuid::now_v7().to_string(),
+            device_id,
+            identity: None,
+            kind,
+            phase: OtaRunPhase::Failed,
+            steps: Vec::new(),
+            step_id: 0,
+            started_at_ms: now,
+            phase_started_at_ms: now,
+            stage_received: None,
+            stage_total: None,
+            rate_per_sec: None,
+            write_percent: None,
+            outcome: None,
+            error: None,
+            release_version: None,
+            daemon_version: None,
+            image_version: None,
+            channel: None,
+            root_url: None,
+            resumable: false,
+            webapp_id: None,
+            webapp_name: None,
+          });
         if run.resumable {
           return Vec::new();
         }
@@ -489,7 +542,7 @@ impl OtaRunStore {
   }
 }
 
-fn load(file: &Path) -> BTreeMap<String, OtaRun> {
+fn load(file: &Path) -> BTreeMap<RunKey, OtaRun> {
   let body = match std::fs::read_to_string(file) {
     Ok(body) => body,
     Err(e) if e.kind() == std::io::ErrorKind::NotFound => return BTreeMap::new(),
@@ -514,7 +567,7 @@ fn load(file: &Path) -> BTreeMap<String, OtaRun> {
     .into_iter()
     .map(|mut run| {
       strand(&mut run);
-      (run.device_id.clone(), run)
+      (key(&run.device_id, run.lane()), run)
     })
     .collect()
 }
@@ -625,7 +678,7 @@ mod tests {
   use libbridgething::OtaKind;
   use tempfile::TempDir;
 
-  use super::{OtaPollEvent, OtaRunOutcome, OtaRunPhase, OtaRunStore, RESUMABLE_REASON, RUNS_FILE};
+  use super::{OtaLane, OtaPollEvent, OtaRunOutcome, OtaRunPhase, OtaRunStore, RESUMABLE_REASON, RUNS_FILE};
   use crate::ota::{
     event::{OtaPhaseSnapshot, OtaPlanStep, OtaStepKind},
     harness::TestClock,
@@ -707,11 +760,13 @@ mod tests {
     let mut store = home.open();
     store.ingest(planned(), None);
     store.ingest(streaming(8 * 1024), None);
-    let before = store.run(DEVICE).cloned().expect("the planned run");
+    let before = store.run(DEVICE, OtaLane::Firmware).cloned().expect("the planned run");
 
     let reopened = home.open();
 
-    let after = reopened.run(DEVICE).expect("the run outlived its process");
+    let after = reopened
+      .run(DEVICE, OtaLane::Firmware)
+      .expect("the run outlived its process");
     assert_eq!(after.run_id, before.run_id);
     assert_eq!(after.channel.as_deref(), Some(CHANNEL));
     assert_eq!(after.root_url.as_deref(), Some(ROOT));
@@ -731,11 +786,14 @@ mod tests {
     let mut store = home.open();
     store.ingest(planned(), None);
     store.ingest(streaming(8 * 1024), None);
-    assert_eq!(store.run(DEVICE).expect("the run").phase, OtaRunPhase::Streaming);
+    assert_eq!(
+      store.run(DEVICE, OtaLane::Firmware).expect("the run").phase,
+      OtaRunPhase::Streaming
+    );
 
     let reopened = home.open();
 
-    let run = reopened.run(DEVICE).expect("the run");
+    let run = reopened.run(DEVICE, OtaLane::Firmware).expect("the run");
     assert_eq!(run.phase, OtaRunPhase::Failed);
     assert_eq!(run.outcome, Some(OtaRunOutcome::Failed));
     assert!(run.resumable, "the drive that owned it is gone, so it wants re-driving");
@@ -762,7 +820,7 @@ mod tests {
 
     let reopened = home.open();
 
-    let run = reopened.run(DEVICE).expect("the run");
+    let run = reopened.run(DEVICE, OtaLane::Firmware).expect("the run");
     assert_eq!(run.phase, OtaRunPhase::Reboot);
     assert!(
       run.outcome.is_none() && !run.resumable,
@@ -794,7 +852,7 @@ mod tests {
     let mut store = home.open();
     store.ingest(planned(), None);
     store.interrupt(DEVICE);
-    assert!(store.run(DEVICE).expect("the run").resumable);
+    assert!(store.run(DEVICE, OtaLane::Firmware).expect("the run").resumable);
 
     store.ingest(
       OtaPollEvent::Updated {
@@ -806,12 +864,12 @@ mod tests {
     );
 
     assert!(
-      !store.run(DEVICE).expect("the run").resumable,
+      !store.run(DEVICE, OtaLane::Firmware).expect("the run").resumable,
       "the update landed, so the older interrupt marker must not survive to re-drive it"
     );
     assert!(store.take_resume(DEVICE).is_none(), "and nothing may still pick it up");
     assert!(
-      !home.open().run(DEVICE).expect("the run").resumable,
+      !home.open().run(DEVICE, OtaLane::Firmware).expect("the run").resumable,
       "the cleared marker has to reach disk, or the next launch re-drives it"
     );
   }
@@ -869,10 +927,12 @@ mod tests {
     store.ingest(planned(), None);
     store.interrupt(DEVICE);
 
-    store.dismiss(DEVICE).expect("a settled run can be dismissed");
+    store
+      .dismiss(DEVICE, OtaLane::Firmware)
+      .expect("a settled run can be dismissed");
 
     assert!(
-      home.open().run(DEVICE).is_none(),
+      home.open().run(DEVICE, OtaLane::Firmware).is_none(),
       "a run the user waved away must not come back on the next launch"
     );
   }
@@ -883,12 +943,15 @@ mod tests {
     let mut store = home.open();
     store.ingest(planned(), None);
     store.ingest(streaming(8 * 1024), None);
-    assert_eq!(store.run(DEVICE).expect("the run").rate_per_sec, Some(150_000.0));
+    assert_eq!(
+      store.run(DEVICE, OtaLane::Firmware).expect("the run").rate_per_sec,
+      Some(150_000.0)
+    );
 
     let reopened = home.open();
 
     assert_eq!(
-      reopened.run(DEVICE).expect("the run").rate_per_sec,
+      reopened.run(DEVICE, OtaLane::Firmware).expect("the run").rate_per_sec,
       None,
       "the rate measures a link this process never held, and a stale one prints a fictional eta"
     );
@@ -933,20 +996,73 @@ mod tests {
 
     store.ingest(planned(), None);
 
-    assert!(store.run(DEVICE).is_some(), "the reducer surface still reduces");
+    assert!(
+      store.run(DEVICE, OtaLane::Firmware).is_some(),
+      "the reducer surface still reduces"
+    );
     assert!(!home.path().join(RUNS_FILE).exists(), "and it wrote nothing anywhere");
+  }
+
+  fn planned_webapp() -> OtaPollEvent {
+    OtaPollEvent::Planned {
+      device_id: DEVICE.into(),
+      kind: OtaKind::InstalledWebapp,
+      release: String::new(),
+      daemon_version: String::new(),
+      image_version: String::new(),
+      channel: String::new(),
+      root_url: String::new(),
+      steps: bandaid_plan(&[("webapp".into(), 4 * 1024)]),
+    }
   }
 
   #[tokio::test]
   async fn an_annotation_reaches_the_file() {
     let home = Home::new();
     let mut store = home.open();
-    store.ingest(planned(), None);
+    store.ingest(planned_webapp(), None);
 
     store.annotate_webapp(DEVICE, Some("hub"), Some("Hub"));
 
     let reopened = home.open();
-    assert_eq!(reopened.run(DEVICE).expect("the run").webapp_id.as_deref(), Some("hub"));
+    assert_eq!(
+      reopened
+        .run(DEVICE, OtaLane::Webapp)
+        .expect("the run")
+        .webapp_id
+        .as_deref(),
+      Some("hub")
+    );
+  }
+
+  #[tokio::test]
+  async fn a_store_install_does_not_displace_the_firmware_run_across_a_launch() {
+    let home = Home::new();
+    let mut store = home.open();
+    store.ingest(planned(), None);
+    store.ingest(
+      OtaPollEvent::Progress {
+        device_id: DEVICE.into(),
+        kind: OtaKind::Daemon,
+        step_id: 3,
+        snapshot: OtaPhaseSnapshot::Applying {
+          phase: libbridgething::OtaPhase::Reboot,
+          write_percent: 100,
+        },
+      },
+      None,
+    );
+    let firmware = store.run(DEVICE, OtaLane::Firmware).cloned().expect("the firmware run");
+
+    store.ingest(planned_webapp(), None);
+
+    let reopened = home.open();
+    assert_eq!(
+      reopened.run(DEVICE, OtaLane::Firmware).map(|run| &run.run_id),
+      Some(&firmware.run_id),
+      "the firmware run is still waiting on the reboot and must still be there to settle it"
+    );
+    assert!(reopened.run(DEVICE, OtaLane::Webapp).is_some());
   }
 
   #[test]
@@ -973,12 +1089,21 @@ mod tests {
     store.ingest(planned(), Some("8558R481Q61R"));
 
     assert_eq!(
-      store.run(DEVICE).expect("the run").identity.as_deref(),
+      store
+        .run(DEVICE, OtaLane::Firmware)
+        .expect("the run")
+        .identity
+        .as_deref(),
       Some("8558R481Q61R"),
       "the live run knows which device is behind the address it is driving"
     );
     assert_eq!(
-      home.open().run(DEVICE).expect("the run").identity.as_deref(),
+      home
+        .open()
+        .run(DEVICE, OtaLane::Firmware)
+        .expect("the run")
+        .identity
+        .as_deref(),
       Some("8558R481Q61R"),
       "and it survives the relaunch, which is the only time the address can have changed hands"
     );
@@ -991,7 +1116,12 @@ mod tests {
     store.ingest(planned(), None);
 
     assert!(
-      home.open().run(DEVICE).expect("the run").identity.is_none(),
+      home
+        .open()
+        .run(DEVICE, OtaLane::Firmware)
+        .expect("the run")
+        .identity
+        .is_none(),
       "an unstamped run claims nothing, so a resume falls back to trusting the address"
     );
   }
@@ -1001,12 +1131,12 @@ mod tests {
     let home = Home::new();
     let mut store = home.open();
     store.ingest(planned(), None);
-    let planned_at = store.run(DEVICE).expect("the run").started_at_ms;
+    let planned_at = store.run(DEVICE, OtaLane::Firmware).expect("the run").started_at_ms;
 
     let reopened = OtaRunStore::new(TestClock::new(), Some(home.path()));
 
     assert_eq!(
-      reopened.run(DEVICE).expect("the run").started_at_ms,
+      reopened.run(DEVICE, OtaLane::Firmware).expect("the run").started_at_ms,
       planned_at,
       "the timestamps a run was born with are its own, not the launch's"
     );
@@ -1030,7 +1160,10 @@ mod tests {
 
     let reopened = home.open();
 
-    assert!(reopened.run(DEVICE).is_some(), "the run itself did survive");
+    assert!(
+      reopened.run(DEVICE, OtaLane::Firmware).is_some(),
+      "the run itself did survive"
+    );
     assert!(
       reopened.available().is_empty(),
       "a device may have been updated by something else while the app was gone; the next poll re-derives it"

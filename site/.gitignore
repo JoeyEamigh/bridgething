@@ -3,6 +3,7 @@ dist/
 .astro/
 public/shell-fs.json
 public/shell-fs/
+public/car-thing-frame.webp
 .wrangler/
 .dev.vars
 apps/.compile-validator/

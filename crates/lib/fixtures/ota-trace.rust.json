@@ -110,7 +110,7 @@
     },
     {
       "component": "run_store",
-      "name": "a-second-plan-replaces-the-first-for-the-same-device",
+      "name": "a-store-install-plans-beside-the-firmware-run",
       "steps": [
         {
           "ret_available_daemon_version": null,
@@ -198,12 +198,15 @@
           "store_poll_error": null,
           "store_poll_last_polled_at": null,
           "store_run_device_ids": [
+            "AA:BB:CC:DD:EE:FF",
             "AA:BB:CC:DD:EE:FF"
           ],
           "store_run_outcomes": [
+            null,
             null
           ],
           "store_run_phases": [
+            "idle",
             "idle"
           ],
           "t_ms": 1000
@@ -1944,7 +1947,7 @@
     },
     {
       "component": "run_store",
-      "name": "progress-overwrites-the-run-kind",
+      "name": "a-tick-for-the-other-lane-moves-nothing",
       "steps": [
         {
           "ret_available_daemon_version": null,
@@ -1998,31 +2001,27 @@
           "ret_available_device_id": null,
           "ret_available_image_version": null,
           "ret_available_release_version": null,
-          "ret_changes": [
-            "run"
-          ],
+          "ret_changes": [],
           "ret_daemon_version": null,
-          "ret_device_id": "AA:BB:CC:DD:EE:FF",
+          "ret_device_id": null,
           "ret_error": null,
           "ret_image_version": null,
-          "ret_kind": "installedWebapp",
+          "ret_kind": null,
           "ret_open_kind": null,
           "ret_outcome": null,
-          "ret_phase": "writing",
-          "ret_phase_started_at_ms": 1000,
+          "ret_phase": null,
+          "ret_phase_started_at_ms": null,
           "ret_poll_error": null,
           "ret_poll_last_polled_at": null,
-          "ret_present": true,
+          "ret_present": false,
           "ret_rate_micros": null,
           "ret_release_version": null,
-          "ret_run_id_seq": 0,
+          "ret_run_id_seq": null,
           "ret_stage_received": null,
           "ret_stage_total": null,
-          "ret_started_at_ms": 0,
-          "ret_step_id": 0,
-          "ret_step_ids": [
-            0
-          ],
+          "ret_started_at_ms": null,
+          "ret_step_id": null,
+          "ret_step_ids": null,
           "ret_webapp_id": null,
           "ret_webapp_name": null,
           "ret_write_percent": null,
@@ -2036,7 +2035,7 @@
             null
           ],
           "store_run_phases": [
-            "writing"
+            "idle"
           ],
           "t_ms": 1000
         },
@@ -2079,7 +2078,7 @@
             null
           ],
           "store_run_phases": [
-            "writing"
+            "idle"
           ],
           "t_ms": 2000
         }
@@ -6231,12 +6230,11 @@
         },
         {
           "ret_available_daemon_version": null,
-          "ret_available_device_id": "AA:BB:CC:DD:EE:FF",
+          "ret_available_device_id": null,
           "ret_available_image_version": null,
           "ret_available_release_version": null,
           "ret_changes": [
-            "run",
-            "available"
+            "run"
           ],
           "ret_daemon_version": null,
           "ret_device_id": "AA:BB:CC:DD:EE:FF",

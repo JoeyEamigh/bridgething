@@ -260,6 +260,7 @@ function scaffoldApp(root: string, spec: AppSpec): { dir: string; uuid: string; 
     source: spec.repoUrl,
     icon: null,
     screenshots: [],
+    categories: [],
     min_libbridgething_version: SDK_VERSIONS.libbridgething!,
   });
 
@@ -455,8 +456,8 @@ async function addApp(root: string, args: Args): Promise<void> {
   console.log(`
 Next:
 
-  fill in the description in apps/${slug}/public/manifest.json, and check the author
-  and repo url in apps/${slug}/catalog.json
+  fill in the description in apps/${slug}/public/manifest.json, then check the author
+  and repo url and pick one or two categories in apps/${slug}/catalog.json
 
   bun run dev ${slug}      develop against a connected Car Thing
   bun run check            ensure your app and source are valid

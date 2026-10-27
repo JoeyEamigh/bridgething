@@ -18,16 +18,22 @@ export function Wordmark({ size = 'md', tagline = false }: { size?: Size; taglin
   return (
     <div className="flex flex-col items-center gap-4">
       <img src={iconDark} alt="" className={`${ICON_SIZE[size]} w-auto`} draggable={false} />
-      <div className={`font-display tracking-wordmark ${TEXT_SIZE[size]} leading-none text-off-white`}>
-        <span className="font-medium">bridge</span>
-        <span className="font-extralight">thing</span>
-      </div>
+      <WordmarkText className={TEXT_SIZE[size]} />
       {tagline && (
         <div className="font-display text-body tracking-wordmark text-accent">
           <span className="font-medium">the thing.</span>{' '}
           <span className="font-extralight">fully open. all yours.</span>
         </div>
       )}
+    </div>
+  );
+}
+
+export function WordmarkText({ className }: { className: string }) {
+  return (
+    <div className={`font-display tracking-wordmark leading-none text-off-white ${className}`}>
+      <span className="font-medium">bridge</span>
+      <span className="font-extralight">thing</span>
     </div>
   );
 }

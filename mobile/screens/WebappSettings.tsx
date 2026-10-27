@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Text, View } from 'react-native';
 
 import { Note } from '../components/Note';
-import { Press } from '../components/Press';
 import { Spinner } from '../components/Spinner';
 import {
   hideSettings,
@@ -31,21 +30,8 @@ export function WebappSettingsScreen({ navigation, route }: Props) {
   const finish = useCallback(() => navigation.goBack(), [navigation]);
 
   useEffect(() => {
-    navigation.setOptions({
-      title: `${name} settings`,
-      headerBackVisible: false,
-      headerLeft: () => (
-        <Press onPress={finish} hitSlop={10} className="pr-3">
-          <Text
-            className="font-mono uppercase text-accent"
-            style={TEXT.eyebrow}
-          >
-            ‹ back
-          </Text>
-        </Press>
-      ),
-    });
-  }, [finish, name, navigation]);
+    navigation.setOptions({ title: `${name} settings` });
+  }, [name, navigation]);
 
   const measure = useCallback(() => {
     placeholder.current?.measureInWindow((x, y, width, height) =>

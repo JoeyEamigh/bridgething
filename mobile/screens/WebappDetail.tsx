@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button } from '../components/Button';
+import { Chevron } from '../components/Chevron';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { Icon } from '../components/Icon';
 import { ListGroup } from '../components/ListGroup';
@@ -15,6 +16,7 @@ import { Press } from '../components/Press';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionEmpty, SectionHeader } from '../components/SectionHeader';
 import { SlotAction } from '../components/SlotAction';
+import { SwitchWebappButton } from '../components/SwitchWebappButton';
 import { Spinner } from '../components/Spinner';
 import { WebappIcon } from '../components/WebappIcon';
 import { useUpdates } from '../lib/catalog';
@@ -39,7 +41,7 @@ export function WebappDetailScreen({ navigation, route }: Props) {
   const peer = usePeer(deviceId);
   const ledger = useSession(s => s.ledger);
 
-  const { list, active } = useWebapps(deviceId);
+  const { list } = useWebapps(deviceId);
   const info = list.find(w => w.id === id) ?? null;
   const update =
     useUpdates(deviceId).find(
@@ -54,25 +56,13 @@ export function WebappDetailScreen({ navigation, route }: Props) {
     }, [deviceId, id, settable]),
   );
 
-  const [busy, setBusy] = useState<'switch' | 'uninstall' | null>(null);
+  const [uninstalling, setUninstalling] = useState(false);
   const [askUninstall, setAskUninstall] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const switchActive = async () => {
-    setBusy('switch');
-    setActionError(null);
-    try {
-      await session.switchWebapp(deviceId, id);
-    } catch (err) {
-      setActionError(describeError(err));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const uninstall = async () => {
     setAskUninstall(false);
-    setBusy('uninstall');
+    setUninstalling(true);
     setActionError(null);
     try {
       await session.uninstallWebapp(deviceId, id);
@@ -80,7 +70,7 @@ export function WebappDetailScreen({ navigation, route }: Props) {
     } catch (err) {
       setActionError(describeError(err));
     } finally {
-      setBusy(null);
+      setUninstalling(false);
     }
   };
 
@@ -100,18 +90,17 @@ export function WebappDetailScreen({ navigation, route }: Props) {
   }
 
   const builtin = info.source === 'builtin';
-  const isActive = active?.id.toLowerCase() === info.id.toLowerCase();
 
   return (
     <ScrollScreen contentContainerStyle={{ paddingTop: 12 }}>
       <ConfirmSheet
         visible={askUninstall}
         title={`uninstall ${info.name}?`}
-        body="it leaves your car thing now. you can install it again obv."
+        body="it leaves your car thing now."
         detail={`detail: ${info.id} ${info.version}`}
         confirmLabel="uninstall"
         destructive
-        busy={busy === 'uninstall'}
+        busy={uninstalling}
         onConfirm={() => void uninstall()}
         onClose={() => setAskUninstall(false)}
       />
@@ -178,47 +167,17 @@ export function WebappDetailScreen({ navigation, route }: Props) {
                 v{update.installedVersion} → v{update.target.version}
               </Text>
             </View>
-            <Text className="font-mono text-dim" style={TEXT.body}>
-              ›
-            </Text>
+            <Chevron />
           </View>
         </Press>
       ) : null}
 
       <View className="mb-8 gap-2">
-        <View className="flex-row gap-2">
-          <View className="flex-1">
-            {isActive ? (
-              <View className="flex-row items-center justify-center gap-2 border border-ok bg-ok-soft px-5 py-2.5">
-                <Icon name="Check" tone="ok" size={17} />
-                <Text className="font-mono text-ok" style={TEXT.body}>
-                  active
-                </Text>
-              </View>
-            ) : (
-              <Button
-                onPress={switchActive}
-                loading={busy === 'switch'}
-                variant="primary"
-                icon="Play"
-              >
-                switch to this
-              </Button>
-            )}
-          </View>
-          {!builtin ? (
-            <View className="flex-1">
-              <Button
-                onPress={() => setAskUninstall(true)}
-                loading={busy === 'uninstall'}
-                variant="destructive"
-                icon="Trash2"
-              >
-                uninstall
-              </Button>
-            </View>
-          ) : null}
-        </View>
+        <SwitchWebappButton
+          deviceId={deviceId}
+          id={info.id}
+          onError={setActionError}
+        />
         {actionError ? <Note tone="err">{actionError}</Note> : null}
       </View>
 
@@ -254,25 +213,28 @@ export function WebappDetailScreen({ navigation, route }: Props) {
       </View>
 
       {info.permissions.length > 0 ? (
-        <View>
-          <SectionHeader
-            title="what this app can do"
-            hint="granted by installation"
-          />
+        <View className="mb-8">
+          <SectionHeader title="permissions" />
           <ListGroup>
             {info.permissions.map(p => {
               const meta = humanizePermission(p);
-              return (
-                <ListRow
-                  key={p}
-                  icon={meta.icon}
-                  title={meta.title}
-                  subtitle={meta.subtitle}
-                />
-              );
+              return <ListRow key={p} icon={meta.icon} title={meta.title} />;
             })}
           </ListGroup>
         </View>
+      ) : null}
+
+      {!builtin ? (
+        <ListGroup>
+          <ListRow
+            icon="Trash2"
+            iconTint="err"
+            title="uninstall"
+            destructive
+            loading={uninstalling}
+            onPress={() => setAskUninstall(true)}
+          />
+        </ListGroup>
       ) : null}
     </ScrollScreen>
   );

@@ -11,7 +11,7 @@ use bridgething_io::HttpExecutor;
 pub use session::*;
 
 use crate::{
-  api::ota::{ArtifactDigest, OtaAvailable, OtaPollStatus, OtaQueue, OtaRun, OtaRunProgress},
+  api::ota::{ArtifactDigest, OtaAvailable, OtaLane, OtaPollStatus, OtaQueue, OtaRun, OtaRunProgress},
   backend::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, GeoProvider,
     HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
@@ -151,6 +151,7 @@ pub enum SessionEvent {
     level: LogLevel,
     target: String,
     message: String,
+    ts_unix_ms: u64,
   },
   WebappsChanged {
     entry: DeviceWebappsEntry,
@@ -831,15 +832,15 @@ impl CompanionSession {
       .await;
   }
 
-  pub async fn dismiss_ota_run(&self, device_id: String) {
-    self.session.ota().dismiss_run(&device_id).await;
+  pub async fn dismiss_ota_run(&self, device_id: String, lane: OtaLane) {
+    self.session.ota().dismiss_run(&device_id, lane.into()).await;
   }
 
-  pub fn ota_run_progress(&self, device_id: String, now_ms: u64) -> Option<OtaRunProgress> {
+  pub fn ota_run_progress(&self, device_id: String, lane: OtaLane, now_ms: u64) -> Option<OtaRunProgress> {
     self
       .session
       .ota()
-      .run_progress(&device_id, now_ms)
+      .run_progress(&device_id, lane.into(), now_ms)
       .map(|progress| OtaRunProgress {
         percent: progress.percent,
         step_index: progress.step_index as u32,

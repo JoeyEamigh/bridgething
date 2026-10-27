@@ -1,14 +1,13 @@
 import type { BridgethingWebappInfo } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from './Button';
 import { Field } from './Field';
 import { Note } from './Note';
-import { Sheet } from './Sheet';
+import { Sheet, SheetTitle } from './Sheet';
 import { getSession } from '../lib/session';
-import { TEXT } from '../lib/theme';
 import { installPickedWebapp } from '../lib/webapps';
 
 type Busy = 'url' | 'file' | null;
@@ -58,14 +57,7 @@ export function SideloadSheet({
 
   return (
     <Sheet visible={visible} onClose={close}>
-      <View className="gap-2">
-        <Text className="font-mono uppercase text-accent" style={TEXT.eyebrow}>
-          install from url or file
-        </Text>
-        <Text className="font-sans text-muted" style={TEXT.body}>
-          enter link to zip or pick one off your phone.
-        </Text>
-      </View>
+      <SheetTitle>install from url or file</SheetTitle>
 
       <Field
         label="url"

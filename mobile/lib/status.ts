@@ -101,7 +101,9 @@ export function conditions(input: ConditionInput): Condition[] {
     });
   }
 
-  const failedRun = input.otaRuns.find(r => r.outcome === 'failed');
+  const failedRun = input.otaRuns.find(
+    r => r.lane === 'firmware' && r.outcome === 'failed',
+  );
   if (failedRun) {
     found.push({
       id: 'updateFailed',

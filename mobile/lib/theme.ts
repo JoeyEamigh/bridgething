@@ -135,12 +135,13 @@ export const TEXT = {
   },
 } as const;
 
-export const BOX: Record<BoxSize, number> = { sm: 32, md: 44, lg: 56 };
+export const BOX: Record<BoxSize, number> = { sm: 32, md: 44, lg: 56, xl: 80 };
 
 export const BOX_TEXT: Record<BoxSize, number> = {
   sm: TYPE.body,
   md: TYPE.rowLg,
   lg: TYPE.title,
+  xl: TYPE.screenTitle,
 };
 
 const TONE_KEY: Record<Tone, keyof Palette> = {

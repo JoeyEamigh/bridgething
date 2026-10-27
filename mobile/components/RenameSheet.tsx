@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from './Button';
 import { Field } from './Field';
-import { Sheet } from './Sheet';
-import { TEXT } from '../lib/theme';
+import { Sheet, SheetTitle } from './Sheet';
 
 export function RenameSheet({
   visible,
   title,
-  message,
   initialValue,
   placeholder,
   onSubmit,
@@ -17,7 +15,6 @@ export function RenameSheet({
 }: {
   visible: boolean;
   title: string;
-  message?: string;
   initialValue?: string;
   placeholder?: string;
   onSubmit: (value: string | null) => void;
@@ -37,16 +34,7 @@ export function RenameSheet({
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <View className="gap-2">
-        <Text className="font-mono uppercase text-accent" style={TEXT.eyebrow}>
-          {title}
-        </Text>
-        {message ? (
-          <Text className="font-sans text-muted" style={TEXT.body}>
-            {message}
-          </Text>
-        ) : null}
-      </View>
+      <SheetTitle>{title}</SheetTitle>
       <Field
         value={draft}
         onChangeText={setDraft}

@@ -26,10 +26,7 @@ export function UpdatesSection() {
 
   return (
     <View className="mb-8">
-      <SectionHeader
-        title="updates"
-        hint="how this phone keeps every car thing current."
-      />
+      <SectionHeader title="updates" />
       <ListGroup>
         <ListRow
           icon="ArrowDownToLine"
@@ -55,7 +52,7 @@ export function UpdatesSection() {
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="url"
-          hint={`probably don't change this. leave empty for ${DEFAULT_OTA_ROOT_URL}.`}
+          hint={`default: ${DEFAULT_OTA_ROOT_URL.replace(/^https?:\/\//, '')}`}
           clearable
         />
       </View>

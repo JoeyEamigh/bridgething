@@ -6,7 +6,7 @@ use bridgething_delivery::ota::{
     MIN_POLL_INTERVAL_SECONDS, MIN_RESUME_DELAY_MS,
   },
   event::{CANCELLED_REASON, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaStepKind},
-  run_store::{OtaRun, OtaRunOutcome, OtaRunPhase, OtaRunStore, OtaStoreChange},
+  run_store::{OtaLane, OtaRun, OtaRunOutcome, OtaRunPhase, OtaRunStore, OtaStoreChange},
 };
 use libbridgething::{OtaKind, OtaPhase};
 use serde_json::{Map, Value, json};
@@ -166,8 +166,8 @@ fn emit_run_store(steps: &[Value]) -> Vec<Value> {
       let mut open_kind: Option<OtaKind> = None;
 
       match call {
-        "dismiss" => run = store.dismiss(device_id),
-        "interrupt" => run = store.interrupt(device_id),
+        "dismiss" => run = OtaLane::ALL.into_iter().find_map(|lane| store.dismiss(device_id, lane)),
+        "interrupt" => run = store.interrupt(device_id).pop(),
         "annotate_webapp" => {
           run = store.annotate_webapp(device_id, step["webapp_id"].as_str(), step["webapp_name"].as_str())
         }

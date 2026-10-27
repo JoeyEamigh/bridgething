@@ -43,7 +43,7 @@ function InstallProgress(): VNode | null {
       <RunCard
         run={run}
         onDismiss={() => {
-          void session.dismissOtaRun();
+          void session.dismissOtaRun(run.lane);
         }}
       />
     </div>

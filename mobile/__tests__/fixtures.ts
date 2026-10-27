@@ -68,6 +68,7 @@ export function otaRun(
     runId: 'run-1',
     deviceId: DEVICE,
     otaKind: 'image',
+    lane: 'firmware',
     phase: 'downloading',
     steps: IMAGE_STEPS,
     stepId: 0,

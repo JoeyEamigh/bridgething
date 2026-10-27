@@ -42,7 +42,7 @@ export function OtaVersionsScreen({ route }: Props) {
   const { deviceId, channel: initialChannel } = route.params;
   const meta = useSession(s => s.deviceMeta[deviceId]);
   const rootUrl = rootUrlOf(useSession(s => s.otaPollConfig));
-  const progress = useOtaProgress(deviceId);
+  const progress = useOtaProgress(deviceId, 'firmware');
   const run = progress?.run;
   const outcome = run?.outcome;
   const runError = run?.error;

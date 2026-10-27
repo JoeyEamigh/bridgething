@@ -12,7 +12,8 @@ import { DevicesScreen } from './screens/Devices.tsx';
 import { LogsScreen } from './screens/Logs.tsx';
 import { OnboardingScreen } from './screens/Onboarding.tsx';
 import { SettingsScreen } from './screens/Settings.tsx';
-import { CatalogAppRoute, SourceAppRoute, SourceRoute, StoreRoute } from './screens/Store.tsx';
+import { SourceRoute, StoreBrowseRoute, StoreRoute } from './screens/Store.tsx';
+import { CatalogAppRoute, SourceAppRoute } from './screens/StoreApp.tsx';
 import { UpdatesScreen } from './screens/Updates.tsx';
 import { completeFirstRun, firstRunDone } from './stores/first-run.ts';
 import { keptRoute, peers, webapps } from './stores/session.ts';
@@ -72,6 +73,7 @@ function Shell(): VNode {
           <Route path="/apps/:webappId" component={AppDetailRoute} />
           <Route path="/apps/:webappId/settings" component={SettingsRoute} />
           <Route path={PATHS.store} component={StoreRoute} />
+          <Route path="/store/browse" component={StoreBrowseRoute} />
           <Route path="/store/app/:appId" component={CatalogAppRoute} />
           <Route path="/store/source/:source" component={SourceRoute} />
           <Route path="/store/source/:source/app/:appId" component={SourceAppRoute} />

@@ -432,4 +432,4 @@ jobs:
         run: |
           set -euo pipefail
           bun run build
-          bunx wrangler deploy
+          bun run ship

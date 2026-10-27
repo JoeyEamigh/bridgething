@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from '../Button';
 import { Field } from '../Field';
 import { Note } from '../Note';
-import { Sheet } from '../Sheet';
+import { Sheet, SheetTitle } from '../Sheet';
 import type { Accounts } from './useAccounts';
-import { TEXT } from '../../lib/theme';
 
 export function ServerLoginSheet({ accounts }: { accounts: Accounts }) {
   const provider = accounts.login;
@@ -31,14 +30,7 @@ export function ServerLoginSheet({ accounts }: { accounts: Accounts }) {
 
   return (
     <Sheet visible={visible} onClose={accounts.dismissLogin}>
-      <View className="gap-2">
-        <Text className="font-mono uppercase text-accent" style={TEXT.eyebrow}>
-          sign in to {provider?.displayName ?? ''}
-        </Text>
-        <Text className="font-sans text-muted" style={TEXT.body}>
-          the address of your server and the account it knows you by.
-        </Text>
-      </View>
+      <SheetTitle>{`sign in to ${provider?.displayName ?? ''}`}</SheetTitle>
       <Field
         label="server"
         icon="Link"

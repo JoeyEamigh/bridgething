@@ -1,5 +1,5 @@
 import { SOURCE_STATUSES, type SourceStatus } from '@bridgething/catalog';
-import { APP_DETAIL_SHELL, appIdFromPath } from '../src/lib/app-routes.ts';
+import { shellFor, storeRoute } from '../src/lib/app-routes.ts';
 import { mergedApps, storeData } from './apps.ts';
 import { isAdmin } from './auth.ts';
 import { refreshCatalogs } from './catalogs.ts';
@@ -16,7 +16,8 @@ import {
   type Limit,
 } from './limits.ts';
 import { OAUTH_CALLBACK_PATH, oauthBounce } from './oauth.ts';
-import { injectStoreData, wantsStoreData } from './prerender.tsx';
+import { featuredPin, pinFeatured, unpinFeatured } from './pins.ts';
+import { injectStoreData } from './prerender.tsx';
 import { relayCatalog } from './relay.ts';
 import { listSources, setSourceStatus, submitSource } from './sources.ts';
 
@@ -72,9 +73,25 @@ async function gate(db: D1Database, limit: Limit, key: string, now: string) {
   return (await takeToken(db, limit, key, now)) ? null : { ok: false as const, status: 429, reason: limit.refusal };
 }
 
+async function handleFeatured(request: Request, env: Env, now: string): Promise<Response | null> {
+  if (request.method === 'GET') return json({ pin: await featuredPin(env.DB) }, { cache: 'no-store' });
+
+  const outcome =
+    request.method === 'PUT'
+      ? await pinFeatured({ db: env.DB, body: await readJsonBody(request), now })
+      : request.method === 'DELETE'
+        ? await unpinFeatured(env.DB)
+        : null;
+  if (outcome === null) return null;
+  if (!outcome.ok) return fail(outcome.status, outcome.reason);
+  return json({ pin: outcome.pin }, { cache: 'no-store' });
+}
+
 async function handleAdmin(request: Request, env: Env, url: URL, now: string): Promise<Response | null> {
-  if (url.pathname !== '/api/admin/sources') return null;
+  if (url.pathname !== '/api/admin/sources' && url.pathname !== '/api/admin/featured') return null;
   if (!isAdmin(request, env.ADMIN_TOKEN)) return fail(401, 'admin token required');
+
+  if (url.pathname === '/api/admin/featured') return handleFeatured(request, env, now);
 
   if (request.method === 'GET') {
     return json({ sources: await listSources(env.DB) }, { cache: 'no-store' });
@@ -180,13 +197,13 @@ export default {
 
     if (url.pathname !== '/api' && !url.pathname.startsWith('/api/')) {
       const direct = await env.ASSETS.fetch(request);
-      const shell = direct.status === 404 && appIdFromPath(url.pathname) !== null;
-      const asset = shell
-        ? await env.ASSETS.fetch(new Request(new URL(APP_DETAIL_SHELL, url.origin), request))
-        : direct;
+      const shell = direct.status === 404 ? shellFor(url.pathname) : null;
+      const asset = shell ? await env.ASSETS.fetch(new Request(new URL(shell, url.origin), request)) : direct;
 
-      if (!asset.ok || request.method !== 'GET' || !wantsStoreData(url.pathname)) return asset;
-      return injectStoreData(asset, url.pathname, await storeData({ db: env.DB, now: new Date().toISOString() }));
+      const route = storeRoute(url.pathname, url.search);
+      if (!asset.ok || request.method !== 'GET' || route === null) return asset;
+      const data = await storeData({ db: env.DB, now: new Date().toISOString() });
+      return injectStoreData(asset, route, `${url.pathname}${url.search}`, data);
     }
 
     const head = request.method === 'HEAD';

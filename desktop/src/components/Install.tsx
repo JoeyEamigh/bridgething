@@ -114,10 +114,12 @@ export function InstallButton({
   listing,
   installer,
   size,
+  quiet = false,
 }: {
   listing: CatalogAppListing;
   installer: Installer;
   size?: 'sm';
+  quiet?: boolean;
 }): VNode {
   const { state, label, start } = installer;
   const actionable = state === 'install' || state === 'update';
@@ -127,7 +129,7 @@ export function InstallButton({
   return (
     <Button
       size={size}
-      variant={actionable ? 'primary' : 'secondary'}
+      variant={actionable && !quiet ? 'primary' : 'secondary'}
       icon={actionable ? <Icon name="download" size={size === 'sm' ? 13 : undefined} /> : undefined}
       loading={state === 'installing'}
       disabled={!actionable}

@@ -10,7 +10,6 @@ import { ListGroup } from '../components/ListGroup';
 import { Note } from '../components/Note';
 import { Pill } from '../components/Pill';
 import { Press } from '../components/Press';
-import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionHeader } from '../components/SectionHeader';
 import { Spinner } from '../components/Spinner';
@@ -23,7 +22,7 @@ type Props = AppsScreenProps<'WebappSlots'>;
 
 type SlotFailure = { slot: WebappSlotName; message: string };
 
-export function WebappSlotsScreen({ route }: Props) {
+export function WebappSlotsScreen({ route, navigation }: Props) {
   const deviceId = route.params.deviceId;
   const { list } = useWebapps(deviceId);
   const { slots, error: loadError } = useSlots(deviceId);
@@ -51,16 +50,12 @@ export function WebappSlotsScreen({ route }: Props) {
     [busy, deviceId],
   );
 
+  const toStore = () => navigation.navigate('store');
   const launchers = slotCandidates(list, 'launcher');
   const overlays = slotCandidates(list, 'overlay');
 
   return (
     <ScrollScreen>
-      <ScreenHeader
-        title="home screen and overlay"
-        subtitle="pick which installed app provides each"
-      />
-
       {loadError ? (
         <Note tone="err" action="retry" onAction={load}>
           {loadError}
@@ -73,16 +68,14 @@ export function WebappSlotsScreen({ route }: Props) {
         <>
           <SectionHeader
             title="home screen"
-            hint={
-              launchers.length === 0
-                ? 'no installed app offers one yet'
-                : undefined
+            action={
+              launchers.length === 0 ? 'find one in the store' : undefined
             }
+            onAction={toStore}
           />
           <ListGroup>
             <BuiltinRow
               label="built-in hub"
-              detail="the launcher that ships with bridgething"
               icon="LayoutGrid"
               selected={slots.launcher == null}
               busy={busy === 'launcher'}
@@ -108,11 +101,10 @@ export function WebappSlotsScreen({ route }: Props) {
           <View className="mt-10">
             <SectionHeader
               title="system overlay"
-              hint={
-                overlays.length === 0
-                  ? 'no installed app offers one yet'
-                  : undefined
+              action={
+                overlays.length === 0 ? 'find one in the store' : undefined
               }
+              onAction={toStore}
             />
             <ListGroup>
               <BuiltinRow
@@ -167,7 +159,7 @@ function BuiltinRow({
   onPress,
 }: {
   label: string;
-  detail: string;
+  detail?: string;
   icon: IconName;
   selected: boolean;
   busy: boolean;
@@ -188,13 +180,15 @@ function BuiltinRow({
             </Text>
             <Pill tone="neutral">built-in</Pill>
           </View>
-          <Text
-            className="mt-0.5 font-sans text-muted"
-            style={TEXT.hint}
-            numberOfLines={1}
-          >
-            {detail}
-          </Text>
+          {detail ? (
+            <Text
+              className="mt-0.5 font-sans text-muted"
+              style={TEXT.hint}
+              numberOfLines={1}
+            >
+              {detail}
+            </Text>
+          ) : null}
         </View>
         <SelectionMark selected={selected} busy={busy} />
       </View>

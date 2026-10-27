@@ -3,7 +3,8 @@ import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
 import { readCatalog } from './catalogs.ts';
 import { fakeD1, type FakeD1 } from './d1-fake.ts';
 import type { Env } from './env.ts';
-import { APP_ID, catalog, DEVICE, NOW, origin, seedOfficial, seedSource, serialOf } from './fixtures.ts';
+import { APP_DETAIL_SHELL } from '../src/lib/app-routes.ts';
+import { app, APP_ID, catalog, DEVICE, NOW, origin, seedOfficial, seedSource, serialOf } from './fixtures.ts';
 import { listInstallCounts } from './installs.ts';
 import { INVENTORY_CHANGES, NEW_DEVICES, NEW_SOURCES, SOURCE_REFRESHES } from './limits.ts';
 import { readSource } from './sources.ts';
@@ -21,8 +22,29 @@ const worker = (await import('./index.ts')).default;
 let db: FakeD1;
 const originalFetch = globalThis.fetch;
 
+const ASSET_PAGES: Record<string, string> = {
+  '/apps/': 'Storefront',
+  '/apps/c/music/': 'StoreBrowse',
+  '/apps/by/': 'StoreBrowse',
+  [APP_DETAIL_SHELL]: 'AppDetail',
+  '/apps/sources/': 'SourcesPage',
+};
+
+const assets = {
+  fetch: async (input: Request | string) => {
+    const path = new URL(typeof input === 'string' ? input : input.url).pathname;
+    const island = ASSET_PAGES[path];
+    if (!island) return new Response('not found', { status: 404 });
+    return new Response(
+      `<html><body><script id="store-data" type="application/json">null</script>` +
+        `<astro-island component-export="${island}" ssr>built<!--astro:end--></astro-island></body></html>`,
+      { headers: { 'content-type': 'text/html' } },
+    );
+  },
+} as unknown as Fetcher;
+
 function env(): Env {
-  return { DB: db, ASSETS: {} as Fetcher, ADMIN_TOKEN };
+  return { DB: db, ASSETS: assets, ADMIN_TOKEN };
 }
 
 function context(): ExecutionContext {
@@ -253,5 +275,51 @@ describe('the scheduled refresh', () => {
 
     expect((await readCatalog(db, OFFICIAL_CATALOG_URL))?.name).toBe('bridgething apps');
     expect((await db.prepare('SELECT * FROM rate_limits').all()).results).toEqual([]);
+  });
+});
+
+describe('store pages', () => {
+  const OUSA = '019e6701-13f8-71b5-ba04-85d326630e9c';
+
+  beforeEach(async () => {
+    await seedOfficial(db, catalog('bridgething apps', [app(APP_ID, 'calendar', { categories: ['music'] })]));
+    await seedSource(db, LISTED, 'listed', catalog('listed', [app(OUSA, 'o-clock', { author: 'Ousa Chea' })]));
+  });
+
+  test('a category page is served with the directory rendered into it', async () => {
+    const html = await (await call('GET', '/apps/c/music/?sort=new')).text();
+
+    expect(html).not.toContain('>built<');
+    expect(html).toContain('calendar');
+    expect(html).toContain('"catalogs":[');
+  });
+
+  test('an author page comes from the author shell, since no build can know every author', async () => {
+    const response = await call('GET', '/apps/by/Ousa%20Chea');
+    const island = (await response.text()).split(' ssr>')[1]!;
+
+    expect(response.status).toBe(200);
+    expect(island).toContain('<h1 class="m-0 break-words">Ousa Chea</h1>');
+    expect(island).toContain('o-clock');
+    expect(island).not.toContain('calendar');
+  });
+
+  test('an app the build never saw comes from the detail shell', async () => {
+    const html = await (await call('GET', `/apps/${OUSA}`)).text();
+
+    expect(html.split(' ssr>')[1]).toContain('<h1 class="m-0 break-words">o-clock</h1>');
+  });
+
+  test('the sources page carries the directory', async () => {
+    expect(await (await call('GET', '/apps/sources/')).text()).toContain(LISTED);
+  });
+
+  test('an unknown store path stays a 404 instead of borrowing a shell', async () => {
+    expect((await call('GET', '/apps/c/not-a-category')).status).toBe(404);
+    expect((await call('GET', '/apps/nothing-here')).status).toBe(404);
+  });
+
+  test('only a get is rendered', async () => {
+    expect(await (await call('POST', '/apps/c/music/')).text()).toContain('>built<');
   });
 });

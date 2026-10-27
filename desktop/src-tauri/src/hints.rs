@@ -217,6 +217,7 @@ pub fn hint_for(event: SessionEvent) -> Option<Hint> {
       level,
       target,
       message,
+      ..
     } => {
       if origin == LogOrigin::Device {
         log(level, &target, &message);

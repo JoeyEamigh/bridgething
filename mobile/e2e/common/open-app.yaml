@@ -1,0 +1,8 @@
+appId: com.bridgething.gateway
+---
+- scrollUntilVisible:
+    element: ".*${APP}.*"
+    direction: DOWN
+    timeout: 20000
+    centerElement: true
+- tapOn: ".*${APP}.*"

@@ -35,6 +35,7 @@ export {
 export { type BoxSize, type Tone } from './tokens.ts';
 
 export { Button, type ButtonSize, type ButtonVariant } from './components/Button.tsx';
+export { DeviceFrame } from './components/DeviceFrame.tsx';
 export { Dialog } from './components/Dialog.tsx';
 export { Field } from './components/Field.tsx';
 export { IconBadge } from './components/IconBadge.tsx';

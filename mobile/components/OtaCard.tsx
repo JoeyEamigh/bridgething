@@ -31,7 +31,7 @@ export function OtaCard({
   const rootUrl = rootUrlOf(useSession(s => s.otaPollConfig));
   const poll = useOta(s => s.poll);
   const available = useOta(s => s.available[deviceId]);
-  const progress = useOtaProgress(deviceId);
+  const progress = useOtaProgress(deviceId, 'firmware');
   const run = progress?.run;
 
   const [checking, setChecking] = useState(false);
@@ -69,47 +69,51 @@ export function OtaCard({
   };
 
   const running = run != null && run.outcome === undefined;
+  const status = running
+    ? null
+    : run?.outcome === 'succeeded'
+      ? { text: 'update installed', tone: 'ok' }
+      : run?.outcome === 'cancelled'
+        ? { text: 'update cancelled', tone: 'muted' }
+        : run?.outcome === 'failed'
+          ? {
+              text: run.resumable
+                ? 'waiting to reconnect to finish'
+                : 'the update did not finish',
+              tone: 'muted',
+            }
+          : offer.version
+            ? null
+            : { text: offer.value, tone: 'muted' };
 
   return (
     <View className="gap-3 border border-rule bg-screen p-4">
-      <View className="flex-row items-baseline justify-between gap-3">
-        <Text className="font-sans text-fg" style={TEXT.body}>
-          {run?.webappName ?? 'firmware'}
-        </Text>
-        {run?.outcome ? (
-          <Press onPress={() => dismissOtaRun(deviceId)} hitSlop={10}>
-            <Icon name="X" size={16} />
-          </Press>
-        ) : (
-          <Text
-            className="font-mono text-soft"
-            style={TEXT.hint}
-            numberOfLines={1}
-          >
-            {offer.value}
-          </Text>
-        )}
-      </View>
-
       {running && progress ? (
         <OtaRunProgress run={run} progress={progress} />
       ) : installing ? (
         <OtaStarting />
-      ) : run?.outcome === 'succeeded' ? (
-        <Text className="font-sans text-ok" style={TEXT.hint}>
-          update installed
-        </Text>
-      ) : run?.outcome === 'cancelled' ? (
-        <Text className="font-sans text-muted" style={TEXT.hint}>
-          update cancelled
-        </Text>
-      ) : run?.outcome === 'failed' ? (
-        <Text className="font-sans text-muted" style={TEXT.hint}>
-          {run.resumable
-            ? 'waiting to reconnect to finish'
-            : 'the update did not finish'}
-        </Text>
-      ) : offer.detail ? (
+      ) : status ? (
+        <View className="flex-row items-center justify-between gap-3">
+          <Text
+            className={`flex-1 font-sans ${status.tone === 'ok' ? 'text-ok' : 'text-fg'}`}
+            style={TEXT.body}
+          >
+            {status.text}
+          </Text>
+          {run?.outcome ? (
+            <Press
+              onPress={() => dismissOtaRun(deviceId, 'firmware')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="dismiss"
+            >
+              <Icon name="X" size={16} />
+            </Press>
+          ) : null}
+        </View>
+      ) : null}
+
+      {!running && !installing && offer.detail ? (
         <Text className="font-mono text-dim" style={TEXT.hint}>
           {offer.detail}
         </Text>
@@ -135,7 +139,7 @@ export function OtaCard({
             size="md"
             icon="RefreshCw"
           >
-            check for updates now
+            check for updates
           </Button>
         </View>
       ) : null}
@@ -144,11 +148,9 @@ export function OtaCard({
         <Press
           onPress={onPickVersion}
           className="flex-row items-center gap-1.5 self-start py-1"
+          accessibilityRole="button"
         >
-          <Text
-            className="font-mono uppercase text-accent"
-            style={TEXT.eyebrow}
-          >
+          <Text className="font-sans text-accent" style={TEXT.hint}>
             choose a specific version
           </Text>
           <Icon name="ChevronRight" tone="accent" size={14} />

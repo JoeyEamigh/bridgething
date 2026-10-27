@@ -12,7 +12,7 @@ name: a store listing shows the screenshots its catalog publishes
 - tapOn:
     id: "source-url"
 - inputText: "http://${FIXTURE_HOST}:${FIXTURE_PORT}/store/catalog.json"
-- hideKeyboard
+- pressKey: Enter
 - tapOn: "add this source"
 - extendedWaitUntil:
     visible: ".*Fixture Calendar.*"

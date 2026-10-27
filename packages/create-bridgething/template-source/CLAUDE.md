@@ -69,7 +69,7 @@ Running and driving the app: `.claude/skills/bridgething/reference/develop.md`. 
 - `settings` names the page built from `settings/`, capped at 1 MiB. It talks to the companion app through `@bridgething/client/settings` and embeds `<ConfigForm/>` for the declared fields. A button on it that acts on those fields awaits the form's `flush()` first. The companion keeps the page loaded between visits, so it rereads device state in `settings.onRefresh`. It is also where a user picks a file for the app (`settings.pick` + `settings.blob.put`), which the webapp then shows through `client.blob`.
 - `extension` declares the desktop-side Deno process and the host permissions it gets.
 
-**`apps/<slug>/catalog.json`** is the store listing and nothing else: `author`, `homepage`, `source`, an `icon` override, `screenshots`, and `min_libbridgething_version` (the oldest daemon the app works against). Never restate anything the manifest already says. An app that ships an extension must carry its `github.com` repo url in `source`, because the store shows that link next to the host permissions it is asking for.
+**`apps/<slug>/catalog.json`** is the store listing and nothing else: `author`, `homepage`, `source`, an `icon` override, `screenshots`, `categories`, and `min_libbridgething_version` (the oldest daemon the app works against). `categories` is one or two of `music`, `clocks-weather`, `dashboards`, `home-control`, `productivity`, `ambient`, `games`, `travel`, `tools`, most fitting first; always set it, because an app without one is left off every category shelf in the store. A launcher or overlay may leave it empty, since those get their own shelves. Never restate anything the manifest already says. An app that ships an extension must carry its `github.com` repo url in `source`, because the store shows that link next to the host permissions it is asking for.
 
 **`apps/<slug>/CHANGELOG.md`** carries a `## <version>` section per release, which becomes that version's changelog in the catalog.
 
@@ -84,7 +84,7 @@ bun run check
 
 `new` scaffolds into `apps/<slug>`. Never add an app by hand: the scaffold generates the uuid, writes the store listing, wires the dev server to a connected device, and lands the tsconfig and scripts CI expects.
 
-`shot` captures the kiosk over CDP into `apps/<slug>/screenshots/`. The image fronts chromium's debugging port on `bridgething.local:9222`, so it needs nothing but the device plugged in. Up to six, filename order, first is the store card.
+`shot` captures the kiosk over CDP into `apps/<slug>/screenshots/`. The image fronts chromium's debugging port on `bridgething.local:9222`, so it needs nothing but the device plugged in. Up to six, filename order, first is the store card. Only an app with a screenshot can be featured at the top of the store, so take at least one.
 
 `bump` writes `public/manifest.json` and `package.json` together and opens the changelog section. Editing one without the other fails the build.
 

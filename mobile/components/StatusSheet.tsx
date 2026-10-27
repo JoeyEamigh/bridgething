@@ -1,15 +1,14 @@
 import { describeError } from '@bridgething/ui/errors';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from './Button';
 import { ConditionList } from './ConditionList';
 import { Note } from './Note';
 import { PairNote } from './PairNote';
-import { Sheet } from './Sheet';
+import { Sheet, SheetTitle } from './Sheet';
 import { reconcileAll } from '../lib/bridge';
 import { type Condition, useConditionAction } from '../lib/status';
-import { TEXT } from '../lib/theme';
 
 export function StatusSheet({
   visible,
@@ -38,18 +37,8 @@ export function StatusSheet({
 
   return (
     <Sheet visible={visible} onClose={onClose}>
-      <Text className="font-mono uppercase text-accent" style={TEXT.eyebrow}>
-        {conditions.length === 0
-          ? 'all clear'
-          : conditions.length === 1
-            ? '1 issue'
-            : `${conditions.length} issues`}
-      </Text>
-
       {conditions.length === 0 ? (
-        <Text className="font-sans text-muted" style={TEXT.hint}>
-          nothing needs your attention.
-        </Text>
+        <SheetTitle>all clear</SheetTitle>
       ) : (
         <ConditionList
           conditions={conditions}
@@ -89,7 +78,7 @@ export function StatusSheet({
           loading={resyncing}
           onPress={resync}
         >
-          resync everything
+          refresh status
         </Button>
         <Button variant="ghost" size="md" full={false} onPress={onClose}>
           close

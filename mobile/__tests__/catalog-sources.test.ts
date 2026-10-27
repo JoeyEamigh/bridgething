@@ -664,3 +664,115 @@ describe('popularity from the directory', () => {
     ]);
   });
 });
+
+describe('the storefront stays put while it loads', () => {
+  const C_ID = '019e6701-13f8-71b5-ba04-0000000000c3';
+
+  function directory(entries: { url: string; catalog: Catalog }[]) {
+    return {
+      updated_at: '2026-05-31T00:00:00Z',
+      catalogs: entries.map(entry => ({
+        ...entry,
+        official: entry.url === OFFICIAL,
+        attested: entry.url === OFFICIAL,
+      })),
+      failures: [],
+      installs: [
+        { app_id: OTHER_APP_ID, source_url: OFFICIAL, count: 9, versions: {} },
+        { app_id: C_ID, source_url: THIRD_PARTY, count: 5, versions: {} },
+        { app_id: APP_ID, source_url: OFFICIAL, count: 1, versions: {} },
+      ],
+    };
+  }
+
+  const official = catalog('official', [
+    app(APP_ID, 'quiet app'),
+    app(OTHER_APP_ID, 'busy app'),
+  ]);
+  const third = catalog('third', [app(C_ID, 'their app')]);
+
+  function order(r: Rig): string[] {
+    const state = r.catalog.useCatalogStore.getState();
+    return r.catalog
+      .buildStoreCatalog({
+        ...state,
+        installed: [],
+        deviceLibVersion: '0.6.0',
+      })
+      .listings.map(listing => listing.app.name);
+  }
+
+  test('a startup refresh and the store opening share one trip to the directory', async () => {
+    const r = rig();
+    const fetchMock = serve({
+      [OFFICIAL]: official,
+      [DIRECTORY]: catalog('dir'),
+      [MERGED]: directory([{ url: OFFICIAL, catalog: official }]),
+    });
+
+    await Promise.all([r.catalog.refreshCatalog(), r.catalog.refreshCatalog()]);
+
+    expect(fetchMock.mock.calls.filter(([url]) => url === MERGED)).toHaveLength(
+      1,
+    );
+  });
+
+  test('the directory paints the whole store before any subscribed catalog answers', async () => {
+    const r = rig();
+    let releaseOfficial = () => {};
+    const held = new Promise<void>(resolve => {
+      releaseOfficial = resolve;
+    });
+    const served: Record<string, unknown> = {
+      [OFFICIAL]: official,
+      [DIRECTORY]: catalog('dir'),
+      [MERGED]: directory([
+        { url: OFFICIAL, catalog: official },
+        { url: THIRD_PARTY, catalog: third },
+      ]),
+    };
+    globalThis.fetch = jest.fn(async (url: string) => {
+      if (url === OFFICIAL) await held;
+      return { ok: true, status: 200, json: () => served[url] };
+    }) as unknown as typeof fetch;
+
+    const refreshing = r.catalog.refreshCatalog();
+    await flush();
+    await flush();
+
+    expect(r.catalog.useCatalogStore.getState().directoryLoaded).toBe(true);
+    const painted = order(r);
+    expect(painted).toEqual(['busy app', 'their app', 'quiet app']);
+
+    releaseOfficial();
+    await refreshing;
+    expect(order(r)).toEqual(painted);
+  });
+
+  test('installing from a source you never added subscribes it and moves nothing', async () => {
+    const r = rig();
+    serve({
+      [OFFICIAL]: official,
+      [DIRECTORY]: catalog('dir'),
+      [THIRD_PARTY]: third,
+      [MERGED]: directory([
+        { url: OFFICIAL, catalog: official },
+        { url: THIRD_PARTY, catalog: third },
+      ]),
+    });
+    r.native.__returns.set('installWebappFromUrl', () => Promise.resolve({}));
+    await r.catalog.refreshCatalog();
+    const before = order(r);
+
+    const state = r.catalog.useCatalogStore.getState();
+    const theirs = r.catalog
+      .buildStoreCatalog({ ...state, installed: [], deviceLibVersion: '0.6.0' })
+      .listings.find(listing => listing.app.id === C_ID)!;
+    expect(theirs.sourceUrl).toBe(THIRD_PARTY);
+
+    await r.catalog.installApp(DEVICE, theirs);
+
+    expect(sourcesOf(r)).toEqual([OFFICIAL, THIRD_PARTY]);
+    expect(order(r)).toEqual(before);
+  });
+});

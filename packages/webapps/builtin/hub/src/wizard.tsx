@@ -4,12 +4,16 @@ import {
   type ConnectedDevice,
   type LauncherGesture,
 } from '@bridgething/client';
+import frame from '@bridgething/ui/car-thing-frame.webp';
+import { DEVICE_FRAME } from '@bridgething/ui/tokens';
 import { useEffect, useRef, useState } from 'react';
 
-import frame from './carthing-frame.png';
 import { GESTURES, practiceFor } from './gesture.ts';
+import { WordmarkText } from './wordmark.tsx';
 
 const PHASE_KEY = 'onboarding_phase';
+
+const percent = (fraction: number) => `${(fraction * 100).toFixed(3)}%`;
 
 type Step = 'pair' | 'gesture-choice' | 'gesture';
 
@@ -322,21 +326,34 @@ function HoldPracticeStep({ holdMs, prompt, onNext }: { holdMs: number; prompt: 
 }
 
 function GestureHint() {
+  const { screen } = DEVICE_FRAME;
   return (
-    <div className="relative">
-      <img src={frame} alt="car thing" className="h-52 w-auto" />
-      <div className="absolute top-[15%] left-[86.4%] -translate-x-1/2 -translate-y-full">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="h-7 w-7 animate-bounce text-accent">
-          <path d="M12 5v14" />
-          <path d="m19 12-7 7-7-7" />
-        </svg>
+    <div className="flex h-52 items-center">
+      <div className="relative w-72.5" style={{ aspectRatio: `${DEVICE_FRAME.width} / ${DEVICE_FRAME.height}` }}>
+        <div
+          className="absolute flex items-center justify-center bg-black pb-1.25"
+          style={{
+            left: percent(screen.left),
+            top: percent(screen.top),
+            width: percent(screen.width),
+            height: percent(screen.height),
+          }}>
+          <WordmarkText className="text-[1.4375rem]" />
+        </div>
+        <img src={frame} alt="car thing" draggable={false} className="absolute inset-0 size-full" />
+        <div className="absolute top-0 left-[86.3%] -translate-x-1/2 -translate-y-full">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-7 w-7 animate-bounce text-accent">
+            <path d="M12 5v14" />
+            <path d="m19 12-7 7-7-7" />
+          </svg>
+        </div>
       </div>
     </div>
   );

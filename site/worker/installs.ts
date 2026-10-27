@@ -1,4 +1,4 @@
-import { OFFICIAL_CATALOG_URL, type InstallCount } from '@bridgething/catalog';
+import { OFFICIAL_CATALOG_URL, type InstallCount, type TrendingCount } from '@bridgething/catalog';
 import { normalizeSourceUrl, SourceUrlError } from './directory.ts';
 
 const MAX_APPS = 200;
@@ -6,6 +6,8 @@ const MAX_APPS = 200;
 const APP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const SERIAL = /^[0-9]{4}[A-Z][0-9A-Z]{7}$/;
 const VERSION_MAX_LEN = 40;
+
+export const TRENDING_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const UNKNOWN_VERSION = 'unknown';
 
@@ -110,16 +112,21 @@ export async function recordInstalled(args: {
 
   const [device, held] = await db.batch([
     db.prepare('SELECT updated_at FROM devices WHERE serial = ?1').bind(serial),
-    db.prepare('SELECT app_id, source_url, version FROM device_apps WHERE serial = ?1').bind(serial),
+    db.prepare('SELECT app_id, source_url, version, added_at FROM device_apps WHERE serial = ?1').bind(serial),
   ]);
   const known = device!.results.length > 0;
-  const before = new Map((held!.results as DeviceApp[]).map(app => [appKey(app), app]));
+  const before = new Map((held!.results as (DeviceApp & { added_at: string | null })[]).map(app => [appKey(app), app]));
 
   const dropped = [...before.values()].filter(app => {
     const kept = candidates.get(appKey(app));
     return kept === undefined || !counted.has(kept.source_url) || kept.version !== app.version;
   });
-  const added = apps.filter(app => before.get(appKey(app))?.version !== app.version);
+  const added = apps
+    .filter(app => before.get(appKey(app))?.version !== app.version)
+    .map(app => {
+      const prior = before.get(appKey(app));
+      return { ...app, added_at: prior ? prior.added_at : now };
+    });
 
   if (known && dropped.length === 0 && added.length === 0) return { ok: true, record };
 
@@ -142,8 +149,9 @@ export async function recordInstalled(args: {
       .bind(serial, JSON.stringify(dropped)),
     db
       .prepare(
-        `INSERT INTO device_apps (serial, app_id, source_url, version)
-         SELECT ?1, value ->> 'app_id', value ->> 'source_url', value ->> 'version' FROM json_each(?2)`,
+        `INSERT INTO device_apps (serial, app_id, source_url, version, added_at)
+         SELECT ?1, value ->> 'app_id', value ->> 'source_url', value ->> 'version', value ->> 'added_at'
+         FROM json_each(?2)`,
       )
       .bind(serial, JSON.stringify(added)),
   ]);
@@ -170,6 +178,22 @@ export function toInstallCounts(rows: unknown[]): InstallCount[] {
   return [...tallies.values()].sort(
     (a, b) => b.count - a.count || a.app_id.localeCompare(b.app_id) || a.source_url.localeCompare(b.source_url),
   );
+}
+
+export function trendingStatement(db: D1Database, now: string): D1PreparedStatement {
+  const since = new Date(Date.parse(now) - TRENDING_WINDOW_MS).toISOString();
+  return db
+    .prepare(
+      `SELECT app_id, source_url, COUNT(*) AS count FROM device_apps
+       WHERE added_at >= ?1 GROUP BY app_id, source_url`,
+    )
+    .bind(since);
+}
+
+export function toTrending(rows: unknown[]): TrendingCount[] {
+  return (rows as TrendingCount[])
+    .map(row => ({ app_id: row.app_id, source_url: row.source_url, count: Number(row.count) }))
+    .sort((a, b) => b.count - a.count || a.app_id.localeCompare(b.app_id) || a.source_url.localeCompare(b.source_url));
 }
 
 export async function listInstallCounts(db: D1Database): Promise<InstallCount[]> {

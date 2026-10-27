@@ -35,8 +35,7 @@ function baked(overrides: Partial<AppEntry> = {}): BakedApp {
       url: 'https://apps.bridgething.com/catalog.json',
       name: 'official',
       icon: null,
-      official: true,
-      attested: true,
+      trust: 'official',
     },
   };
 }

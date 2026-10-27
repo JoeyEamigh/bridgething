@@ -176,14 +176,8 @@ describe('what onboarding leaves behind', () => {
   test('the finish page states what is left rather than dropping it silently', () => {
     const r = rig();
 
-    expect(r.setup.pendingSummary(2)).toBe(
-      '2 things left · you can finish these any time',
-    );
-    expect(r.setup.pendingSummary(1)).toBe(
-      '1 thing left · you can finish these any time',
-    );
-    expect(r.setup.pendingSummary(0)).toBe(
-      'nothing left · your car thing is ready',
-    );
+    expect(r.setup.pendingSummary(2)).toBe('2 left');
+    expect(r.setup.pendingSummary(1)).toBe('1 left');
+    expect(r.setup.pendingSummary(0)).toBe('all set');
   });
 });

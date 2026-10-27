@@ -1,4 +1,4 @@
-import type { Catalog, InstallCount, SourceCatalog } from './types.ts';
+import type { Catalog, InstallCount, SourceCatalog, StorePin, TrendingCount } from './types.ts';
 import { validate } from './validate.ts';
 
 export const OFFICIAL_CATALOG_URL = 'https://apps.bridgething.com/catalog.json';
@@ -143,6 +143,9 @@ export type MergedApps = {
   catalogs: MergedCatalog[];
   failures: SourceFailure[];
   installs: InstallCount[];
+  trending: TrendingCount[];
+  featured: StorePin | null;
+  category_backfill: Record<string, string[]>;
 };
 
 export async function fetchMergedApps(init?: { origin?: string; signal?: AbortSignal }): Promise<MergedApps> {
@@ -156,7 +159,13 @@ export async function fetchMergedApps(init?: { origin?: string; signal?: AbortSi
   if (!body || !Array.isArray(body.catalogs)) {
     throw new Error('the app directory returned an unexpected shape');
   }
-  return { ...body, installs: Array.isArray(body.installs) ? body.installs : [] };
+  return {
+    ...body,
+    installs: Array.isArray(body.installs) ? body.installs : [],
+    trending: Array.isArray(body.trending) ? body.trending : [],
+    featured: body.featured ?? null,
+    category_backfill: body.category_backfill ?? {},
+  };
 }
 
 export type InstalledApp = {

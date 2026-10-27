@@ -12,6 +12,7 @@ export type AppCurationEntry = {
   description?: string;
   icon?: string | null;
   screenshots?: string[];
+  categories?: string[];
   homepage?: string | null;
   source?: string | null;
 };
@@ -38,6 +39,7 @@ export type AppConfigEntry = {
   author: string;
   icon: string | null;
   screenshots?: string[];
+  categories?: string[];
   homepage?: string | null;
   source?: string | null;
   versions: AppVersionConfig[];

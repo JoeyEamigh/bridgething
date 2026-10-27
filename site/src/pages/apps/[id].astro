@@ -1,21 +1,18 @@
 ---
 import catalog from '../../../apps/catalog.json';
 import type { AppEntry, Catalog } from '@bridgething/catalog';
-import Footer from '../../components/Footer.astro';
-import Header from '../../components/Header.astro';
 import { AppDetail, type BakedApp } from '../../components/store/AppDetail';
-import Layout from '../../layouts/Layout.astro';
+import StorePage from '../../components/store/StorePage.astro';
 import { APP_DETAIL_SHELL_ID } from '../../lib/app-routes.ts';
 import { SITE } from '../../lib/site.ts';
 
-export async function getStaticPaths() {
+export function getStaticPaths() {
   const official = catalog as Catalog;
   const source = {
     url: SITE.officialCatalog,
     name: official.repo.name,
     icon: official.repo.icon,
-    official: true,
-    attested: true,
+    trust: 'official' as const,
   };
 
   return [
@@ -28,15 +25,10 @@ const { baked } = Astro.props as { baked: BakedApp | null };
 const app: AppEntry | null = baked?.app ?? null;
 ---
 
-<Layout
+<StorePage
   title={app ? app.name.toLowerCase() : 'app'}
   description={app?.description ?? 'an installable webapp for bridgething.'}
   noindex={app === null}>
-  <Header />
-  <main class="container-site w-full flex-1 py-12 md:py-16">
-    <p class="mb-6 font-mono text-sm text-white/40"><a href="/apps">← apps</a></p>
-    <script id="store-data" type="application/json" is:inline>null</script>
-    <AppDetail client:load baked={baked} />
-  </main>
-  <Footer />
-</Layout>
+  <p class="m-0 mb-6 font-mono text-sm text-white/40"><a href="/apps">← apps</a></p>
+  <AppDetail client:load baked={baked} />
+</StorePage>

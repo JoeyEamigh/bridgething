@@ -24,6 +24,5 @@ export function stepForCondition(
 }
 
 export function pendingSummary(count: number): string {
-  if (count === 0) return 'nothing left · your car thing is ready';
-  return `${count} thing${count === 1 ? '' : 's'} left · you can finish these any time`;
+  return count === 0 ? 'all set' : `${count} left`;
 }

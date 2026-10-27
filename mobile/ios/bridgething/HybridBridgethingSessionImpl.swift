@@ -46,7 +46,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     private var onPeerLinkFailed: (@Sendable (BridgethingSessionPeer) -> Void)?
     private var onNowPlayingChanged: (@Sendable (BridgethingNowPlaying?) -> Void)?
     private var onAncsAuthStatusChanged: (@Sendable (String, BridgethingAncsAuthStatus) -> Void)?
-    private var onLog: (@Sendable (String, String, String) -> Void)?
+    private var onLog: (@Sendable (String, String, String, Double) -> Void)?
     private var onWebappsChanged: (@Sendable (BridgethingDeviceWebappsEntry) -> Void)?
     private var onWebappDocChanged: (@Sendable (String, String, String, String?) -> Void)?
     private var onDeviceMetaChanged: (@Sendable (String, BridgethingDeviceMeta) -> Void)?
@@ -204,12 +204,14 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             if foreground {
                 stateLock.withLock { onAncsAuthStatusChanged }?(deviceId, toRNAncsAuthStatus(status))
             }
-        case let .log(origin, level, target, message):
+        case let .log(origin, level, target, message, tsUnixMs):
             let line = "[\(target)] \(message)"
             if origin == .device {
                 CompanionLogs.shared.store?.record(level: toStoreLevel(level), label: daemonLabel, message: line)
             }
-            if foreground { stateLock.withLock { onLog }?(toOriginName(origin), toLevelName(level), line) }
+            if foreground {
+                stateLock.withLock { onLog }?(toOriginName(origin), toLevelName(level), line, Double(tsUnixMs))
+            }
         case let .webappsChanged(entry):
             if foreground { stateLock.withLock { onWebappsChanged }?(toRNWebappsEntry(entry)) }
         case let .webappDocChanged(deviceId, webappId, key, value):
@@ -692,13 +694,14 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         )
     }
 
-    public func otaRunProgress(deviceId: String, nowMs: Double) -> BridgethingOtaProgress? {
+    public func otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double) -> BridgethingOtaProgress? {
         guard let session = try? requireSession() else { return nil }
-        return session.otaRunProgress(deviceId: deviceId, nowMs: UInt64(saturating: nowMs)).map(toRNOtaProgress)
+        return session.otaRunProgress(deviceId: deviceId, lane: fromRNOtaLane(lane), nowMs: UInt64(saturating: nowMs))
+            .map(toRNOtaProgress)
     }
 
-    public func dismissOtaRun(deviceId: String) async throws {
-        try await requireSession().dismissOtaRun(deviceId: deviceId)
+    public func dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) async throws {
+        try await requireSession().dismissOtaRun(deviceId: deviceId, lane: fromRNOtaLane(lane))
     }
 
     // MARK: - Peers
@@ -779,7 +782,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         stateLock.withLock { onAncsAuthStatusChanged = callback }
     }
 
-    public func setOnLog(_ callback: @escaping @Sendable (String, String, String) -> Void) {
+    public func setOnLog(_ callback: @escaping @Sendable (String, String, String, Double) -> Void) {
         stateLock.withLock { onLog = callback }
     }
 
@@ -1336,6 +1339,7 @@ private func toRNOtaRun(_ run: OtaRun) -> BridgethingOtaRun {
         runId: run.runId,
         deviceId: run.deviceId,
         otaKind: toRNOtaKind(run.kind),
+        lane: toRNOtaLane(run.lane),
         phase: toRNOtaRunPhase(run.phase),
         steps: run.steps.map {
             BridgethingOtaStep(id: Double($0.id), kind: toRNOtaStepKind($0.kind), label: $0.label, bytes: Double($0.bytes))
@@ -1356,6 +1360,20 @@ private func toRNOtaRun(_ run: OtaRun) -> BridgethingOtaRun {
         webappId: run.webappId,
         webappName: run.webappName
     )
+}
+
+private func toRNOtaLane(_ lane: OtaLane) -> BridgethingOtaLane {
+    switch lane {
+    case .firmware: .firmware
+    case .webapp: .webapp
+    }
+}
+
+private func fromRNOtaLane(_ lane: BridgethingOtaLane) -> OtaLane {
+    switch lane {
+    case .firmware: .firmware
+    case .webapp: .webapp
+    }
 }
 
 private func toRNOtaProgress(_ progress: OtaRunProgress) -> BridgethingOtaProgress {

@@ -109,7 +109,7 @@ describe('mergedApps', () => {
     db.statements.length = 0;
     await merged(db);
 
-    expect(db.statements).toHaveLength(2);
+    expect(db.statements).toHaveLength(4);
   });
 });
 

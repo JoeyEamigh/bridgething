@@ -19,6 +19,7 @@ import com.margelo.nitro.bridgething.session.BridgethingNowPlayingTrack
 import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
 import com.margelo.nitro.bridgething.session.BridgethingOtaChannelInfo
 import com.margelo.nitro.bridgething.session.BridgethingOtaKind
+import com.margelo.nitro.bridgething.session.BridgethingOtaLane
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaOutcome
 import com.margelo.nitro.bridgething.session.BridgethingOtaPhase
@@ -76,6 +77,7 @@ import uniffi.bridgething_companion.NowPlaying
 import uniffi.bridgething_companion.OtaAvailable
 import uniffi.bridgething_companion.OtaDiscoverManifest
 import uniffi.bridgething_companion.OtaKind
+import uniffi.bridgething_companion.OtaLane
 import uniffi.bridgething_companion.OtaPollConfig
 import uniffi.bridgething_companion.OtaPollStatus
 import uniffi.bridgething_companion.OtaQueue
@@ -404,6 +406,7 @@ internal fun toRnOtaRun(run: OtaRun): BridgethingOtaRun = BridgethingOtaRun(
     runId = run.runId,
     deviceId = run.deviceId,
     otaKind = toRnOtaKind(run.kind),
+    lane = toRnOtaLane(run.lane),
     phase = toRnOtaPhase(run.phase),
     steps = run.steps.map {
         BridgethingOtaStep(it.id.toDouble(), toRnOtaStepKind(it.kind), it.label, it.bytes.toDouble())
@@ -424,6 +427,16 @@ internal fun toRnOtaRun(run: OtaRun): BridgethingOtaRun = BridgethingOtaRun(
     webappId = run.webappId,
     webappName = run.webappName,
 )
+
+internal fun toRnOtaLane(lane: OtaLane): BridgethingOtaLane = when (lane) {
+    OtaLane.FIRMWARE -> BridgethingOtaLane.FIRMWARE
+    OtaLane.WEBAPP -> BridgethingOtaLane.WEBAPP
+}
+
+internal fun fromRnOtaLane(lane: BridgethingOtaLane): OtaLane = when (lane) {
+    BridgethingOtaLane.FIRMWARE -> OtaLane.FIRMWARE
+    BridgethingOtaLane.WEBAPP -> OtaLane.WEBAPP
+}
 
 internal fun toRnOtaProgress(progress: OtaRunProgress): BridgethingOtaProgress = BridgethingOtaProgress(
     percent = progress.percent.toDouble(),

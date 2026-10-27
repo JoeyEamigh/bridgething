@@ -228,7 +228,7 @@ export class BrowserSession implements BrowserBackend {
 
   async installWebappBytes(bundle: Uint8Array, provenance?: string): Promise<InstalledWebapp> {
     const device = this.device;
-    this.open('installedWebapp', { phase: 'streaming', stageTotal: bundle.byteLength });
+    this.open('installedWebapp', 'webapp', { phase: 'streaming', stageTotal: bundle.byteLength });
     try {
       const installed = await device.installWebapp(bundle, provenance);
       this.settle({ webappId: installed.id, webappName: installed.name });
@@ -352,7 +352,7 @@ export class BrowserSession implements BrowserBackend {
     const plan = await planFor(info, channel, version);
     if (!plan) return;
 
-    this.open(plan.kind === 'image' ? 'image' : 'daemon', {
+    this.open(plan.kind === 'image' ? 'image' : 'daemon', 'firmware', {
       releaseVersion: plan.version,
       daemonVersion: plan.to.daemon,
       imageVersion: plan.to.image,
@@ -375,8 +375,8 @@ export class BrowserSession implements BrowserBackend {
     }
   }
 
-  dismissOtaRun(): Promise<void> {
-    this.run = null;
+  dismissOtaRun(lane: api.OtaLane): Promise<void> {
+    if (this.run?.lane === lane) this.run = null;
     this.fan('ota-runs');
     return Promise.resolve();
   }
@@ -389,12 +389,13 @@ export class BrowserSession implements BrowserBackend {
     return beyondTheLink('device logs');
   }
 
-  private open(kind: api.OtaKind, seed: Partial<api.OtaRun>): void {
+  private open(kind: api.OtaKind, lane: api.OtaLane, seed: Partial<api.OtaRun>): void {
     const now = Date.now();
     this.run = {
       runId: `browser-${++this.runs}`,
       deviceId: this.link?.id ?? '',
       kind,
+      lane,
       phase: 'downloading',
       steps: [],
       stepId: 0,

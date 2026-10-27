@@ -50,7 +50,7 @@ export function Update({ channel }: { channel: string | null }): VNode {
         <RunCard
           run={run}
           onDismiss={() => {
-            void session.dismissOtaRun();
+            void session.dismissOtaRun(run.lane);
           }}
         />
       ) : version ? (

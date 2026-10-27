@@ -51,7 +51,9 @@ export function DevicesScreen(): VNode {
   const chosen = selectedDevice.data.value;
   const primary = live.find(peer => peer.id === chosen) ?? (live.length === 1 ? (live[0] ?? null) : null);
 
-  const run = primary ? otaRuns.value.find(entry => entry.deviceId === primary.id) : undefined;
+  const run = primary
+    ? otaRuns.value.find(entry => entry.deviceId === primary.id && entry.lane === 'firmware')
+    : undefined;
   const offered = primary ? otaAvailable.value.find(entry => entry.deviceId === primary.id) : undefined;
 
   return (
@@ -80,7 +82,7 @@ export function DevicesScreen(): VNode {
           <OtaRunCard
             run={run}
             onDismiss={() => {
-              void session.dismissOtaRun();
+              void session.dismissOtaRun(run.lane);
             }}
           />
         </Section>

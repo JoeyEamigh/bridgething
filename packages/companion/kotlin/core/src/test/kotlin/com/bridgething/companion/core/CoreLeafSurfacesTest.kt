@@ -9,6 +9,7 @@ import uniffi.bridgething_companion.NluFastPathRepeatMode
 import uniffi.bridgething_companion.NluRejectionOutcome
 import uniffi.bridgething_companion.NluRejectionPolicy
 import uniffi.bridgething_companion.OtaKind
+import uniffi.bridgething_companion.OtaLane
 import uniffi.bridgething_companion.OtaPhaseSnapshot
 import uniffi.bridgething_companion.OtaPlanStep
 import uniffi.bridgething_companion.OtaPollEvent
@@ -92,13 +93,14 @@ class CoreLeafSurfacesTest {
         ),
       )
       val run = store.runs().single()
+      assertEquals(OtaLane.FIRMWARE, run.lane)
       val progress = otaRunProgress(run, run.phaseStartedAtMs)
       assertTrue(progress.percent in 1u..99u) { "mid-download percent, got ${progress.percent}" }
-      assertNull(store.dismiss("dev-1")) { "an unfinished run must refuse dismissal" }
+      assertNull(store.dismiss("dev-1", OtaLane.FIRMWARE)) { "an unfinished run must refuse dismissal" }
 
       val changes = store.ingest(OtaPollEvent.Updated("dev-1", OtaKind.IMAGE, "1+image.2"))
       assertTrue(changes.any { it is OtaStoreChange.Run && it.run.outcome == OtaRunOutcome.SUCCEEDED })
-      assertNotNull(store.dismiss("dev-1"))
+      assertNotNull(store.dismiss("dev-1", OtaLane.FIRMWARE))
     }
   }
 }

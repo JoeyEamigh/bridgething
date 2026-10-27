@@ -123,8 +123,8 @@
     },
     {
       "component": "run_store",
-      "name": "a-second-plan-replaces-the-first-for-the-same-device",
-      "description": "the store keys one run per device. the replacement carries a new run id and the new kind, and the old run is gone rather than archived.",
+      "name": "a-store-install-plans-beside-the-firmware-run",
+      "description": "firmware and store installs are separate lanes per device, so a store install opens its own run and the firmware run stays put.",
       "steps": [
         {
           "t_ms": 0,
@@ -847,8 +847,8 @@
     },
     {
       "component": "run_store",
-      "name": "progress-overwrites-the-run-kind",
-      "description": "the kind on the progress event was assigned unconditionally in both platform captures, so a tick carrying a different kind than the plan relabeled the run. overruled 2026-08-05: the shared reducer never overwrites the run's kind; the expectation carries the guarded answer and the frozen platform arms remain the record of the relabel.",
+      "name": "a-tick-for-the-other-lane-moves-nothing",
+      "description": "a tick is routed to the lane its kind belongs to, so a firmware tick with no firmware run is dropped and the store install it does not belong to is untouched.",
       "steps": [
         {
           "t_ms": 0,

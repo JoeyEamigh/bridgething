@@ -2,7 +2,10 @@ appId: com.bridgething.gateway
 name: config-only apps share the default page, which follows whichever app's settings are open
 ---
 - runFlow: ../common/fresh-start.yaml
-- tapOn: ".*Weather.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Weather
 - tapOn: "open Weather settings"
 - extendedWaitUntil:
     visible: "(?i).*location as lat,lon.*"
@@ -21,7 +24,10 @@ name: config-only apps share the default page, which follows whichever app's set
 
 - tapOn:
     id: "tab-apps"
-- tapOn: ".*Browser.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Browser
 - tapOn: "open Browser settings"
 - extendedWaitUntil:
     visible: "(?i).*bookmarks.*"
@@ -31,7 +37,10 @@ name: config-only apps share the default page, which follows whichever app's set
 
 - tapOn:
     id: "tab-apps"
-- tapOn: ".*Home Assistant.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Home Assistant
 - tapOn: "open Home Assistant settings"
 - extendedWaitUntil:
     visible: "(?i).*long-lived access token.*"
@@ -41,7 +50,10 @@ name: config-only apps share the default page, which follows whichever app's set
 
 - tapOn:
     id: "tab-apps"
-- tapOn: ".*Weather.*"
+- runFlow:
+    file: ../common/open-app.yaml
+    env:
+      APP: Weather
 - tapOn: "open Weather settings"
 - extendedWaitUntil:
     visible: "(?i).*location as lat,lon.*"

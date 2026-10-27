@@ -56,6 +56,10 @@ enter_dev_env() {
     if [ -f "${DEV_DIR}/superbird.json" ]; then
         export BRIDGETHING_SUPERBIRD_META="${DEV_DIR}/superbird.json"
     fi
+    if [ -f "${DEV_DIR}/daemon-version" ]; then
+        BRIDGETHING_APP_VERSION="$(cat "${DEV_DIR}/daemon-version")"
+        export BRIDGETHING_APP_VERSION
+    fi
     export RUST_LOG="${RUST_LOG:-bridgething=debug,bridgething::chrome=info,libbridgething=info}"
 }
 

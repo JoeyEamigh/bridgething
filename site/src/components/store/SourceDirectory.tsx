@@ -93,25 +93,14 @@ function Rows({ entries }: { entries: DirectoryEntry[] }) {
   );
 }
 
-export function SourceDirectory({ directory }: { directory: DirectoryEntry[] | null }) {
-  if (directory === null) {
-    return (
-      <section class="mb-16">
-        <header class="mb-4 border-b border-white/20 pb-2">
-          <h2 class="m-0">where these come from</h2>
-        </header>
-        <p class="font-mono text-sm text-white/45">loading the directory…</p>
-      </section>
-    );
-  }
-
+export function SourceDirectory({ directory }: { directory: DirectoryEntry[] }) {
   const published = directory.filter(entry => entry.status === 'attested' || entry.status === 'listed');
   const unreviewed = directory.filter(entry => entry.status === 'quarantined');
 
   return (
     <section class="mb-16">
       <header class="mb-4 flex flex-wrap items-baseline justify-between gap-3 border-b border-white/20 pb-2">
-        <h2 class="m-0">where these come from</h2>
+        <h2 class="m-0 text-xl">directory</h2>
         <p class="m-0 font-mono text-sm text-white/40">{published.length}</p>
       </header>
 
