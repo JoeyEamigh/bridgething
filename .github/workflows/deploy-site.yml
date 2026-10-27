@@ -36,7 +36,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
       - run: bun install --frozen-lockfile
       - run: bunx turbo run build --filter='@bridgething/site^...'
       - name: pull current manifest from R2 (if exists)

@@ -116,7 +116,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
 
       - name: install rclone (R2 client)
         run: |
