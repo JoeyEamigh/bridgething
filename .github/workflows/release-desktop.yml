@@ -103,6 +103,18 @@ jobs:
         with:
           key: desktop-${{ matrix.updater_target }}
 
+      - name: keep ort's onnx runtime download across runs
+        if: ${{ !startsWith(matrix.runner, 'macos') }}
+        shell: bash
+        run: echo "ORT_CACHE_DIR=${{ runner.temp }}/ort-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache@v4
+        if: ${{ !startsWith(matrix.runner, 'macos') }}
+        with:
+          path: ${{ runner.temp }}/ort-cache
+          key: ort-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ort-${{ matrix.target }}-
+
       - name: linux bundling deps
         if: startsWith(matrix.runner, 'ubuntu')
         run: |
