@@ -19,6 +19,7 @@ import {
   Switch,
   useSession,
 } from '@bridgething/ui';
+import { LAUNCHER_GESTURE_OPTIONS } from '@bridgething/ui/launcher-gesture';
 import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
@@ -546,11 +547,7 @@ function LauncherGestureRow(): VNode {
         <Segmented<LauncherGesture>
           size="sm"
           label="jump back to apps"
-          options={[
-            { value: 'longPress', label: 'hold m' },
-            { value: 'fivePress', label: 'press m 5x' },
-            { value: 'doublePress', label: 'press m 2x' },
-          ]}
+          options={LAUNCHER_GESTURE_OPTIONS}
           value={gesture}
           onChange={next => {
             void session.setLauncherGesture(next);

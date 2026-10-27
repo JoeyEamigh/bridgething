@@ -18,6 +18,7 @@ pub struct BridgeThingMeta {
   /// The adapter's bluetooth alias, the name phones see when pairing. Absent where the daemon has no radio.
   #[ts(optional)]
   pub bluetooth_name: Option<String>,
+  #[serde(default, deserialize_with = "launcher_gesture_or_default")]
   pub launcher_gesture: LauncherGesture,
   /// Whether the device opens the companion app when an iPhone reconnects without it running.
   #[serde(default = "companion_launch_default")]
@@ -64,6 +65,19 @@ pub enum LauncherGesture {
   #[default]
   FivePress,
   DoublePress,
+}
+
+pub(crate) fn launcher_gesture_or_default<'de, D: serde::Deserializer<'de>>(d: D) -> Result<LauncherGesture, D::Error> {
+  #[derive(Deserialize)]
+  #[serde(untagged)]
+  enum Reported {
+    Known(LauncherGesture),
+    Unknown(serde::de::IgnoredAny),
+  }
+  Ok(match Reported::deserialize(d)? {
+    Reported::Known(gesture) => gesture,
+    Reported::Unknown(_) => LauncherGesture::default(),
+  })
 }
 
 /// What an update installs.
@@ -181,5 +195,60 @@ mod tests {
     )
     .expect("an older daemon's meta still decodes");
     assert!(meta.companion_launch, "older daemons always open the companion app");
+  }
+
+  fn meta_reporting(gesture: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+      "bridgethingVersion": "v0.15.0", "libbridgethingVersion": "v0.15.0", "appName": "bridgething",
+      "nickname": null, "launcherGesture": gesture, "companionLaunch": true, "appVersion": "0.15.0",
+      "daemonSha256": null, "wakewordModelVersion": null, "osName": "", "osVersion": "", "osDescription": "",
+      "btMac": "", "serialNumber": "", "fccId": "", "icId": "", "modelName": "", "channel": "", "imageVariant": "",
+      "imageVersion": "", "imageBuildId": "", "imageBuildDate": "", "imageDistro": "", "imageMachine": "",
+      "discord": "", "credits": ""
+    })
+  }
+
+  #[test]
+  fn a_meta_reporting_a_gesture_this_build_does_not_know_still_decodes() {
+    for unknown in [serde_json::json!("pressThrice"), serde_json::json!({ "presses": 3 })] {
+      let packed = rmp_serde::to_vec_named(&meta_reporting(unknown.clone())).expect("encode meta");
+      let meta: BridgeThingMeta = rmp_serde::from_slice(&packed).expect("the frame survives an unknown gesture");
+      assert_eq!(meta.launcher_gesture, LauncherGesture::default(), "{unknown}");
+      assert_eq!(meta.app_version, "0.15.0");
+    }
+  }
+
+  #[test]
+  fn every_known_gesture_survives_the_lenient_decode() {
+    for gesture in [
+      LauncherGesture::LongPress,
+      LauncherGesture::FivePress,
+      LauncherGesture::DoublePress,
+    ] {
+      let reported = serde_json::to_value(gesture).expect("encode gesture");
+      let packed = rmp_serde::to_vec_named(&meta_reporting(reported)).expect("encode meta");
+      let meta: BridgeThingMeta = rmp_serde::from_slice(&packed).expect("decode meta");
+      assert_eq!(meta.launcher_gesture, gesture);
+
+      let reply: crate::gateway::LauncherGestureReply =
+        serde_json::from_value(serde_json::json!({ "gesture": gesture })).expect("decode gateway reply");
+      assert_eq!(reply.gesture, gesture);
+    }
+  }
+
+  #[test]
+  fn a_gesture_reply_naming_an_unknown_gesture_still_decodes() {
+    let packed = rmp_serde::to_vec_named(&serde_json::json!({ "gesture": "pressThrice" })).expect("encode reply");
+    let gateway: crate::gateway::LauncherGestureReply = rmp_serde::from_slice(&packed).expect("gateway reply decodes");
+    assert_eq!(gateway.gesture, LauncherGesture::default());
+    let client: crate::client::LauncherGestureReply =
+      serde_json::from_str(r#"{"gesture":"pressThrice"}"#).expect("client reply decodes");
+    assert_eq!(client.gesture, LauncherGesture::default());
+  }
+
+  #[test]
+  fn setting_an_unknown_gesture_is_refused() {
+    let set = serde_json::from_str::<crate::gateway::LauncherGestureSet>(r#"{"gesture":"pressThrice"}"#);
+    assert!(set.is_err(), "a set names exactly what to store, so it stays strict");
   }
 }
