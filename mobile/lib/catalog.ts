@@ -368,6 +368,7 @@ export async function installApp(
     listing.sourceUrl,
     listing.app.id,
     listing.app.name,
+    version.version,
   );
   if (!useCatalogStore.getState().sources.includes(listing.sourceUrl)) {
     await addSource(listing.sourceUrl);

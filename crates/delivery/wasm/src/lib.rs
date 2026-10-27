@@ -86,7 +86,7 @@ export interface UpdateEvent {
   channel?: string;
   rootUrl?: string;
   version?: string;
-  updatedAt?: string;
+  checkedAt?: string;
   reason?: string;
   stepId?: number;
   steps?: PlanStep[];

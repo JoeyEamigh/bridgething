@@ -69,7 +69,7 @@ function run(overrides: Partial<OtaRun> = {}): OtaRun {
     stageReceived: null,
     stageTotal: null,
     ratePerSec: null,
-    dwlPercent: null,
+    writePercent: null,
     outcome: null,
     error: null,
     releaseVersion: null,
@@ -131,7 +131,7 @@ describe('advance', () => {
 
   test('applying is a write, which is the phase the daemon is actually in', () => {
     const event: UpdateEvent = { kind: 'progress', phase: { kind: 'applying', writePercent: 40 } };
-    expect(advance(run(), event)).toMatchObject({ phase: 'writing', dwlPercent: 40 });
+    expect(advance(run(), event)).toMatchObject({ phase: 'writing', writePercent: 40 });
   });
 
   test('a failure carries its reason and settles the outcome', () => {

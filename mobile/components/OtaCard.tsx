@@ -34,14 +34,13 @@ export function OtaCard({
   const progress = useOtaProgress(deviceId);
   const run = progress?.run;
 
-  const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
   const offer = describeOtaOffer({
     available,
-    lastCheckedAt: lastCheckedAt(poll, checkedAt),
+    lastCheckedAt: lastCheckedAt(poll),
     error: poll.error,
   });
 
@@ -50,7 +49,6 @@ export function OtaCard({
     setFailure(null);
     try {
       await getSession().checkForOtaUpdate(rootUrl);
-      setCheckedAt(Date.now());
     } catch (err) {
       setFailure(describeError(err));
     } finally {

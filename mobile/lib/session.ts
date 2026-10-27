@@ -148,6 +148,7 @@ export function registerSessionDomain(): void {
         case 'otaRunChanged':
         case 'otaAvailableChanged':
         case 'otaPollChanged':
+        case 'otaQueueChanged':
         case 'resumed':
         case 'log':
           return;

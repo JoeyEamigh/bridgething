@@ -226,7 +226,7 @@ export type OtaPhaseSnapshot =
   | 'idle'
   | { downloading: { asset: string; received: number; total: number; ratePerSec: number | null } }
   | { streaming: { asset: string; sent: number; total: number; ratePerSec: number | null; etaSeconds: number | null } }
-  | { applying: { phase: OtaApplyPhase; writePercent: number; dwlPercent: number; dwlBytes: number } }
+  | { applying: { phase: OtaApplyPhase; writePercent: number } }
   | 'staged'
   | 'completed'
   | { failed: { reason: string } };
@@ -236,7 +236,7 @@ export type OtaPlanStep = { id: number; kind: OtaStepKind; label: string; bytes:
 export type OtaPollConfig = { intervalSeconds: number; autoPush: boolean; rootUrl: string | null };
 
 export type OtaPollEvent =
-  | { manifestPolled: { updatedAt: string } }
+  | { manifestPolled: { checkedAt: string } }
   | { manifestPollFailed: { reason: string } }
   | { updateAvailable: { deviceId: string; release: string; daemonVersion: string; imageVersion: string } }
   | {
@@ -256,6 +256,10 @@ export type OtaPollEvent =
   | { failed: { deviceId: string; kind: OtaKind; reason: string } };
 
 export type OtaPollStatus = { lastPolledAt: string | null; error: string | null };
+
+export type OtaQueue = { deviceId: string; installs: Array<OtaQueuedInstall> };
+
+export type OtaQueuedInstall = { webappId: string; webappName: string; version: string };
 
 export type OtaReleaseArtifacts = {
   daemon: ArtifactDigest | null;
@@ -279,7 +283,7 @@ export type OtaRun = {
   stageReceived: number | null;
   stageTotal: number | null;
   ratePerSec: number | null;
-  dwlPercent: number | null;
+  writePercent: number | null;
   outcome: OtaRunOutcome | null;
   error: string | null;
   releaseVersion: string | null;
@@ -318,7 +322,8 @@ export type OtaStepKind = 'download' | 'stream' | 'apply' | 'reboot';
 export type OtaStoreChange =
   | { run: { run: OtaRun } }
   | { available: { available: OtaAvailable } }
-  | { poll: { status: OtaPollStatus } };
+  | { poll: { status: OtaPollStatus } }
+  | { queue: { queue: OtaQueue } };
 
 export type PeerLinkStatus = 'connected' | 'linkFailed';
 
@@ -370,6 +375,7 @@ export type SessionEvent =
   | { otaRunChanged: { run: OtaRun } }
   | { otaAvailableChanged: { available: OtaAvailable } }
   | { otaPollChanged: { status: OtaPollStatus } }
+  | { otaQueueChanged: { queue: OtaQueue } }
   | { companionUpdateProgress: { received: number; total: number } }
   | 'resumed';
 
@@ -402,6 +408,7 @@ export type SessionSnapshot = {
   otaRuns: Array<OtaRun>;
   otaAvailable: Array<OtaAvailable>;
   otaPoll: OtaPollStatus;
+  otaQueues: Array<OtaQueue>;
 };
 
 export type SignInMethod = 'handshake' | 'serverLogin';
@@ -464,6 +471,7 @@ export type WebappInstallRequest = {
   provenance: string | null;
   webappId: string | null;
   webappName: string | null;
+  webappVersion: string | null;
 };
 
 export type WebappResourceFile = { path: string; mime: string | null };

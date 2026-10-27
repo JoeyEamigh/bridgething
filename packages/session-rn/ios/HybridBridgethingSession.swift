@@ -83,7 +83,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
         size: Double,
         provenance: String?,
         webappId: String?,
-        webappName: String?
+        webappName: String?,
+        webappVersion: String?
     ) async throws -> BridgethingWebappInfo
 
     func reconnectPeer(deviceId: String) async throws
@@ -129,6 +130,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setOnOtaRunChanged(_ callback: @escaping @Sendable (BridgethingOtaRun) -> Void)
     func setOnOtaAvailableChanged(_ callback: @escaping @Sendable (BridgethingOtaAvailable) -> Void)
     func setOnOtaPollChanged(_ callback: @escaping @Sendable (BridgethingOtaPollStatus) -> Void)
+    func setOnOtaQueueChanged(_ callback: @escaping @Sendable (BridgethingOtaQueue) -> Void)
     func setOnCompanionUpdateProgress(_ callback: @escaping @Sendable (Double, Double) -> Void)
     func setOnResumed(_ callback: @escaping @Sendable (BridgethingSessionSnapshot) -> Void)
 }
@@ -152,6 +154,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     private static var pendingOtaRunChanged: (@Sendable (BridgethingOtaRun) -> Void)?
     private static var pendingOtaAvailableChanged: (@Sendable (BridgethingOtaAvailable) -> Void)?
     private static var pendingOtaPollChanged: (@Sendable (BridgethingOtaPollStatus) -> Void)?
+    private static var pendingOtaQueueChanged: (@Sendable (BridgethingOtaQueue) -> Void)?
     private static var pendingCompanionUpdateProgress: (@Sendable (Double, Double) -> Void)?
     private static var pendingResumed: (@Sendable (BridgethingSessionSnapshot) -> Void)?
 
@@ -173,6 +176,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         let otaRunCb = pendingOtaRunChanged
         let otaAvailCb = pendingOtaAvailableChanged
         let otaPollCb = pendingOtaPollChanged
+        let otaQueueCb = pendingOtaQueueChanged
         let companionUpdateCb = pendingCompanionUpdateProgress
         let resumedCb = pendingResumed
         pendingProvidersChanged = nil
@@ -190,6 +194,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         pendingOtaRunChanged = nil
         pendingOtaAvailableChanged = nil
         pendingOtaPollChanged = nil
+        pendingOtaQueueChanged = nil
         pendingCompanionUpdateProgress = nil
         pendingResumed = nil
         stateLock.unlock()
@@ -209,6 +214,7 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         if let otaRunCb { backend.setOnOtaRunChanged(otaRunCb) }
         if let otaAvailCb { backend.setOnOtaAvailableChanged(otaAvailCb) }
         if let otaPollCb { backend.setOnOtaPollChanged(otaPollCb) }
+        if let otaQueueCb { backend.setOnOtaQueueChanged(otaQueueCb) }
         if let companionUpdateCb { backend.setOnCompanionUpdateProgress(companionUpdateCb) }
         if let resumedCb { backend.setOnResumed(resumedCb) }
     }
@@ -626,15 +632,17 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         size: Double,
         provenance: Variant_NullType_String?,
         webappId: Variant_NullType_String?,
-        webappName: Variant_NullType_String?
+        webappName: Variant_NullType_String?,
+        webappVersion: Variant_NullType_String?
     ) throws -> Promise<BridgethingWebappInfo> {
         let prov = Self.unwrapString(provenance)
         let id = Self.unwrapString(webappId)
         let name = Self.unwrapString(webappName)
+        let version = Self.unwrapString(webappVersion)
         return Promise.async {
             try await Self.backend().installWebappFromUrl(
                 deviceId: deviceId, url: url, sha256: sha256, size: size, provenance: prov,
-                webappId: id, webappName: name
+                webappId: id, webappName: name, webappVersion: version
             )
         }
     }
@@ -877,6 +885,15 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         if backend == nil { Self.pendingOtaPollChanged = wrapped }
         Self.stateLock.unlock()
         backend?.setOnOtaPollChanged(wrapped)
+    }
+
+    public func setOnOtaQueueChanged(callback: @escaping (BridgethingOtaQueue) -> Void) throws {
+        let wrapped: @Sendable (BridgethingOtaQueue) -> Void = { queue in callback(queue) }
+        Self.stateLock.lock()
+        let backend = Self._backend
+        if backend == nil { Self.pendingOtaQueueChanged = wrapped }
+        Self.stateLock.unlock()
+        backend?.setOnOtaQueueChanged(wrapped)
     }
 
     public func setOnCompanionUpdateProgress(callback: @escaping (Double, Double) -> Void) throws {

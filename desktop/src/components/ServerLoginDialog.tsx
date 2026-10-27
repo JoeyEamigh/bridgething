@@ -68,7 +68,7 @@ export function ServerLoginDialog({
           hint="https is assumed when the address has no scheme"
         />
         <Field label="username" value={username} onInput={setUsername} />
-        <Field label="password" type="password" value={password} onInput={setPassword} onCommit={() => void submit()} />
+        <Field label="password" type="password" value={password} onInput={setPassword} onSubmit={() => void submit()} />
         {failure ? <ErrorNote>{failure}</ErrorNote> : null}
       </div>
     </Dialog>

@@ -11,7 +11,7 @@ use bridgething_io::HttpExecutor;
 pub use session::*;
 
 use crate::{
-  api::ota::{ArtifactDigest, OtaAvailable, OtaPollStatus, OtaRun, OtaRunProgress},
+  api::ota::{ArtifactDigest, OtaAvailable, OtaPollStatus, OtaQueue, OtaRun, OtaRunProgress},
   backend::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, GeoProvider,
     HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
@@ -180,6 +180,9 @@ pub enum SessionEvent {
   OtaPollChanged {
     status: OtaPollStatus,
   },
+  OtaQueueChanged {
+    queue: OtaQueue,
+  },
   CompanionUpdateProgress {
     received: u64,
     total: u64,
@@ -226,6 +229,7 @@ pub struct WebappInstallRequest {
   pub provenance: Option<String>,
   pub webapp_id: Option<String>,
   pub webapp_name: Option<String>,
+  pub webapp_version: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -429,7 +433,7 @@ impl CompanionSession {
     }))
   }
 
-  #[uniffi::method(default(webapp_id = None, webapp_name = None))]
+  #[uniffi::method(default(webapp_id = None, webapp_name = None, webapp_version = None))]
   pub async fn install_webapp(
     &self,
     device_id: String,
@@ -437,31 +441,13 @@ impl CompanionSession {
     provenance: Option<String>,
     webapp_id: Option<String>,
     webapp_name: Option<String>,
+    webapp_version: Option<String>,
   ) -> Result<WebappInfo, CompanionError> {
     self.gateway_checked(&device_id)?;
-    let source = std::sync::Arc::new(bridgething_delivery::ota::stream::FileSource::open(
-      std::path::Path::new(&archive_path),
-    ));
-    let mut probe = [0u8; 1];
-    bridgething_delivery::transfer::FragmentSource::read_at(source.as_ref(), 0, &mut probe)
-      .map_err(|reason| CompanionError::Device(format!("{archive_path}: {reason}")))?;
-    match self
-      .session
-      .ota()
-      .install_webapp(
-        &device_id,
-        source,
-        provenance.as_deref(),
-        webapp_label(webapp_id, webapp_name),
-      )
+    let reservation = self.reserve_install(&device_id, webapp_id, webapp_name, webapp_version);
+    self
+      .install_archive(&device_id, &archive_path, provenance.as_deref(), reservation)
       .await
-    {
-      bridgething_delivery::ota::service::WebappInstallResult::Installed(info) => {
-        self.announce_webapps(&device_id).await;
-        Ok(crate::session::observer::webapp(*info))
-      }
-      bridgething_delivery::ota::service::WebappInstallResult::Failed { reason } => Err(CompanionError::Device(reason)),
-    }
   }
 
   #[uniffi::method(default(sink = None))]
@@ -477,8 +463,10 @@ impl CompanionSession {
       provenance,
       webapp_id,
       webapp_name,
+      webapp_version,
     } = request;
     self.gateway_checked(&device_id)?;
+    let reservation = self.reserve_install(&device_id, webapp_id, webapp_name, webapp_version);
     let path = self
       .session
       .ota()
@@ -491,17 +479,11 @@ impl CompanionSession {
       )
       .await
       .map_err(|failure| CompanionError::Device(failure.to_string()))?;
+    let bundle = path.display().to_string();
     let installed = self
-      .install_webapp(
-        device_id,
-        path.display().to_string(),
-        provenance,
-        webapp_id,
-        webapp_name,
-      )
+      .install_archive(&device_id, &bundle, provenance.as_deref(), reservation)
       .await;
     if let (Ok(_), Some(sink)) = (&installed, sink) {
-      let bundle = path.display().to_string();
       let _ = tokio::task::spawn_blocking(move || sink.installed(bundle)).await;
     }
     let _ = std::fs::remove_file(&path);
@@ -873,6 +855,48 @@ impl CompanionSession {
     self.session.gateway_for(device_id).ok_or(CompanionError::NotConnected)
   }
 
+  fn reserve_install(
+    &self,
+    device_id: &str,
+    id: Option<String>,
+    name: Option<String>,
+    version: Option<String>,
+  ) -> Option<bridgething_delivery::ota::service::InstallReservation> {
+    let label = bridgething_delivery::ota::run_store::WebappLabel {
+      id: id?,
+      name: name?,
+      version: version?,
+    };
+    Some(self.session.ota().reserve_install(device_id, label))
+  }
+
+  async fn install_archive(
+    &self,
+    device_id: &str,
+    archive_path: &str,
+    provenance: Option<&str>,
+    reservation: Option<bridgething_delivery::ota::service::InstallReservation>,
+  ) -> Result<WebappInfo, CompanionError> {
+    let source = std::sync::Arc::new(bridgething_delivery::ota::stream::FileSource::open(
+      std::path::Path::new(archive_path),
+    ));
+    let mut probe = [0u8; 1];
+    bridgething_delivery::transfer::FragmentSource::read_at(source.as_ref(), 0, &mut probe)
+      .map_err(|reason| CompanionError::Device(format!("{archive_path}: {reason}")))?;
+    match self
+      .session
+      .ota()
+      .install_webapp(device_id, source, provenance, reservation)
+      .await
+    {
+      bridgething_delivery::ota::service::WebappInstallResult::Installed(info) => {
+        self.announce_webapps(device_id).await;
+        Ok(crate::session::observer::webapp(*info))
+      }
+      bridgething_delivery::ota::service::WebappInstallResult::Failed { reason } => Err(CompanionError::Device(reason)),
+    }
+  }
+
   async fn announce_webapps(&self, device_id: &str) {
     let Ok(gateway) = self.gateway_checked(device_id) else {
       return;
@@ -896,10 +920,6 @@ impl CompanionSession {
 
 fn device_error<E: std::fmt::Debug>(failure: bridgething_sdk_runtime::RequestFailure<E>) -> CompanionError {
   CompanionError::Device(format!("{failure:?}"))
-}
-
-fn webapp_label(id: Option<String>, name: Option<String>) -> Option<bridgething_delivery::ota::run_store::WebappLabel> {
-  Some(bridgething_delivery::ota::run_store::WebappLabel { id: id?, name: name? })
 }
 
 fn webapp_id(raw: &str) -> Result<uuid::Uuid, CompanionError> {

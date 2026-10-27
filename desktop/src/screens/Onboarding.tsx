@@ -14,35 +14,18 @@ export function OnboardingScreen({ onSkip }: { onSkip: () => void }): VNode {
       <header class="flex shrink-0 items-center justify-between gap-3 border-b border-rule bg-screen px-6 py-4">
         <Wordmark size="sm" />
         <Button variant="ghost" size="sm" onClick={onSkip}>
-          skip for now
+          skip
         </Button>
       </header>
 
       <Screen>
-        <ScreenHeader
-          eyebrow="first run"
-          title="connect a Car Thing"
-          subtitle="this app talks to the daemon running on the device. pick one below and it takes over from here."
-        />
+        <ScreenHeader title="connect a Car Thing" />
 
-        <StatusStrip
-          tone={failed.length > 0 ? 'err' : found.length > 0 ? 'accent' : 'warn'}
-          title={
-            failed.length > 0
-              ? 'the link did not open'
-              : found.length > 0
-                ? `${found.length} daemon${found.length === 1 ? '' : 's'} on your network`
-                : 'looking for a Car Thing'
-          }
-          subtitle={
-            failed.length > 0
-              ? (failed[0]?.linkError ?? 'pick it again below')
-              : found.length > 0
-                ? 'pick one to link this computer to it'
-                : 'plug one in over usb, or put it on the same network as this computer'
-          }
-          class="mb-6"
-        />
+        {failed.length > 0 ? (
+          <StatusStrip tone="err" title="link failed" subtitle={failed[0]?.linkError ?? undefined} class="mb-6" />
+        ) : found.length === 0 ? (
+          <StatusStrip tone="warn" title="searching" subtitle="plug a Car Thing in over usb" class="mb-6" />
+        ) : null}
 
         <ConnectFlow />
       </Screen>

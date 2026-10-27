@@ -6,8 +6,8 @@ use bridgething_companion::{
     NowPlayingTrack, OtaPollConfig, PeerLinkStatus, ProviderInfo, RepeatMode, ServiceHealth, ServiceHealthKind,
     SessionEvent, SessionHostInfo, SessionPeer, SessionSnapshot, SignInMethod, VoiceModelState, VoiceModelStatus,
     ota::{
-      OtaApplyPhase, OtaAvailable, OtaKind, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaPollStatus, OtaRun,
-      OtaRunPhase, OtaStepKind, OtaStoreChange,
+      OtaApplyPhase, OtaAvailable, OtaKind, OtaPhaseSnapshot, OtaPlanStep, OtaPollEvent, OtaPollStatus, OtaQueue,
+      OtaQueuedInstall, OtaRun, OtaRunPhase, OtaStepKind, OtaStoreChange,
     },
   },
   backend::LogLevel,
@@ -136,6 +136,18 @@ fn snapshot() -> SessionSnapshot {
       last_polled_at: Some("2026-08-09T00:00:00Z".into()),
       error: None,
     },
+    ota_queues: vec![queue()],
+  }
+}
+
+fn queue() -> OtaQueue {
+  OtaQueue {
+    device_id: "device".into(),
+    installs: vec![OtaQueuedInstall {
+      webapp_id: "01890000-0000-7000-8000-0000000000ab".into(),
+      webapp_name: "FlowState".into(),
+      version: "1.2.0".into(),
+    }],
   }
 }
 
@@ -157,7 +169,7 @@ fn run() -> OtaRun {
     stage_received: Some(512),
     stage_total: Some(4096),
     rate_per_sec: Some(128.0),
-    dwl_percent: Some(12),
+    write_percent: Some(12),
     outcome: None,
     error: None,
     release_version: Some("1.2.3".into()),
@@ -288,12 +300,9 @@ fn a_phase_snapshot_keeps_its_variant_payload_fields_camel_case() {
   let applying = OtaPhaseSnapshot::Applying {
     phase: OtaApplyPhase::Confirming,
     write_percent: 40,
-    dwl_percent: 90,
-    dwl_bytes: 4096,
   };
   let keys = keys_of(&applying);
   assert!(keys.contains("writePercent"), "payload field: {keys:?}");
-  assert!(keys.contains("dwlBytes"), "payload field: {keys:?}");
   assert_eq!(round_trip(&applying), applying);
 }
 
@@ -323,6 +332,8 @@ fn no_serialized_key_on_the_api_surface_is_snake_case() {
     snapshot: OtaPhaseSnapshot::Failed { reason: "nope".into() },
   }));
   keys.extend(keys_of(&OtaStoreChange::Run { run: Box::new(run()) }));
+  keys.extend(keys_of(&OtaStoreChange::Queue { queue: queue() }));
+  keys.extend(keys_of(&SessionEvent::OtaQueueChanged { queue: queue() }));
 
   let offenders: Vec<&String> = keys.iter().filter(|key| key.contains('_')).collect();
   assert!(

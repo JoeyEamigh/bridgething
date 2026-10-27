@@ -58,7 +58,7 @@ pub struct OtaRun {
   pub stage_total: Option<u64>,
   #[serde(skip)]
   pub rate_per_sec: Option<f64>,
-  pub dwl_percent: Option<u32>,
+  pub write_percent: Option<u32>,
   pub outcome: Option<OtaRunOutcome>,
   pub error: Option<String>,
   pub release_version: Option<String>,
@@ -82,6 +82,13 @@ pub struct OtaResume {
 pub struct WebappLabel {
   pub id: String,
   pub name: String,
+  pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtaQueue {
+  pub device_id: String,
+  pub installs: Vec<WebappLabel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,6 +110,7 @@ pub enum OtaStoreChange {
   Run(Box<OtaRun>),
   Available(OtaAvailable),
   Poll(OtaPollStatus),
+  Queue(OtaQueue),
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -119,6 +127,8 @@ pub struct OtaRunStore {
   runs: BTreeMap<String, OtaRun>,
   available: BTreeMap<String, OtaAvailable>,
   poll: OtaPollStatus,
+  queued: BTreeMap<String, Vec<(u64, WebappLabel)>>,
+  tickets: u64,
 }
 
 impl OtaRunStore {
@@ -133,6 +143,8 @@ impl OtaRunStore {
       runs,
       available: BTreeMap::new(),
       poll: OtaPollStatus::default(),
+      queued: BTreeMap::new(),
+      tickets: 0,
     }
   }
 
@@ -170,6 +182,42 @@ impl OtaRunStore {
 
   pub fn poll_status(&self) -> &OtaPollStatus {
     &self.poll
+  }
+
+  pub fn queues(&self) -> Vec<OtaQueue> {
+    self.queued.keys().map(|device_id| self.queue(device_id)).collect()
+  }
+
+  pub fn queue(&self, device_id: &str) -> OtaQueue {
+    OtaQueue {
+      device_id: device_id.to_owned(),
+      installs: self
+        .queued
+        .get(device_id)
+        .map(|held| held.iter().map(|(_, label)| label.clone()).collect())
+        .unwrap_or_default(),
+    }
+  }
+
+  pub fn enqueue(&mut self, device_id: &str, label: WebappLabel) -> (u64, OtaStoreChange) {
+    self.tickets += 1;
+    let ticket = self.tickets;
+    self
+      .queued
+      .entry(device_id.to_owned())
+      .or_default()
+      .push((ticket, label));
+    (ticket, OtaStoreChange::Queue(self.queue(device_id)))
+  }
+
+  pub fn dequeue(&mut self, device_id: &str, ticket: u64) -> Option<OtaStoreChange> {
+    let held = self.queued.get_mut(device_id)?;
+    let at = held.iter().position(|(held, _)| *held == ticket)?;
+    held.remove(at);
+    if held.is_empty() {
+      self.queued.remove(device_id);
+    }
+    Some(OtaStoreChange::Queue(self.queue(device_id)))
   }
 
   pub fn open_run_kind(&self, device_id: &str) -> Option<OtaKind> {
@@ -218,26 +266,6 @@ impl OtaRunStore {
     let resume = resume_of(run);
     self.persist();
     resume
-  }
-
-  pub fn note_meta(&mut self, device_id: &str, daemon_version: &str, image_version: &str) -> Option<OtaRun> {
-    let run = self.runs.get(device_id)?;
-    let daemon_ok = run.daemon_version.as_deref().is_none_or(|want| want == daemon_version);
-    let image_ok = run.image_version.as_deref().is_none_or(|want| want == image_version);
-    if !daemon_ok || !image_ok {
-      return None;
-    }
-    let targeted = run.daemon_version.is_some() || run.image_version.is_some();
-    if !targeted && run.outcome != Some(OtaRunOutcome::Succeeded) {
-      return None;
-    }
-    let mut cleared = self.runs.remove(device_id)?;
-    cleared.phase = OtaRunPhase::Idle;
-    cleared.outcome = Some(OtaRunOutcome::Succeeded);
-    cleared.error = None;
-    cleared.resumable = false;
-    self.persist();
-    Some(cleared)
   }
 
   pub fn annotate_webapp(
@@ -294,9 +322,9 @@ impl OtaRunStore {
     let now = self.clock.unix_millis();
 
     match event {
-      OtaPollEvent::ManifestPolled { updated_at } => {
+      OtaPollEvent::ManifestPolled { checked_at } => {
         self.poll = OtaPollStatus {
-          last_polled_at: Some(updated_at),
+          last_polled_at: Some(checked_at),
           error: None,
         };
         vec![OtaStoreChange::Poll(self.poll.clone())]
@@ -346,7 +374,7 @@ impl OtaRunStore {
           stage_received: None,
           stage_total: None,
           rate_per_sec: None,
-          dwl_percent: None,
+          write_percent: None,
           outcome: None,
           error: None,
           release_version: unset_if_empty(release),
@@ -393,7 +421,7 @@ impl OtaRunStore {
         run.stage_received = None;
         run.stage_total = None;
         run.rate_per_sec = None;
-        run.dwl_percent = None;
+        run.write_percent = None;
         if run.release_version.is_none() {
           run.release_version = unset_if_empty(version);
         }
@@ -434,7 +462,7 @@ impl OtaRunStore {
           stage_received: None,
           stage_total: None,
           rate_per_sec: None,
-          dwl_percent: None,
+          write_percent: None,
           outcome: None,
           error: None,
           release_version: None,
@@ -544,7 +572,7 @@ fn apply_snapshot(snapshot: OtaPhaseSnapshot, run: &mut OtaRun) {
       run.stage_received = Some(received);
       run.stage_total = Some(total);
       run.rate_per_sec = rate_per_sec;
-      run.dwl_percent = None;
+      run.write_percent = None;
     }
 
     OtaPhaseSnapshot::Streaming {
@@ -557,15 +585,10 @@ fn apply_snapshot(snapshot: OtaPhaseSnapshot, run: &mut OtaRun) {
       run.stage_received = Some(sent);
       run.stage_total = Some(total);
       run.rate_per_sec = rate_per_sec;
-      run.dwl_percent = None;
+      run.write_percent = None;
     }
 
-    OtaPhaseSnapshot::Applying {
-      phase,
-      dwl_percent,
-      dwl_bytes,
-      ..
-    } => {
+    OtaPhaseSnapshot::Applying { phase, write_percent } => {
       run.phase = match phase {
         OtaPhase::Streaming => OtaRunPhase::Streaming,
         OtaPhase::Verifying => OtaRunPhase::Verifying,
@@ -573,15 +596,17 @@ fn apply_snapshot(snapshot: OtaPhaseSnapshot, run: &mut OtaRun) {
         OtaPhase::Confirming => OtaRunPhase::Confirming,
         OtaPhase::Reboot => OtaRunPhase::Reboot,
       };
-      run.dwl_percent = Some(dwl_percent);
-      run.stage_received = (dwl_percent < 100 && dwl_bytes > 0).then_some(dwl_bytes);
+      run.write_percent = Some(write_percent);
+      run.stage_received = None;
       run.stage_total = None;
+      run.rate_per_sec = None;
     }
 
     OtaPhaseSnapshot::Staged => {
       run.phase = OtaRunPhase::Writing;
       run.stage_received = None;
       run.stage_total = None;
+      run.rate_per_sec = None;
     }
 
     OtaPhaseSnapshot::Completed => run.phase = OtaRunPhase::Completed,
@@ -730,8 +755,6 @@ mod tests {
         snapshot: OtaPhaseSnapshot::Applying {
           phase: libbridgething::OtaPhase::Reboot,
           write_percent: 100,
-          dwl_percent: 100,
-          dwl_bytes: 0,
         },
       },
       None,

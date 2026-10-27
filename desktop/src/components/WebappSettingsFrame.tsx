@@ -92,7 +92,7 @@ export function WebappSettingsFrame({ open }: { open: string | null }): VNode {
         settings={settings}
         loaded={state.loaded}
         title={shown ? `${shown.name} settings` : 'settings'}
-        class={ready ? 'min-h-0 w-full flex-1 border-0 bg-bg' : 'hidden'}
+        class={ready ? 'mx-auto min-h-0 w-full max-w-4xl flex-1 border-0 bg-bg' : 'hidden'}
       />
     </div>
   );

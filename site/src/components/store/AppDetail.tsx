@@ -7,6 +7,7 @@ import {
   sortNewestFirst,
   type AppEntry,
   type CatalogAppListing,
+  webHref,
 } from '@bridgething/catalog';
 import { appIdFromPath } from '../../lib/app-routes';
 import {
@@ -16,7 +17,6 @@ import {
   type MergedCatalog,
   type StoreData,
 } from '../../lib/directory-client';
-import { webHref } from '../../lib/href';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import { orderedByTrust, sourceMap, type StoreSource } from '../../lib/store-sources';
 import { ExtensionBadge, ExtensionNote } from './ExtensionNote';

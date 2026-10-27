@@ -1,12 +1,4 @@
-use std::{
-  collections::HashSet,
-  net::SocketAddr,
-  path::PathBuf,
-  sync::{
-    Arc,
-    atomic::{AtomicU64, Ordering},
-  },
-};
+use std::{collections::HashSet, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use cache::{AssetLog, RangeCache};
 use libbridgething::RangePart;
@@ -29,38 +21,9 @@ mod server;
 
 const BROKER_MAILBOX: usize = 64;
 
-#[derive(Debug, Default)]
-pub struct RangeTally {
-  served: AtomicU64,
-  expected: AtomicU64,
-}
-
-impl RangeTally {
-  fn reset(&self) {
-    self.served.store(0, Ordering::Relaxed);
-    self.expected.store(0, Ordering::Relaxed);
-  }
-
-  fn add_expected(&self, n: u64) {
-    self.expected.fetch_add(n, Ordering::Relaxed);
-  }
-
-  fn add_served(&self, n: u64) {
-    self.served.fetch_add(n, Ordering::Relaxed);
-  }
-
-  pub fn snapshot(&self) -> (u64, u64) {
-    (
-      self.served.load(Ordering::Relaxed),
-      self.expected.load(Ordering::Relaxed),
-    )
-  }
-}
-
 #[derive(Clone)]
 pub struct RangeProxy {
   cmd_tx: mpsc::Sender<BrokerCmd>,
-  tally: Arc<RangeTally>,
 }
 
 impl std::fmt::Debug for RangeProxy {
@@ -100,10 +63,7 @@ impl RangeProxy {
     };
     let _broker = tokio::spawn(broker.run());
 
-    let proxy = RangeProxy {
-      cmd_tx,
-      tally: Arc::new(RangeTally::default()),
-    };
+    let proxy = RangeProxy { cmd_tx };
     let bound = match server::spawn(proxy.clone(), bluetooth, sinks, bind, cancel.clone()).await {
       Ok((addr, handle)) => Some((addr, handle)),
       Err(err) => {
@@ -126,14 +86,9 @@ impl RangeProxy {
   }
 
   pub async fn activate(&self, update_id: String, peer: Option<Address>) {
-    self.tally.reset();
     if let Err(err) = self.cmd_tx.send(BrokerCmd::Activate { update_id, peer }).await {
       tracing::error!(?err, "range proxy mailbox closed; activate dropped");
     }
-  }
-
-  pub fn tally(&self) -> Arc<RangeTally> {
-    self.tally.clone()
   }
 
   pub async fn deactivate(&self) {
@@ -340,10 +295,7 @@ impl BrokerActor {
 pub fn noop_proxy() -> RangeProxy {
   let (cmd_tx, mut cmd_rx) = mpsc::channel::<BrokerCmd>(16);
   tokio::spawn(async move { while cmd_rx.recv().await.is_some() {} });
-  RangeProxy {
-    cmd_tx,
-    tally: Arc::new(RangeTally::default()),
-  }
+  RangeProxy { cmd_tx }
 }
 
 #[cfg(test)]
@@ -365,10 +317,7 @@ mod tests {
       inflight: Default::default(),
     };
     tokio::spawn(broker.run());
-    RangeProxy {
-      cmd_tx,
-      tally: Arc::new(RangeTally::default()),
-    }
+    RangeProxy { cmd_tx }
   }
 
   async fn broker() -> (RangeProxy, PathBuf) {

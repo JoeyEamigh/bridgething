@@ -17,7 +17,7 @@ use tokio_util::{bytes::Bytes, sync::CancellationToken};
 use uuid::Uuid;
 
 use super::{
-  BeginRangeError, RangeProxy, RangeTally,
+  BeginRangeError, RangeProxy,
   cache::{self, AssetLog, FetchReader, FetchWriter},
   layout::{self, EmitStep, MULTIPART_BOUNDARY},
 };
@@ -171,9 +171,6 @@ async fn serve(
     };
     tracing::info!(%asset, bytes = plan.cached_bytes, "serving an OTA range entirely from the cache");
     state.sinks.unbind(request_id);
-    let tally = state.proxy.tally();
-    tally.add_expected(plan.data_bytes());
-    tally.add_served(plan.cached_bytes);
     let meta = ResponseMeta {
       is_multipart: planned.is_multipart(),
       single: planned.single,
@@ -276,7 +273,6 @@ async fn finish_response(
   body_rx: ForwardStream,
 ) -> Response<Body> {
   let expected = plan.companion_bytes;
-  let tally = state.proxy.tally();
   let (mut writer, reader) = cache::fetch_channel(log.clone(), plan.companion_ranges.clone());
 
   let body = match reply_body {
@@ -297,8 +293,6 @@ async fn finish_response(
         return error_response(StatusCode::INTERNAL_SERVER_ERROR, "range cache write failed");
       }
       writer.finish();
-      tally.add_expected(plan.data_bytes());
-      tally.add_served(plan.cached_bytes + expected);
       Body::from_stream(emit_stream(plan.steps, log, Some(reader), state.proxy, request_id))
     }
     TransferBody::Stream(transfer) => {
@@ -310,9 +304,7 @@ async fn finish_response(
         state.proxy.end_range(request_id).await;
         return error_response(StatusCode::BAD_GATEWAY, "stream length does not match requested ranges");
       }
-      tally.add_expected(plan.data_bytes());
-      tally.add_served(plan.cached_bytes);
-      tokio::spawn(ingest_pump(body_rx, writer, expected, request_id, tally));
+      tokio::spawn(ingest_pump(body_rx, writer, expected, request_id));
       Body::from_stream(emit_stream(plan.steps, log, Some(reader), state.proxy, request_id))
     }
   };
@@ -320,13 +312,7 @@ async fn finish_response(
   build_headers(meta).body(body).unwrap()
 }
 
-async fn ingest_pump(
-  mut rx: ForwardStream,
-  mut writer: FetchWriter,
-  expected: u64,
-  request_id: Uuid,
-  tally: Arc<RangeTally>,
-) {
+async fn ingest_pump(mut rx: ForwardStream, mut writer: FetchWriter, expected: u64, request_id: Uuid) {
   let mut received: u64 = 0;
   loop {
     let event = match tokio::time::timeout(INGEST_IDLE_TIMEOUT, rx.recv()).await {
@@ -366,7 +352,6 @@ async fn ingest_pump(
       return;
     }
     received += bytes.len() as u64;
-    tally.add_served(bytes.len() as u64);
     if received == expected {
       writer.finish();
       return;
@@ -608,8 +593,7 @@ mod tests {
         length: expected as u32,
       }],
     );
-    let tally = Arc::new(RangeTally::default());
-    let pump = tokio::spawn(ingest_pump(body_rx, writer, expected, request_id, tally.clone()));
+    let pump = tokio::spawn(ingest_pump(body_rx, writer, expected, request_id));
 
     let body: Vec<u8> = (0..expected).map(|i| (i % 251) as u8).collect();
     let mut acks = Vec::new();
@@ -626,7 +610,6 @@ mod tests {
 
     assert!(!acks.is_empty(), "receipt acks must flow while the reader stalls");
     assert_eq!(acks.last().copied(), Some(expected as u32));
-    assert_eq!(tally.snapshot().0, expected);
 
     let mut drained = Vec::new();
     while (drained.len() as u64) < expected {
@@ -705,7 +688,6 @@ mod tests {
       multipart_body(&parts, 100_000),
       "a fully cached body is reproduced byte for byte with no companion answering"
     );
-    assert_eq!(proxy.tally().snapshot(), (350, 350));
   }
 
   #[tokio::test]
@@ -736,7 +718,6 @@ mod tests {
       vec![vec![RangeSpec { start: 40, length: 60 }]],
       "only the uncovered gap crosses the wire"
     );
-    assert_eq!(proxy.tally().snapshot(), (100, 100));
   }
 
   #[tokio::test]
@@ -819,7 +800,6 @@ mod tests {
       }]],
       "only the bytes the cache is missing cross the wire after a restart"
     );
-    assert_eq!(restarted.tally().snapshot(), (200, 200));
   }
 
   #[tokio::test]
@@ -885,13 +865,7 @@ mod tests {
     let bl = layout::build(&parts, 4096);
     let plan = layout::plan_from(&bl, 0, &log.index()).unwrap();
     let (writer, reader) = cache::fetch_channel(log.clone(), plan.companion_ranges.clone());
-    tokio::spawn(ingest_pump(
-      body_rx,
-      writer,
-      1024,
-      request_id,
-      Arc::new(RangeTally::default()),
-    ));
+    tokio::spawn(ingest_pump(body_rx, writer, 1024, request_id));
 
     sinks.fragment(request_id, 0, Bytes::from_static(&[0u8; 512]));
     sinks.abandon(request_id, "link died".into());

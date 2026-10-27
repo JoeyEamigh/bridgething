@@ -1,4 +1,4 @@
-import { Button, Dialog, ListGroup, ListRow, Pill, SectionEmpty, SectionHeader, Spinner } from '@bridgething/ui';
+import { Button, Dialog, ListGroup, ListRow, SectionEmpty, SectionHeader, Spinner } from '@bridgething/ui';
 import type { VNode } from 'preact';
 
 import { useDesktop } from '../desktop.ts';
@@ -8,16 +8,15 @@ import { postponedUpdate, promptedUpdate, selfUpdate } from '../stores/session.t
 import { Progress } from './Progress.tsx';
 import { ErrorNote, Section } from './Screen.tsx';
 
-export function SelfUpdate({ version }: { version: string | undefined }): VNode {
+export function SelfUpdate(): VNode {
   const session = useDesktop();
   const state = selfUpdate.data.value;
 
   return (
     <Section>
       <SectionHeader
-        title="this app"
-        hint={version ? `bridgething desktop v${version}` : undefined}
-        action={state.kind === 'downloading' || state.kind === 'installing' ? undefined : 'check now'}
+        title="app update"
+        action={state.kind === 'downloading' || state.kind === 'installing' ? undefined : 'check'}
         pending={state.kind === 'checking'}
         onAction={() => void session.checkSelfUpdate()}
       />
@@ -26,7 +25,7 @@ export function SelfUpdate({ version }: { version: string | undefined }): VNode 
         <div class="border border-accent/30 bg-accent-soft">
           <div class="flex items-start gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <span class="text-row text-off-white">fetching version {state.version}</span>
+              <span class="text-row text-off-white">downloading {state.version}</span>
               <span class="font-mono text-hint text-muted">
                 {bytes(state.received)}
                 {state.total === null ? '' : ` of ${bytes(state.total)}`}
@@ -40,7 +39,7 @@ export function SelfUpdate({ version }: { version: string | undefined }): VNode 
         <div class="border border-accent/30 bg-accent-soft">
           <div class="flex items-start gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-1 flex-col gap-1">
-              <span class="text-row text-off-white">version {state.version} is ready</span>
+              <span class="text-row text-off-white">{state.version} ready</span>
               {state.kind === 'ready' && state.date ? (
                 <span class="font-mono text-hint text-muted">{day(state.date)}</span>
               ) : null}
@@ -70,16 +69,15 @@ export function SelfUpdate({ version }: { version: string | undefined }): VNode 
             iconTint="ok"
             title="up to date"
             subtitle={`checked ${since(state.checkedAt)}`}
-            trailing={<Pill tone="ok">current</Pill>}
           />
         </ListGroup>
       ) : state.kind === 'unavailable' ? (
         <>
-          <SectionEmpty>updates are unavailable</SectionEmpty>
+          <SectionEmpty>unavailable</SectionEmpty>
           <ErrorNote>{state.reason}</ErrorNote>
         </>
       ) : (
-        <SectionEmpty>{state.kind === 'checking' ? <Spinner class="mx-auto" /> : 'not checked yet'}</SectionEmpty>
+        <SectionEmpty>{state.kind === 'checking' ? <Spinner class="mx-auto" /> : 'not checked'}</SectionEmpty>
       )}
     </Section>
   );
@@ -96,8 +94,7 @@ export function SelfUpdatePrompt(): VNode {
     <Dialog
       open={ready !== null}
       onClose={later}
-      title={ready ? `version ${ready.version} is ready` : ''}
-      subtitle="bridgething closes, installs it and opens again"
+      title={ready ? `${ready.version} ready` : ''}
       footer={
         <>
           <Button variant="ghost" onClick={later}>
@@ -108,11 +105,7 @@ export function SelfUpdatePrompt(): VNode {
           </Button>
         </>
       }>
-      {ready?.notes ? (
-        <p class="m-0 text-hint leading-relaxed whitespace-pre-wrap text-muted">{ready.notes}</p>
-      ) : (
-        <p class="m-0 text-body text-muted">a linked Car Thing drops off for a moment while the app restarts.</p>
-      )}
+      {ready?.notes ? <p class="m-0 text-hint leading-relaxed whitespace-pre-wrap text-muted">{ready.notes}</p> : null}
     </Dialog>
   );
 }

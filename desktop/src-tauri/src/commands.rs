@@ -6,7 +6,7 @@ use bridgething_companion::{
     DocEntry, LauncherGesture, MediaCover, MediaPickKind, NowPlaying, OtaPollConfig, PickedMedia, ProviderCredentials,
     ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappBlob, WebappInfo,
     WebappInstallRequest, WebappSlot, WebappSlots,
-    ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun},
+    ota::{OtaAvailable, OtaDiscoverManifest, OtaPollStatus, OtaRun, OtaRunProgress},
   },
   provider::ResumeTarget,
 };
@@ -202,6 +202,14 @@ pub async fn voice_model(shell: State<'_, Arc<Shell>>) -> Answer<VoiceModelState
 #[tauri::command]
 pub async fn ota_runs(shell: State<'_, Arc<Shell>>) -> Answer<Vec<OtaRun>> {
   Ok(shell.session().snapshot().await.ota_runs)
+}
+
+#[tauri::command]
+pub async fn ota_run_progress(shell: State<'_, Arc<Shell>>, device_id: String) -> Answer<Option<OtaRunProgress>> {
+  let now_ms = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map_or(0, |since| since.as_millis() as u64);
+  Ok(shell.session().ota_run_progress(device_id, now_ms))
 }
 
 #[tauri::command]

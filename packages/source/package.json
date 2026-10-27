@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/source",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "The toolkit for running a bridgething webapp source: build, bundle, version, validate and publish a catalog.v1 to GitHub Pages.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

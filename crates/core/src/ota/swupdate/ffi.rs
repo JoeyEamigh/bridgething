@@ -17,9 +17,12 @@ use tokio::{
   task,
 };
 
-use super::{Error, ProgressTick, Selector};
+use super::{Error, ProgressTick, meter::WriteMeter};
+use crate::ota::slots::Slot;
+
 const CHUNK_SIZE: usize = 64 * 1024;
-const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(100);
+const SOFTWARE_SET: &str = "stable";
+const SAMPLE_INTERVAL: Duration = Duration::from_millis(500);
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 const SWUPDATE_CTRL_SOCKET: &str = "/tmp/sockinstctrl";
 const SWUPDATE_PROGRESS_SOCKET: &str = "/tmp/swupdateprog";
@@ -45,7 +48,7 @@ fn ensure_socket_paths() {
 
 pub async fn install_swu<F>(
   swu_path: &Path,
-  selector: &Selector,
+  target: Slot,
   progress: &F,
   cancel_rx: &mut watch::Receiver<bool>,
 ) -> Result<(), Error>
@@ -53,23 +56,34 @@ where
   F: Fn(ProgressTick) + Send + Sync,
 {
   ensure_socket_paths();
+  let meter = match WriteMeter::open(swu_path, target) {
+    Ok(meter) => Some(meter),
+    Err(err) => {
+      tracing::warn!(%err, ?target, "cannot meter the slot write; install progress will hold at zero");
+      None
+    }
+  };
   let (prog_tx, mut prog_rx) = mpsc::channel::<sys::progress_msg>(32);
   let stop = StopSignal::new();
   let stop_for_reader = stop.handle();
   let _progress_handle = task::spawn_blocking(move || progress_reader(prog_tx, stop_for_reader));
 
   let path = swu_path.to_path_buf();
-  let selector = selector.clone();
-  let send_handle = task::spawn_blocking(move || install_blocking(path, selector));
+  let send_handle = task::spawn_blocking(move || install_blocking(path, target));
 
   let mut send_handle = Some(send_handle);
   let mut send_done = false;
   let mut progress_closed = false;
-  let mut last_emit: Option<(ProgressKey, Instant)> = None;
-  let mut last_tick: Option<ProgressTick> = None;
-  let mut heartbeat = tokio::time::interval(HEARTBEAT_INTERVAL);
-  heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-  heartbeat.tick().await;
+  let mut tick = ProgressTick {
+    phase: OtaPhase::Writing,
+    percent: 0,
+    step: 0,
+    nsteps: 0,
+    eta_ms: None,
+  };
+  let mut last_emit = Instant::now();
+  let mut sample = tokio::time::interval(SAMPLE_INTERVAL);
+  sample.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
   loop {
     if send_done && progress_closed {
@@ -83,16 +97,19 @@ where
           progress_closed = true;
           continue;
         };
-        let tick = translate(&msg);
-        last_tick = Some(tick);
-        heartbeat.reset();
-        let terminal = matches!(msg.status, sys::RECOVERY_STATUS_SUCCESS | sys::RECOVERY_STATUS_FAILURE);
-        if should_emit(&mut last_emit, &tick, terminal) {
+        let step = msg.cur_step.min(u8::MAX as c_uint) as u8;
+        let nsteps = msg.nsteps.min(u8::MAX as c_uint) as u8;
+        if (step, nsteps) != (tick.step, tick.nsteps) {
+          tick.step = step;
+          tick.nsteps = nsteps;
           progress(tick);
+          last_emit = Instant::now();
         }
         match msg.status {
           sys::RECOVERY_STATUS_SUCCESS => {
             tracing::info!("libswupdate reported SUCCESS");
+            tick.percent = 100;
+            progress(tick);
             return Ok(());
           }
           sys::RECOVERY_STATUS_FAILURE => {
@@ -103,17 +120,13 @@ where
           _ => {}
         }
       }
-      _ = heartbeat.tick() => {
-        let beat = last_tick.unwrap_or(ProgressTick {
-          phase: OtaPhase::Writing,
-          percent: 0,
-          step: 0,
-          nsteps: 0,
-          dwl_percent: 0,
-          dwl_bytes: 0,
-          eta_ms: None,
-        });
-        progress(beat);
+      _ = sample.tick() => {
+        let percent = meter.as_ref().map_or(0, WriteMeter::percent).max(tick.percent);
+        if percent != tick.percent || last_emit.elapsed() >= HEARTBEAT_INTERVAL {
+          tick.percent = percent;
+          progress(tick);
+          last_emit = Instant::now();
+        }
       }
       res = wait_send(&mut send_handle), if send_handle.is_some() => {
         send_done = true;
@@ -140,37 +153,6 @@ async fn wait_send(
   h.await
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct ProgressKey {
-  phase: OtaPhase,
-  percent: u8,
-  step: u8,
-  dwl_percent: u8,
-}
-
-fn should_emit(last: &mut Option<(ProgressKey, Instant)>, tick: &ProgressTick, terminal: bool) -> bool {
-  let now = Instant::now();
-  let key = ProgressKey {
-    phase: tick.phase,
-    percent: tick.percent,
-    step: tick.step,
-    dwl_percent: tick.dwl_percent,
-  };
-  let (phase_changed, dup, intervaled) = match last {
-    Some((prev, t)) => (
-      prev.phase != key.phase,
-      *prev == key,
-      now.duration_since(*t) < PROGRESS_MIN_INTERVAL,
-    ),
-    None => (true, false, false),
-  };
-  if !terminal && !phase_changed && (dup || intervaled) {
-    return false;
-  }
-  *last = Some((key, now));
-  true
-}
-
 fn write_cstr_field(field: &mut [c_char], value: &str) -> Result<(), Error> {
   let bytes = value.as_bytes();
   if bytes.len() + 1 > field.len() {
@@ -185,7 +167,7 @@ fn write_cstr_field(field: &mut [c_char], value: &str) -> Result<(), Error> {
   Ok(())
 }
 
-fn install_blocking(swu_path: PathBuf, selector: Selector) -> Result<(), Error> {
+fn install_blocking(swu_path: PathBuf, target: Slot) -> Result<(), Error> {
   let mut file = std::fs::File::open(&swu_path)?;
   let total_len = file.metadata()?.len();
   let mut buf = vec![0u8; CHUNK_SIZE];
@@ -197,8 +179,8 @@ fn install_blocking(swu_path: PathBuf, selector: Selector) -> Result<(), Error> 
     req.apiversion = sys::SWUPDATE_API_VERSION;
     req.source = sys::sourcetype_SOURCE_LOCAL;
     req.dry_run = sys::run_type_RUN_INSTALL;
-    write_cstr_field(&mut req.software_set, &selector.software_set)?;
-    write_cstr_field(&mut req.running_mode, &selector.running_mode)?;
+    write_cstr_field(&mut req.software_set, SOFTWARE_SET)?;
+    write_cstr_field(&mut req.running_mode, running_mode(target))?;
 
     let fd = sys::ipc_inst_start_ext(
       &mut req as *mut _ as *mut c_void,
@@ -231,6 +213,13 @@ fn install_blocking(swu_path: PathBuf, selector: Selector) -> Result<(), Error> 
     sys::ipc_end(fd);
   }
   Ok(())
+}
+
+fn running_mode(slot: Slot) -> &'static str {
+  match slot {
+    Slot::A => "slot_a",
+    Slot::B => "slot_b",
+  }
 }
 
 struct StopSignal(Arc<AtomicBool>);
@@ -298,18 +287,6 @@ fn connect_progress(stop: &AtomicBool) -> Option<c_int> {
   }
 }
 
-fn translate(msg: &sys::progress_msg) -> ProgressTick {
-  ProgressTick {
-    phase: OtaPhase::Writing,
-    percent: msg.cur_percent.min(100) as u8,
-    step: msg.cur_step.min(u8::MAX as c_uint) as u8,
-    nsteps: msg.nsteps.min(u8::MAX as c_uint) as u8,
-    dwl_percent: msg.dwl_percent.min(100) as u8,
-    dwl_bytes: u32::try_from(msg.dwl_bytes).unwrap_or(u32::MAX),
-    eta_ms: None,
-  }
-}
-
 fn info_str(msg: &sys::progress_msg) -> String {
   let bytes = &msg.info[..msg.infolen.min(msg.info.len() as c_uint) as usize];
   let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
@@ -352,16 +329,12 @@ mod tests {
     let swu = dir.join("update.swu");
     std::fs::write(&swu, vec![0x5au8; 4096]).unwrap();
 
-    let selector = Selector {
-      software_set: "stable".into(),
-      running_mode: "slot_b".into(),
-    };
     let (_cancel_tx, mut cancel_rx) = watch::channel(false);
     let progress = |_: ProgressTick| {};
 
     let outcome = tokio::time::timeout(
       PROGRESS_CONNECT_BUDGET * 4,
-      install_swu(&swu, &selector, &progress, &mut cancel_rx),
+      install_swu(&swu, Slot::B, &progress, &mut cancel_rx),
     )
     .await
     .expect("install must give a verdict once the progress socket is written off, not heartbeat forever");

@@ -1,4 +1,4 @@
-import type { OtaDiscoverManifest, OtaManifestRelease, OtaPollConfig } from '@bridgething/companion-types';
+import type { OtaDiscoverManifest, OtaManifestRelease, OtaPollConfig, OtaRun } from '@bridgething/companion-types';
 import {
   Button,
   Dialog,
@@ -19,33 +19,26 @@ import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
 import { OtaRunCard } from '../components/OtaRunCard.tsx';
-import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
+import { Disclosure, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import { useDesktop } from '../desktop.ts';
 import { basename, since } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
 import { DEFAULT_OTA_POLL_CONFIG, POLL_INTERVALS, intervalLabel, rootUrlOf } from '../lib/ota.ts';
 import { pickArtifact } from '../lib/picker.ts';
-import {
-  otaAvailable,
-  otaManifestFor,
-  otaPoll,
-  otaPollConfig,
-  otaRuns,
-  selectedDevice,
-  selectedMeta,
-} from '../stores/session.ts';
+import { otaManifestFor, otaPoll, otaPollConfig, otaRuns, selectedMeta } from '../stores/session.ts';
+
+const RELEASES_SHOWN = 5;
 
 export function UpdatesScreen(): VNode {
   const session = useSession();
-  const runs = otaRuns.value;
-  const available = otaAvailable.value;
+  const active = otaRuns.value.filter(run => run.outcome !== 'succeeded');
+  const firmware = otaRuns.value.find(run => !run.outcome && (run.kind === 'image' || run.kind === 'daemon')) ?? null;
   const poll = otaPoll.value;
 
   const config = otaPollConfig.value;
   const rootUrl = rootUrlOf(config);
   const manifest = otaManifestFor(rootUrl);
 
-  const deviceId = selectedDevice.data.value;
   const held = selectedMeta.value;
   const [channel, setChannel] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -57,7 +50,7 @@ export function UpdatesScreen(): VNode {
   const check = async () => {
     setChecking(true);
     try {
-      await session.checkForOtaUpdate(rootUrl);
+      await Promise.all([session.checkForOtaUpdate(rootUrl), manifest.refresh()]);
     } finally {
       setChecking(false);
     }
@@ -66,21 +59,19 @@ export function UpdatesScreen(): VNode {
   return (
     <Screen>
       <ScreenHeader
-        eyebrow="ota"
         title="updates"
-        subtitle="what the release manifest offers, and what the core is pushing right now."
         trailing={
           <Button size="sm" icon={<Icon name="refresh" />} loading={checking} onClick={() => void check()}>
-            check now
+            check
           </Button>
         }
       />
 
-      {runs.length > 0 ? (
+      {active.length > 0 ? (
         <Section>
-          <SectionHeader title="in flight" />
+          <SectionHeader title="in progress" />
           <div class="flex flex-col gap-2">
-            {runs.map(run => (
+            {active.map(run => (
               <OtaRunCard
                 key={run.runId}
                 run={run}
@@ -94,13 +85,7 @@ export function UpdatesScreen(): VNode {
       ) : null}
 
       <Section>
-        <SectionHeader
-          title="releases"
-          hint={installed ? `installed: ${installed}` : 'nothing connected'}
-          action="reload"
-          pending={manifest.pending.value}
-          onAction={manifest.refresh}
-        />
+        <SectionHeader title="releases" hint={installed ? `installed ${installed}` : undefined} />
         {channels.length > 1 ? (
           <div class="mb-3">
             <Segmented options={channels} value={chosen} label="channel" size="sm" onChange={setChannel} />
@@ -112,25 +97,22 @@ export function UpdatesScreen(): VNode {
           loading={manifest.pending.value}
           error={manifest.error.value}
           installed={installed}
+          firmware={firmware}
           deviceChannel={held?.channel ?? null}
           rootUrl={rootUrl}
         />
-        {available
-          .filter(entry => entry.deviceId === deviceId)
-          .map(entry =>
-            entry.releaseVersion ? (
-              <Hint key={entry.deviceId}>the core has flagged release {entry.releaseVersion} for this device.</Hint>
-            ) : null,
-          )}
       </Section>
 
       <Section>
-        <SectionHeader title="polling" hint={`last checked ${since(poll?.lastPolledAt ?? null)}`} />
+        <SectionHeader title="automatic updates" hint={`checked ${since(poll?.lastPolledAt ?? null)}`} />
         <PollConfig config={config} />
         {poll?.error ? <ErrorNote>{poll.error}</ErrorNote> : null}
       </Section>
 
-      <PushLocalArtifact />
+      <Disclosure title="advanced">
+        <ManifestRoot config={config} />
+        <PushLocalArtifact />
+      </Disclosure>
     </Screen>
   );
 }
@@ -141,6 +123,7 @@ function Releases({
   loading,
   error,
   installed,
+  firmware,
   deviceChannel,
   rootUrl,
 }: {
@@ -149,31 +132,31 @@ function Releases({
   loading: boolean;
   error: string | undefined;
   installed: string | null;
+  firmware: OtaRun | null;
   deviceChannel: string | null;
   rootUrl: string;
 }): VNode {
   const session = useSession();
   const [pending, setPending] = useState<OtaManifestRelease | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
 
   if (error) return <ErrorNote>{error}</ErrorNote>;
   if (!manifest) {
-    return (
-      <SectionEmpty>{loading ? <Spinner class="mx-auto" /> : 'the release manifest could not be read'}</SectionEmpty>
-    );
+    return <SectionEmpty>{loading ? <Spinner class="mx-auto" /> : 'manifest unavailable'}</SectionEmpty>;
   }
 
   const held = manifest.channels[channel];
-  if (!held) return <SectionEmpty>{`channel '${channel}' is not in the manifest`}</SectionEmpty>;
+  if (!held) return <SectionEmpty>{`no ${channel} channel`}</SectionEmpty>;
 
   const releases = held.releases.map(version => manifest.releases[version]).filter(entry => entry !== undefined);
-  if (releases.length === 0) return <SectionEmpty>no releases on this channel</SectionEmpty>;
+  if (releases.length === 0) return <SectionEmpty>no releases</SectionEmpty>;
 
   const apply = async (release: OtaManifestRelease) => {
+    setPending(null);
     setFailure(null);
     try {
       await session.applyOtaUpdate(channel, release.version, rootUrl);
-      setPending(null);
     } catch (reason) {
       setFailure(describeError(reason));
     }
@@ -182,17 +165,20 @@ function Releases({
   return (
     <>
       <ListGroup>
-        {releases.map(release => {
+        {(all ? releases : releases.slice(0, RELEASES_SHOWN)).map(release => {
           const current = installed === release.version;
           const yanked = release.yanked !== null;
+          const locked = yanked || current || firmware !== null;
           return (
             <ListRow
               key={release.version}
               title={release.version}
-              subtitle={yanked ? (release.yanked ?? 'yanked') : `channel ${release.channel}`}
-              disabled={yanked || current}
+              subtitle={yanked ? (release.yanked ?? undefined) : undefined}
+              disabled={locked}
               trailing={
-                yanked ? (
+                firmware?.releaseVersion === release.version ? (
+                  <Pill tone="accent">installing</Pill>
+                ) : yanked ? (
                   <Pill tone="err">yanked</Pill>
                 ) : current ? (
                   <Pill tone="ok">installed</Pill>
@@ -202,18 +188,23 @@ function Releases({
                   <Pill tone="warn">old</Pill>
                 ) : undefined
               }
-              onClick={yanked || current ? undefined : () => setPending(release)}
+              onClick={locked ? undefined : () => setPending(release)}
             />
           );
         })}
       </ListGroup>
+      {releases.length > RELEASES_SHOWN ? (
+        <Button size="sm" variant="ghost" class="mt-2" onClick={() => setAll(!all)}>
+          {all ? 'fewer' : `all ${releases.length}`}
+        </Button>
+      ) : null}
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
 
       <Dialog
         open={pending !== null}
         onClose={() => setPending(null)}
         title={pending ? `install ${pending.version}?` : ''}
-        subtitle="the device reboots into the new image once it is written"
+        subtitle="the device reboots when it finishes"
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(null)}>
@@ -224,70 +215,73 @@ function Releases({
             </Button>
           </>
         }>
-        <p class="m-0 text-body text-muted">
-          {deviceChannel && deviceChannel !== channel
-            ? `this moves the device from the ${deviceChannel} channel to ${channel}.`
-            : 'the daemon and the system image are pushed together.'}
-        </p>
+        {deviceChannel && deviceChannel !== channel ? (
+          <p class="m-0 text-body text-muted">{`moves the device from ${deviceChannel} to ${channel}`}</p>
+        ) : null}
       </Dialog>
     </>
   );
 }
 
-function PollConfig({ config }: { config: OtaPollConfig | null }): VNode {
+function usePollWriter(config: OtaPollConfig | null): (partial: Partial<OtaPollConfig>) => void {
   const session = useSession();
   const held = config ?? DEFAULT_OTA_POLL_CONFIG;
-  const [rootDraft, setRootDraft] = useState(rootUrlOf(config));
-
-  const write = (partial: Partial<OtaPollConfig>) => {
+  return partial => {
     void session.setOtaPollConfig({
       intervalSeconds: partial.intervalSeconds ?? held.intervalSeconds,
       autoPush: partial.autoPush ?? held.autoPush,
       rootUrl: partial.rootUrl ?? rootUrlOf(config),
     });
   };
+}
+
+function PollConfig({ config }: { config: OtaPollConfig | null }): VNode {
+  const held = config ?? DEFAULT_OTA_POLL_CONFIG;
+  const write = usePollWriter(config);
 
   return (
-    <div class="flex flex-col gap-2">
-      <ListGroup>
-        <ListRow
-          icon={<Icon name="download" />}
-          iconTint={held.autoPush ? 'accent' : 'default'}
-          title="install updates automatically"
-          subtitle="firmware and store apps. off means every release waits for you to pick it"
-          trailing={
-            <Switch
-              checked={held.autoPush}
-              label="install updates automatically"
-              onChange={autoPush => write({ autoPush })}
-            />
-          }
-        />
-        <ListRow
-          icon={<Icon name="clock" />}
-          title="check every"
-          subtitle="how often the manifest is polled"
-          trailing={
-            <Segmented
-              options={POLL_INTERVALS.map(value => ({ value, label: intervalLabel(Number(value)) }))}
-              value={String(held.intervalSeconds)}
-              label="poll interval"
-              size="sm"
-              onChange={value => write({ intervalSeconds: Number(value) })}
-            />
-          }
-        />
-      </ListGroup>
+    <ListGroup>
+      <ListRow
+        icon={<Icon name="download" />}
+        iconTint={held.autoPush ? 'accent' : 'default'}
+        title="install automatically"
+        subtitle="firmware and store apps"
+        trailing={
+          <Switch checked={held.autoPush} label="install automatically" onChange={autoPush => write({ autoPush })} />
+        }
+      />
+      <ListRow
+        icon={<Icon name="clock" />}
+        title="check every"
+        trailing={
+          <Segmented
+            options={POLL_INTERVALS.map(value => ({ value, label: intervalLabel(Number(value)) }))}
+            value={String(held.intervalSeconds)}
+            label="poll interval"
+            size="sm"
+            onChange={value => write({ intervalSeconds: Number(value) })}
+          />
+        }
+      />
+    </ListGroup>
+  );
+}
+
+function ManifestRoot({ config }: { config: OtaPollConfig | null }): VNode {
+  const write = usePollWriter(config);
+  const [draft, setDraft] = useState(rootUrlOf(config));
+
+  return (
+    <Section>
       <Field
         label="manifest root"
-        value={rootDraft}
-        onInput={setRootDraft}
+        value={draft}
+        onInput={setDraft}
         onCommit={value => write({ rootUrl: value.trim() })}
         icon={<Icon name="globe" />}
         type="url"
-        hint="where manifest.json is fetched from"
       />
-    </div>
+    </Section>
   );
 }
 
@@ -304,9 +298,9 @@ function PushLocalArtifact(): VNode {
     setFailure(null);
     try {
       const answer = await session.otaPushDaemon(artifact);
-      if (answer.kind === 'completed') setOutcome(`${basename(artifact)} is on the device`);
+      if (answer.kind === 'completed') setOutcome(`${basename(artifact)} pushed`);
       else if (answer.kind === 'failed') setFailure(answer.reason);
-      else setFailure('the push stopped before it finished');
+      else setFailure('push stopped');
     } catch (reason) {
       setFailure(describeError(reason));
     } finally {
@@ -323,24 +317,23 @@ function PushLocalArtifact(): VNode {
 
   return (
     <Section>
-      <SectionHeader title="push a local build" hint="a daemon binary or .swu from this computer" />
       <div class="flex items-end gap-2">
         <Field
           class="flex-1"
+          label="push a daemon binary"
           value={path}
           onInput={setPath}
-          onCommit={value => value.trim() && void push(value.trim())}
+          onSubmit={value => value.trim() && void push(value.trim())}
           icon={<Icon name="file" />}
           placeholder="/path/to/bridgething"
           clearable
         />
         <Button icon={<Icon name="upload" />} loading={busy} onClick={() => void browse()}>
-          pick a file
+          choose
         </Button>
       </div>
       {outcome ? <Hint>{outcome}</Hint> : null}
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
-      <Hint>this bypasses the manifest entirely. the device takes whatever you hand it.</Hint>
     </Section>
   );
 }

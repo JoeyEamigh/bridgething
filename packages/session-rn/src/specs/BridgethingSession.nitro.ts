@@ -231,7 +231,7 @@ export type BridgethingOtaRun = {
   stageReceived?: number;
   stageTotal?: number;
   ratePerSec?: number;
-  dwlPercent?: number;
+  writePercent?: number;
   outcome?: BridgethingOtaOutcome;
   error?: string;
   releaseVersion?: string;
@@ -260,6 +260,17 @@ export type BridgethingOtaAvailable = {
 export type BridgethingOtaPollStatus = {
   lastPolledAt?: string;
   error?: string;
+};
+
+export type BridgethingOtaQueuedInstall = {
+  webappId: string;
+  webappName: string;
+  version: string;
+};
+
+export type BridgethingOtaQueue = {
+  deviceId: string;
+  installs: BridgethingOtaQueuedInstall[];
 };
 
 export type BridgethingOtaRelease = {
@@ -353,6 +364,7 @@ export type BridgethingSessionSnapshot = {
   otaRuns: BridgethingOtaRun[];
   otaAvailable: BridgethingOtaAvailable[];
   otaPoll: BridgethingOtaPollStatus;
+  otaQueues: BridgethingOtaQueue[];
 };
 
 export type BridgethingDeviceLogLine = {
@@ -486,6 +498,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
     provenance: string | null,
     webappId: string | null,
     webappName: string | null,
+    webappVersion: string | null,
   ): Promise<BridgethingWebappInfo>;
 
   reconnectPeer(deviceId: string): Promise<void>;
@@ -536,6 +549,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   setOnOtaRunChanged(callback: (run: BridgethingOtaRun) => void): void;
   setOnOtaAvailableChanged(callback: (available: BridgethingOtaAvailable) => void): void;
   setOnOtaPollChanged(callback: (status: BridgethingOtaPollStatus) => void): void;
+  setOnOtaQueueChanged(callback: (queue: BridgethingOtaQueue) => void): void;
   setOnCompanionUpdateProgress(callback: (received: number, total: number) => void): void;
 
   setOnResumed(callback: (snapshot: BridgethingSessionSnapshot) => void): void;

@@ -129,7 +129,7 @@ export function runTitle(run: OtaRun): string {
 
 export function runPercent(run: OtaRun): number | null {
   if (run.outcome === 'succeeded') return 100;
-  if (run.dwlPercent !== null) return Math.round(run.dwlPercent);
+  if (run.writePercent !== null) return Math.round(run.writePercent);
   if (run.stageTotal === null || run.stageTotal <= 0) return null;
   return Math.round(((run.stageReceived ?? 0) * 100) / run.stageTotal);
 }

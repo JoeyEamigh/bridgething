@@ -162,7 +162,7 @@ function FromCatalog({ libVersion }: { libVersion: string | null }): VNode {
           placeholder="https://example.com/catalog.json"
           value={url}
           onInput={setUrl}
-          onCommit={() => void load()}
+          onSubmit={() => void load()}
         />
         <Button loading={loading} onClick={() => void load()}>
           load

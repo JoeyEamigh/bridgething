@@ -403,7 +403,7 @@ export class BrowserSession implements BrowserBackend {
       stageReceived: null,
       stageTotal: null,
       ratePerSec: null,
-      dwlPercent: null,
+      writePercent: null,
       outcome: null,
       error: null,
       releaseVersion: null,
@@ -466,7 +466,7 @@ export function advance(run: api.OtaRun, event: UpdateEvent): api.OtaRun {
         stageReceived: phase.received ?? phase.sent ?? null,
         stageTotal: phase.total ?? null,
         ratePerSec: phase.ratePerSec ?? null,
-        dwlPercent: phase.writePercent ?? null,
+        writePercent: phase.writePercent ?? null,
       };
     }
     case 'updated':

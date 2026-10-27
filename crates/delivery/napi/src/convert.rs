@@ -69,16 +69,9 @@ impl From<OtaPhaseSnapshot> for Phase {
         eta_seconds,
         ..base
       },
-      OtaPhaseSnapshot::Applying {
-        phase,
-        write_percent,
-        dwl_percent,
-        dwl_bytes,
-      } => Phase {
+      OtaPhaseSnapshot::Applying { phase, write_percent } => Phase {
         asset: Some(format!("{phase:?}")),
         write_percent: Some(write_percent),
-        received: Some(dwl_bytes as f64),
-        rate_per_sec: Some(f64::from(dwl_percent)),
         ..base
       },
       OtaPhaseSnapshot::Failed { reason } => Phase {
@@ -117,7 +110,7 @@ pub struct UpdateEvent {
   pub daemon_version: Option<String>,
   pub image_version: Option<String>,
   pub version: Option<String>,
-  pub updated_at: Option<String>,
+  pub checked_at: Option<String>,
   pub reason: Option<String>,
   pub step_id: Option<u32>,
   pub steps: Option<Vec<PlanStep>>,
@@ -134,7 +127,7 @@ impl UpdateEvent {
       daemon_version: None,
       image_version: None,
       version: None,
-      updated_at: None,
+      checked_at: None,
       reason: None,
       step_id: None,
       steps: None,
@@ -147,8 +140,8 @@ impl From<OtaPollEvent> for UpdateEvent {
   fn from(event: OtaPollEvent) -> Self {
     let base = UpdateEvent::named(event.kind_name());
     match event {
-      OtaPollEvent::ManifestPolled { updated_at } => UpdateEvent {
-        updated_at: Some(updated_at),
+      OtaPollEvent::ManifestPolled { checked_at } => UpdateEvent {
+        checked_at: Some(checked_at),
         ..base
       },
       OtaPollEvent::ManifestPollFailed { reason } => UpdateEvent {

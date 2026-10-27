@@ -8,6 +8,7 @@ const PATHS = {
   layers: 'M12 3 3 8l9 5 9-5z M3 14l9 5 9-5',
   store: 'M3 7h18l-1.5 4a3 3 0 0 1-2.9 2.2H7.4A3 3 0 0 1 4.5 11z M5 13v8h14v-8 M3 7l2-4h14l2 4',
   download: 'M12 3v12 M7 11l5 5 5-5 M4 20h16',
+  down: 'M12 4v15 M6 13l6 6 6-6',
   upload: 'M12 21V9 M7 13l5-5 5 5 M4 4h16',
   terminal: 'M4 5h16v14H4z M8 10l3 2-3 2 M13 14h4',
   gear: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M12 2v3 M12 19v3 M2 12h3 M19 12h3 M4.9 4.9l2.1 2.1 M17 17l2.1 2.1 M19.1 4.9 17 7 M7 17l-2.1 2.1',

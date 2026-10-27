@@ -3,7 +3,7 @@ use std::{
     Arc,
     atomic::{AtomicBool, Ordering},
   },
-  time::Duration,
+  time::{Duration, Instant},
 };
 
 use bridgething_companion::api::{DeviceMeta, DeviceWebappsEntry, LogOrigin, SessionEvent, SessionEventSink};
@@ -147,7 +147,12 @@ fn coalesce_logs(rx: std::sync::mpsc::Receiver<()>, hints: Arc<dyn HintSink>) {
   const WINDOW: Duration = Duration::from_millis(150);
 
   while rx.recv().is_ok() {
-    while rx.recv_timeout(WINDOW).is_ok() {}
+    let deadline = Instant::now() + WINDOW;
+    while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+      if rx.recv_timeout(left).is_err() {
+        break;
+      }
+    }
     crate::logs::without_capture(|| hints.emit(Hint::bare(LOGS)));
   }
 }
@@ -205,6 +210,7 @@ pub fn hint_for(event: SessionEvent) -> Option<Hint> {
     SessionEvent::OtaRunChanged { run } => Hint::about(OTA_RUNS, run.device_id),
     SessionEvent::OtaAvailableChanged { available } => Hint::about(OTA_AVAILABLE, available.device_id),
     SessionEvent::OtaPollChanged { .. } => Hint::bare(OTA_POLL),
+    SessionEvent::OtaQueueChanged { queue } => Hint::about(OTA_RUNS, queue.device_id),
     SessionEvent::Resumed => Hint::bare(SESSION),
     SessionEvent::Log {
       origin,
@@ -235,7 +241,7 @@ fn log(level: bridgething_companion::backend::LogLevel, target: &str, message: &
 
 #[cfg(test)]
 mod tests {
-  use std::time::Instant;
+  use std::sync::atomic::AtomicUsize;
 
   use bridgething_companion::api::{ConfigFields, DeviceWebappsEntry, WebappInfo, WebappRole, WebappSource};
   use bridgething_io::{HttpDownloadSink, HttpExecutor, HttpRequest, HttpSink, HttpTransport};
@@ -253,6 +259,17 @@ mod tests {
 
   impl HintSink for Deaf {
     fn emit(&self, _hint: Hint) {}
+  }
+
+  #[derive(Default)]
+  struct Counted(AtomicUsize);
+
+  impl HintSink for Counted {
+    fn emit(&self, hint: Hint) {
+      if hint.name == LOGS {
+        self.0.fetch_add(1, Ordering::SeqCst);
+      }
+    }
   }
 
   struct Offline;
@@ -428,6 +445,28 @@ mod tests {
       wait_for(&extensions, <[_]>::is_empty).await,
       "a claim keyed on an address the device has since moved off is a claim nothing can drop, and the \
        sidecar outlives every app that could reach it"
+    );
+  }
+
+  #[test]
+  fn a_steady_log_stream_still_refreshes_the_window() {
+    let counted = Arc::new(Counted::default());
+    let (tx, rx) = std::sync::mpsc::channel();
+    let sink: Arc<dyn HintSink> = counted.clone();
+    let coalescer = std::thread::spawn(move || coalesce_logs(rx, sink));
+
+    let streaming = Instant::now();
+    while streaming.elapsed() < Duration::from_millis(800) {
+      tx.send(()).expect("the coalescer is listening");
+      std::thread::sleep(Duration::from_millis(20));
+    }
+    let during = counted.0.load(Ordering::SeqCst);
+    drop(tx);
+    coalescer.join().expect("the coalescer exits when the relay drops");
+
+    assert!(
+      during >= 3,
+      "lines arriving faster than the coalescing window starved the logs screen ({during} refreshes in 800ms)"
     );
   }
 }

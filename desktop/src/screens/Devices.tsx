@@ -1,8 +1,6 @@
-import { listedWebapps } from '@bridgething/catalog';
 import type { DeviceMetaEntry, SessionPeer } from '@bridgething/companion-types';
 import {
   Button,
-  cx,
   describeError,
   Dialog,
   type Endpoint,
@@ -11,7 +9,6 @@ import {
   ListRow,
   Pill,
   ScreenHeader,
-  SectionEmpty,
   SectionHeader,
   StatusStrip,
   type Tone,
@@ -23,12 +20,12 @@ import { useState } from 'preact/hooks';
 
 import { deviceName } from '@bridgething/client';
 import { ConnectFlow } from '../components/ConnectFlow.tsx';
+import { DeviceSettings } from '../components/DeviceSettings.tsx';
 import { OtaRunCard } from '../components/OtaRunCard.tsx';
-import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
+import { Disclosure, ErrorNote, Screen, Section } from '../components/Screen.tsx';
 import { useDesktop } from '../desktop.ts';
 import { peerHost, since } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
-import { hasActivity } from '../lib/ota.ts';
 import { WebappIcon } from '../lib/webapp-icon.tsx';
 import { PATHS } from '../routes.ts';
 import {
@@ -60,9 +57,7 @@ export function DevicesScreen(): VNode {
   return (
     <Screen>
       <ScreenHeader
-        eyebrow="home"
         title="devices"
-        subtitle="the daemons this computer can reach, and what is running on them."
         trailing={
           primary ? (
             <Button
@@ -79,9 +74,9 @@ export function DevicesScreen(): VNode {
 
       {primary === null ? <StatusStrip {...unattached(linked, live, found)} class="mb-6" /> : null}
 
-      {run && hasActivity(run, offered) ? (
+      {run && run.outcome !== 'succeeded' ? (
         <Section>
-          <SectionHeader title="update" action="all releases" onAction={() => route(PATHS.updates)} />
+          <SectionHeader title="update" action="releases" onAction={() => route(PATHS.updates)} />
           <OtaRunCard
             run={run}
             onDismiss={() => {
@@ -92,35 +87,70 @@ export function DevicesScreen(): VNode {
       ) : offered?.releaseVersion ? (
         <StatusStrip
           tone="accent"
-          title={`release ${offered.releaseVersion} is available`}
-          subtitle={`daemon ${offered.daemonVersion ?? '?'} · image ${offered.imageVersion ?? '?'}`}
+          title={`${offered.releaseVersion} available`}
           onClick={() => route(PATHS.updates)}
           class="mb-6"
         />
       ) : null}
 
-      <ConnectFlow />
-
-      <Section>
-        <SectionHeader
-          title="links"
-          hint={live.length > 1 ? 'the accent one is the one this app talks to' : 'one daemon at a time'}
-        />
-        {linked.length === 0 ? (
-          <SectionEmpty>not connected to anything</SectionEmpty>
-        ) : (
+      {linked.length > 0 ? (
+        <Section>
+          <SectionHeader title="linked" />
           <ListGroup>
             {linked.map(peer => (
-              <PeerRow key={peer.id} peer={peer} meta={meta} active={peer.id === primary?.id} />
+              <PeerRow
+                key={peer.id}
+                peer={peer}
+                meta={meta}
+                active={peer.id === primary?.id}
+                choosable={live.length > 1}
+              />
             ))}
           </ListGroup>
-        )}
-      </Section>
+          {primary ? <OnScreen /> : null}
+        </Section>
+      ) : null}
 
-      <KnownDevices />
+      {primary ? (
+        <Section>
+          <SectionHeader title="settings" />
+          <DeviceSettings />
+        </Section>
+      ) : null}
 
-      {primary ? <InstalledApps /> : null}
+      <OfflineDevices />
+
+      <AddDevice linked={linked.length > 0} />
     </Screen>
+  );
+}
+
+function OnScreen(): VNode | null {
+  const { route } = useLocation();
+  const active = webappActive.data.value;
+  const app = active ? webapps.data.value.find(entry => entry.id === active.id) : undefined;
+  if (!app) return null;
+
+  return (
+    <ListGroup class="mt-2">
+      <ListRow
+        icon={<WebappIcon id={app.id} iconHash={app.iconHash} name={app.name} size="sm" />}
+        title={app.name}
+        subtitle="on screen"
+        chevron
+        onClick={() => route(PATHS.app(app.id))}
+      />
+    </ListGroup>
+  );
+}
+
+function AddDevice({ linked }: { linked: boolean }): VNode {
+  if (!linked) return <ConnectFlow />;
+
+  return (
+    <Disclosure title="add a device">
+      <ConnectFlow />
+    </Disclosure>
   );
 }
 
@@ -128,34 +158,34 @@ function unattached(
   linked: SessionPeer[],
   live: SessionPeer[],
   found: Endpoint[],
-): { tone: Tone; title: string; subtitle: string } {
+): { tone: Tone; title: string; subtitle?: string } {
   if (live.length > 1) {
-    return { tone: 'warn', title: 'more than one daemon is linked', subtitle: 'pick the one this app talks to below' };
+    return { tone: 'warn', title: 'pick a device' };
   }
   if (linked.length > 0) {
-    return { tone: 'err', title: 'the link did not open', subtitle: linked[0]?.linkError ?? 'pick it again below' };
+    return { tone: 'err', title: 'link failed', subtitle: linked[0]?.linkError ?? undefined };
   }
   return {
     tone: 'warn',
     title: 'no Car Thing connected',
-    subtitle: found.length > 0 ? 'pick one of the daemons below' : 'browsing the network for a daemon',
+    subtitle: found.length > 0 ? undefined : 'searching',
   };
 }
 
-function KnownDevices(): VNode | null {
+function OfflineDevices(): VNode | null {
   const session = useDesktop();
-  const known = knownDevices.data.value;
   const linked = peers.value;
+  const offline = knownDevices.data.value.filter(device => !linked.some(peer => peer.id === device.url));
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
-  if (known.length === 0) return null;
+  if (offline.length === 0) return null;
 
-  const act = async (id: string, run: () => Promise<void>) => {
+  const forget = async (id: string) => {
     setBusy(id);
     setFailure(null);
     try {
-      await run();
+      await session.forgetKnownDevice(id);
       await knownDevices.refresh();
     } catch (reason) {
       setFailure(describeError(reason));
@@ -166,42 +196,44 @@ function KnownDevices(): VNode | null {
 
   return (
     <Section>
-      <SectionHeader title="remembered" hint="daemons this computer has linked to before" />
+      <SectionHeader title="offline" />
       <ListGroup>
-        {known.map(device => {
-          const attached = linked.some(peer => peer.id === device.url);
-          return (
-            <ListRow
-              key={device.id}
-              icon={<Icon name="device" />}
-              iconTint={attached ? 'accent' : 'default'}
-              title={device.name}
-              subtitle={device.url}
-              value={attached ? 'linked' : since(device.lastConnectedAt)}
-              trailing={
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Icon name="trash" size={13} />}
-                  disabled={busy === device.id}
-                  onClick={() => void act(device.id, () => session.forgetKnownDevice(device.id))}>
-                  forget
-                </Button>
-              }
-            />
-          );
-        })}
+        {offline.map(device => (
+          <ListRow
+            key={device.id}
+            icon={<Icon name="device" />}
+            title={device.name}
+            subtitle={device.url}
+            value={since(device.lastConnectedAt)}
+            trailing={
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Icon name="trash" size={13} />}
+                disabled={busy === device.id}
+                onClick={() => void forget(device.id)}>
+                forget
+              </Button>
+            }
+          />
+        ))}
       </ListGroup>
-      <Hint>
-        every daemon on the link is connected as it appears; disconnect one to leave it alone until it is unplugged and
-        back.
-      </Hint>
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
     </Section>
   );
 }
 
-function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEntry[]; active: boolean }): VNode {
+function PeerRow({
+  peer,
+  meta,
+  active,
+  choosable,
+}: {
+  peer: SessionPeer;
+  meta: DeviceMetaEntry[];
+  active: boolean;
+  choosable: boolean;
+}): VNode {
   const session = useSession();
   const desktop = useDesktop();
   const held = meta.find(entry => entry.deviceId === peer.id)?.meta ?? null;
@@ -230,8 +262,7 @@ function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEn
       <Dialog
         open={renaming}
         onClose={() => setRenaming(false)}
-        title="rename this Car Thing"
-        subtitle="the name shows on the device and wherever it is listed"
+        title="rename"
         footer={
           <>
             <Button variant="ghost" onClick={() => setRenaming(false)}>
@@ -246,7 +277,7 @@ function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEn
           label="name"
           value={draft}
           onInput={setDraft}
-          onCommit={() => void submit()}
+          onSubmit={() => void submit()}
           placeholder={peer.name}
           clearable
         />
@@ -261,17 +292,21 @@ function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEn
           connected
             ? held
               ? `${held.serialNumber} · ${peerHost(peer.id)}`
-              : `reading device info from ${peerHost(peer.id)}`
-            : (peer.linkError ?? 'attached, but the link did not open')
+              : peerHost(peer.id)
+            : (peer.linkError ?? 'link failed')
         }
-        value={held ? `v${held.daemonVersion}+${held.imageVersion}` : undefined}
+        value={held ? `${held.daemonVersion}+image.${held.imageVersion}` : undefined}
         trailing={
           connected ? (
             <span class="flex shrink-0 items-center gap-2">
               <Pill tone={active ? 'ok' : 'neutral'} dot={active}>
                 {held?.channel ?? 'connected'}
               </Pill>
-              {active ? <Icon name="pencil" size={14} class="text-dim" /> : <Pill tone="accent">use</Pill>}
+              {active ? (
+                <Icon name="pencil" size={14} class="text-dim" />
+              ) : choosable ? (
+                <Pill tone="accent">use</Pill>
+              ) : null}
             </span>
           ) : (
             <Pill tone="err">link failed</Pill>
@@ -290,63 +325,5 @@ function PeerRow({ peer, meta, active }: { peer: SessionPeer; meta: DeviceMetaEn
         }
       />
     </>
-  );
-}
-
-function InstalledApps(): VNode {
-  const { route } = useLocation();
-  const list = listedWebapps(webapps.data.value);
-  const active = webappActive.data.value;
-  const failure = webapps.error.value;
-
-  return (
-    <Section>
-      <SectionHeader
-        title="installed apps"
-        hint="the one in accent is on screen now"
-        action="refresh"
-        pending={webapps.pending.value}
-        onAction={webapps.refresh}
-      />
-      {failure ? (
-        <SectionEmpty>{failure}</SectionEmpty>
-      ) : (
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] border-t border-l border-rule">
-          {list.map(webapp => {
-            const running = active?.id === webapp.id;
-            return (
-              <button
-                key={webapp.id}
-                type="button"
-                class={cx(
-                  'flex min-w-0 flex-col items-center gap-2.5 border-r border-b border-rule px-3 py-5 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2',
-                  running ? 'bg-accent-soft' : 'bg-screen hover:bg-neutral-soft active:bg-rule',
-                )}
-                onClick={() => route(PATHS.app(webapp.id))}>
-                <WebappIcon id={webapp.id} iconHash={webapp.iconHash} name={webapp.name} size="lg" />
-                <span
-                  class={cx(
-                    'line-clamp-2 w-full text-center wrap-break-word text-hint',
-                    running ? 'text-accent' : 'text-off-white',
-                  )}>
-                  {webapp.name}
-                </span>
-                <span class="font-mono text-eyebrow text-dim uppercase">{running ? 'active' : webapp.source}</span>
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            class="flex min-w-0 flex-col items-center justify-center gap-2.5 border-r border-b border-rule bg-screen px-3 py-5 text-dim transition-colors duration-150 hover:bg-neutral-soft hover:text-off-white active:bg-rule focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2"
-            onClick={() => route(PATHS.store)}>
-            <Icon name="plus" size={22} />
-            <span class="text-hint">add app</span>
-          </button>
-        </div>
-      )}
-      {list.length === 0 && !webapps.pending.value && !failure ? (
-        <Hint>this Car Thing reports no webapps yet.</Hint>
-      ) : null}
-    </Section>
   );
 }

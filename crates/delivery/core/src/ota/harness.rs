@@ -240,18 +240,14 @@ impl FakeDevice {
   }
 
   pub fn progress(&self, phase: OtaPhase, percent: u8) {
-    self.progress_full(phase, percent, 0, 0);
-  }
-
-  pub fn progress_full(&self, phase: OtaPhase, percent: u8, dwl_percent: u8, dwl_bytes: u32) {
     self.event(BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::OtaProgress(
       libbridgething::OtaProgress {
         phase,
         percent,
         step: 1,
         nsteps: 1,
-        dwl_percent,
-        dwl_bytes,
+        dwl_percent: percent,
+        dwl_bytes: 0,
         eta_ms: None,
       },
     )));

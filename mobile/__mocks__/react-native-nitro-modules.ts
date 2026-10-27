@@ -36,6 +36,7 @@ export function emptySnapshot(): BridgethingSessionSnapshot {
     otaRuns: [],
     otaAvailable: [],
     otaPoll: {},
+    otaQueues: [],
   };
 }
 

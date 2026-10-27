@@ -155,7 +155,7 @@ fn apply_fraction(run: &OtaRun) -> f64 {
   if run.kind == OtaKind::Image {
     return match run.phase {
       OtaRunPhase::Confirming | OtaRunPhase::Reboot | OtaRunPhase::Completed => 1.0,
-      _ => (f64::from(run.dwl_percent.unwrap_or(0)) / 100.0).min(1.0),
+      _ => (f64::from(run.write_percent.unwrap_or(0)) / 100.0).min(1.0),
     };
   }
   match run.phase {
@@ -169,7 +169,7 @@ fn apply_fraction(run: &OtaRun) -> f64 {
 
 /// the staged byte counts track whatever is moving now, so anything the device is reporting on is already behind us.
 fn transfer_fraction(run: &OtaRun) -> f64 {
-  if run.dwl_percent.is_some() {
+  if run.write_percent.is_some() {
     return 1.0;
   }
   match run.phase {

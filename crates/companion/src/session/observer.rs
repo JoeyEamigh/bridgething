@@ -173,6 +173,7 @@ impl SessionObserver {
         available: available.into(),
       },
       ota::run_store::OtaStoreChange::Poll(status) => SessionEvent::OtaPollChanged { status: status.into() },
+      ota::run_store::OtaStoreChange::Queue(queue) => SessionEvent::OtaQueueChanged { queue: queue.into() },
     });
   }
 
@@ -224,15 +225,22 @@ impl SessionObserver {
       spliced
     };
     for entry in spliced {
-      self.ingest(entry);
+      let stamped = (entry.ts_unix_s > 0).then(|| u64::from(entry.ts_unix_s) * 1000);
+      self.ingest(entry, stamped);
     }
   }
 
-  fn ingest(&self, entry: LogEntry) {
+  fn ingest(&self, entry: LogEntry, stamped: Option<u64>) {
     let level = level(entry.level);
-    self
-      .log_ring
-      .push(RingOrigin::Device, ring_level(level), &entry.target, &entry.message);
+    let ring_level = ring_level(level);
+    match stamped {
+      Some(at) => self
+        .log_ring
+        .push_at(RingOrigin::Device, ring_level, at, &entry.target, &entry.message),
+      None => self
+        .log_ring
+        .push(RingOrigin::Device, ring_level, &entry.target, &entry.message),
+    };
     self.emit(SessionEvent::Log {
       origin: LogOrigin::Device,
       level,
@@ -311,7 +319,7 @@ impl DeviceLogSink for SessionObserver {
         return;
       }
     }
-    self.ingest(entry);
+    self.ingest(entry, None);
   }
 }
 

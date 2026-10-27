@@ -104,7 +104,7 @@ export interface UpdateEvent {
   daemonVersion?: string;
   imageVersion?: string;
   version?: string;
-  updatedAt?: string;
+  checkedAt?: string;
   reason?: string;
   stepId?: number;
   steps?: Array<PlanStep>;

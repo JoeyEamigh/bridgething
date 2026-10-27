@@ -55,6 +55,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     private var onOtaRunChanged: (@Sendable (BridgethingOtaRun) -> Void)?
     private var onOtaAvailableChanged: (@Sendable (BridgethingOtaAvailable) -> Void)?
     private var onOtaPollChanged: (@Sendable (BridgethingOtaPollStatus) -> Void)?
+    private var onOtaQueueChanged: (@Sendable (BridgethingOtaQueue) -> Void)?
     private var onResumed: (@Sendable (BridgethingSessionSnapshot) -> Void)?
 
     public init() {
@@ -117,6 +118,7 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             onOtaRunChanged = nil
             onOtaAvailableChanged = nil
             onOtaPollChanged = nil
+            onOtaQueueChanged = nil
             onResumed = nil
         }
     }
@@ -232,6 +234,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             if foreground { stateLock.withLock { onOtaAvailableChanged }?(toRNOtaAvailable(available)) }
         case let .otaPollChanged(status):
             if foreground { stateLock.withLock { onOtaPollChanged }?(toRNOtaPollStatus(status)) }
+        case let .otaQueueChanged(queue):
+            if foreground { stateLock.withLock { onOtaQueueChanged }?(toRNOtaQueue(queue)) }
         case .companionUpdateProgress:
             break
         case .resumed:
@@ -446,7 +450,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             info = try await session.installWebappFromUrl(
                 deviceId: deviceId,
                 request: WebappInstallRequest(
-                    url: sourceUri, expected: nil, provenance: sourceUri, webappId: nil, webappName: nil
+                    url: sourceUri, expected: nil, provenance: sourceUri, webappId: nil, webappName: nil,
+                    webappVersion: nil
                 )
             )
         } else {
@@ -462,7 +467,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         size: Double,
         provenance: String?,
         webappId: String?,
-        webappName: String?
+        webappName: String?,
+        webappVersion: String?
     ) async throws -> BridgethingWebappInfo {
         let info = try await requireSession().installWebappFromUrl(
             deviceId: deviceId,
@@ -471,7 +477,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
                 expected: ArtifactDigest(size: UInt64(saturating: size), sha256: sha256.lowercased()),
                 provenance: provenance,
                 webappId: webappId,
-                webappName: webappName
+                webappName: webappName,
+                webappVersion: webappVersion
             )
         )
         return toRNWebappInfo(info)
@@ -808,6 +815,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
         stateLock.withLock { onOtaPollChanged = callback }
     }
 
+    public func setOnOtaQueueChanged(_ callback: @escaping @Sendable (BridgethingOtaQueue) -> Void) {
+        stateLock.withLock { onOtaQueueChanged = callback }
+    }
+
     public func setOnCompanionUpdateProgress(_ callback: @escaping @Sendable (Double, Double) -> Void) {}
 
     public func setOnResumed(_ callback: @escaping @Sendable (BridgethingSessionSnapshot) -> Void) {
@@ -930,7 +941,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             webapps: [],
             otaRuns: [],
             otaAvailable: [],
-            otaPoll: BridgethingOtaPollStatus(lastPolledAt: nil, error: nil)
+            otaPoll: BridgethingOtaPollStatus(lastPolledAt: nil, error: nil),
+            otaQueues: []
         )
     }
 }
@@ -1034,7 +1046,8 @@ private func toRNSnapshot(_ snap: SessionSnapshot) -> BridgethingSessionSnapshot
         webapps: snap.webapps.map(toRNWebappsEntry),
         otaRuns: snap.otaRuns.map(toRNOtaRun),
         otaAvailable: snap.otaAvailable.map(toRNOtaAvailable),
-        otaPoll: toRNOtaPollStatus(snap.otaPoll)
+        otaPoll: toRNOtaPollStatus(snap.otaPoll),
+        otaQueues: snap.otaQueues.map(toRNOtaQueue)
     )
 }
 
@@ -1333,7 +1346,7 @@ private func toRNOtaRun(_ run: OtaRun) -> BridgethingOtaRun {
         stageReceived: run.stageReceived.map(Double.init),
         stageTotal: run.stageTotal.map(Double.init),
         ratePerSec: run.ratePerSec,
-        dwlPercent: run.dwlPercent.map(Double.init),
+        writePercent: run.writePercent.map(Double.init),
         outcome: run.outcome.map(toRNOtaOutcome),
         error: run.error,
         releaseVersion: run.releaseVersion,
@@ -1407,6 +1420,15 @@ private func toRNOtaAvailable(_ a: OtaAvailable) -> BridgethingOtaAvailable {
 
 private func toRNOtaPollStatus(_ s: OtaPollStatus) -> BridgethingOtaPollStatus {
     BridgethingOtaPollStatus(lastPolledAt: s.lastPolledAt, error: s.error)
+}
+
+private func toRNOtaQueue(_ q: OtaQueue) -> BridgethingOtaQueue {
+    BridgethingOtaQueue(
+        deviceId: q.deviceId,
+        installs: q.installs.map {
+            BridgethingOtaQueuedInstall(webappId: $0.webappId, webappName: $0.webappName, version: $0.version)
+        }
+    )
 }
 
 private func toRNOtaPollConfig(_ config: OtaPollConfig) -> BridgethingOtaPollConfig {

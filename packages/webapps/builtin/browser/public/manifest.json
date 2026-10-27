@@ -1,7 +1,7 @@
 {
   "id": "019e7f1a-bcea-7187-a438-53e486c4d950",
   "name": "Browser",
-  "version": "0.14.0",
+  "version": "0.15.1",
   "description": "Open any site through the phone proxy.",
   "icon": "icon.svg",
   "config": [

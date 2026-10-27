@@ -1,5 +1,5 @@
+import { webHref } from '@bridgething/catalog';
 import type { DirectoryEntry, SourceStatus } from '../../lib/directory-client';
-import { webHref } from '../../lib/href';
 import { hideOnError } from '../../lib/img';
 
 const PILL_FOR: Record<SourceStatus, string> = {

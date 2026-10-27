@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager as _, Runtime};
 use crate::{AUTOSTART_ARG, extensions::Extensions, hints::Visibility};
 
 pub fn release<R: Runtime>(app: &AppHandle<R>) {
+  crate::tray::remember(app);
   if let Some(extensions) = app.try_state::<Arc<Extensions>>() {
     extensions.halt();
   }

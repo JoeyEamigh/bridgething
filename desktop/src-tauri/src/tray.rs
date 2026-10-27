@@ -1,11 +1,13 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use tauri::{
-  AppHandle, Emitter, Manager, Runtime, Window, WindowEvent,
+  AppHandle, Emitter, Manager, PhysicalSize, Runtime, Window, WindowEvent,
   image::Image,
   menu::{Menu, MenuItem, PredefinedMenuItem},
+  plugin::TauriPlugin,
   tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+use tauri_plugin_window_state::{AppHandleExt as _, StateFlags};
 
 use crate::{
   hints::{RESYNC, Visibility},
@@ -28,6 +30,9 @@ const TRAY_ICON: &[u8] = include_bytes!("../icons/tray-linux.png");
 const TRAY_ICON: &[u8] = include_bytes!("../icons/32x32.png");
 
 const TRAY: &str = "main";
+
+const WINDOW_STATE: StateFlags = StateFlags::SIZE.union(StateFlags::POSITION);
+const WINDOW_STATE_FILE: &str = "window-state.json";
 
 fn menu<R: Runtime>(app: &AppHandle<R>, ready: Option<&str>) -> tauri::Result<Menu<R>> {
   let show = MenuItem::with_id(app, "show", "open bridgething", true, None::<&str>)?;
@@ -115,6 +120,7 @@ pub fn present<R: Runtime>(app: &AppHandle<R>) {
 
 pub fn dismiss<R: Runtime>(app: &AppHandle<R>) {
   tracing::debug!("the shell window is going tray-only");
+  remember(app);
   if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
     let _ = window.hide();
   }
@@ -138,6 +144,53 @@ pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
     }
     _ => {}
   }
+}
+
+pub fn window_state<R: Runtime>(config_dir: Option<&Path>) -> TauriPlugin<R> {
+  let builder = tauri_plugin_window_state::Builder::new().with_state_flags(WINDOW_STATE);
+  match config_dir {
+    Some(dir) => builder.with_filename(dir.join(WINDOW_STATE_FILE).to_string_lossy()),
+    None => builder,
+  }
+  .build()
+}
+
+pub fn remember<R: Runtime>(app: &AppHandle<R>) {
+  if let Err(error) = app.save_window_state(WINDOW_STATE) {
+    tracing::warn!(%error, "the window size and position did not save");
+  }
+}
+
+pub fn fit<R: Runtime>(app: &AppHandle<R>) {
+  let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+    return;
+  };
+  let monitor = match window.current_monitor() {
+    Ok(Some(monitor)) => monitor,
+    _ => match window.primary_monitor() {
+      Ok(Some(monitor)) => monitor,
+      _ => return,
+    },
+  };
+  let (Ok(inner), Ok(outer)) = (window.inner_size(), window.outer_size()) else {
+    return;
+  };
+  let area = monitor.work_area().size;
+  let over_width = outer.width.saturating_sub(area.width);
+  let over_height = outer.height.saturating_sub(area.height);
+  if over_width == 0 && over_height == 0 {
+    return;
+  }
+  tracing::debug!(
+    ?outer,
+    ?area,
+    "the shell window is larger than its monitor and is shrinking to fit"
+  );
+  let _ = window.set_size(PhysicalSize::new(
+    inner.width.saturating_sub(over_width),
+    inner.height.saturating_sub(over_height),
+  ));
+  let _ = window.center();
 }
 
 fn watch<R: Runtime>(app: &AppHandle<R>, visible: bool) {

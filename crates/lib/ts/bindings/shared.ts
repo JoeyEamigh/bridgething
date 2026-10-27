@@ -629,7 +629,13 @@ export type OtaProgress = {
   percent: number;
   step: number;
   nsteps: number;
+  /**
+   * Mirrors `percent`.
+   */
   dwlPercent: number;
+  /**
+   * Always 0.
+   */
   dwlBytes: number;
   etaMs: number | null;
 };

@@ -1,5 +1,5 @@
 use crate::{
-  api::ota::{OtaAvailable, OtaPollStatus, OtaRun},
+  api::ota::{OtaAvailable, OtaPollStatus, OtaQueue, OtaRun},
   provider::ResumeTarget,
 };
 
@@ -579,6 +579,7 @@ pub struct SessionSnapshot {
   pub ota_runs: Vec<OtaRun>,
   pub ota_available: Vec<OtaAvailable>,
   pub ota_poll: OtaPollStatus,
+  pub ota_queues: Vec<OtaQueue>,
 }
 
 #[cfg(test)]

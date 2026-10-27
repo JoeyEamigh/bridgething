@@ -25,6 +25,8 @@ export {
 
 export { releasedAtInstant, sortNewestFirst } from './versions.ts';
 
+export { webHref } from './href.ts';
+
 export {
   SETTINGS_PAGE_MIME,
   aggregate,

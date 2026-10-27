@@ -8,6 +8,8 @@ mod extension_host;
 mod fakes;
 #[path = "../src/media/fixture.rs"]
 mod fixture;
+#[path = "rig/heard.rs"]
+mod heard;
 #[path = "rig/install.rs"]
 mod install;
 #[path = "rig/log_sink.rs"]
@@ -858,6 +860,7 @@ async fn the_bundle_sink_is_handed_the_artifact_while_it_is_still_on_disk() {
         provenance: None,
         webapp_id: None,
         webapp_name: None,
+        webapp_version: None,
       },
       Some(sink.clone()),
     )
@@ -876,6 +879,57 @@ async fn the_bundle_sink_is_handed_the_artifact_while_it_is_still_on_disk() {
   assert!(
     !Path::new(bundle).exists(),
     "and the download is cleaned up once the install returns"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_store_install_is_queued_in_the_session_until_it_reaches_the_device() {
+  const URL: &str = "https://apps.bridgething.test/queued.zip";
+  let id = uuid::Uuid::now_v7();
+  let http = Serving::new();
+  http.stage(URL, webapp_zip(id, "queued"));
+
+  let rig = Rig::with_http(http).await;
+  rig
+    .companion
+    .install_webapp_from_url(
+      rig.device_id().to_owned(),
+      WebappInstallRequest {
+        url: URL.to_owned(),
+        expected: None,
+        provenance: None,
+        webapp_id: Some(id.to_string()),
+        webapp_name: Some("Queued".into()),
+        webapp_version: Some("0.1.0".into()),
+      },
+      None,
+    )
+    .await
+    .expect("the device installs the bundle");
+
+  let queues: Vec<Vec<String>> = rig
+    .heard
+    .events()
+    .into_iter()
+    .filter_map(|event| match event {
+      SessionEvent::OtaQueueChanged { queue } if queue.device_id == rig.device_id() => Some(
+        queue
+          .installs
+          .into_iter()
+          .map(|install| format!("{}@{}", install.webapp_id, install.version))
+          .collect(),
+      ),
+      _ => None,
+    })
+    .collect();
+  assert_eq!(
+    queues,
+    vec![vec![format!("{id}@0.1.0")], Vec::new()],
+    "the request is queued from the moment the session takes it until it holds the device"
+  );
+  assert!(
+    rig.session.snapshot().await.ota_queues.is_empty(),
+    "a screen opened afterwards reads nothing as still queued"
   );
 }
 
@@ -909,6 +963,7 @@ async fn the_bundle_sink_runs_off_the_worker_that_is_driving_the_link() {
         provenance: None,
         webapp_id: None,
         webapp_name: None,
+        webapp_version: None,
       },
       Some(sink.clone()),
     )
@@ -941,6 +996,7 @@ async fn a_device_install_that_fails_never_reaches_the_bundle_sink() {
         provenance: None,
         webapp_id: None,
         webapp_name: None,
+        webapp_version: None,
       },
       Some(sink.clone()),
     )

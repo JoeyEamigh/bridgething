@@ -170,7 +170,7 @@ or `unsupported`. The device page has neither: there `settings.fetch` rejects
 with a plain `Error` and `authorize` with `unsupported`.
 
 The companion keeps the page loaded after the user leaves it and shows the
-same document the next time they open the app's settings. Three rules follow:
+same document the next time they open the app's settings. Four rules follow:
 
 - `settings.onRefresh(context => ...)` fires each time the page comes back on
   screen, and whenever the app's name, version, or config fields change. Reread

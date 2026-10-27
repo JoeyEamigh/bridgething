@@ -58,6 +58,7 @@ macro_rules! desktop_commands {
       $crate::commands::device_log_streaming,
       $crate::commands::voice_model,
       $crate::commands::ota_runs,
+      $crate::commands::ota_run_progress,
       $crate::commands::ota_available,
       $crate::commands::ota_poll,
       $crate::commands::webapps,
@@ -135,12 +136,8 @@ macro_rules! desktop_commands {
 }
 
 pub fn run() {
-  let verbosity = logs::install(
-    DesktopPaths::xdg()
-      .ok()
-      .as_ref()
-      .map(|paths| paths.config_dir.as_path()),
-  );
+  let config_dir = DesktopPaths::xdg().ok().map(|paths| paths.config_dir);
+  let verbosity = logs::install(config_dir.as_deref());
 
   let resident = std::env::args().any(|arg| arg == AUTOSTART_ARG);
 
@@ -148,6 +145,7 @@ pub fn run() {
     .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
       tray::present(app)
     }))
+    .plugin(tray::window_state(config_dir.as_deref()))
     .plugin(tauri_plugin_autostart::init(
       tauri_plugin_autostart::MacosLauncher::LaunchAgent,
       Some(vec![AUTOSTART_ARG]),
@@ -218,6 +216,7 @@ pub fn run() {
       updates.spawn(online);
       app.manage(updates);
       theme::sync(app.handle());
+      tray::fit(app.handle());
       if resident {
         tray::dismiss(app.handle());
       } else {
@@ -236,7 +235,7 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("the desktop shell runs")
     .run(|app, event| {
-      if let tauri::RunEvent::ExitRequested { .. } = event {
+      if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
         process::leave(app);
       }
     });

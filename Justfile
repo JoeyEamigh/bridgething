@@ -28,7 +28,9 @@ sidecar_run := 'docker run --rm -v bridgething-ffmpeg-sidecar:/cache'
 container_vendor := '/work/crates/swupdate-sys/vendor/swupdate'
 # Registry and target live in named volumes: virtiofs drops writes between rapid container runs
 container_target_volume := 'bridgething-target-' + sha256(justfile_directory())
-container_run := 'docker run --rm -v ' + justfile_directory() + ':/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -v ' + container_target_volume + ':/target -e CARGO_TARGET_DIR=/target -e CARGO_INCREMENTAL=0 bridgething-build'
+container_mounts := 'docker run --rm -v ' + justfile_directory() + ':/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -v ' + container_target_volume + ':/target -e CARGO_TARGET_DIR=/target'
+container_run := container_mounts + ' -e CARGO_INCREMENTAL=0 bridgething-build'
+cross_out := '/target/' + cross_target + '/release'
 # mic-debug binds alsa + evdev, which a mac host has no toolchain for; test-shipping covers it there.
 host_test_excludes := if os() == 'macos' { '--exclude bridgething-mic-debug' } else { '' }
 
@@ -325,15 +327,15 @@ build-image: submodules
 
 # Cross-build the daemon. `extra` appends to the shipping feature set: `mic` for voice, `test-tap` for the test binary.
 cross-build extra="": build-image
-  docker run --rm -v {{justfile_directory()}}:/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -e CARGO_TARGET_DIR=/work/target-cross -e RUSTFLAGS='--remap-path-prefix=/work=/bridgething --remap-path-prefix=/usr/local/cargo=/cargo' bridgething-build cargo build --release -p bridgething --target {{cross_target}} --no-default-features --features "{{device_features}}{{ if extra == '' { '' } else { ',' + extra } }}" {{dev_profile}}
+  {{container_mounts}} -e RUSTFLAGS='--remap-path-prefix=/work=/bridgething --remap-path-prefix=/usr/local/cargo=/cargo' bridgething-build bash -c "cargo build --release -p bridgething --target {{cross_target}} --no-default-features --features '{{device_features}}{{ if extra == '' { '' } else { ',' + extra } }}' {{dev_profile}} && install -D {{cross_out}}/bridgething /work/target-cross/{{cross_target}}/release/bridgething"
 
 # Cross-check the daemon, `extra` as above.
 check extra="": build-image
-  docker run --rm -v {{justfile_directory()}}:/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -e CARGO_TARGET_DIR=/work/target-cross bridgething-build cargo check -p bridgething --target {{cross_target}} --no-default-features --features "{{device_features}}{{ if extra == '' { '' } else { ',' + extra } }}" --locked
+  {{container_run}} cargo check -p bridgething --target {{cross_target}} --no-default-features --features "{{device_features}}{{ if extra == '' { '' } else { ',' + extra } }}" --locked
 
 # Release-build the daemon inside the cross image. for any host without an aarch64 toolchain (mac).
 cross-release: build-image
-  docker run --rm -v {{justfile_directory()}}:/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -e CARGO_TARGET_DIR=/work/target-cross-release bridgething-build {{release_build}}
+  {{container_run}} bash -c "{{release_build}} && install -D {{cross_out}}/bridgething /work/target-cross-release/{{cross_target}}/release/bridgething"
 
 # Release-build the daemon against a toolchain already on the host, provisioned by scripts/cross-aarch64-deps.sh
 cross-release-native:
@@ -361,7 +363,7 @@ publish-asr *args:
 
 # Cross-build the MFi i2c-3 dev proxy and push it + its unit to the device
 push-mfi-proxy: build-image
-  docker run --rm -v {{justfile_directory()}}:/work -w /work -v bridgething-cargo-registry:/usr/local/cargo/registry -e CARGO_TARGET_DIR=/work/target-cross bridgething-build cargo build --release -p bridgething-mfi-proxy --target {{cross_target}} --locked
+  {{container_run}} bash -c "cargo build --release -p bridgething-mfi-proxy --target {{cross_target}} --locked && install -D {{cross_out}}/bridgething-mfi-proxy /work/target-cross/{{cross_target}}/release/bridgething-mfi-proxy"
   scripts/bridgething-push-mfi-proxy
 
 # Push a webapp bundle into /var/bridgething/webapps/<name>/

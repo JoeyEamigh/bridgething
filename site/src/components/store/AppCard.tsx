@@ -4,9 +4,9 @@ import {
   installsLabel,
   STORE_COPY,
   type CatalogAppListing,
+  webHref,
 } from '@bridgething/catalog';
 import { appDetailPath } from '../../lib/app-routes';
-import { webHref } from '../../lib/href';
 import { ExtensionBadge } from './ExtensionNote';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
 import type { StoreSource } from '../../lib/store-sources';

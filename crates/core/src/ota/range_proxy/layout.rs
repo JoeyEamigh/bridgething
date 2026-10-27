@@ -85,12 +85,6 @@ pub(super) struct EmitPlan {
   pub cached_bytes: u64,
 }
 
-impl EmitPlan {
-  pub(super) fn data_bytes(&self) -> u64 {
-    self.companion_bytes + self.cached_bytes
-  }
-}
-
 pub(super) fn plan_from(layout: &BodyLayout, start: u64, index: &CacheIndex) -> Option<EmitPlan> {
   if start > layout.total_body {
     return None;
@@ -212,7 +206,7 @@ mod tests {
     let full = assemble(&full_plan.steps, &gather(&full_plan.companion_ranges), &log);
     assert_eq!(full.len() as u64, layout.total_body, "full body length");
     assert_eq!(
-      full_plan.data_bytes(),
+      full_plan.companion_bytes + full_plan.cached_bytes,
       parts.iter().map(|p| p.length as u64).sum::<u64>()
     );
 

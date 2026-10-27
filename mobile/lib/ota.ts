@@ -3,6 +3,8 @@ import type {
   BridgethingOtaPollConfig,
   BridgethingOtaPollStatus,
   BridgethingOtaProgress,
+  BridgethingOtaQueuedInstall,
+  BridgethingOtaQueue,
   BridgethingOtaRelease,
   BridgethingOtaRun,
 } from '@bridgething/session-react-native';
@@ -29,9 +31,10 @@ type OtaState = {
   poll: BridgethingOtaPollStatus;
   available: Record<string, BridgethingOtaAvailable>;
   runs: Record<string, BridgethingOtaRun>;
+  queues: Record<string, BridgethingOtaQueue>;
 };
 
-const empty: OtaState = { poll: {}, available: {}, runs: {} };
+const empty: OtaState = { poll: {}, available: {}, runs: {}, queues: {} };
 
 export const useOtaStore = create<OtaState>(() => ({ ...empty }));
 
@@ -56,6 +59,11 @@ export function registerOtaDomain(): void {
         case 'otaPollChanged':
           useOtaStore.setState({ poll: event.status });
           return;
+        case 'otaQueueChanged':
+          useOtaStore.setState(s => ({
+            queues: { ...s.queues, [event.queue.deviceId]: event.queue },
+          }));
+          return;
         default:
           return;
       }
@@ -67,6 +75,9 @@ export function registerOtaDomain(): void {
           snapshot.otaAvailable.map(a => [a.deviceId, a]),
         ),
         runs: Object.fromEntries(snapshot.otaRuns.map(r => [r.deviceId, r])),
+        queues: Object.fromEntries(
+          snapshot.otaQueues.map(q => [q.deviceId, q]),
+        ),
       }),
   });
 }
@@ -85,6 +96,18 @@ export function useOtaRun(
   deviceId: string | null,
 ): BridgethingOtaRun | undefined {
   return useOtaStore(s => (deviceId ? s.runs[deviceId] : undefined));
+}
+
+const NO_QUEUED: BridgethingOtaQueuedInstall[] = [];
+
+export function useQueuedInstall(
+  deviceId: string | null,
+  webappId: string,
+): BridgethingOtaQueuedInstall | null {
+  const installs = useOtaStore(s =>
+    deviceId ? (s.queues[deviceId]?.installs ?? NO_QUEUED) : NO_QUEUED,
+  );
+  return installs.find(i => i.webappId === webappId) ?? null;
 }
 
 function sampleOtaProgress(deviceId: string): BridgethingOtaProgress | null {
@@ -180,13 +203,9 @@ export function describeOtaOffer(input: OtaOfferInput): OtaOffer {
   };
 }
 
-export function lastCheckedAt(
-  poll: BridgethingOtaPollStatus,
-  local: number | null,
-): number | null {
+export function lastCheckedAt(poll: BridgethingOtaPollStatus): number | null {
   const polled = poll.lastPolledAt ? Date.parse(poll.lastPolledAt) : NaN;
-  const best = Math.max(local ?? 0, Number.isNaN(polled) ? 0 : polled);
-  return best > 0 ? best : null;
+  return Number.isNaN(polled) ? null : polled;
 }
 
 export async function installLatestOta(

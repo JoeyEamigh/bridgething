@@ -29,6 +29,7 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
+import com.margelo.nitro.bridgething.session.BridgethingOtaQueue
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingPickKind
@@ -213,6 +214,7 @@ public class HybridBridgethingSessionImpl(
 
     @Volatile
     private var onOtaPollChanged: ((BridgethingOtaPollStatus) -> Unit)? = null
+    private var onOtaQueueChanged: ((BridgethingOtaQueue) -> Unit)? = null
 
     @Volatile
     private var onResumed: ((BridgethingSessionSnapshot) -> Unit)? = null
@@ -294,6 +296,8 @@ public class HybridBridgethingSessionImpl(
                 if (foreground) onOtaAvailableChanged?.invoke(toRnOtaAvailable(event.available))
             is SessionEvent.OtaPollChanged ->
                 if (foreground) onOtaPollChanged?.invoke(toRnOtaPollStatus(event.status))
+            is SessionEvent.OtaQueueChanged ->
+                if (foreground) onOtaQueueChanged?.invoke(toRnOtaQueue(event.queue))
             is SessionEvent.CompanionUpdateProgress ->
                 if (foreground) {
                     onCompanionUpdateProgress?.invoke(event.received.toDouble(), event.total.toDouble())
@@ -427,7 +431,7 @@ public class HybridBridgethingSessionImpl(
             "http", "https" ->
                 session.installWebappFromUrl(
                     deviceId,
-                    WebappInstallRequest(sourceUri, null, sourceUri, null, null),
+                    WebappInstallRequest(sourceUri, null, sourceUri, null, null, null),
                 )
             else -> throw IllegalArgumentException("invalid archive uri")
         }
@@ -442,6 +446,7 @@ public class HybridBridgethingSessionImpl(
         provenance: String?,
         webappId: String?,
         webappName: String?,
+        webappVersion: String?,
     ): BridgethingWebappInfo = toRnWebappInfo(
         requireSession().installWebappFromUrl(
             deviceId,
@@ -451,6 +456,7 @@ public class HybridBridgethingSessionImpl(
                 provenance = provenance,
                 webappId = webappId,
                 webappName = webappName,
+                webappVersion = webappVersion,
             ),
         ),
     )
@@ -835,6 +841,7 @@ public class HybridBridgethingSessionImpl(
     }
 
     override fun setOnOtaPollChanged(callback: (BridgethingOtaPollStatus) -> Unit) { onOtaPollChanged = callback }
+    override fun setOnOtaQueueChanged(callback: (BridgethingOtaQueue) -> Unit) { onOtaQueueChanged = callback }
 
     override fun setOnCompanionUpdateProgress(callback: (Double, Double) -> Unit) { onCompanionUpdateProgress = callback }
 

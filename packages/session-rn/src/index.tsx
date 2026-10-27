@@ -18,6 +18,7 @@ import type {
   BridgethingOtaPollConfig,
   BridgethingOtaPollStatus,
   BridgethingOtaProgress,
+  BridgethingOtaQueue,
   BridgethingOtaRun,
   BridgethingPickKind,
   BridgethingPickedMedia,
@@ -69,6 +70,8 @@ export type {
   BridgethingOtaPollConfig,
   BridgethingOtaPollStatus,
   BridgethingOtaProgress,
+  BridgethingOtaQueue,
+  BridgethingOtaQueuedInstall,
   BridgethingOtaRelease,
   BridgethingOtaRun,
   BridgethingOtaStep,
@@ -119,6 +122,7 @@ export type SessionEvent =
   | { type: 'otaRunChanged'; run: BridgethingOtaRun }
   | { type: 'otaAvailableChanged'; available: BridgethingOtaAvailable }
   | { type: 'otaPollChanged'; status: BridgethingOtaPollStatus }
+  | { type: 'otaQueueChanged'; queue: BridgethingOtaQueue }
   | { type: 'companionUpdateProgress'; received: number; total: number }
   | { type: 'resumed'; snapshot: BridgethingSessionSnapshot }
   | { type: 'log'; origin: string; level: string; message: string };
@@ -399,8 +403,18 @@ export class BridgethingSession {
     provenance: string | null = null,
     webappId: string | null = null,
     webappName: string | null = null,
+    webappVersion: string | null = null,
   ): Promise<BridgethingWebappInfo> {
-    return this.native.installWebappFromUrl(deviceId, url, sha256, size, provenance, webappId, webappName);
+    return this.native.installWebappFromUrl(
+      deviceId,
+      url,
+      sha256,
+      size,
+      provenance,
+      webappId,
+      webappName,
+      webappVersion,
+    );
   }
 
   async reconnectPeer(deviceId: string): Promise<void> {
@@ -520,6 +534,9 @@ export class BridgethingSession {
     this.native.setOnOtaPollChanged(status => {
       this.dispatch({ type: 'otaPollChanged', status });
     });
+    this.native.setOnOtaQueueChanged(queue => {
+      this.dispatch({ type: 'otaQueueChanged', queue });
+    });
     this.native.setOnCompanionUpdateProgress((received, total) => {
       this.dispatch({ type: 'companionUpdateProgress', received, total });
     });
@@ -572,8 +589,18 @@ export class BridgethingDevice {
     provenance: string | null,
     webappId: string | null = null,
     webappName: string | null = null,
+    webappVersion: string | null = null,
   ) {
-    return this.session.installWebappFromUrl(this.id, url, sha256, size, provenance, webappId, webappName);
+    return this.session.installWebappFromUrl(
+      this.id,
+      url,
+      sha256,
+      size,
+      provenance,
+      webappId,
+      webappName,
+      webappVersion,
+    );
   }
 }
 

@@ -55,6 +55,8 @@ export interface DesktopSession extends CompanionSession {
   addCatalogSource(url: string): Promise<string[]>;
   removeCatalogSource(url: string): Promise<string[]>;
 
+  otaRunProgress(deviceId: string): Promise<api.OtaRunProgress | null>;
+
   deviceAutoResume(): Promise<boolean>;
   deviceLogStreaming(): Promise<boolean>;
 
@@ -82,7 +84,7 @@ export interface DesktopSession extends CompanionSession {
     provenance?: string,
     expected?: api.ArtifactDigest | null,
     confirmed?: string[],
-    webapp?: { id: string; name: string },
+    webapp?: { id: string; name: string; version: string },
   ): Promise<api.WebappInfo>;
 
   extensions(): Promise<ExtensionEntry[]>;

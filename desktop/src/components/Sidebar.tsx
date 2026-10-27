@@ -5,8 +5,21 @@ import { useLocation } from 'preact-iso';
 
 import { useDesktop } from '../desktop.ts';
 import { Icon } from '../lib/icons.tsx';
-import { SECTIONS, sectionFor } from '../routes.ts';
-import { selfUpdate } from '../stores/session.ts';
+import { PATHS, SECTIONS, sectionFor } from '../routes.ts';
+import { storeListings } from '../stores/catalog.ts';
+import { otaAvailable, otaRuns, selectedDevice, selfUpdate } from '../stores/session.ts';
+
+function attention(): Set<string> {
+  const device = selectedDevice.data.value;
+  const flagged = new Set<string>();
+  const firmware =
+    otaRuns.value.some(run => run.outcome === null) ||
+    otaAvailable.value.some(entry => entry.deviceId === device && entry.releaseVersion);
+  if (firmware) flagged.add(PATHS.updates);
+  const { vouched, community } = storeListings();
+  if ([...vouched, ...community].some(listing => listing.updateAvailable)) flagged.add(PATHS.apps);
+  return flagged;
+}
 
 export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
   const { path, route } = useLocation();
@@ -16,6 +29,7 @@ export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
 
   const linked = peers.filter(peer => peer.status === 'connected');
   const failed = peers.filter(peer => peer.status === 'linkFailed');
+  const flagged = attention();
 
   return (
     <nav class="flex w-52 shrink-0 flex-col border-r border-rule bg-screen">
@@ -38,6 +52,9 @@ export function Sidebar({ peers }: { peers: SessionPeer[] }): VNode {
               onClick={() => route(section.path)}>
               <Icon name={section.icon} size={15} />
               {section.label}
+              {flagged.has(section.path) ? (
+                <span aria-label="needs attention" class="ml-auto size-1.5 bg-accent" />
+              ) : null}
             </button>
           </li>
         ))}

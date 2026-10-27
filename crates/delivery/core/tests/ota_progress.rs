@@ -44,7 +44,7 @@ fn run() -> OtaRun {
     stage_received: Some(50_000_000),
     stage_total: Some(100_000_000),
     rate_per_sec: Some(1_000_000.0),
-    dwl_percent: None,
+    write_percent: None,
     outcome: None,
     error: None,
     release_version: None,
@@ -74,7 +74,7 @@ fn lifecycle() -> Vec<OtaRun> {
     let mut frame = run();
     frame.step_id = 1;
     frame.phase = OtaRunPhase::Writing;
-    frame.dwl_percent = Some(pct as u32);
+    frame.write_percent = Some(pct as u32);
     frame.stage_received = None;
     frame.stage_total = None;
     frames.push(frame);
@@ -247,7 +247,7 @@ fn an_apply_step_with_no_byte_count_falls_back_to_the_batch_estimate() {
   let mut weighed = run();
   weighed.stage_received = None;
   weighed.stage_total = None;
-  weighed.dwl_percent = Some(0);
+  weighed.write_percent = Some(0);
   weighed.steps = vec![OtaPlanStep {
     id: 0,
     kind: OtaStepKind::Apply,
@@ -287,7 +287,7 @@ fn a_step_id_outside_the_plan_lands_on_the_step_the_phase_is_describing() {
   let mut stray = run();
   stray.step_id = 99;
   stray.phase = OtaRunPhase::Writing;
-  stray.dwl_percent = Some(0);
+  stray.write_percent = Some(0);
   stray.stage_received = None;
   stray.stage_total = None;
 
@@ -332,7 +332,7 @@ fn a_device_reporting_its_own_work_puts_the_transfer_behind_the_cursor() {
   let mut applying = run();
   applying.step_id = 0;
   applying.phase = OtaRunPhase::Streaming;
-  applying.dwl_percent = Some(20);
+  applying.write_percent = Some(20);
   applying.stage_received = None;
   applying.stage_total = None;
 
@@ -347,12 +347,12 @@ fn an_image_apply_tracks_the_delta_pull() {
   let mut image = run();
   image.step_id = 1;
   image.phase = OtaRunPhase::Streaming;
-  image.dwl_percent = Some(50);
+  image.write_percent = Some(50);
   image.stage_received = None;
   image.stage_total = None;
 
   let mut none = image.clone();
-  none.dwl_percent = Some(0);
+  none.write_percent = Some(0);
 
   assert!(ota_progress(&image, EPOCH_MS).percent > ota_progress(&none, EPOCH_MS).percent);
 }
@@ -364,7 +364,7 @@ fn a_non_image_apply_fills_in_by_phase_instead_of_jumping_whole() {
   webapp.step_id = 1;
   webapp.stage_received = None;
   webapp.stage_total = None;
-  webapp.dwl_percent = None;
+  webapp.write_percent = None;
 
   let at = |phase| {
     let mut frame = webapp.clone();
@@ -387,7 +387,7 @@ fn an_image_apply_is_whole_once_the_device_is_confirming_or_rebooting() {
   let mut image = run();
   image.step_id = 1;
   image.phase = OtaRunPhase::Confirming;
-  image.dwl_percent = Some(0);
+  image.write_percent = Some(0);
   image.stage_received = None;
   image.stage_total = None;
 
@@ -493,7 +493,7 @@ fn the_image_plan_spends_most_of_the_bar_where_it_spends_the_wall_clock() {
     let mut frame = planned.clone();
     frame.step_id = 4;
     frame.phase = OtaRunPhase::Writing;
-    frame.dwl_percent = Some(0);
+    frame.write_percent = Some(0);
     ota_progress(&frame, EPOCH_MS).percent
   };
 

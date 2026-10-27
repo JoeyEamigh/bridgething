@@ -726,11 +726,10 @@ impl OtaActor {
         }
 
         let terminator = self.terminators.reboot.clone();
-        let tally = self.range_proxy.tally();
         let transfers = self.transfers.clone();
         let range_proxy = self.range_proxy.clone();
         tokio::spawn(async move {
-          let outcome = run_image_write(&events_tx, &payload, tally, cancel_rx).await;
+          let outcome = run_image_write(&events_tx, &payload, cancel_rx).await;
           match outcome {
             Ok(()) => {
               let _ = transfers.abandon(update_id.clone()).await;
@@ -953,7 +952,6 @@ pub(crate) struct WriteError {
 async fn run_image_write(
   events_tx: &OtaEventTx,
   swu_path: &std::path::Path,
-  tally: Arc<range_proxy::RangeTally>,
   mut cancel_rx: watch::Receiver<bool>,
 ) -> Result<(), WriteError> {
   if check_cancel(&mut cancel_rx) {
@@ -968,19 +966,10 @@ async fn run_image_write(
     msg: format!("failed to read inactive slot: {err}"),
   })?;
   tracing::info!(?target, "ota target slot resolved");
-  let selector = swupdate::Selector {
-    software_set: "stable".into(),
-    running_mode: target.selector().into(),
-  };
 
   let progress_emitter = {
     let tx = events_tx.clone();
-    move |mut tick: swupdate::ProgressTick| {
-      let (served, expected) = tally.snapshot();
-      if let Some(percent) = served.saturating_mul(100).checked_div(expected) {
-        tick.dwl_bytes = served.min(u32::MAX as u64) as u32;
-        tick.dwl_percent = percent.min(100) as u8;
-      }
+    move |tick: swupdate::ProgressTick| {
       let tx = tx.clone();
       tokio::spawn(async move {
         emit_progress_tick(&tx, tick).await;
@@ -988,7 +977,7 @@ async fn run_image_write(
     }
   };
 
-  swupdate::install_swu(swu_path, &selector, &progress_emitter, &mut cancel_rx)
+  swupdate::install_swu(swu_path, target, &progress_emitter, &mut cancel_rx)
     .await
     .map_err(|err| WriteError {
       code: match err {
@@ -1067,17 +1056,17 @@ pub(crate) fn check_cancel(rx: &mut watch::Receiver<bool>) -> bool {
 }
 
 async fn emit_progress(events_tx: &OtaEventTx, phase: OtaPhase, percent: u8, eta_ms: Option<u32>) {
-  let _ = events_tx
-    .send(BridgeToGatewaySystemMsgEvent::OtaProgress(OtaProgress {
+  emit_progress_tick(
+    events_tx,
+    swupdate::ProgressTick {
       phase,
       percent,
       step: 0,
       nsteps: 0,
-      dwl_percent: 0,
-      dwl_bytes: 0,
       eta_ms,
-    }))
-    .await;
+    },
+  )
+  .await;
 }
 
 async fn emit_progress_tick(events_tx: &OtaEventTx, tick: swupdate::ProgressTick) {
@@ -1087,8 +1076,8 @@ async fn emit_progress_tick(events_tx: &OtaEventTx, tick: swupdate::ProgressTick
       percent: tick.percent,
       step: tick.step,
       nsteps: tick.nsteps,
-      dwl_percent: tick.dwl_percent,
-      dwl_bytes: tick.dwl_bytes,
+      dwl_percent: tick.percent,
+      dwl_bytes: 0,
       eta_ms: tick.eta_ms,
     }))
     .await;

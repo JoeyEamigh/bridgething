@@ -48,7 +48,17 @@ impl DeviceLogRing {
   }
 
   pub fn push(&self, origin: LogOrigin, level: LogLevel, target: &str, message: &str) -> DeviceLogRecord {
-    let ts_unix_ms = self.clock.unix_millis();
+    self.push_at(origin, level, self.clock.unix_millis(), target, message)
+  }
+
+  pub fn push_at(
+    &self,
+    origin: LogOrigin,
+    level: LogLevel,
+    ts_unix_ms: u64,
+    target: &str,
+    message: &str,
+  ) -> DeviceLogRecord {
     let mut held = self.held.lock().unwrap();
     held.seq += 1;
     let record = DeviceLogRecord {

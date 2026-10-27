@@ -63,6 +63,7 @@ export const otaPollConfig: ReadonlySignal<api.OtaPollConfig | null> = computed(
 export const otaRuns: ReadonlySignal<api.OtaRun[]> = computed(() => snapshot.data.value?.otaRuns ?? []);
 export const otaAvailable: ReadonlySignal<api.OtaAvailable[]> = computed(() => snapshot.data.value?.otaAvailable ?? []);
 export const otaPoll: ReadonlySignal<api.OtaPollStatus | null> = computed(() => snapshot.data.value?.otaPoll ?? null);
+export const otaQueues: ReadonlySignal<api.OtaQueue[]> = computed(() => snapshot.data.value?.otaQueues ?? []);
 
 const docs = keyed<api.DocEntry[]>([]);
 const manifests = keyed<api.OtaDiscoverManifest | null>(null);

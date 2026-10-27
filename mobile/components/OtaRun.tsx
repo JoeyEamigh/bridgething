@@ -16,10 +16,6 @@ function formatEta(seconds: number): string {
   return r ? `${m}m ${r}s` : `${m}m`;
 }
 
-function isPullingDeltas(run: BridgethingOtaRun): boolean {
-  return run.dwlPercent != null && run.dwlPercent < 100;
-}
-
 export function otaPhaseLabel(
   run: BridgethingOtaRun,
   stepLabel?: string,
@@ -32,11 +28,11 @@ export function otaPhaseLabel(
     case 'verifying':
       return 'verifying';
     case 'writing':
-      return isPullingDeltas(run) ? 'pulling deltas' : 'writing to device';
+      return 'writing to device';
     case 'confirming':
       return 'confirming';
     case 'reboot':
-      return 'rebooting device';
+      return run.otaKind === 'image' ? 'rebooting device' : 'restarting device';
     default:
       return 'preparing update';
   }
@@ -58,9 +54,6 @@ function stageDetail(
     parts.push(`${formatBytes(run.ratePerSec)}/s`);
   if (etaSeconds != null && etaSeconds > 0)
     parts.push(`${formatEta(etaSeconds)} left`);
-  if (parts.length === 0 && run.phase === 'writing' && !isPullingDeltas(run)) {
-    return 'this can take several minutes';
-  }
   return parts.length ? parts.join(' · ') : null;
 }
 

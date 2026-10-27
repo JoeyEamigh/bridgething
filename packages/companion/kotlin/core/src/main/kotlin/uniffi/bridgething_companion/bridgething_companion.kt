@@ -2841,8 +2841,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_otarunstore_interrupt(): Int
 
-    external fun uniffi_bridgething_companion_checksum_method_otarunstore_note_meta(): Int
-
     external fun uniffi_bridgething_companion_checksum_method_otarunstore_open_run_kind(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_otarunstore_poll_status(): Int
@@ -3497,6 +3495,7 @@ internal object UniffiLib {
         `provenance`: RustBuffer.ByValue,
         `webappId`: RustBuffer.ByValue,
         `webappName`: RustBuffer.ByValue,
+        `webappVersion`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_install_webapp_from_url(
@@ -3753,14 +3752,6 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_otarunstore_interrupt(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_bridgething_companion_fn_method_otarunstore_note_meta(
-        `ptr`: Long,
-        `deviceId`: RustBuffer.ByValue,
-        `daemonVersion`: RustBuffer.ByValue,
-        `imageVersion`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -6113,7 +6104,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_import_picked_media() != 21994) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 19772) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
@@ -6231,9 +6222,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_otarunstore_interrupt() != 47469) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_bridgething_companion_checksum_method_otarunstore_note_meta() != 19259) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_otarunstore_open_run_kind() != 10159) {
@@ -12030,10 +12018,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeAmInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeAmInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12061,10 +12048,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`snapshot`(
-                    FfiConverterTypeAmSnapshotSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`snapshot`(
+                FfiConverterTypeAmSnapshotSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12079,10 +12065,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`authStatus`(
-                    FfiConverterTypeAmAuthSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`authStatus`(
+                FfiConverterTypeAmAuthSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12097,10 +12082,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`requestAuthorization`(
-                    FfiConverterTypeAmAuthSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`requestAuthorization`(
+                FfiConverterTypeAmAuthSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12115,10 +12099,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`canPlayCatalogContent`(
-                    FfiConverterTypeAmCatalogSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`canPlayCatalogContent`(
+                FfiConverterTypeAmCatalogSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12133,10 +12116,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`isOtherAudioPlaying`(
-                    FfiConverterTypeAmFlagSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`isOtherAudioPlaying`(
+                FfiConverterTypeAmFlagSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12153,12 +12135,11 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`playContext`(
-                    FfiConverterTypeAmRef.lift(`context`),
-                    FfiConverterOptionalTypeAmRef.lift(`startAt`),
-                    FfiConverterTypeAmActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`playContext`(
+                FfiConverterTypeAmRef.lift(`context`),
+                FfiConverterOptionalTypeAmRef.lift(`startAt`),
+                FfiConverterTypeAmActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12175,12 +12156,11 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`queueInsert`(
-                    FfiConverterTypeAmRef.lift(`item`),
-                    FfiConverterBoolean.lift(`next`),
-                    FfiConverterTypeAmActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`queueInsert`(
+                FfiConverterTypeAmRef.lift(`item`),
+                FfiConverterBoolean.lift(`next`),
+                FfiConverterTypeAmActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12196,11 +12176,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`command`(
-                    FfiConverterTypeAmPlayerCommand.lift(`cmd`),
-                    FfiConverterTypeAmActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`command`(
+                FfiConverterTypeAmPlayerCommand.lift(`cmd`),
+                FfiConverterTypeAmActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12218,13 +12197,12 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`library`(
-                    FfiConverterTypeAmLibraryScope.lift(`scope`),
-                    FfiConverterUInt.lift(`limit`),
-                    FfiConverterUInt.lift(`offset`),
-                    FfiConverterTypeAmPageSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`library`(
+                FfiConverterTypeAmLibraryScope.lift(`scope`),
+                FfiConverterUInt.lift(`limit`),
+                FfiConverterUInt.lift(`offset`),
+                FfiConverterTypeAmPageSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12240,11 +12218,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`libraryCount`(
-                    FfiConverterTypeAmLibraryScope.lift(`scope`),
-                    FfiConverterTypeAmCountSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`libraryCount`(
+                FfiConverterTypeAmLibraryScope.lift(`scope`),
+                FfiConverterTypeAmCountSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12261,12 +12238,11 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`recentlyPlayed`(
-                    FfiConverterUInt.lift(`limit`),
-                    FfiConverterUInt.lift(`offset`),
-                    FfiConverterTypeAmPageSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`recentlyPlayed`(
+                FfiConverterUInt.lift(`limit`),
+                FfiConverterUInt.lift(`offset`),
+                FfiConverterTypeAmPageSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12282,11 +12258,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`children`(
-                    FfiConverterTypeAmRef.lift(`item`),
-                    FfiConverterTypeAmItemsSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`children`(
+                FfiConverterTypeAmRef.lift(`item`),
+                FfiConverterTypeAmItemsSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12301,10 +12276,9 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`recommendations`(
-                    FfiConverterTypeAmShelvesSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`recommendations`(
+                FfiConverterTypeAmShelvesSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12320,11 +12294,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`resolve`(
-                    FfiConverterTypeAmRef.lift(`item`),
-                    FfiConverterTypeAmItemSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`resolve`(
+                FfiConverterTypeAmRef.lift(`item`),
+                FfiConverterTypeAmItemSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12340,11 +12313,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`relations`(
-                    FfiConverterTypeAmRef.lift(`item`),
-                    FfiConverterTypeAmRelationsSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`relations`(
+                FfiConverterTypeAmRef.lift(`item`),
+                FfiConverterTypeAmRelationsSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12362,13 +12334,12 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`search`(
-                    FfiConverterString.lift(`query`),
-                    FfiConverterUInt.lift(`limit`),
-                    FfiConverterUInt.lift(`offset`),
-                    FfiConverterTypeAmSearchSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`search`(
+                FfiConverterString.lift(`query`),
+                FfiConverterUInt.lift(`limit`),
+                FfiConverterUInt.lift(`offset`),
+                FfiConverterTypeAmSearchSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12384,11 +12355,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`isFavorite`(
-                    FfiConverterSequenceTypeAmRef.lift(`items`),
-                    FfiConverterTypeAmFavoritesSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`isFavorite`(
+                FfiConverterSequenceTypeAmRef.lift(`items`),
+                FfiConverterTypeAmFavoritesSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12404,11 +12374,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`addFavorite`(
-                    FfiConverterTypeAmRef.lift(`item`),
-                    FfiConverterTypeAmActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`addFavorite`(
+                FfiConverterTypeAmRef.lift(`item`),
+                FfiConverterTypeAmActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12424,11 +12393,10 @@ internal object uniffiCallbackInterfaceAppleMusicBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAppleMusicBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`artwork`(
-                    FfiConverterString.lift(`url`),
-                    FfiConverterTypeAmArtworkSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`artwork`(
+                FfiConverterString.lift(`url`),
+                FfiConverterTypeAmArtworkSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12808,13 +12776,12 @@ internal object uniffiCallbackInterfaceAudioBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAudioBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`speak`(
-                    FfiConverterString.lift(`id`),
-                    FfiConverterString.lift(`text`),
-                    FfiConverterOptionalString.lift(`voice`),
-                    FfiConverterTypeSpeakSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`speak`(
+                FfiConverterString.lift(`id`),
+                FfiConverterString.lift(`text`),
+                FfiConverterOptionalString.lift(`voice`),
+                FfiConverterTypeSpeakSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12829,10 +12796,9 @@ internal object uniffiCallbackInterfaceAudioBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAudioBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`cancel`(
-                    FfiConverterString.lift(`id`),
-                )
+            val makeCall = {  uniffiObj.`cancel`(
+                FfiConverterString.lift(`id`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -12861,11 +12827,10 @@ internal object uniffiCallbackInterfaceAudioBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeAudioBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`playEarcon`(
-                    FfiConverterString.lift(`name`),
-                    FfiConverterTypeEarconSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`playEarcon`(
+                FfiConverterString.lift(`name`),
+                FfiConverterTypeEarconSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -13176,11 +13141,10 @@ internal object uniffiCallbackInterfaceBlobProgressSink {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeBlobProgressSink.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`progress`(
-                    FfiConverterULong.lift(`sent`),
-                    FfiConverterULong.lift(`total`),
-                )
+            val makeCall = {  uniffiObj.`progress`(
+                FfiConverterULong.lift(`sent`),
+                FfiConverterULong.lift(`total`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -13456,6 +13420,7 @@ public interface CompanionSessionInterface {
         `provenance`: kotlin.String?,
         `webappId`: kotlin.String? = null,
         `webappName`: kotlin.String? = null,
+        `webappVersion`: kotlin.String? = null,
     ): WebappInfo
 
     suspend fun `installWebappFromUrl`(
@@ -14302,6 +14267,7 @@ open class CompanionSession :
         `provenance`: kotlin.String?,
         `webappId`: kotlin.String?,
         `webappName`: kotlin.String?,
+        `webappVersion`: kotlin.String?,
     ): WebappInfo =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -14312,6 +14278,7 @@ open class CompanionSession :
                     FfiConverterOptionalString.lower(`provenance`),
                     FfiConverterOptionalString.lower(`webappId`),
                     FfiConverterOptionalString.lower(`webappName`),
+                    FfiConverterOptionalString.lower(`webappVersion`),
                 )
             },
             {
@@ -15543,10 +15510,9 @@ internal object uniffiCallbackInterfaceConnectivityMonitor {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeConnectivityMonitor.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeConnectivityInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeConnectivityInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -15868,11 +15834,10 @@ internal object uniffiCallbackInterfaceDeviceWaker {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeDeviceWaker.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`wakeDevice`(
-                    FfiConverterTypeWakeReason.lift(`reason`),
-                    FfiConverterBoolean.lift(`allowPlayTap`),
-                )
+            val makeCall = {  uniffiObj.`wakeDevice`(
+                FfiConverterTypeWakeReason.lift(`reason`),
+                FfiConverterBoolean.lift(`allowPlayTap`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16533,10 +16498,9 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeExtensionHostInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeExtensionHostInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16566,12 +16530,11 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`deliver`(
-                    FfiConverterString.lift(`device`),
-                    FfiConverterString.lift(`webapp`),
-                    FfiConverterTypeExtensionMessage.lift(`message`),
-                )
+            val makeCall = {  uniffiObj.`deliver`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterTypeExtensionMessage.lift(`message`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16589,13 +16552,12 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`deviceConnected`(
-                    FfiConverterString.lift(`device`),
-                    FfiConverterString.lift(`name`),
-                    FfiConverterSequenceTypeExtensionConfigEntry.lift(`config`),
-                    FfiConverterSequenceString.lift(`webapps`),
-                )
+            val makeCall = {  uniffiObj.`deviceConnected`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`name`),
+                FfiConverterSequenceTypeExtensionConfigEntry.lift(`config`),
+                FfiConverterSequenceString.lift(`webapps`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16610,10 +16572,9 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`deviceDisconnected`(
-                    FfiConverterString.lift(`device`),
-                )
+            val makeCall = {  uniffiObj.`deviceDisconnected`(
+                FfiConverterString.lift(`device`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16630,12 +16591,11 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`deviceActive`(
-                    FfiConverterString.lift(`device`),
-                    FfiConverterString.lift(`webapp`),
-                    FfiConverterBoolean.lift(`active`),
-                )
+            val makeCall = {  uniffiObj.`deviceActive`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterBoolean.lift(`active`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -16653,13 +16613,12 @@ internal object uniffiCallbackInterfaceExtensionHost {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeExtensionHost.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`configChanged`(
-                    FfiConverterString.lift(`device`),
-                    FfiConverterString.lift(`webapp`),
-                    FfiConverterString.lift(`key`),
-                    FfiConverterOptionalString.lift(`value`),
-                )
+            val makeCall = {  uniffiObj.`configChanged`(
+                FfiConverterString.lift(`device`),
+                FfiConverterString.lift(`webapp`),
+                FfiConverterString.lift(`key`),
+                FfiConverterOptionalString.lift(`value`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -17608,10 +17567,9 @@ internal object uniffiCallbackInterfaceGeoProvider {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeGeoProvider.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeGeoInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeGeoInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -17639,10 +17597,9 @@ internal object uniffiCallbackInterfaceGeoProvider {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeGeoProvider.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`configure`(
-                    FfiConverterTypeGeoAccuracy.lift(`accuracy`),
-                )
+            val makeCall = {  uniffiObj.`configure`(
+                FfiConverterTypeGeoAccuracy.lift(`accuracy`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -18889,11 +18846,10 @@ internal object uniffiCallbackInterfaceHttpTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeHttpTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`execute`(
-                    FfiConverterTypeHttpRequest.lift(`request`),
-                    FfiConverterTypeHttpSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`execute`(
+                FfiConverterTypeHttpRequest.lift(`request`),
+                FfiConverterTypeHttpSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -18909,11 +18865,10 @@ internal object uniffiCallbackInterfaceHttpTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeHttpTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`download`(
-                    FfiConverterTypeHttpRequest.lift(`request`),
-                    FfiConverterTypeHttpDownloadSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`download`(
+                FfiConverterTypeHttpRequest.lift(`request`),
+                FfiConverterTypeHttpDownloadSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -19229,12 +19184,11 @@ internal object uniffiCallbackInterfaceImageScaler {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeImageScaler.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`scale`(
-                    FfiConverterByteArray.lift(`bytes`),
-                    FfiConverterTypeMediaSniff.lift(`sniff`),
-                    FfiConverterTypeImageTarget.lift(`target`),
-                )
+            val makeCall = {  uniffiObj.`scale`(
+                FfiConverterByteArray.lift(`bytes`),
+                FfiConverterTypeMediaSniff.lift(`sniff`),
+                FfiConverterTypeImageTarget.lift(`target`),
+            )
             }
             val writeReturn = { value: ScaledImage? -> uniffiOutReturn.setValue(FfiConverterOptionalTypeScaledImage.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -19940,10 +19894,9 @@ internal object uniffiCallbackInterfaceLinkTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeLinkTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeLinkInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeLinkInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -19972,11 +19925,10 @@ internal object uniffiCallbackInterfaceLinkTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeLinkTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`send`(
-                    FfiConverterString.lift(`deviceId`),
-                    FfiConverterByteArray.lift(`batch`),
-                )
+            val makeCall = {  uniffiObj.`send`(
+                FfiConverterString.lift(`deviceId`),
+                FfiConverterByteArray.lift(`batch`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -19991,10 +19943,9 @@ internal object uniffiCallbackInterfaceLinkTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeLinkTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`disconnect`(
-                    FfiConverterString.lift(`deviceId`),
-                )
+            val makeCall = {  uniffiObj.`disconnect`(
+                FfiConverterString.lift(`deviceId`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -20009,10 +19960,9 @@ internal object uniffiCallbackInterfaceLinkTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeLinkTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`reconnect`(
-                    FfiConverterString.lift(`deviceId`),
-                )
+            val makeCall = {  uniffiObj.`reconnect`(
+                FfiConverterString.lift(`deviceId`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -20579,12 +20529,11 @@ internal object uniffiCallbackInterfaceLogSink {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeLogSink.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`onLine`(
-                    FfiConverterTypeLogLevel.lift(`level`),
-                    FfiConverterString.lift(`target`),
-                    FfiConverterString.lift(`message`),
-                )
+            val makeCall = {  uniffiObj.`onLine`(
+                FfiConverterTypeLogLevel.lift(`level`),
+                FfiConverterString.lift(`target`),
+                FfiConverterString.lift(`message`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -21596,10 +21545,9 @@ internal object uniffiCallbackInterfaceMediaSessionBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaSessionBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeMediaSessionInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeMediaSessionInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -21627,10 +21575,9 @@ internal object uniffiCallbackInterfaceMediaSessionBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaSessionBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`snapshotAll`(
-                    FfiConverterTypeMediaSnapshotSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`snapshotAll`(
+                FfiConverterTypeMediaSnapshotSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -21646,11 +21593,10 @@ internal object uniffiCallbackInterfaceMediaSessionBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaSessionBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`control`(
-                    FfiConverterString.lift(`package`),
-                    FfiConverterTypeMediaControl.lift(`cmd`),
-                )
+            val makeCall = {  uniffiObj.`control`(
+                FfiConverterString.lift(`package`),
+                FfiConverterTypeMediaControl.lift(`cmd`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -21667,12 +21613,11 @@ internal object uniffiCallbackInterfaceMediaSessionBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaSessionBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`art`(
-                    FfiConverterString.lift(`package`),
-                    FfiConverterString.lift(`token`),
-                    FfiConverterTypeMediaArtSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`art`(
+                FfiConverterString.lift(`package`),
+                FfiConverterString.lift(`token`),
+                FfiConverterTypeMediaArtSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -22484,11 +22429,10 @@ internal object uniffiCallbackInterfaceMediaTranscoder {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaTranscoder.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`transcode`(
-                    FfiConverterTypeTranscodeRequest.lift(`request`),
-                    FfiConverterTypeTranscodeSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`transcode`(
+                FfiConverterTypeTranscodeRequest.lift(`request`),
+                FfiConverterTypeTranscodeSink.lift(`sink`),
+            )
             }
             val writeReturn = { value: TranscodeJob -> uniffiOutReturn.setValue(FfiConverterTypeTranscodeJob.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -22503,10 +22447,9 @@ internal object uniffiCallbackInterfaceMediaTranscoder {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeMediaTranscoder.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`poster`(
-                    FfiConverterString.lift(`source`),
-                )
+            val makeCall = {  uniffiObj.`poster`(
+                FfiConverterString.lift(`source`),
+            )
             }
             val writeReturn = { value: kotlin.ByteArray? -> uniffiOutReturn.setValue(FfiConverterOptionalByteArray.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -22816,11 +22759,10 @@ internal object uniffiCallbackInterfaceModelArtifactValidator {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeModelArtifactValidator.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`validate`(
-                    FfiConverterTypeModelArtifactKind.lift(`kind`),
-                    FfiConverterString.lift(`path`),
-                )
+            val makeCall = {  uniffiObj.`validate`(
+                FfiConverterTypeModelArtifactKind.lift(`kind`),
+                FfiConverterString.lift(`path`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCallWithError(
@@ -23162,11 +23104,10 @@ internal object uniffiCallbackInterfaceNluModelRunner {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeNluModelRunner.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`predict`(
-                    FfiConverterSequenceInt.lift(`inputIds`),
-                    FfiConverterSequenceInt.lift(`attentionMask`),
-                )
+            val makeCall = {  uniffiObj.`predict`(
+                FfiConverterSequenceInt.lift(`inputIds`),
+                FfiConverterSequenceInt.lift(`attentionMask`),
+            )
             }
             val writeReturn = { value: NluModelOutputs -> uniffiOutReturn.setValue(FfiConverterTypeNluModelOutputs.lower(value)) }
             uniffiTraitInterfaceCallWithError(
@@ -23523,10 +23464,9 @@ internal object uniffiCallbackInterfaceNotificationBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeNotificationBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeNotificationInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeNotificationInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -23555,11 +23495,10 @@ internal object uniffiCallbackInterfaceNotificationBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeNotificationBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`invokePositive`(
-                    FfiConverterString.lift(`id`),
-                    FfiConverterTypeActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`invokePositive`(
+                FfiConverterString.lift(`id`),
+                FfiConverterTypeActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -23575,11 +23514,10 @@ internal object uniffiCallbackInterfaceNotificationBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeNotificationBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`invokeNegative`(
-                    FfiConverterString.lift(`id`),
-                    FfiConverterTypeActionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`invokeNegative`(
+                FfiConverterString.lift(`id`),
+                FfiConverterTypeActionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -24015,12 +23953,6 @@ public interface OtaRunStoreInterface {
 
     fun `interrupt`(`deviceId`: kotlin.String): OtaRun?
 
-    fun `noteMeta`(
-        `deviceId`: kotlin.String,
-        `daemonVersion`: kotlin.String,
-        `imageVersion`: kotlin.String,
-    ): OtaRun?
-
     fun `openRunKind`(`deviceId`: kotlin.String): OtaKind?
 
     fun `pollStatus`(): OtaPollStatus
@@ -24205,25 +24137,6 @@ open class OtaRunStore :
                     UniffiLib.uniffi_bridgething_companion_fn_method_otarunstore_interrupt(
                         it,
                         FfiConverterString.lower(`deviceId`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `noteMeta`(
-        `deviceId`: kotlin.String,
-        `daemonVersion`: kotlin.String,
-        `imageVersion`: kotlin.String,
-    ): OtaRun? =
-        FfiConverterOptionalTypeOtaRun.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_bridgething_companion_fn_method_otarunstore_note_meta(
-                        it,
-                        FfiConverterString.lower(`deviceId`),
-                        FfiConverterString.lower(`daemonVersion`),
-                        FfiConverterString.lower(`imageVersion`),
                         _status,
                     )
                 }
@@ -24562,10 +24475,9 @@ internal object uniffiCallbackInterfacePhoneBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypePhoneBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypePhoneInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypePhoneInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -24593,10 +24505,9 @@ internal object uniffiCallbackInterfacePhoneBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypePhoneBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`command`(
-                    FfiConverterTypePhoneCommand.lift(`cmd`),
-                )
+            val makeCall = {  uniffiObj.`command`(
+                FfiConverterTypePhoneCommand.lift(`cmd`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -24611,10 +24522,9 @@ internal object uniffiCallbackInterfacePhoneBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypePhoneBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`stateGet`(
-                    FfiConverterTypePhoneStateSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`stateGet`(
+                FfiConverterTypePhoneStateSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -25786,10 +25696,9 @@ internal object uniffiCallbackInterfaceSecretStore {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSecretStore.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`get`(
-                    FfiConverterString.lift(`key`),
-                )
+            val makeCall = {  uniffiObj.`get`(
+                FfiConverterString.lift(`key`),
+            )
             }
             val writeReturn = { value: kotlin.String? -> uniffiOutReturn.setValue(FfiConverterOptionalString.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -25805,11 +25714,10 @@ internal object uniffiCallbackInterfaceSecretStore {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSecretStore.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`set`(
-                    FfiConverterString.lift(`key`),
-                    FfiConverterString.lift(`value`),
-                )
+            val makeCall = {  uniffiObj.`set`(
+                FfiConverterString.lift(`key`),
+                FfiConverterString.lift(`value`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -25824,10 +25732,9 @@ internal object uniffiCallbackInterfaceSecretStore {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSecretStore.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`remove`(
-                    FfiConverterString.lift(`key`),
-                )
+            val makeCall = {  uniffiObj.`remove`(
+                FfiConverterString.lift(`key`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -25842,10 +25749,9 @@ internal object uniffiCallbackInterfaceSecretStore {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSecretStore.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`getBlob`(
-                    FfiConverterString.lift(`key`),
-                )
+            val makeCall = {  uniffiObj.`getBlob`(
+                FfiConverterString.lift(`key`),
+            )
             }
             val writeReturn = { value: kotlin.ByteArray? -> uniffiOutReturn.setValue(FfiConverterOptionalByteArray.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -26149,10 +26055,9 @@ internal object uniffiCallbackInterfaceSessionEventSink {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSessionEventSink.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`onEvent`(
-                    FfiConverterTypeSessionEvent.lift(`event`),
-                )
+            val makeCall = {  uniffiObj.`onEvent`(
+                FfiConverterTypeSessionEvent.lift(`event`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -26728,10 +26633,9 @@ internal object uniffiCallbackInterfaceSpeechRecognizer {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSpeechRecognizer.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`prepare`(
-                    FfiConverterTypePrepareSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`prepare`(
+                FfiConverterTypePrepareSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -26748,12 +26652,11 @@ internal object uniffiCallbackInterfaceSpeechRecognizer {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeSpeechRecognizer.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`transcribe`(
-                    FfiConverterSequenceFloat.lift(`pcm`),
-                    FfiConverterUInt.lift(`sampleRateHz`),
-                    FfiConverterTypeTranscriptionSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`transcribe`(
+                FfiConverterSequenceFloat.lift(`pcm`),
+                FfiConverterUInt.lift(`sampleRateHz`),
+                FfiConverterTypeTranscriptionSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -27151,11 +27054,10 @@ internal object uniffiCallbackInterfaceStreamBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeStreamBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`play`(
-                    FfiConverterTypeStreamSource.lift(`source`),
-                    FfiConverterTypeStreamSink.lift(`sink`),
-                )
+            val makeCall = {  uniffiObj.`play`(
+                FfiConverterTypeStreamSource.lift(`source`),
+                FfiConverterTypeStreamSink.lift(`sink`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -27170,10 +27072,9 @@ internal object uniffiCallbackInterfaceStreamBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeStreamBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`present`(
-                    FfiConverterTypeStreamPresentation.lift(`presentation`),
-                )
+            val makeCall = {  uniffiObj.`present`(
+                FfiConverterTypeStreamPresentation.lift(`presentation`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -27214,10 +27115,9 @@ internal object uniffiCallbackInterfaceStreamBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeStreamBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`seekTo`(
-                    FfiConverterUInt.lift(`positionMs`),
-                )
+            val makeCall = {  uniffiObj.`seekTo`(
+                FfiConverterUInt.lift(`positionMs`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -29006,10 +28906,9 @@ internal object uniffiCallbackInterfaceVolumeBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeVolumeBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`start`(
-                    FfiConverterTypeVolumeInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`start`(
+                FfiConverterTypeVolumeInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -29050,10 +28949,9 @@ internal object uniffiCallbackInterfaceVolumeBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeVolumeBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`setVolume`(
-                    FfiConverterFloat.lift(`level`),
-                )
+            val makeCall = {  uniffiObj.`setVolume`(
+                FfiConverterFloat.lift(`level`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -29068,10 +28966,9 @@ internal object uniffiCallbackInterfaceVolumeBackend {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeVolumeBackend.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`setMute`(
-                    FfiConverterBoolean.lift(`muted`),
-                )
+            val makeCall = {  uniffiObj.`setMute`(
+                FfiConverterBoolean.lift(`muted`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -29665,10 +29562,9 @@ internal object uniffiCallbackInterfaceWebappBundleSink {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeWebappBundleSink.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`installed`(
-                    FfiConverterString.lift(`bundle`),
-                )
+            val makeCall = {  uniffiObj.`installed`(
+                FfiConverterString.lift(`bundle`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -30324,11 +30220,10 @@ internal object uniffiCallbackInterfaceWsTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeWsTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`connect`(
-                    FfiConverterTypeWsConnect.lift(`connect`),
-                    FfiConverterTypeWsInbox.lift(`inbox`),
-                )
+            val makeCall = {  uniffiObj.`connect`(
+                FfiConverterTypeWsConnect.lift(`connect`),
+                FfiConverterTypeWsInbox.lift(`inbox`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -30344,11 +30239,10 @@ internal object uniffiCallbackInterfaceWsTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeWsTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`send`(
-                    FfiConverterString.lift(`id`),
-                    FfiConverterTypeWsFrame.lift(`frame`),
-                )
+            val makeCall = {  uniffiObj.`send`(
+                FfiConverterString.lift(`id`),
+                FfiConverterTypeWsFrame.lift(`frame`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -30365,12 +30259,11 @@ internal object uniffiCallbackInterfaceWsTransport {
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
             val uniffiObj = FfiConverterTypeWsTransport.handleMap.get(uniffiHandle)
-            val makeCall = {
-                uniffiObj.`disconnect`(
-                    FfiConverterString.lift(`id`),
-                    FfiConverterOptionalUShort.lift(`code`),
-                    FfiConverterOptionalString.lift(`reason`),
-                )
+            val makeCall = {  uniffiObj.`disconnect`(
+                FfiConverterString.lift(`id`),
+                FfiConverterOptionalUShort.lift(`code`),
+                FfiConverterOptionalString.lift(`reason`),
+            )
             }
             val writeReturn = { _: Unit -> Unit }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
@@ -33207,6 +33100,74 @@ public object FfiConverterTypeOtaPollStatus : FfiConverterRustBuffer<OtaPollStat
     }
 }
 
+data class OtaQueue(
+    var `deviceId`: kotlin.String,
+    var `installs`: List<OtaQueuedInstall>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOtaQueue : FfiConverterRustBuffer<OtaQueue> {
+    override fun read(buf: ByteBuffer): OtaQueue =
+        OtaQueue(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeOtaQueuedInstall.read(buf),
+        )
+
+    override fun allocationSize(value: OtaQueue) =
+        (
+            FfiConverterString.allocationSize(value.`deviceId`) +
+                FfiConverterSequenceTypeOtaQueuedInstall.allocationSize(value.`installs`)
+        )
+
+    override fun write(
+        value: OtaQueue,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`deviceId`, buf)
+        FfiConverterSequenceTypeOtaQueuedInstall.write(value.`installs`, buf)
+    }
+}
+
+data class OtaQueuedInstall(
+    var `webappId`: kotlin.String,
+    var `webappName`: kotlin.String,
+    var `version`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOtaQueuedInstall : FfiConverterRustBuffer<OtaQueuedInstall> {
+    override fun read(buf: ByteBuffer): OtaQueuedInstall =
+        OtaQueuedInstall(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: OtaQueuedInstall) =
+        (
+            FfiConverterString.allocationSize(value.`webappId`) +
+                FfiConverterString.allocationSize(value.`webappName`) +
+                FfiConverterString.allocationSize(value.`version`)
+        )
+
+    override fun write(
+        value: OtaQueuedInstall,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`webappId`, buf)
+        FfiConverterString.write(value.`webappName`, buf)
+        FfiConverterString.write(value.`version`, buf)
+    }
+}
+
 data class OtaReleaseArtifacts(
     var `daemon`: ArtifactDigest?,
     var `daemonZst`: ArtifactDigest?,
@@ -33271,7 +33232,7 @@ data class OtaRun(
     var `stageReceived`: kotlin.ULong?,
     var `stageTotal`: kotlin.ULong?,
     var `ratePerSec`: kotlin.Double?,
-    var `dwlPercent`: kotlin.UInt?,
+    var `writePercent`: kotlin.UInt?,
     var `outcome`: OtaRunOutcome?,
     var `error`: kotlin.String?,
     var `releaseVersion`: kotlin.String?,
@@ -33329,7 +33290,7 @@ public object FfiConverterTypeOtaRun : FfiConverterRustBuffer<OtaRun> {
                 FfiConverterOptionalULong.allocationSize(value.`stageReceived`) +
                 FfiConverterOptionalULong.allocationSize(value.`stageTotal`) +
                 FfiConverterOptionalDouble.allocationSize(value.`ratePerSec`) +
-                FfiConverterOptionalUInt.allocationSize(value.`dwlPercent`) +
+                FfiConverterOptionalUInt.allocationSize(value.`writePercent`) +
                 FfiConverterOptionalTypeOtaRunOutcome.allocationSize(value.`outcome`) +
                 FfiConverterOptionalString.allocationSize(value.`error`) +
                 FfiConverterOptionalString.allocationSize(value.`releaseVersion`) +
@@ -33357,7 +33318,7 @@ public object FfiConverterTypeOtaRun : FfiConverterRustBuffer<OtaRun> {
         FfiConverterOptionalULong.write(value.`stageReceived`, buf)
         FfiConverterOptionalULong.write(value.`stageTotal`, buf)
         FfiConverterOptionalDouble.write(value.`ratePerSec`, buf)
-        FfiConverterOptionalUInt.write(value.`dwlPercent`, buf)
+        FfiConverterOptionalUInt.write(value.`writePercent`, buf)
         FfiConverterOptionalTypeOtaRunOutcome.write(value.`outcome`, buf)
         FfiConverterOptionalString.write(value.`error`, buf)
         FfiConverterOptionalString.write(value.`releaseVersion`, buf)
@@ -33923,6 +33884,7 @@ data class SessionSnapshot(
     var `otaRuns`: List<OtaRun>,
     var `otaAvailable`: List<OtaAvailable>,
     var `otaPoll`: OtaPollStatus,
+    var `otaQueues`: List<OtaQueue>,
 ) {
     companion object
 }
@@ -33948,6 +33910,7 @@ public object FfiConverterTypeSessionSnapshot : FfiConverterRustBuffer<SessionSn
             FfiConverterSequenceTypeOtaRun.read(buf),
             FfiConverterSequenceTypeOtaAvailable.read(buf),
             FfiConverterTypeOtaPollStatus.read(buf),
+            FfiConverterSequenceTypeOtaQueue.read(buf),
         )
 
     override fun allocationSize(value: SessionSnapshot) =
@@ -33966,7 +33929,8 @@ public object FfiConverterTypeSessionSnapshot : FfiConverterRustBuffer<SessionSn
                 FfiConverterSequenceTypeDeviceWebappsEntry.allocationSize(value.`webapps`) +
                 FfiConverterSequenceTypeOtaRun.allocationSize(value.`otaRuns`) +
                 FfiConverterSequenceTypeOtaAvailable.allocationSize(value.`otaAvailable`) +
-                FfiConverterTypeOtaPollStatus.allocationSize(value.`otaPoll`)
+                FfiConverterTypeOtaPollStatus.allocationSize(value.`otaPoll`) +
+                FfiConverterSequenceTypeOtaQueue.allocationSize(value.`otaQueues`)
         )
 
     override fun write(
@@ -33988,6 +33952,7 @@ public object FfiConverterTypeSessionSnapshot : FfiConverterRustBuffer<SessionSn
         FfiConverterSequenceTypeOtaRun.write(value.`otaRuns`, buf)
         FfiConverterSequenceTypeOtaAvailable.write(value.`otaAvailable`, buf)
         FfiConverterTypeOtaPollStatus.write(value.`otaPoll`, buf)
+        FfiConverterSequenceTypeOtaQueue.write(value.`otaQueues`, buf)
     }
 }
 
@@ -34705,6 +34670,7 @@ data class WebappInstallRequest(
     var `provenance`: kotlin.String?,
     var `webappId`: kotlin.String?,
     var `webappName`: kotlin.String?,
+    var `webappVersion`: kotlin.String?,
 ) {
     companion object
 }
@@ -34720,6 +34686,7 @@ public object FfiConverterTypeWebappInstallRequest : FfiConverterRustBuffer<Weba
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: WebappInstallRequest) =
@@ -34728,7 +34695,8 @@ public object FfiConverterTypeWebappInstallRequest : FfiConverterRustBuffer<Weba
                 FfiConverterOptionalTypeArtifactDigest.allocationSize(value.`expected`) +
                 FfiConverterOptionalString.allocationSize(value.`provenance`) +
                 FfiConverterOptionalString.allocationSize(value.`webappId`) +
-                FfiConverterOptionalString.allocationSize(value.`webappName`)
+                FfiConverterOptionalString.allocationSize(value.`webappName`) +
+                FfiConverterOptionalString.allocationSize(value.`webappVersion`)
         )
 
     override fun write(
@@ -34740,6 +34708,7 @@ public object FfiConverterTypeWebappInstallRequest : FfiConverterRustBuffer<Weba
         FfiConverterOptionalString.write(value.`provenance`, buf)
         FfiConverterOptionalString.write(value.`webappId`, buf)
         FfiConverterOptionalString.write(value.`webappName`, buf)
+        FfiConverterOptionalString.write(value.`webappVersion`, buf)
     }
 }
 
@@ -37416,8 +37385,6 @@ sealed class OtaPhaseSnapshot {
     data class Applying(
         val `phase`: uniffi.bridgething_companion.OtaApplyPhase,
         val `writePercent`: kotlin.UInt,
-        val `dwlPercent`: kotlin.UInt,
-        val `dwlBytes`: kotlin.ULong,
     ) : OtaPhaseSnapshot() {
         companion object
     }
@@ -37468,8 +37435,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 OtaPhaseSnapshot.Applying(
                     FfiConverterTypeOtaApplyPhase.read(buf),
                     FfiConverterUInt.read(buf),
-                    FfiConverterUInt.read(buf),
-                    FfiConverterULong.read(buf),
                 )
             }
 
@@ -37529,9 +37494,7 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 (
                     4UL +
                         FfiConverterTypeOtaApplyPhase.allocationSize(value.`phase`) +
-                        FfiConverterUInt.allocationSize(value.`writePercent`) +
-                        FfiConverterUInt.allocationSize(value.`dwlPercent`) +
-                        FfiConverterULong.allocationSize(value.`dwlBytes`)
+                        FfiConverterUInt.allocationSize(value.`writePercent`)
                 )
             }
 
@@ -37591,8 +37554,6 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
                 buf.putInt(4)
                 FfiConverterTypeOtaApplyPhase.write(value.`phase`, buf)
                 FfiConverterUInt.write(value.`writePercent`, buf)
-                FfiConverterUInt.write(value.`dwlPercent`, buf)
-                FfiConverterULong.write(value.`dwlBytes`, buf)
                 Unit
             }
 
@@ -37617,7 +37578,7 @@ public object FfiConverterTypeOtaPhaseSnapshot : FfiConverterRustBuffer<OtaPhase
 
 sealed class OtaPollEvent {
     data class ManifestPolled(
-        val `updatedAt`: kotlin.String,
+        val `checkedAt`: kotlin.String,
     ) : OtaPollEvent() {
         companion object
     }
@@ -37754,7 +37715,7 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL +
-                        FfiConverterString.allocationSize(value.`updatedAt`)
+                        FfiConverterString.allocationSize(value.`checkedAt`)
                 )
             }
 
@@ -37831,7 +37792,7 @@ public object FfiConverterTypeOtaPollEvent : FfiConverterRustBuffer<OtaPollEvent
         when (value) {
             is OtaPollEvent.ManifestPolled -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`updatedAt`, buf)
+                FfiConverterString.write(value.`checkedAt`, buf)
                 Unit
             }
 
@@ -38007,6 +37968,12 @@ sealed class OtaStoreChange {
         companion object
     }
 
+    data class Queue(
+        val `queue`: uniffi.bridgething_companion.OtaQueue,
+    ) : OtaStoreChange() {
+        companion object
+    }
+
     companion object
 }
 
@@ -38031,6 +37998,12 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
             3 -> {
                 OtaStoreChange.Poll(
                     FfiConverterTypeOtaPollStatus.read(buf),
+                )
+            }
+
+            4 -> {
+                OtaStoreChange.Queue(
+                    FfiConverterTypeOtaQueue.read(buf),
                 )
             }
 
@@ -38064,6 +38037,14 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
                         FfiConverterTypeOtaPollStatus.allocationSize(value.`status`)
                 )
             }
+
+            is OtaStoreChange.Queue -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterTypeOtaQueue.allocationSize(value.`queue`)
+                )
+            }
         }
 
     override fun write(
@@ -38086,6 +38067,12 @@ public object FfiConverterTypeOtaStoreChange : FfiConverterRustBuffer<OtaStoreCh
             is OtaStoreChange.Poll -> {
                 buf.putInt(3)
                 FfiConverterTypeOtaPollStatus.write(value.`status`, buf)
+                Unit
+            }
+
+            is OtaStoreChange.Queue -> {
+                buf.putInt(4)
+                FfiConverterTypeOtaQueue.write(value.`queue`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -38861,6 +38848,12 @@ sealed class SessionEvent {
         companion object
     }
 
+    data class OtaQueueChanged(
+        val `queue`: uniffi.bridgething_companion.OtaQueue,
+    ) : SessionEvent() {
+        companion object
+    }
+
     data class CompanionUpdateProgress(
         val `received`: kotlin.ULong,
         val `total`: kotlin.ULong,
@@ -38978,13 +38971,19 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
             }
 
             16 -> {
+                SessionEvent.OtaQueueChanged(
+                    FfiConverterTypeOtaQueue.read(buf),
+                )
+            }
+
+            17 -> {
                 SessionEvent.CompanionUpdateProgress(
                     FfiConverterULong.read(buf),
                     FfiConverterULong.read(buf),
                 )
             }
 
-            17 -> {
+            18 -> {
                 SessionEvent.Resumed
             }
 
@@ -39123,6 +39122,14 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 )
             }
 
+            is SessionEvent.OtaQueueChanged -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterTypeOtaQueue.allocationSize(value.`queue`)
+                )
+            }
+
             is SessionEvent.CompanionUpdateProgress -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -39243,15 +39250,21 @@ public object FfiConverterTypeSessionEvent : FfiConverterRustBuffer<SessionEvent
                 Unit
             }
 
-            is SessionEvent.CompanionUpdateProgress -> {
+            is SessionEvent.OtaQueueChanged -> {
                 buf.putInt(16)
+                FfiConverterTypeOtaQueue.write(value.`queue`, buf)
+                Unit
+            }
+
+            is SessionEvent.CompanionUpdateProgress -> {
+                buf.putInt(17)
                 FfiConverterULong.write(value.`received`, buf)
                 FfiConverterULong.write(value.`total`, buf)
                 Unit
             }
 
             is SessionEvent.Resumed -> {
-                buf.putInt(17)
+                buf.putInt(18)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -42437,6 +42450,62 @@ public object FfiConverterSequenceTypeOtaPlanStep : FfiConverterRustBuffer<List<
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeOtaPlanStep.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeOtaQueue : FfiConverterRustBuffer<List<OtaQueue>> {
+    override fun read(buf: ByteBuffer): List<OtaQueue> {
+        val len = buf.getInt()
+        return List<OtaQueue>(len) {
+            FfiConverterTypeOtaQueue.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<OtaQueue>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeOtaQueue.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<OtaQueue>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeOtaQueue.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeOtaQueuedInstall : FfiConverterRustBuffer<List<OtaQueuedInstall>> {
+    override fun read(buf: ByteBuffer): List<OtaQueuedInstall> {
+        val len = buf.getInt()
+        return List<OtaQueuedInstall>(len) {
+            FfiConverterTypeOtaQueuedInstall.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<OtaQueuedInstall>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeOtaQueuedInstall.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<OtaQueuedInstall>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeOtaQueuedInstall.write(it, buf)
         }
     }
 }

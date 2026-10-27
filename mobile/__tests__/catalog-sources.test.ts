@@ -276,6 +276,7 @@ describe('installing from a catalog you added yourself', () => {
         THIRD_PARTY,
         APP_ID,
         'my app',
+        '1.2.0',
       ],
     ]);
   });
@@ -587,6 +588,7 @@ describe('installing a version other than the newest', () => {
         THIRD_PARTY,
         APP_ID,
         'my app',
+        '1.2.0',
       ],
     ]);
   });

@@ -9,6 +9,7 @@ use tokio::sync::Notify;
 use uuid::Uuid;
 
 pub const ACK_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+const SLOW_ACK: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("transfer {transfer_id} stalled: fragment acks stopped at offset {offset}")]
@@ -104,14 +105,17 @@ impl AckWindow {
       let acked = self.received_bytes(transfer_id);
       if offset < acked.saturating_add(window_bytes) {
         if let Some(since) = blocked_since {
-          tracing::warn!(
-            %transfer_id,
-            offset,
-            acked,
-            window_bytes,
-            blocked_ms = rt::Instant::now().saturating_duration_since(since).as_millis() as u64,
-            "transfer resumed after the peer stopped acking"
-          );
+          let blocked = rt::Instant::now().saturating_duration_since(since);
+          if blocked >= SLOW_ACK {
+            tracing::warn!(
+              %transfer_id,
+              offset,
+              acked,
+              window_bytes,
+              blocked_ms = blocked.as_millis() as u64,
+              "transfer resumed after the peer stopped acking"
+            );
+          }
         }
         return Ok(());
       }

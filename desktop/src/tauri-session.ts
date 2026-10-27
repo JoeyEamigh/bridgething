@@ -113,7 +113,7 @@ export class TauriSession implements CompanionSession {
     provenance?: string,
     expected?: api.ArtifactDigest | null,
     confirmed?: string[],
-    webapp?: { id: string; name: string },
+    webapp?: { id: string; name: string; version: string },
   ) =>
     invoke<api.WebappInfo>('install_webapp_from_url', {
       request: {
@@ -122,6 +122,7 @@ export class TauriSession implements CompanionSession {
         provenance: provenance ?? null,
         webappId: webapp?.id ?? null,
         webappName: webapp?.name ?? null,
+        webappVersion: webapp?.version ?? null,
       },
       confirmed: confirmed ?? null,
     });
@@ -153,6 +154,7 @@ export class TauriSession implements CompanionSession {
   voiceModel = () => invoke<api.VoiceModelState>('voice_model');
 
   otaRuns = () => invoke<api.OtaRun[]>('ota_runs');
+  otaRunProgress = (deviceId: string) => invoke<api.OtaRunProgress | null>('ota_run_progress', { deviceId });
   otaAvailable = () => invoke<api.OtaAvailable[]>('ota_available');
   otaPoll = () => invoke<api.OtaPollStatus>('ota_poll');
   otaManifest = (rootUrl: string) => invoke<api.OtaDiscoverManifest>('ota_manifest', { rootUrl });

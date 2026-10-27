@@ -28,14 +28,14 @@
     },
     "crates/delivery/napi": {
       "name": "@bridgething/core-node",
-      "version": "0.14.1",
+      "version": "0.15.1",
       "devDependencies": {
         "@napi-rs/cli": "^3.8.5",
       },
     },
     "crates/lib": {
       "name": "@bridgething/lib",
-      "version": "0.14.1",
+      "version": "0.15.1",
       "dependencies": {
         "uuid": "^14.0.0",
       },
@@ -59,6 +59,7 @@
         "@tauri-apps/plugin-autostart": "^2.5.1",
         "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
         "@tauri-apps/plugin-dialog": "^2.7.2",
+        "@tauri-apps/plugin-opener": "^2.7.2",
         "preact": "^11.0.1",
         "preact-iso": "^2.12.1",
       },
@@ -72,7 +73,7 @@
     },
     "mobile": {
       "name": "@bridgething/mobile",
-      "version": "0.14.3",
+      "version": "0.15.1",
       "dependencies": {
         "@bottom-tabs/react-navigation": "^1.4.0",
         "@bridgething/catalog": "workspace:*",
@@ -143,7 +144,7 @@
     },
     "packages/browser": {
       "name": "@bridgething/browser",
-      "version": "0.14.0",
+      "version": "0.15.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
       },
@@ -153,7 +154,7 @@
     },
     "packages/catalog": {
       "name": "@bridgething/catalog",
-      "version": "0.15.0",
+      "version": "0.15.1",
       "devDependencies": {
         "@types/bun": "^1.3.14",
         "ajv": "^8.20.0",
@@ -165,7 +166,7 @@
     },
     "packages/client-ts": {
       "name": "@bridgething/client",
-      "version": "0.14.0",
+      "version": "0.15.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
         "@msgpack/msgpack": "^3.1.3",
@@ -192,7 +193,7 @@
     },
     "packages/create-bridgething": {
       "name": "create-bridgething",
-      "version": "0.15.0",
+      "version": "0.15.1",
       "bin": {
         "create-bridgething": "./dist/index.mjs",
       },
@@ -228,7 +229,7 @@
     },
     "packages/extension-ts": {
       "name": "@bridgething/extension",
-      "version": "0.14.0",
+      "version": "0.15.1",
       "dependencies": {
         "@bridgething/lib": "workspace:*",
       },
@@ -274,7 +275,7 @@
     },
     "packages/source": {
       "name": "@bridgething/source",
-      "version": "0.15.0",
+      "version": "0.15.1",
       "bin": {
         "bridgething-source": "./dist/cli.js",
       },
@@ -308,7 +309,7 @@
     },
     "packages/updater": {
       "name": "@bridgething/updater",
-      "version": "0.14.0",
+      "version": "0.15.1",
       "bin": {
         "bridgething-updater": "./dist/cli.js",
       },
@@ -1670,6 +1671,8 @@
     "@tauri-apps/plugin-clipboard-manager": ["@tauri-apps/plugin-clipboard-manager@2.3.2", "", { "dependencies": { "@tauri-apps/api": "^2.8.0" } }, "sha512-CUlb5Hqi2oZbcZf4VUyUH53XWPPdtpw43EUpCza5HWZJwxEoDowFzNUDt1tRUXA8Uq+XPn17Ysfptip33sG4eQ=="],
 
     "@tauri-apps/plugin-dialog": ["@tauri-apps/plugin-dialog@2.7.2", "", { "dependencies": { "@tauri-apps/api": "^2.11.0" } }, "sha512-pX0IGm1I3I6wc+zeKYcq1GSqogK6okCNX5fOdaNU5ab1AjGS6l1E5wFNjEb7meg7ZFSp0JUs+0jQGQNyOvLrsg=="],
+
+    "@tauri-apps/plugin-opener": ["@tauri-apps/plugin-opener@2.7.2", "", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-LyybP1VSzTMQiaFYcsbAse47KpivlyXdLZMQzGLEnkgQacGESnpjAfFoQ6h5sqWgAdZDH9szYjPzHMpv0Sz+TQ=="],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 

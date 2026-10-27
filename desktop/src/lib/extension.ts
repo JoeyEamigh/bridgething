@@ -14,7 +14,7 @@ export function describeExtensionStatus(status: ExtensionStatus): ExtensionCopy 
         tone: 'accent',
         tint: 'accent',
         label: 'starting',
-        detail: 'waiting for the extension to say it is ready',
+        detail: null,
         icon: 'clock',
       };
     case 'running':
@@ -24,7 +24,7 @@ export function describeExtensionStatus(status: ExtensionStatus): ExtensionCopy 
         tone: 'err',
         tint: 'err',
         label: 'crashed',
-        detail: `${status.reason}. retrying with a growing delay.`,
+        detail: `${status.reason} · retrying`,
         icon: 'undo',
       };
     case 'stopped':
@@ -52,7 +52,7 @@ export const EXTENSION_MISSING: ExtensionCopy = {
   tone: 'err',
   tint: 'err',
   label: 'extension missing',
-  detail: 'nothing was taken out of the bundle here, so it cannot run. reinstall the app from this computer.',
+  detail: 'reinstall the app from this computer',
   icon: 'undo',
 };
 

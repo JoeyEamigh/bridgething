@@ -36,7 +36,7 @@
     "run_store": [
       "ret_changes: array of change kinds in emission order, e.g. [] or [\"run\"] or [\"run\",\"available\"] or [\"poll\"]. null on `call` steps.",
       "ret_present: true when the operation produced a run (the `run` change, or the optional returned by a call).",
-      "ret_device_id, ret_run_id_seq, ret_kind, ret_phase, ret_step_id, ret_step_ids, ret_started_at_ms, ret_phase_started_at_ms, ret_stage_received, ret_stage_total, ret_rate_micros, ret_dwl_percent, ret_outcome, ret_error, ret_release_version, ret_daemon_version, ret_image_version, ret_webapp_id, ret_webapp_name: fields of that run, all null when ret_present is false. ret_step_ids is the plan's step ids in plan order.",
+      "ret_device_id, ret_run_id_seq, ret_kind, ret_phase, ret_step_id, ret_step_ids, ret_started_at_ms, ret_phase_started_at_ms, ret_stage_received, ret_stage_total, ret_rate_micros, ret_write_percent, ret_outcome, ret_error, ret_release_version, ret_daemon_version, ret_image_version, ret_webapp_id, ret_webapp_name: fields of that run, all null when ret_present is false. ret_step_ids is the plan's step ids in plan order.",
       "ret_available_device_id, ret_available_release_version, ret_available_daemon_version, ret_available_image_version: fields of the `available` change when one was emitted, else null.",
       "ret_poll_last_polled_at, ret_poll_error: fields of the `poll` change when one was emitted, else null.",
       "ret_open_kind: the kind returned by an open_run_kind call, else null.",
@@ -98,7 +98,7 @@
     {
       "component": "run_store",
       "name": "planned-with-no-versions-leaves-them-unset-rather-than-empty",
-      "description": "a webapp install targets no daemon or image version. the empty strings the event carries must land as absent, not as empty strings, because absent is what noteMeta later reads as untargeted.",
+      "description": "a webapp install targets no daemon or image version. the empty strings the event carries must land as absent, not as empty strings.",
       "steps": [
         {
           "t_ms": 0,
@@ -452,8 +452,8 @@
     },
     {
       "component": "run_store",
-      "name": "applying-reports-delta-bytes-only-while-the-delta-pull-is-measurable",
-      "description": "past the delta pull there are no reported bytes, and a frozen number reads as a stall. the guard is percent-below-one-hundred AND bytes-above-zero, so this walks 50/4096, 99/4096, 99/0 and 100/8192 to pin both halves of it independently.",
+      "name": "applying-reports-no-transfer-bytes",
+      "description": "an applying tick carries only the write percent, so stage received clears and never freezes into a fake stall.",
       "steps": [
         {
           "t_ms": 0,
@@ -496,9 +496,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 10,
-              "dwl_percent": 50,
-              "dwl_bytes": 4096
+              "write_percent": 50
             }
           }
         },
@@ -512,9 +510,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 50,
-              "dwl_percent": 99,
-              "dwl_bytes": 4096
+              "write_percent": 99
             }
           }
         },
@@ -528,9 +524,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 55,
-              "dwl_percent": 99,
-              "dwl_bytes": 0
+              "write_percent": 99
             }
           }
         },
@@ -544,9 +538,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 60,
-              "dwl_percent": 100,
-              "dwl_bytes": 8192
+              "write_percent": 100
             }
           }
         }
@@ -554,8 +546,8 @@
     },
     {
       "component": "run_store",
-      "name": "an-applying-tick-does-not-clear-a-stale-rate",
-      "description": "the applying branch writes dwl percent, stage received and stage total, and leaves rate alone. so a rate measured during the download keeps rendering behind a write bar it no longer describes. both platforms do this identically; the case exists so the reconcile has to answer whether the port keeps it.",
+      "name": "an-applying-tick-clears-the-transfer-rate",
+      "description": "the applying branch writes the write percent and clears stage received, stage total and the rate. nothing crosses the link while the device writes, so a rate measured during the download would render behind a write bar it no longer describes.",
       "steps": [
         {
           "t_ms": 0,
@@ -608,9 +600,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 20,
-              "dwl_percent": 100,
-              "dwl_bytes": 0
+              "write_percent": 100
             }
           }
         },
@@ -793,9 +783,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 50,
-              "dwl_percent": 50,
-              "dwl_bytes": 0
+              "write_percent": 50
             }
           }
         },
@@ -809,9 +797,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 60,
-              "dwl_percent": 60,
-              "dwl_bytes": 0
+              "write_percent": 60
             }
           }
         },
@@ -825,9 +811,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 70,
-              "dwl_percent": 70,
-              "dwl_bytes": 0
+              "write_percent": 70
             }
           }
         }
@@ -1208,7 +1192,7 @@
     {
       "component": "run_store",
       "name": "failed-records-the-reason-and-clears-the-numbers",
-      "description": "a failure wipes received, total and rate but deliberately leaves the dwl percent, which is the one progress field that survives a terminal failure on both platforms.",
+      "description": "a failure wipes received, total and rate but deliberately leaves the write percent, which is the one progress field that survives a terminal failure on both platforms.",
       "steps": [
         {
           "t_ms": 0,
@@ -1245,9 +1229,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 40,
-              "dwl_percent": 60,
-              "dwl_bytes": 2048
+              "write_percent": 60
             }
           }
         },
@@ -1604,9 +1586,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "verifying",
-              "write_percent": 0,
-              "dwl_percent": 100,
-              "dwl_bytes": 0
+              "write_percent": 100
             }
           }
         },
@@ -1644,9 +1624,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "writing",
-              "write_percent": 30,
-              "dwl_percent": 100,
-              "dwl_bytes": 0
+              "write_percent": 100
             }
           }
         },
@@ -1684,9 +1662,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "confirming",
-              "write_percent": 100,
-              "dwl_percent": 100,
-              "dwl_bytes": 0
+              "write_percent": 100
             }
           }
         },
@@ -1705,9 +1681,7 @@
             "snapshot": {
               "phase": "applying",
               "ota_phase": "reboot",
-              "write_percent": 100,
-              "dwl_percent": 100,
-              "dwl_bytes": 0
+              "write_percent": 100
             }
           }
         },
@@ -1855,13 +1829,6 @@
           "t_ms": 3000,
           "call": "open_run_kind",
           "device_id": "AA:BB:CC:DD:EE:FF"
-        },
-        {
-          "t_ms": 4000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
         }
       ]
     },
@@ -2004,328 +1971,6 @@
     },
     {
       "component": "run_store",
-      "name": "meta-on-the-target-version-clears-the-run",
-      "description": "the device coming back on the versions the run targeted is the confirmation the run landed. the run is removed and handed back phase-idle and succeeded.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "release": "0.9.0+image.2026.06.0",
-            "daemon_version": "0.9.0",
-            "image_version": "2026.06.0",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "ingest": {
-            "event": "updated",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "version": "2026.06.0"
-          }
-        },
-        {
-          "t_ms": 2000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "meta-on-the-wrong-version-leaves-the-run-alone",
-      "description": "the device came back on the old image, so the run did not land and stays on the card.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "release": "0.9.0+image.2026.06.0",
-            "daemon_version": "0.9.0",
-            "image_version": "2026.06.0",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "ingest": {
-            "event": "updated",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "version": "2026.06.0"
-          }
-        },
-        {
-          "t_ms": 2000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.05.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "meta-on-the-target-version-rescues-a-run-that-timed-out-rebooting",
-      "description": "the version the device came back on outranks the guess. a run that gave up waiting is converted to a success and its error is dropped.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "release": "0.9.0+image.2026.06.0",
-            "daemon_version": "0.9.0",
-            "image_version": "2026.06.0",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 90000,
-          "ingest": {
-            "event": "failed",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "reason": "ota stalled: no progress within 60s"
-          }
-        },
-        {
-          "t_ms": 91000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "meta-does-not-rescue-a-run-that-failed-before-reaching-the-device",
-      "description": "the device is still on the old versions, so nothing confirms this run.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "release": "0.9.0+image.2026.06.0",
-            "daemon_version": "0.9.0",
-            "image_version": "2026.06.0",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "ingest": {
-            "event": "failed",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "reason": "bundle download failed"
-          }
-        },
-        {
-          "t_ms": 2000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.8.0",
-          "image_version": "2026.05.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "meta-clears-a-targeted-run-that-is-still-in-flight",
-      "description": "the version match is not gated on the run having ended. a run mid-download whose device reports the target versions is removed and reported succeeded on the spot, which is how a device that updated out from under the companion gets reconciled -- and is also how a genuinely in-flight run disappears if the versions coincide. shared behaviour, nothing in either suite covers it.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "release": "0.9.0+image.2026.06.0",
-            "daemon_version": "0.9.0",
-            "image_version": "2026.06.0",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "ingest": {
-            "event": "progress",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "image",
-            "step_id": 0,
-            "snapshot": {
-              "phase": "downloading",
-              "asset": "update.swu",
-              "received": 40,
-              "total": 100,
-              "rate_micros": 20000000
-            }
-          }
-        },
-        {
-          "t_ms": 2000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "a-daemon-only-run-is-confirmed-by-the-daemon-version-alone",
-      "description": "a daemon update targets no image version, so the image half of the match is vacuously satisfied and the daemon half decides. the half-targeted run is the case that separates the two guards.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "daemon",
-            "release": "0.9.1",
-            "daemon_version": "0.9.1",
-            "image_version": "",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        },
-        {
-          "t_ms": 2000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.1",
-          "image_version": "2026.99.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
-      "name": "meta-leaves-a-webapp-run-alone-until-it-says-it-succeeded",
-      "description": "a webapp install targets no version, so device meta confirms nothing about it -- until the run has already reported success, at which point any meta at all clears it. the untargeted branch is the only place the outcome is read.",
-      "steps": [
-        {
-          "t_ms": 0,
-          "ingest": {
-            "event": "planned",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "installedWebapp",
-            "release": "",
-            "daemon_version": "",
-            "image_version": "",
-            "steps": [
-              {
-                "id": 0,
-                "kind": "download",
-                "label": "step",
-                "bytes": 100
-              }
-            ]
-          }
-        },
-        {
-          "t_ms": 1000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        },
-        {
-          "t_ms": 2000,
-          "ingest": {
-            "event": "failed",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "installedWebapp",
-            "reason": "nope"
-          }
-        },
-        {
-          "t_ms": 3000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        },
-        {
-          "t_ms": 4000,
-          "ingest": {
-            "event": "updated",
-            "device_id": "AA:BB:CC:DD:EE:FF",
-            "kind": "installedWebapp",
-            "version": "1.4.0"
-          }
-        },
-        {
-          "t_ms": 5000,
-          "call": "note_meta",
-          "device_id": "AA:BB:CC:DD:EE:FF",
-          "daemon_version": "0.9.0",
-          "image_version": "2026.06.0"
-        }
-      ]
-    },
-    {
-      "component": "run_store",
       "name": "annotate-names-the-app-being-installed",
       "description": "annotation is unconditional on the run's state and returns the whole run, so it is also the only mutator that touches a finished run without ending or clearing it. nulls overwrite: annotating with nothing erases a name that was there.",
       "steps": [
@@ -2441,7 +2086,7 @@
           "t_ms": 2000,
           "ingest": {
             "event": "manifest_polled",
-            "updated_at": "2026-06-01T00:00:00Z"
+            "checked_at": "2026-06-01T00:00:00Z"
           }
         },
         {
@@ -2455,7 +2100,7 @@
           "t_ms": 4000,
           "ingest": {
             "event": "manifest_polled",
-            "updated_at": "2026-06-02T00:00:00Z"
+            "checked_at": "2026-06-02T00:00:00Z"
           }
         }
       ]
@@ -2526,13 +2171,6 @@
           "t_ms": 3000,
           "call": "interrupt",
           "device_id": "11:22:33:44:55:66"
-        },
-        {
-          "t_ms": 4000,
-          "call": "note_meta",
-          "device_id": "11:22:33:44:55:66",
-          "daemon_version": "0.9.1",
-          "image_version": ""
         },
         {
           "t_ms": 5000,

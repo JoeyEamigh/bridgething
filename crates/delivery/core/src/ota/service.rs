@@ -3,7 +3,7 @@ use std::{
   path::PathBuf,
   sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
   },
   time::{Duration, SystemTime},
 };
@@ -38,7 +38,7 @@ use crate::{
     progress::{OtaRunProgress, ota_progress},
     range::RangeServer,
     rate::RateTracker,
-    run_store::{OtaAvailable, OtaPollStatus, OtaRun, OtaRunStore, OtaStoreChange, WebappLabel},
+    run_store::{OtaAvailable, OtaPollStatus, OtaQueue, OtaRun, OtaRunPhase, OtaRunStore, OtaStoreChange, WebappLabel},
     stream::{Artifact, ArtifactStreamer, FileSource},
     watchdog::{IDLE_DEADLINE_MS, IDLE_POLL_MS, ProgressClock, stalled_reason},
   },
@@ -206,6 +206,22 @@ impl Feed {
   }
 }
 
+pub struct InstallReservation {
+  feed: Arc<Feed>,
+  device_id: String,
+  ticket: u64,
+  label: WebappLabel,
+}
+
+impl Drop for InstallReservation {
+  fn drop(&mut self) {
+    let change = self.feed.store.lock().unwrap().dequeue(&self.device_id, self.ticket);
+    if let Some(change) = change {
+      let _ = self.feed.store_changes.send(change);
+    }
+  }
+}
+
 #[derive(Debug, Clone)]
 pub enum OtaSignal {
   LinkLost,
@@ -240,12 +256,57 @@ struct Link {
   streamer: ArtifactStreamer,
   signals: broadcast::Sender<OtaSignal>,
   meta: Option<BridgeThingMeta>,
+  generation: u64,
 }
 
 struct LinkHandle {
   gateway: Gateway,
   streamer: ArtifactStreamer,
   signals: broadcast::Sender<OtaSignal>,
+  generation: u64,
+}
+
+struct RestartTarget {
+  run_id: String,
+  kind: OtaKind,
+  version: String,
+  pieces: Vec<(OtaKind, String)>,
+  asked_on: u64,
+}
+
+impl RestartTarget {
+  fn awaited_by(run: &OtaRun) -> Option<(String, Self)> {
+    if run.outcome.is_some() || run.phase != OtaRunPhase::Reboot || !restarts_device(run.kind) {
+      return None;
+    }
+    let version = match run.kind {
+      OtaKind::Image => run.image_version.clone()?,
+      _ => run.daemon_version.clone()?,
+    };
+    let target = Self {
+      run_id: run.run_id.clone(),
+      kind: run.kind,
+      pieces: vec![(run.kind, version.clone())],
+      version,
+      asked_on: 0,
+    };
+    Some((run.device_id.clone(), target))
+  }
+
+  fn verdict(&self, meta: &BridgeThingMeta) -> Result<(), String> {
+    let (landed, noun) = match self.kind {
+      OtaKind::Image => (&meta.image_version, "image "),
+      _ => (&meta.app_version, ""),
+    };
+    if *landed == self.version {
+      return Ok(());
+    }
+    Err(format!("the device came back on {noun}{landed}, not {}", self.version))
+  }
+}
+
+fn restarts_device(kind: OtaKind) -> bool {
+  matches!(kind, OtaKind::Image | OtaKind::Daemon)
 }
 
 #[derive(Default)]
@@ -270,9 +331,20 @@ fn stages_for_activate(kind: OtaKind) -> bool {
 }
 
 struct DriveOutcome {
-  terminal: OtaPhaseSnapshot,
+  landed: Landed,
   update_id: String,
   installed: Option<WebappInfo>,
+}
+
+struct Landed {
+  terminal: OtaPhaseSnapshot,
+  link: u64,
+}
+
+impl Landed {
+  fn off_link(terminal: OtaPhaseSnapshot) -> Self {
+    Self { terminal, link: 0 }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -419,7 +491,8 @@ pub struct OtaService {
   links: Mutex<BTreeMap<String, Link>>,
   schedules: Mutex<BTreeMap<String, AutoPushSchedule>>,
   recheck_soon: AtomicBool,
-  image_targets: Mutex<BTreeMap<String, String>>,
+  restarts: Mutex<BTreeMap<String, RestartTarget>>,
+  link_generations: AtomicU64,
   in_flight: Mutex<BTreeSet<String>>,
   install_turns: Mutex<BTreeMap<String, Arc<tokio::sync::Mutex<()>>>>,
   blob_puts: Arc<BlobPuts>,
@@ -440,13 +513,23 @@ impl OtaService {
       webapp_labels: Mutex::new(BTreeMap::new()),
     };
 
+    let restarts = feed
+      .store
+      .lock()
+      .unwrap()
+      .runs()
+      .into_iter()
+      .filter_map(RestartTarget::awaited_by)
+      .collect();
+
     Arc::new(Self {
       deps,
       feed: Arc::new(feed),
       links: Mutex::new(BTreeMap::new()),
       schedules: Mutex::new(BTreeMap::new()),
       recheck_soon: AtomicBool::new(false),
-      image_targets: Mutex::new(BTreeMap::new()),
+      restarts: Mutex::new(restarts),
+      link_generations: AtomicU64::new(0),
       in_flight: Mutex::new(BTreeSet::new()),
       install_turns: Mutex::new(BTreeMap::new()),
       blob_puts: Arc::default(),
@@ -477,6 +560,7 @@ impl OtaService {
       range,
       signals: broadcast::channel(256).0,
       meta: None,
+      generation: self.link_generations.fetch_add(1, Ordering::SeqCst) + 1,
     };
     self.links.lock().unwrap().insert(device_id.to_owned(), link);
     self.feed.identities.lock().unwrap().remove(device_id);
@@ -717,7 +801,7 @@ impl OtaService {
       self.fail(device_id, OtaKind::Image, "device meta not yet known");
       return;
     };
-    if self.in_flight.lock().unwrap().contains(device_id) {
+    if self.busy(device_id) {
       self.recheck_soon.store(true, Ordering::SeqCst);
       return;
     }
@@ -796,6 +880,10 @@ impl OtaService {
     self.feed.store.lock().unwrap().poll_status().clone()
   }
 
+  pub async fn retained_queues(&self) -> Vec<OtaQueue> {
+    self.feed.store.lock().unwrap().queues()
+  }
+
   pub async fn dismiss_run(&self, device_id: &str) {
     let cleared = self.feed.store.lock().unwrap().dismiss(device_id);
     if let Some(run) = cleared {
@@ -811,7 +899,10 @@ impl OtaService {
     update_url_base: Option<&str>,
   ) -> OtaPhaseSnapshot {
     let progress = direct_sink(self.feed.clone(), device_id, OtaKind::Image);
-    self.push_image(device_id, swu, zcks, update_url_base, &progress).await
+    self
+      .push_image(device_id, swu, zcks, update_url_base, &progress)
+      .await
+      .terminal
   }
 
   pub async fn push_daemon(
@@ -852,7 +943,21 @@ impl OtaService {
   pub async fn push_bandaid_batch(&self, device_id: &str, artifacts: Vec<BandaidArtifact>) -> OtaPhaseSnapshot {
     let kind = artifacts.first().map_or(OtaKind::Daemon, |artifact| artifact.kind);
     let progress = direct_sink(self.feed.clone(), device_id, kind);
-    self.apply_bandaid_batch(device_id, &artifacts, &progress).await
+    self
+      .apply_bandaid_batch(device_id, &artifacts, &progress)
+      .await
+      .terminal
+  }
+
+  pub fn reserve_install(&self, device_id: &str, label: WebappLabel) -> InstallReservation {
+    let (ticket, change) = self.feed.store.lock().unwrap().enqueue(device_id, label.clone());
+    let _ = self.feed.store_changes.send(change);
+    InstallReservation {
+      feed: self.feed.clone(),
+      device_id: device_id.to_owned(),
+      ticket,
+      label,
+    }
   }
 
   pub async fn install_webapp(
@@ -860,18 +965,18 @@ impl OtaService {
     device_id: &str,
     bundle: Arc<dyn Artifact>,
     provenance: Option<&str>,
-    webapp: Option<WebappLabel>,
+    reservation: Option<InstallReservation>,
   ) -> WebappInstallResult {
     let turn = self.install_turn(device_id);
     let _queued = turn.lock().await;
     self.claim_device(device_id).await;
-    if let Some(label) = webapp {
+    if let Some(reservation) = &reservation {
       self
         .feed
         .webapp_labels
         .lock()
         .unwrap()
-        .insert(device_id.to_owned(), label);
+        .insert(device_id.to_owned(), reservation.label.clone());
     }
     let plan = webapp_plan(bundle.size().unwrap_or(0));
     self.feed.emit(OtaPollEvent::Planned {
@@ -884,6 +989,7 @@ impl OtaService {
       root_url: String::new(),
       steps: plan.clone(),
     });
+    drop(reservation);
     let progress = StepRouter::sink(self.feed.clone(), device_id, OtaKind::InstalledWebapp, plan);
 
     let outcome = self
@@ -905,16 +1011,17 @@ impl OtaService {
       .as_ref()
       .map(|info| info.version.clone())
       .unwrap_or_default();
-    self.emit_terminal(
+    let terminal = outcome.landed.terminal.clone();
+    self.conclude(
       device_id,
       OtaKind::InstalledWebapp,
-      &installed_version,
-      &outcome.terminal,
+      vec![(OtaKind::InstalledWebapp, installed_version)],
+      outcome.landed,
     );
     self.end_in_flight(device_id);
     self.feed.webapp_labels.lock().unwrap().remove(device_id);
 
-    match (outcome.terminal, outcome.installed) {
+    match (terminal, outcome.installed) {
       (_, Some(info)) => WebappInstallResult::Installed(Box::new(info)),
       (OtaPhaseSnapshot::Failed { reason }, None) => WebappInstallResult::Failed { reason },
       (other, None) => WebappInstallResult::Failed {
@@ -958,6 +1065,7 @@ impl OtaService {
       gateway: link.gateway.clone(),
       streamer: link.streamer.clone(),
       signals: link.signals.clone(),
+      generation: link.generation,
     })
   }
 
@@ -970,47 +1078,80 @@ impl OtaService {
         .unwrap()
         .insert(device_id.to_owned(), meta.serial_number.clone());
     }
-    let reached = self
-      .image_targets
-      .lock()
-      .unwrap()
-      .get(device_id)
-      .is_some_and(|target| *target == meta.image_version);
-
-    let first_announce = {
+    let (first_announce, restarted) = {
+      let mut restarts = self.restarts.lock().unwrap();
       let mut links = self.links.lock().unwrap();
       let Some(link) = links.get_mut(device_id) else { return };
       let first_announce = link.meta.is_none();
       link.meta = Some(meta.clone());
-      first_announce
+      let fresh = restarts
+        .get(device_id)
+        .is_some_and(|target| link.generation > target.asked_on);
+      (first_announce, fresh.then(|| restarts.remove(device_id)).flatten())
     };
 
-    if reached {
-      self.image_targets.lock().unwrap().remove(device_id);
-      self.note_auto_push_result(device_id, false);
-      self.feed.emit(OtaPollEvent::Updated {
-        device_id: device_id.to_owned(),
-        kind: OtaKind::Image,
-        version: meta.image_version,
-      });
+    if let Some(target) = restarted {
+      self.settle_restart(device_id, target, &meta);
     }
     if first_announce {
       self.wake.notify_waiters();
     }
   }
 
+  fn await_restart(&self, device_id: &str, target: RestartTarget) {
+    let back = {
+      let mut restarts = self.restarts.lock().unwrap();
+      let links = self.links.lock().unwrap();
+      let fresh = links
+        .get(device_id)
+        .filter(|link| link.generation > target.asked_on)
+        .and_then(|link| link.meta.clone());
+      match fresh {
+        Some(meta) => Some((target, meta)),
+        None => {
+          restarts.insert(device_id.to_owned(), target);
+          None
+        }
+      }
+    };
+    if let Some((target, meta)) = back {
+      self.settle_restart(device_id, target, &meta);
+    }
+  }
+
+  fn settle_restart(&self, device_id: &str, target: RestartTarget, meta: &BridgeThingMeta) {
+    let verdict = target.verdict(meta);
+    self.note_auto_push_result(device_id, verdict.is_err());
+    let current = self
+      .feed
+      .store
+      .lock()
+      .unwrap()
+      .run(device_id)
+      .is_some_and(|run| run.run_id == target.run_id);
+    if !current {
+      return;
+    }
+    match verdict {
+      Ok(()) => {
+        tracing::info!(%device_id, version = %target.version, "the device came back on the version it was updated to");
+        self.succeed(device_id, &target.pieces);
+      }
+      Err(reason) => {
+        tracing::warn!(%device_id, %reason, "the device did not come back on the version it was updated to");
+        self.fail(device_id, target.kind, reason);
+      }
+    }
+  }
+
+  fn busy(&self, device_id: &str) -> bool {
+    self.in_flight.lock().unwrap().contains(device_id) || self.restarts.lock().unwrap().contains_key(device_id)
+  }
+
   fn arm_range_server(&self, device_id: &str, zcks: BTreeMap<String, Arc<dyn Artifact>>) {
     if let Some(link) = self.links.lock().unwrap().get(device_id) {
       link.range.set_assets(zcks);
     }
-  }
-
-  fn set_image_target(&self, device_id: &str, version: &str) {
-    self
-      .image_targets
-      .lock()
-      .unwrap()
-      .insert(device_id.to_owned(), version.to_owned());
   }
 
   fn try_begin_in_flight(&self, device_id: &str) -> bool {
@@ -1040,7 +1181,19 @@ impl OtaService {
   fn end_in_flight(&self, device_id: &str) {
     self.in_flight.lock().unwrap().remove(device_id);
     self.idle.notify_waiters();
-    let open = self.feed.store.lock().unwrap().open_run_kind(device_id);
+    let awaiting = self
+      .restarts
+      .lock()
+      .unwrap()
+      .get(device_id)
+      .map(|target| target.run_id.clone());
+    let open = {
+      let store = self.feed.store.lock().unwrap();
+      let awaited = store
+        .run(device_id)
+        .is_some_and(|run| Some(&run.run_id) == awaiting.as_ref());
+      store.open_run_kind(device_id).filter(|_| !awaited)
+    };
     if let Some(kind) = open {
       self.fail(device_id, kind, ABANDONED_REASON);
     }
@@ -1153,7 +1306,7 @@ impl OtaService {
     let manifest = match self.discover_manifest(&config.root_url).await {
       Ok(manifest) => {
         self.feed.emit(OtaPollEvent::ManifestPolled {
-          updated_at: manifest.updated_at.clone(),
+          checked_at: rfc3339(self.deps.clock.unix_millis()),
         });
         Some(manifest)
       }
@@ -1214,7 +1367,7 @@ impl OtaService {
   }
 
   async fn update_store_apps(&self, device_id: &str, meta: &BridgeThingMeta, catalogs: &BTreeMap<String, Catalog>) {
-    if self.in_flight.lock().unwrap().contains(device_id) {
+    if self.busy(device_id) {
       self.recheck_soon.store(true, Ordering::SeqCst);
       return;
     }
@@ -1245,6 +1398,14 @@ impl OtaService {
       to = %update.target.version,
       "updating a store app"
     );
+    let reservation = self.reserve_install(
+      device_id,
+      WebappLabel {
+        id: update.app_id,
+        name: update.name.clone(),
+        version: update.target.version.clone(),
+      },
+    );
     let path = match self
       .download_webapp(&update.target.download.url, Some(update.target.download.digest()))
       .await
@@ -1255,16 +1416,12 @@ impl OtaService {
         return;
       }
     };
-    let label = WebappLabel {
-      id: update.app_id,
-      name: update.name.clone(),
-    };
     let result = self
       .install_webapp(
         device_id,
         Arc::new(FileSource::open(path.clone())),
         Some(&update.source_url),
-        Some(label),
+        Some(reservation),
       )
       .await;
     let _ = std::fs::remove_file(&path);
@@ -1299,7 +1456,7 @@ impl OtaService {
     release: Option<&OtaManifestRelease>,
     config: &OtaPollConfig,
   ) -> bool {
-    if self.in_flight.lock().unwrap().contains(device_id) {
+    if self.busy(device_id) {
       self.recheck_soon.store(true, Ordering::SeqCst);
       return true;
     }
@@ -1439,7 +1596,6 @@ impl OtaService {
     if !self.try_begin_in_flight(device_id) {
       return;
     }
-    self.set_image_target(device_id, &latest.image);
 
     let plan = image_plan(artifacts);
     self.feed.emit(OtaPollEvent::Planned {
@@ -1509,7 +1665,7 @@ impl OtaService {
         Arc::new(FileSource::open(boot)) as Arc<dyn Artifact>,
       ),
     ]);
-    let terminal = self
+    let landed = self
       .push_image(
         device_id,
         Arc::new(FileSource::open(swu)),
@@ -1519,8 +1675,15 @@ impl OtaService {
       )
       .await;
 
-    self.emit_terminal(device_id, OtaKind::Image, target, &terminal);
-    self.note_auto_push_result(device_id, matches!(terminal, OtaPhaseSnapshot::Failed { .. }));
+    let verdict = self.conclude(
+      device_id,
+      OtaKind::Image,
+      vec![(OtaKind::Image, target.clone())],
+      landed,
+    );
+    if let Some(push_failed) = verdict {
+      self.note_auto_push_result(device_id, push_failed);
+    }
     self.end_in_flight(device_id);
   }
 
@@ -1564,26 +1727,14 @@ impl OtaService {
     });
     let progress = StepRouter::sink(self.feed.clone(), device_id, kind, plan);
 
-    let mut terminal = self.bandaid_attempt(device_id, &pieces, true, &progress).await;
-    if matches!(terminal, OtaPhaseSnapshot::Failed { .. }) && pieces.iter().any(|piece| piece.patch.is_some()) {
-      terminal = self.bandaid_attempt(device_id, &pieces, false, &progress).await;
+    let mut landed = self.bandaid_attempt(device_id, &pieces, true, &progress).await;
+    if matches!(landed.terminal, OtaPhaseSnapshot::Failed { .. }) && pieces.iter().any(|piece| piece.patch.is_some()) {
+      landed = self.bandaid_attempt(device_id, &pieces, false, &progress).await;
     }
 
-    match terminal {
-      OtaPhaseSnapshot::Failed { reason } => {
-        self.fail(device_id, kind, reason);
-        self.note_auto_push_result(device_id, true);
-      }
-      _ => {
-        for piece in &pieces {
-          self.feed.emit(OtaPollEvent::Updated {
-            device_id: device_id.to_owned(),
-            kind: piece.kind,
-            version: piece.version.clone(),
-          });
-        }
-        self.note_auto_push_result(device_id, false);
-      }
+    let versions = pieces.iter().map(|piece| (piece.kind, piece.version.clone())).collect();
+    if let Some(push_failed) = self.conclude(device_id, kind, versions, landed) {
+      self.note_auto_push_result(device_id, push_failed);
     }
     self.end_in_flight(device_id);
   }
@@ -1594,7 +1745,7 @@ impl OtaService {
     pieces: &[BandaidPiece],
     use_patch: bool,
     progress: &ProgressSink,
-  ) -> OtaPhaseSnapshot {
+  ) -> Landed {
     let mut artifacts = Vec::with_capacity(pieces.len());
     for piece in pieces {
       let delta = piece.patch.as_ref().filter(|_| use_patch);
@@ -1622,7 +1773,7 @@ impl OtaService {
         Err(e) => {
           let reason = format!("bandaid download failed: {e}");
           progress(failed(reason.clone()));
-          return failed(reason);
+          return Landed::off_link(failed(reason));
         }
       }
     }
@@ -1677,26 +1828,60 @@ impl OtaService {
       .await
   }
 
-  fn emit_terminal(&self, device_id: &str, kind: OtaKind, version: &str, terminal: &OtaPhaseSnapshot) {
-    if kind == OtaKind::Image {
-      let claimed = self.image_targets.lock().unwrap().remove(device_id).is_some();
-      if !claimed {
-        return;
+  fn conclude(&self, device_id: &str, kind: OtaKind, pieces: Vec<(OtaKind, String)>, landed: Landed) -> Option<bool> {
+    match landed.terminal {
+      OtaPhaseSnapshot::Completed | OtaPhaseSnapshot::Staged if restarts_device(kind) => {
+        let version = pieces
+          .iter()
+          .find(|(piece, _)| *piece == kind)
+          .map(|(_, version)| version.clone())
+          .unwrap_or_default();
+        let run_id = self
+          .feed
+          .store
+          .lock()
+          .unwrap()
+          .run(device_id)
+          .map(|run| run.run_id.clone())
+          .unwrap_or_default();
+        self.await_restart(
+          device_id,
+          RestartTarget {
+            run_id,
+            kind,
+            version,
+            pieces,
+            asked_on: landed.link,
+          },
+        );
+        None
+      }
+      OtaPhaseSnapshot::Completed | OtaPhaseSnapshot::Staged => {
+        self.succeed(device_id, &pieces);
+        Some(false)
+      }
+      OtaPhaseSnapshot::Failed { reason } => {
+        self.fail(device_id, kind, reason);
+        Some(true)
+      }
+      other => {
+        self.fail(
+          device_id,
+          kind,
+          format!("update ended before completing (last phase: {other:?})"),
+        );
+        Some(true)
       }
     }
+  }
 
-    match terminal {
-      OtaPhaseSnapshot::Completed | OtaPhaseSnapshot::Staged => self.feed.emit(OtaPollEvent::Updated {
+  fn succeed(&self, device_id: &str, pieces: &[(OtaKind, String)]) {
+    for (kind, version) in pieces {
+      self.feed.emit(OtaPollEvent::Updated {
         device_id: device_id.to_owned(),
-        kind,
-        version: version.to_owned(),
-      }),
-      OtaPhaseSnapshot::Failed { reason } => self.fail(device_id, kind, reason.clone()),
-      other => self.fail(
-        device_id,
-        kind,
-        format!("update ended before completing (last phase: {other:?})"),
-      ),
+        kind: *kind,
+        version: version.clone(),
+      });
     }
   }
 
@@ -1707,7 +1892,7 @@ impl OtaService {
     zcks: BTreeMap<String, Arc<dyn Artifact>>,
     update_url_base: Option<&str>,
     progress: &ProgressSink,
-  ) -> OtaPhaseSnapshot {
+  ) -> Landed {
     self.arm_range_server(device_id, zcks);
     self
       .drive(
@@ -1723,7 +1908,7 @@ impl OtaService {
         progress,
       )
       .await
-      .terminal
+      .landed
   }
 
   async fn apply_bandaid_batch(
@@ -1731,7 +1916,7 @@ impl OtaService {
     device_id: &str,
     artifacts: &[BandaidArtifact],
     progress: &ProgressSink,
-  ) -> OtaPhaseSnapshot {
+  ) -> Landed {
     let mut staged = Vec::with_capacity(artifacts.len());
     let mut applied = false;
     for artifact in artifacts {
@@ -1755,29 +1940,32 @@ impl OtaService {
           progress,
         )
         .await;
-      match (stages, &outcome.terminal) {
+      match (stages, &outcome.landed.terminal) {
         (true, OtaPhaseSnapshot::Staged) => staged.push(outcome.update_id),
         (false, OtaPhaseSnapshot::Completed) => applied = true,
-        _ => return outcome.terminal,
+        _ => return outcome.landed,
       }
     }
 
     if staged.is_empty() && applied {
-      return OtaPhaseSnapshot::Completed;
+      return Landed::off_link(OtaPhaseSnapshot::Completed);
     }
     self.commit_bandaid(device_id, staged, progress).await
   }
 
-  async fn commit_bandaid(&self, device_id: &str, expected: Vec<String>, progress: &ProgressSink) -> OtaPhaseSnapshot {
+  async fn commit_bandaid(&self, device_id: &str, expected: Vec<String>, progress: &ProgressSink) -> Landed {
     let Some(link) = self.link(device_id) else {
-      return failed("no link to the device");
+      return Landed::off_link(failed("no link to the device"));
     };
 
     let watching = self.watch_terminal(&link, DriveMode::Full, progress);
     if let Err(e) = link.gateway.system().ota_activate(OtaActivate { expected }).await {
-      return failed(format!("OtaActivate send failed: {e}"));
+      return Landed::off_link(failed(format!("OtaActivate send failed: {e}")));
     }
-    watching.await.0
+    Landed {
+      terminal: watching.await.0,
+      link: link.generation,
+    }
   }
 
   #[allow(clippy::too_many_arguments)]
@@ -1795,7 +1983,7 @@ impl OtaService {
     progress: &ProgressSink,
   ) -> DriveOutcome {
     let abandoned = |terminal, update_id: &str| DriveOutcome {
-      terminal,
+      landed: Landed::off_link(terminal),
       update_id: update_id.to_owned(),
       installed: None,
     };
@@ -1902,7 +2090,10 @@ impl OtaService {
     }
 
     DriveOutcome {
-      terminal,
+      landed: Landed {
+        terminal,
+        link: link.generation,
+      },
       update_id,
       installed,
     }
@@ -1943,8 +2134,6 @@ impl OtaService {
               progress(OtaPhaseSnapshot::Applying {
                 phase: tick.phase,
                 write_percent: u32::from(tick.percent.min(100)),
-                dwl_percent: u32::from(tick.dwl_percent.min(100)),
-                dwl_bytes: u64::from(tick.dwl_bytes),
               });
 
               let done = match mode {
@@ -1980,6 +2169,13 @@ impl OtaService {
     }
   }
 }
+
+fn rfc3339(unix_ms: u64) -> String {
+  chrono::DateTime::from_timestamp_millis(i64::try_from(unix_ms).unwrap_or(i64::MAX))
+    .unwrap_or_default()
+    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+}
+
 #[cfg(test)]
 mod tests {
   use std::{collections::BTreeMap, sync::Arc, time::Duration};
@@ -2003,7 +2199,7 @@ mod tests {
         route_into,
       },
       manifest::{OtaArtifactUrls, OtaPatchDigest, OtaReleaseArtifacts},
-      run_store::RUNS_FILE,
+      run_store::{OtaRun, OtaRunOutcome, OtaRunPhase, OtaStoreChange, RUNS_FILE},
       stream::FileSource,
       watchdog::stalled_reason,
     },
@@ -2012,7 +2208,9 @@ mod tests {
   const CHANNEL: &str = "stable";
   const ROOT: &str = "https://ota.example";
   const FROM_VERSION: &str = "0.9.0";
+  const TO_VERSION: &str = "0.9.1";
   const TO_RELEASE: &str = "0.9.1+image.1.0.0";
+  const IMAGE_RELEASE: &str = "0.9.1+image.1.1.0";
 
   struct Rig {
     service: Arc<OtaService>,
@@ -2243,8 +2441,6 @@ mod tests {
       &OtaPhaseSnapshot::Applying {
         phase: OtaPhase::Writing,
         write_percent: 10,
-        dwl_percent: 0,
-        dwl_bytes: 0,
       },
     );
     let rebooting = route_step(
@@ -2253,8 +2449,6 @@ mod tests {
       &OtaPhaseSnapshot::Applying {
         phase: OtaPhase::Reboot,
         write_percent: 100,
-        dwl_percent: 100,
-        dwl_bytes: 0,
       },
     );
 
@@ -2822,17 +3016,10 @@ mod tests {
 
     let driving = {
       let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("01890000-0000-7000-8000-0000000000ab", "FlowState"));
       tokio::spawn(async move {
         service
-          .install_webapp(
-            DEVICE,
-            Arc::new(FileSource::open(bundle)),
-            None,
-            Some(WebappLabel {
-              id: "01890000-0000-7000-8000-0000000000ab".into(),
-              name: "FlowState".into(),
-            }),
-          )
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, Some(reservation))
           .await
       })
     };
@@ -2849,50 +3036,231 @@ mod tests {
     assert_eq!(run.webapp_name.as_deref(), Some("FlowState"));
   }
 
+  fn label(id: &str, name: &str) -> WebappLabel {
+    WebappLabel {
+      id: id.into(),
+      name: name.into(),
+      version: "1.2.0".into(),
+    }
+  }
+
+  async fn queued_ids(service: &OtaService) -> Vec<String> {
+    service
+      .retained_queues()
+      .await
+      .into_iter()
+      .filter(|queue| queue.device_id == DEVICE)
+      .flat_map(|queue| queue.installs)
+      .map(|install| install.id)
+      .collect()
+  }
+
+  async fn settle() {
+    for _ in 0..16 {
+      tokio::task::yield_now().await;
+    }
+  }
+
+  fn queue_changes(changes: &mut broadcast::Receiver<OtaStoreChange>) -> Vec<Vec<String>> {
+    let mut seen = Vec::new();
+    while let Ok(change) = changes.try_recv() {
+      if let OtaStoreChange::Queue(queue) = change {
+        seen.push(queue.installs.into_iter().map(|install| install.id).collect());
+      }
+    }
+    seen
+  }
+
   #[tokio::test]
-  async fn an_install_on_a_busy_device_waits_its_turn() {
+  async fn an_install_waiting_its_turn_is_queued_until_it_becomes_a_run() {
     let mut rig = rig().await;
+    let mut changes = rig.service.store_changes();
     let first = rig.spool.write("first.zip", &pattern(16 * 1024));
     let second = rig.spool.write("second.zip", &pattern(16 * 1024));
 
     let driving = {
       let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("first", "First"));
       tokio::spawn(async move {
         service
-          .install_webapp(DEVICE, Arc::new(FileSource::open(first)), None, None)
+          .install_webapp(DEVICE, Arc::new(FileSource::open(first)), None, Some(reservation))
           .await
       })
     };
     stream_through(&mut rig.device).await;
+    assert!(
+      queued_ids(&rig.service).await.is_empty(),
+      "an install that holds the device is a run, not a queue entry"
+    );
 
-    let queued = {
+    let waiting = {
       let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("second", "Second"));
       tokio::spawn(async move {
         service
-          .install_webapp(DEVICE, Arc::new(FileSource::open(second)), None, None)
+          .install_webapp(DEVICE, Arc::new(FileSource::open(second)), None, Some(reservation))
           .await
       })
     };
-    for _ in 0..16 {
-      tokio::task::yield_now().await;
-    }
-    assert!(!queued.is_finished(), "a second install waits instead of being refused");
+    settle().await;
+
+    let queues = rig.service.retained_queues().await;
+    let [queue] = queues.as_slice() else {
+      panic!("expected one device queue, got {queues:?}");
+    };
+    assert_eq!(queue.device_id, DEVICE);
+    assert_eq!(
+      queue.installs,
+      vec![label("second", "Second")],
+      "the waiting install is visible with everything a store card needs to recognize it"
+    );
+    assert_eq!(
+      queue_changes(&mut changes),
+      vec![vec!["first".to_string()], Vec::new(), vec!["second".to_string()]],
+      "every shell hears the queue move, so none has to remember what it asked for"
+    );
 
     rig.device.webapp_installed(installed_info("0.1.0"));
     assert!(matches!(
       driving.await.expect("the first install task"),
       WebappInstallResult::Installed(_)
     ));
-
     stream_through(&mut rig.device).await;
-    rig.device.webapp_installed(installed_info("0.2.0"));
+
     assert!(
-      matches!(
-        queued.await.expect("the queued install task"),
-        WebappInstallResult::Installed(_)
-      ),
-      "the queued install takes the device once it is free"
+      queued_ids(&rig.service).await.is_empty(),
+      "once it holds the device it is a run, not a queue entry"
     );
+    let runs = rig.service.retained_runs().await;
+    let [run] = runs.as_slice() else {
+      panic!("expected one run, got {runs:?}");
+    };
+    assert_eq!(run.webapp_id.as_deref(), Some("second"));
+    assert!(run.outcome.is_none());
+
+    rig.device.webapp_installed(installed_info("0.2.0"));
+    assert!(matches!(
+      waiting.await.expect("the queued install task"),
+      WebappInstallResult::Installed(_)
+    ));
+  }
+
+  #[tokio::test]
+  async fn the_run_appears_before_the_queue_entry_leaves() {
+    let mut rig = rig().await;
+    let mut changes = rig.service.store_changes();
+    let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
+
+    let driving = {
+      let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("app", "App"));
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, Some(reservation))
+          .await
+      })
+    };
+    stream_through(&mut rig.device).await;
+
+    let mut order = Vec::new();
+    while let Ok(change) = changes.try_recv() {
+      match change {
+        OtaStoreChange::Run(run) if run.webapp_id.as_deref() == Some("app") && order.is_empty() => order.push("run"),
+        OtaStoreChange::Queue(queue) if queue.installs.is_empty() => order.push("dequeued"),
+        _ => {}
+      }
+    }
+    assert_eq!(
+      order,
+      vec!["run", "dequeued"],
+      "a card that saw the entry leave before the run arrived would offer the install again for a frame"
+    );
+
+    rig.device.webapp_installed(installed_info("0.1.0"));
+    driving.await.expect("the install task");
+  }
+
+  #[tokio::test]
+  async fn a_queued_install_whose_caller_gives_up_leaves_the_queue() {
+    let rig = rig().await;
+    let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
+    assert!(rig.service.try_begin_in_flight(DEVICE));
+
+    let waiting = {
+      let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("app", "App"));
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, Some(reservation))
+          .await
+      })
+    };
+    settle().await;
+    assert_eq!(queued_ids(&rig.service).await, vec!["app".to_string()]);
+
+    waiting.abort();
+    let _ = waiting.await;
+
+    assert!(
+      queued_ids(&rig.service).await.is_empty(),
+      "nothing is waiting any more, so nothing may still read as queued"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_reservation_that_never_reaches_the_device_leaves_the_queue() {
+    let rig = rig().await;
+
+    let reservation = rig.service.reserve_install(DEVICE, label("app", "App"));
+    assert_eq!(queued_ids(&rig.service).await, vec!["app".to_string()]);
+    drop(reservation);
+
+    assert!(
+      queued_ids(&rig.service).await.is_empty(),
+      "a download that failed before the install took its turn must not strand a queued badge"
+    );
+  }
+
+  #[tokio::test]
+  async fn a_queued_install_stays_queued_across_the_reboot_of_the_update_ahead_of_it() {
+    let rig = rig().await;
+    let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
+    assert!(rig.service.try_begin_in_flight(DEVICE));
+
+    let waiting = {
+      let service = rig.service.clone();
+      let reservation = service.reserve_install(DEVICE, label("app", "App"));
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, Some(reservation))
+          .await
+      })
+    };
+    settle().await;
+
+    rig.service.release(DEVICE).await;
+    settle().await;
+    assert_eq!(
+      queued_ids(&rig.service).await,
+      vec!["app".to_string()],
+      "the device rebooting into its new image does not drop what is waiting behind it"
+    );
+
+    let (gateway, mut device) = linked_gateway();
+    rig.service.adopt(DEVICE, gateway.clone()).await;
+    route_into(&gateway, &rig.service, DEVICE);
+    settle().await;
+    assert_eq!(queued_ids(&rig.service).await, vec!["app".to_string()]);
+
+    rig.service.end_in_flight(DEVICE);
+    stream_through(&mut device).await;
+    assert!(queued_ids(&rig.service).await.is_empty());
+
+    device.webapp_installed(installed_info("0.1.0"));
+    assert!(matches!(
+      waiting.await.expect("the queued install task"),
+      WebappInstallResult::Installed(_)
+    ));
   }
 
   #[tokio::test]
@@ -3321,21 +3689,302 @@ mod tests {
     device.progress(OtaPhase::Writing, 100);
     device.await_activate().await;
     device.progress(OtaPhase::Reboot, 100);
+    awaiting_restart(&rig.service).await;
+    let _back = restart(&rig.service, TO_VERSION, "1.0.0").await;
 
-    let settling = async {
-      loop {
-        let run = run_of(&rig.service).await;
-        if run.outcome.is_some() {
-          return run;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-      }
-    };
-    let resumed = tokio::time::timeout(Duration::from_secs(120), settling)
-      .await
-      .expect("the resumed run reaches a result");
+    let resumed = run_reaches(&rig.service, OtaRunOutcome::Succeeded).await;
 
     assert!(!resumed.resumable, "a run that got picked back up is no longer waiting");
+  }
+
+  async fn awaiting_restart(service: &Arc<OtaService>) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+      while !service.restarts.lock().unwrap().contains_key(DEVICE) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .expect("the drive heard the reboot and waits for the device to come back");
+  }
+
+  async fn restart(service: &Arc<OtaService>, app_version: &str, image_version: &str) -> FakeDevice {
+    service.release(DEVICE).await;
+    let (gateway, device) = linked_gateway();
+    service.adopt(DEVICE, gateway.clone()).await;
+    route_into(&gateway, service, DEVICE);
+    device.announce_meta(meta(app_version, image_version, CHANNEL));
+    device
+  }
+
+  async fn run_reaches(service: &Arc<OtaService>, want: OtaRunOutcome) -> OtaRun {
+    let reaching = async {
+      loop {
+        let run = run_of(service).await;
+        if run.outcome == Some(want) {
+          return run;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      }
+    };
+    match tokio::time::timeout(Duration::from_secs(120), reaching).await {
+      Ok(run) => run,
+      Err(_) => panic!("the run never reached {want:?}, got {:?}", run_of(service).await),
+    }
+  }
+
+  async fn drive_daemon_to_reboot(rig: &mut Rig) {
+    publish_daemon_release(&rig.fetch, &pattern(64 * 1024));
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    drive_apply(&rig.service);
+    let (request_id, begin) = rig.device.await_ota_begin().await;
+    rig.device.ack_begin(request_id, begin.transfer.total_size);
+    rig.device.progress(OtaPhase::Writing, 100);
+    rig.device.await_activate().await;
+    rig.device.progress(OtaPhase::Reboot, 100);
+    awaiting_restart(&rig.service).await;
+  }
+
+  fn auto_push_failures(service: &OtaService) -> u32 {
+    service
+      .schedules
+      .lock()
+      .unwrap()
+      .get(DEVICE)
+      .map_or(0, |schedule| schedule.failures())
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_daemon_update_waits_in_its_reboot_until_the_device_comes_back_on_it() {
+    let mut rig = rig().await;
+    drive_daemon_to_reboot(&mut rig).await;
+
+    let rebooting = run_of(&rig.service).await;
+    assert_eq!(rebooting.phase, OtaRunPhase::Reboot);
+    assert!(
+      rebooting.outcome.is_none(),
+      "the device said it is restarting, which is not the same as having restarted into the update"
+    );
+    assert!(
+      !drain(&mut rig.events)
+        .iter()
+        .any(|event| matches!(event, OtaPollEvent::Updated { .. })),
+      "nothing may report the update landed before the device says so"
+    );
+
+    let _back = restart(&rig.service, TO_VERSION, "1.0.0").await;
+
+    let run = run_reaches(&rig.service, OtaRunOutcome::Succeeded).await;
+    assert_eq!(run.phase, OtaRunPhase::Completed);
+    assert_eq!(auto_push_failures(&rig.service), 0);
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_daemon_that_comes_back_on_the_old_version_fails_the_run() {
+    let mut rig = rig().await;
+    drive_daemon_to_reboot(&mut rig).await;
+
+    let _back = restart(&rig.service, FROM_VERSION, "1.0.0").await;
+
+    let run = run_reaches(&rig.service, OtaRunOutcome::Failed).await;
+    assert_eq!(
+      run.error.as_deref(),
+      Some("the device came back on 0.9.0, not 0.9.1"),
+      "a rolled back daemon is a failed update, and the reason names what the device is actually running"
+    );
+    assert!(
+      !run.resumable,
+      "re-driving a rollback straight away would only roll back again"
+    );
+    assert_eq!(
+      auto_push_failures(&rig.service),
+      1,
+      "a rollback costs a backoff like any other failed push, or auto-push loops on it"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_flap_before_the_commit_is_not_judged_by_the_version_it_reconnects_on() {
+    let mut rig = rig().await;
+    publish_daemon_release(&rig.fetch, &pattern(64 * 1024));
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    drive_apply(&rig.service);
+    let (request_id, begin) = rig.device.await_ota_begin().await;
+    rig.device.ack_begin(request_id, 0);
+    rig.device.next_fragment(begin.transfer.id).await;
+
+    let mut back = restart(&rig.service, FROM_VERSION, "1.0.0").await;
+    let (_, again) = back.await_ota_begin_within(Duration::from_secs(60)).await;
+
+    assert_eq!(again.update_id, begin.update_id, "the flap is resumed, not judged");
+    assert!(
+      !drain(&mut rig.events).iter().any(|event| matches!(
+        event,
+        OtaPollEvent::Failed { reason, .. } if reason.contains("came back")
+      )),
+      "a link that drops before the device was asked to restart comes back on the old version by design"
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_device_back_before_the_drive_hears_its_reboot_still_settles_the_run() {
+    let mut rig = rig().await;
+    publish_daemon_release(&rig.fetch, &pattern(64 * 1024));
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    drive_apply(&rig.service);
+    let (request_id, begin) = rig.device.await_ota_begin().await;
+    rig.device.ack_begin(request_id, begin.transfer.total_size);
+    rig.device.progress(OtaPhase::Writing, 100);
+    rig.device.await_activate().await;
+
+    rig.service.progress(
+      DEVICE,
+      libbridgething::OtaProgress {
+        phase: OtaPhase::Reboot,
+        percent: 100,
+        step: 1,
+        nsteps: 1,
+        dwl_percent: 100,
+        dwl_bytes: 0,
+        eta_ms: None,
+      },
+    );
+    rig.service.release(DEVICE).await;
+    let (gateway, _back) = linked_gateway();
+    rig.service.adopt(DEVICE, gateway).await;
+    rig.service.device_meta(DEVICE, meta(TO_VERSION, "1.0.0", CHANNEL));
+
+    run_reaches(&rig.service, OtaRunOutcome::Succeeded).await;
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_device_awaiting_its_restart_is_not_pushed_to_again() {
+    let mut rig = rig().await;
+    drive_daemon_to_reboot(&mut rig).await;
+
+    drive_apply(&rig.service);
+
+    assert!(
+      rig.device.no_ota_begin(Duration::from_secs(30)).await,
+      "the link still up is the old daemon on its way out; pushing to it again races its own restart"
+    );
+  }
+
+  fn publish_image_release(fetch: &FakeFetch) {
+    let swu = pattern(32 * 1024);
+    let zck = pattern(2 * 1024);
+    let boot = pattern(1_024);
+    let urls = OtaArtifactUrls::build(ROOT, CHANNEL, TO_VERSION, "1.1.0", "prod");
+    fetch.serve_artifact(&urls.image_swu, swu.clone());
+    fetch.serve_artifact(&urls.image_zck, zck.clone());
+    fetch.serve_artifact(&urls.image_boot_zck, boot.clone());
+
+    let mut fixture = ManifestFixture::new(CHANNEL, IMAGE_RELEASE);
+    fixture.image_swu = Some(digest_of(&swu));
+    fixture.image_zck = Some(digest_of(&zck));
+    fixture.image_boot_zck = Some(digest_of(&boot));
+    fetch.serve_text(&format!("{ROOT}/manifest.json"), fixture.json());
+  }
+
+  async fn drive_image_to_reboot(rig: &mut Rig) {
+    publish_image_release(&rig.fetch);
+    rig.service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+    let service = rig.service.clone();
+    tokio::spawn(async move { service.apply_version(DEVICE, CHANNEL, IMAGE_RELEASE, ROOT).await });
+    let (request_id, begin) = rig.device.await_ota_begin().await;
+    assert_eq!(begin.kind, OtaKind::Image);
+    rig.device.ack_begin(request_id, begin.transfer.total_size);
+    rig.device.progress(OtaPhase::Writing, 100);
+    rig.device.progress(OtaPhase::Reboot, 100);
+    awaiting_restart(&rig.service).await;
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_image_update_is_confirmed_by_the_image_the_device_boots() {
+    let mut rig = rig().await;
+    drive_image_to_reboot(&mut rig).await;
+    assert!(run_of(&rig.service).await.outcome.is_none());
+
+    let _back = restart(&rig.service, TO_VERSION, "1.1.0").await;
+
+    run_reaches(&rig.service, OtaRunOutcome::Succeeded).await;
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn an_image_the_device_falls_back_from_fails_the_run() {
+    let mut rig = rig().await;
+    drive_image_to_reboot(&mut rig).await;
+
+    let _back = restart(&rig.service, FROM_VERSION, "1.0.0").await;
+
+    let run = run_reaches(&rig.service, OtaRunOutcome::Failed).await;
+    assert_eq!(
+      run.error.as_deref(),
+      Some("the device came back on image 1.0.0, not 1.1.0")
+    );
+  }
+
+  #[tokio::test(start_paused = true)]
+  async fn a_restart_the_app_died_during_is_confirmed_on_the_next_launch() {
+    let cache = Spool::new();
+    let killed = Spool::new();
+    let relaunched = Spool::new();
+    let fetch = FakeFetch::new();
+    publish_daemon_release(&fetch, &pattern(64 * 1024));
+
+    {
+      let service = launch(cache.path(), killed.path(), fetch.clone());
+      let (gateway, mut device) = linked_gateway();
+      service.adopt(DEVICE, gateway.clone()).await;
+      route_into(&gateway, &service, DEVICE);
+      service.device_meta(DEVICE, meta(FROM_VERSION, "1.0.0", CHANNEL));
+
+      drive_apply(&service);
+      let (request_id, begin) = device.await_ota_begin().await;
+      device.ack_begin(request_id, begin.transfer.total_size);
+      device.progress(OtaPhase::Writing, 100);
+      device.await_activate().await;
+      device.progress(OtaPhase::Reboot, 100);
+      awaiting_restart(&service).await;
+      snapshot_runs(killed.path(), relaunched.path());
+    }
+
+    let service = launch(cache.path(), relaunched.path(), fetch.clone());
+    let (gateway, device) = linked_gateway();
+    service.adopt(DEVICE, gateway.clone()).await;
+    route_into(&gateway, &service, DEVICE);
+    device.announce_meta(meta(TO_VERSION, "1.0.0", CHANNEL));
+
+    run_reaches(&service, OtaRunOutcome::Succeeded).await;
+  }
+
+  #[tokio::test]
+  async fn a_webapp_install_succeeds_the_moment_the_device_reports_it() {
+    let mut rig = rig().await;
+    let bundle = rig.spool.write("app.zip", &pattern(16 * 1024));
+
+    let driving = {
+      let service = rig.service.clone();
+      tokio::spawn(async move {
+        service
+          .install_webapp(DEVICE, Arc::new(FileSource::open(bundle)), None, None)
+          .await
+      })
+    };
+    stream_through(&mut rig.device).await;
+    rig.device.webapp_installed(installed_info("0.1.0"));
+    driving.await.expect("the install task");
+
+    let run = run_of(&rig.service).await;
+    assert_eq!(
+      run.outcome,
+      Some(OtaRunOutcome::Succeeded),
+      "an install restarts nothing, so the device's own report is the whole verdict"
+    );
+    assert!(!rig.service.restarts.lock().unwrap().contains_key(DEVICE));
   }
 
   #[tokio::test(start_paused = true)]

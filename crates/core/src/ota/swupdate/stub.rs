@@ -3,11 +3,12 @@ use std::path::Path;
 use libbridgething::OtaPhase;
 use tokio::{sync::watch, time::Duration};
 
-use super::{Error, ProgressTick, Selector};
+use super::{Error, ProgressTick};
+use crate::ota::slots::Slot;
 
 pub async fn install_swu<F>(
   swu_path: &Path,
-  selector: &Selector,
+  target: Slot,
   progress: &F,
   cancel_rx: &mut watch::Receiver<bool>,
 ) -> Result<(), Error>
@@ -18,8 +19,7 @@ where
   tracing::info!(
     path = %swu_path.display(),
     bytes = metadata.len(),
-    software_set = %selector.software_set,
-    running_mode = %selector.running_mode,
+    ?target,
     "swupdate stub: would install .swu"
   );
 
@@ -34,8 +34,6 @@ where
       percent,
       step: 1,
       nsteps: 1,
-      dwl_percent: 0,
-      dwl_bytes: 0,
       eta_ms: Some((10 - tick) as u32 * 100),
     });
     tokio::time::sleep(Duration::from_millis(100)).await;

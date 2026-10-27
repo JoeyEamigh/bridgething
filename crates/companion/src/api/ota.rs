@@ -149,8 +149,6 @@ pub enum OtaPhaseSnapshot {
   Applying {
     phase: OtaApplyPhase,
     write_percent: u32,
-    dwl_percent: u32,
-    dwl_bytes: u64,
   },
   Staged,
   Completed,
@@ -187,16 +185,9 @@ impl From<OtaPhaseSnapshot> for ota::event::OtaPhaseSnapshot {
         rate_per_sec,
         eta_seconds,
       },
-      OtaPhaseSnapshot::Applying {
-        phase,
-        write_percent,
-        dwl_percent,
-        dwl_bytes,
-      } => Self::Applying {
+      OtaPhaseSnapshot::Applying { phase, write_percent } => Self::Applying {
         phase: phase.into(),
         write_percent,
-        dwl_percent,
-        dwl_bytes,
       },
       OtaPhaseSnapshot::Staged => Self::Staged,
       OtaPhaseSnapshot::Completed => Self::Completed,
@@ -210,7 +201,7 @@ impl From<OtaPhaseSnapshot> for ota::event::OtaPhaseSnapshot {
 #[ts(export, export_to = "companion.ts")]
 pub enum OtaPollEvent {
   ManifestPolled {
-    updated_at: String,
+    checked_at: String,
   },
   ManifestPollFailed {
     reason: String,
@@ -252,7 +243,7 @@ pub enum OtaPollEvent {
 impl From<OtaPollEvent> for ota::event::OtaPollEvent {
   fn from(event: OtaPollEvent) -> Self {
     match event {
-      OtaPollEvent::ManifestPolled { updated_at } => Self::ManifestPolled { updated_at },
+      OtaPollEvent::ManifestPolled { checked_at } => Self::ManifestPolled { checked_at },
       OtaPollEvent::ManifestPollFailed { reason } => Self::ManifestPollFailed { reason },
       OtaPollEvent::UpdateAvailable {
         device_id,
@@ -408,7 +399,7 @@ pub struct OtaRun {
   pub stage_received: Option<u64>,
   pub stage_total: Option<u64>,
   pub rate_per_sec: Option<f64>,
-  pub dwl_percent: Option<u32>,
+  pub write_percent: Option<u32>,
   pub outcome: Option<OtaRunOutcome>,
   pub error: Option<String>,
   pub release_version: Option<String>,
@@ -435,7 +426,7 @@ impl From<ota::run_store::OtaRun> for OtaRun {
       stage_received: run.stage_received,
       stage_total: run.stage_total,
       rate_per_sec: run.rate_per_sec,
-      dwl_percent: run.dwl_percent,
+      write_percent: run.write_percent,
       outcome: run.outcome.map(Into::into),
       error: run.error,
       release_version: run.release_version,
@@ -465,7 +456,7 @@ impl From<OtaRun> for ota::run_store::OtaRun {
       stage_received: run.stage_received,
       stage_total: run.stage_total,
       rate_per_sec: run.rate_per_sec,
-      dwl_percent: run.dwl_percent,
+      write_percent: run.write_percent,
       outcome: run.outcome.map(Into::into),
       error: run.error,
       release_version: run.release_version,
@@ -518,6 +509,40 @@ impl From<ota::run_store::OtaPollStatus> for OtaPollStatus {
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct OtaQueuedInstall {
+  pub webapp_id: String,
+  pub webapp_name: String,
+  pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct OtaQueue {
+  pub device_id: String,
+  pub installs: Vec<OtaQueuedInstall>,
+}
+
+impl From<ota::run_store::OtaQueue> for OtaQueue {
+  fn from(queue: ota::run_store::OtaQueue) -> Self {
+    Self {
+      device_id: queue.device_id,
+      installs: queue
+        .installs
+        .into_iter()
+        .map(|label| OtaQueuedInstall {
+          webapp_id: label.id,
+          webapp_name: label.name,
+          version: label.version,
+        })
+        .collect(),
+    }
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
@@ -525,6 +550,7 @@ pub enum OtaStoreChange {
   Run { run: Box<OtaRun> },
   Available { available: OtaAvailable },
   Poll { status: OtaPollStatus },
+  Queue { queue: OtaQueue },
 }
 
 impl From<ota::run_store::OtaStoreChange> for OtaStoreChange {
@@ -537,6 +563,7 @@ impl From<ota::run_store::OtaStoreChange> for OtaStoreChange {
         available: available.into(),
       },
       ota::run_store::OtaStoreChange::Poll(status) => Self::Poll { status: status.into() },
+      ota::run_store::OtaStoreChange::Queue(queue) => Self::Queue { queue: queue.into() },
     }
   }
 }
@@ -613,15 +640,6 @@ impl OtaRunStore {
 
   pub fn interrupt(&self, device_id: String) -> Option<OtaRun> {
     self.inner.lock().unwrap().interrupt(&device_id).map(Into::into)
-  }
-
-  pub fn note_meta(&self, device_id: String, daemon_version: String, image_version: String) -> Option<OtaRun> {
-    self
-      .inner
-      .lock()
-      .unwrap()
-      .note_meta(&device_id, &daemon_version, &image_version)
-      .map(Into::into)
   }
 
   pub fn annotate_webapp(

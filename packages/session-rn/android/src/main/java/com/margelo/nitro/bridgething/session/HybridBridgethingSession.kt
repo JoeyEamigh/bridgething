@@ -29,6 +29,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         private var pendingOtaRunChanged: ((BridgethingOtaRun) -> Unit)? = null
         private var pendingOtaAvailableChanged: ((BridgethingOtaAvailable) -> Unit)? = null
         private var pendingOtaPollChanged: ((BridgethingOtaPollStatus) -> Unit)? = null
+        private var pendingOtaQueueChanged: ((BridgethingOtaQueue) -> Unit)? = null
         private var pendingCompanionUpdateProgress: ((Double, Double) -> Unit)? = null
         private var pendingResumed: ((BridgethingSessionSnapshot) -> Unit)? = null
 
@@ -52,6 +53,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
                     otaRun = pendingOtaRunChanged,
                     otaAvailable = pendingOtaAvailableChanged,
                     otaPoll = pendingOtaPollChanged,
+                    otaQueue = pendingOtaQueueChanged,
                     companionUpdateProgress = pendingCompanionUpdateProgress,
                     resumed = pendingResumed,
                 )
@@ -70,6 +72,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
                 pendingOtaRunChanged = null
                 pendingOtaAvailableChanged = null
                 pendingOtaPollChanged = null
+                pendingOtaQueueChanged = null
                 pendingCompanionUpdateProgress = null
                 pendingResumed = null
                 snapshot
@@ -89,6 +92,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
             replay.otaRun?.let(b::setOnOtaRunChanged)
             replay.otaAvailable?.let(b::setOnOtaAvailableChanged)
             replay.otaPoll?.let(b::setOnOtaPollChanged)
+            replay.otaQueue?.let(b::setOnOtaQueueChanged)
             replay.companionUpdateProgress?.let(b::setOnCompanionUpdateProgress)
             replay.resumed?.let(b::setOnResumed)
         }
@@ -116,6 +120,7 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         val otaRun: ((BridgethingOtaRun) -> Unit)?,
         val otaAvailable: ((BridgethingOtaAvailable) -> Unit)?,
         val otaPoll: ((BridgethingOtaPollStatus) -> Unit)?,
+        val otaQueue: ((BridgethingOtaQueue) -> Unit)?,
         val companionUpdateProgress: ((Double, Double) -> Unit)?,
         val resumed: ((BridgethingSessionSnapshot) -> Unit)?,
     )
@@ -373,10 +378,11 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         provenance: Variant_NullType_String?,
         webappId: Variant_NullType_String?,
         webappName: Variant_NullType_String?,
+        webappVersion: Variant_NullType_String?,
     ): Promise<BridgethingWebappInfo> = Promise.async {
         require().installWebappFromUrl(
             deviceId, url, sha256, size,
-            unwrapString(provenance), unwrapString(webappId), unwrapString(webappName),
+            unwrapString(provenance), unwrapString(webappId), unwrapString(webappName), unwrapString(webappVersion),
         )
     }
 
@@ -525,6 +531,10 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
 
     override fun setOnOtaPollChanged(callback: (status: BridgethingOtaPollStatus) -> Unit) {
         forwardOrBuffer(callback, BridgethingSessionBackend::setOnOtaPollChanged) { pendingOtaPollChanged = it }
+    }
+
+    override fun setOnOtaQueueChanged(callback: (queue: BridgethingOtaQueue) -> Unit) {
+        forwardOrBuffer(callback, BridgethingSessionBackend::setOnOtaQueueChanged) { pendingOtaQueueChanged = it }
     }
 
     override fun setOnCompanionUpdateProgress(callback: (received: Double, total: Double) -> Unit) {

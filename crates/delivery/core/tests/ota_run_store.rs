@@ -75,13 +75,8 @@ fn downloading(received: u64, total: u64, rate_per_sec: Option<f64>) -> OtaPhase
   }
 }
 
-fn applying(phase: OtaPhase, write_percent: u32, dwl_percent: u32, dwl_bytes: u64) -> OtaPhaseSnapshot {
-  OtaPhaseSnapshot::Applying {
-    phase,
-    write_percent,
-    dwl_percent,
-    dwl_bytes,
-  }
+fn applying(phase: OtaPhase, write_percent: u32) -> OtaPhaseSnapshot {
+  OtaPhaseSnapshot::Applying { phase, write_percent }
 }
 
 fn progress(step_id: u32, snapshot: OtaPhaseSnapshot) -> OtaPollEvent {
@@ -220,38 +215,23 @@ fn phase_started_at_moves_only_when_the_phase_does() {
 }
 
 #[test]
-fn applying_reports_delta_bytes_only_while_the_delta_pull_is_measurable() {
+fn an_applying_tick_records_the_write_percent_and_no_transfer_bytes() {
   let (clock, mut store) = store_at(at(0));
   store.ingest(planned_image(), None);
 
   clock.set(at(1));
-  let pulling = store.ingest(progress(1, applying(OtaPhase::Writing, 10, 50, 4096)), None);
-  let pulling = only_run(&pulling).expect("run");
-  assert_eq!(pulling.phase, OtaRunPhase::Writing);
-  assert_eq!(pulling.dwl_percent, Some(50));
-  assert_eq!(pulling.stage_received, Some(4096));
-
-  clock.set(at(2));
-  let writing = store.ingest(progress(1, applying(OtaPhase::Writing, 60, 100, 8192)), None);
+  let writing = store.ingest(progress(1, applying(OtaPhase::Writing, 50)), None);
+  let writing = only_run(&writing).expect("run");
+  assert_eq!(writing.phase, OtaRunPhase::Writing);
+  assert_eq!(writing.write_percent, Some(50));
   assert!(
-    only_run(&writing).expect("run").stage_received.is_none(),
-    "past the delta pull there are no reported bytes, and a frozen number reads as a stall"
+    writing.stage_received.is_none(),
+    "a byte count frozen from the transfer reads as a stall"
   );
 }
 
 #[test]
-fn a_zero_byte_delta_pull_reports_no_bytes_either() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(1));
-  let changes = store.ingest(progress(1, applying(OtaPhase::Writing, 10, 50, 0)), None);
-
-  assert!(only_run(&changes).expect("run").stage_received.is_none());
-}
-
-#[test]
-fn an_applying_tick_clears_the_stage_total_but_not_the_rate() {
+fn an_applying_tick_clears_the_stage_total_and_the_rate() {
   let (clock, mut store) = store_at(at(0));
   store.ingest(planned_image(), None);
 
@@ -259,14 +239,45 @@ fn an_applying_tick_clears_the_stage_total_but_not_the_rate() {
   store.ingest(progress(0, downloading(90, 100, Some(250.0))), None);
 
   clock.set(at(2));
-  let changes = store.ingest(progress(1, applying(OtaPhase::Writing, 0, 100, 0)), None);
+  let changes = store.ingest(progress(1, applying(OtaPhase::Writing, 100)), None);
   let run = only_run(&changes).expect("run");
 
   assert!(run.stage_total.is_none(), "the apply phase has no byte total to show");
+  assert!(
+    run.rate_per_sec.is_none(),
+    "nothing is moving over the link while the device writes, so a transfer rate there is a stale number"
+  );
+}
+
+#[test]
+fn a_staged_snapshot_clears_the_rate() {
+  let (clock, mut store) = store_at(at(0));
+  store.ingest(planned_image(), None);
+
+  clock.set(at(1));
+  store.ingest(progress(0, downloading(90, 100, Some(250.0))), None);
+
+  clock.set(at(2));
+  let changes = store.ingest(progress(1, OtaPhaseSnapshot::Staged), None);
+
+  assert!(only_run(&changes).expect("run").rate_per_sec.is_none());
+}
+
+#[test]
+fn entering_the_reboot_phase_restarts_the_phase_clock() {
+  let (clock, mut store) = store_at(at(0));
+  store.ingest(planned_image(), None);
+
+  clock.set(at(10));
+  store.ingest(progress(1, applying(OtaPhase::Writing, 100)), None);
+
+  clock.set(at(40));
+  let changes = store.ingest(progress(2, applying(OtaPhase::Reboot, 100)), None);
+
   assert_eq!(
-    run.rate_per_sec,
-    Some(250.0),
-    "the last measured transfer rate still feeds the eta"
+    only_run(&changes).expect("run").phase_started_at_ms,
+    at(40),
+    "the reboot bar coasts from the moment the device went away, not from when it started writing"
   );
 }
 
@@ -332,7 +343,7 @@ fn every_applying_phase_maps_to_its_own_run_phase() {
     let (clock, mut store) = store_at(at(0));
     store.ingest(planned_image(), None);
     clock.set(at(1));
-    let changes = store.ingest(progress(1, applying(wire, 0, 0, 0)), None);
+    let changes = store.ingest(progress(1, applying(wire, 0)), None);
 
     assert_eq!(only_run(&changes).expect("run").phase, expected, "{wire:?}");
   }
@@ -361,10 +372,10 @@ fn progress_for_a_step_outside_the_plan_keeps_the_last_understood_position() {
   store.ingest(planned_image(), None);
 
   clock.set(at(1));
-  store.ingest(progress(1, applying(OtaPhase::Writing, 50, 50, 0)), None);
+  store.ingest(progress(1, applying(OtaPhase::Writing, 50)), None);
 
   clock.set(at(2));
-  let changes = store.ingest(progress(99, applying(OtaPhase::Writing, 60, 60, 0)), None);
+  let changes = store.ingest(progress(99, applying(OtaPhase::Writing, 60)), None);
 
   assert_eq!(
     only_run(&changes).expect("run").step_id,
@@ -505,7 +516,7 @@ fn updated_ends_the_run_and_clears_the_available_update() {
   );
   assert!(run.stage_total.is_none());
   assert!(run.rate_per_sec.is_none());
-  assert!(run.dwl_percent.is_none());
+  assert!(run.write_percent.is_none());
   assert!(run.error.is_none());
   assert!(
     store.available().is_empty(),
@@ -654,13 +665,13 @@ fn a_second_failure_overwrites_the_first_reason() {
 fn a_fresh_transfer_drops_what_the_device_said_about_the_last_one() {
   let (_clock, mut store) = store_at(at(0));
   store.ingest(planned_image(), None);
-  store.ingest(progress(1, applying(OtaPhase::Writing, 100, 40, 4_096)), None);
-  assert!(store.runs()[0].dwl_percent.is_some());
+  store.ingest(progress(1, applying(OtaPhase::Writing, 40)), None);
+  assert!(store.runs()[0].write_percent.is_some());
 
   store.ingest(progress(0, downloading(10, 100, None)), None);
 
   assert!(
-    store.runs()[0].dwl_percent.is_none(),
+    store.runs()[0].write_percent.is_none(),
     "the next piece in a batch starts from nothing, not from the previous piece's apply"
   );
 }
@@ -729,7 +740,7 @@ fn a_link_that_dies_while_the_device_reboots_leaves_the_run_alone() {
   store.ingest(planned_image(), None);
 
   clock.set(at(1));
-  store.ingest(progress(2, applying(OtaPhase::Reboot, 100, 100, 0)), None);
+  store.ingest(progress(2, applying(OtaPhase::Reboot, 100)), None);
 
   assert!(
     store.interrupt(DEVICE).is_none(),
@@ -744,7 +755,7 @@ fn a_link_that_dies_while_the_device_confirms_leaves_the_run_alone() {
   store.ingest(planned_image(), None);
 
   clock.set(at(1));
-  store.ingest(progress(1, applying(OtaPhase::Confirming, 100, 100, 0)), None);
+  store.ingest(progress(1, applying(OtaPhase::Confirming, 100)), None);
 
   assert!(store.interrupt(DEVICE).is_none());
   assert!(store.runs()[0].outcome.is_none());
@@ -769,7 +780,6 @@ fn interrupt_and_dismiss_and_annotate_on_an_unknown_device_are_no_ops() {
   assert!(store.interrupt(DEVICE).is_none());
   assert!(store.dismiss(DEVICE).is_none());
   assert!(store.annotate_webapp(DEVICE, Some("abc"), Some("Weather")).is_none());
-  assert!(store.note_meta(DEVICE, "0.9.0", "2026.06.0").is_none());
   assert!(store.open_run_kind(DEVICE).is_none());
   assert!(store.runs().is_empty());
 }
@@ -918,134 +928,6 @@ fn an_offer_with_no_versions_reports_them_empty_rather_than_unset() {
   );
 }
 
-// -- note_meta --
-
-#[test]
-fn meta_on_the_target_version_clears_the_run() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(1));
-  store.ingest(updated(OtaKind::Image, "2026.06.0"), None);
-
-  let cleared = store
-    .note_meta(DEVICE, "0.9.0", "2026.06.0")
-    .expect("the run is confirmed");
-  assert_eq!(cleared.phase, OtaRunPhase::Idle);
-  assert_eq!(cleared.outcome, Some(OtaRunOutcome::Succeeded));
-  assert!(store.runs().is_empty());
-}
-
-#[test]
-fn meta_on_the_wrong_version_leaves_the_run_alone() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(1));
-  store.ingest(updated(OtaKind::Image, "2026.06.0"), None);
-
-  assert!(store.note_meta(DEVICE, "0.9.0", "2026.05.0").is_none());
-  assert_eq!(
-    store.runs().len(),
-    1,
-    "the device came back on the old image; the run did not land"
-  );
-}
-
-#[test]
-fn meta_on_the_target_version_rescues_a_run_that_timed_out_rebooting() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(90));
-  store.ingest(failed(OtaKind::Image, "ota stalled: no progress within 60s"), None);
-  assert_eq!(store.runs()[0].outcome, Some(OtaRunOutcome::Failed));
-
-  let cleared = store
-    .note_meta(DEVICE, "0.9.0", "2026.06.0")
-    .expect("the run is confirmed");
-  assert_eq!(
-    cleared.outcome,
-    Some(OtaRunOutcome::Succeeded),
-    "the version the device came back on outranks the guess"
-  );
-  assert!(cleared.error.is_none());
-  assert!(store.runs().is_empty());
-}
-
-#[test]
-fn meta_does_not_rescue_a_run_that_failed_before_reaching_the_device() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(1));
-  store.ingest(failed(OtaKind::Image, "bundle download failed"), None);
-
-  assert!(
-    store.note_meta(DEVICE, "0.8.0", "2026.05.0").is_none(),
-    "the device is still on the old versions, so nothing confirms this run"
-  );
-  assert_eq!(store.runs().len(), 1);
-}
-
-#[test]
-fn meta_clears_a_targeted_run_that_is_still_in_flight() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_image(), None);
-
-  clock.set(at(1));
-  store.ingest(progress(0, downloading(40, 100, Some(20.0))), None);
-
-  let cleared = store
-    .note_meta(DEVICE, "0.9.0", "2026.06.0")
-    .expect("the device is already on the target versions");
-  assert_eq!(cleared.outcome, Some(OtaRunOutcome::Succeeded));
-  assert!(store.runs().is_empty());
-}
-
-#[test]
-fn a_daemon_only_run_is_confirmed_by_the_daemon_version_alone() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(
-    OtaPollEvent::Planned {
-      device_id: DEVICE.into(),
-      kind: OtaKind::Daemon,
-      release: "0.9.1".into(),
-      daemon_version: "0.9.1".into(),
-      image_version: String::new(),
-      channel: "stable".into(),
-      root_url: "https://ota.bridgething.com".into(),
-      steps: vec![plan_step(0, OtaStepKind::Download)],
-    },
-    None,
-  );
-
-  clock.set(at(1));
-  let cleared = store
-    .note_meta(DEVICE, "0.9.1", "any-image-at-all")
-    .expect("nothing was targeted about the image");
-  assert_eq!(cleared.outcome, Some(OtaRunOutcome::Succeeded));
-  assert!(store.runs().is_empty());
-}
-
-#[test]
-fn meta_leaves_a_webapp_run_alone_until_it_says_it_succeeded() {
-  let (clock, mut store) = store_at(at(0));
-  store.ingest(planned_webapp(), None);
-
-  assert!(
-    store.note_meta(DEVICE, "0.9.0", "2026.06.0").is_none(),
-    "a webapp install targets no version, so device meta confirms nothing about it"
-  );
-  assert_eq!(store.runs().len(), 1);
-
-  clock.set(at(1));
-  store.ingest(updated(OtaKind::InstalledWebapp, "1.4.0"), None);
-
-  assert!(store.note_meta(DEVICE, "0.9.0", "2026.06.0").is_some());
-  assert!(store.runs().is_empty());
-}
-
 // -- annotate_webapp --
 
 #[test]
@@ -1111,7 +993,7 @@ fn poll_failure_keeps_the_last_good_timestamp() {
   let (clock, mut store) = store_at(at(0));
   store.ingest(
     OtaPollEvent::ManifestPolled {
-      updated_at: "2026-06-01T00:00:00Z".into(),
+      checked_at: "2026-06-01T00:00:00Z".into(),
     },
     None,
   );
@@ -1144,7 +1026,7 @@ fn a_successful_poll_clears_the_previous_error() {
   clock.set(at(1));
   store.ingest(
     OtaPollEvent::ManifestPolled {
-      updated_at: "2026-06-02T00:00:00Z".into(),
+      checked_at: "2026-06-02T00:00:00Z".into(),
     },
     None,
   );
@@ -1161,7 +1043,7 @@ fn a_poll_change_is_the_only_thing_a_poll_event_reports() {
   let (_clock, mut store) = store_at(at(0));
   let changes = store.ingest(
     OtaPollEvent::ManifestPolled {
-      updated_at: "2026-06-01T00:00:00Z".into(),
+      checked_at: "2026-06-01T00:00:00Z".into(),
     },
     None,
   );

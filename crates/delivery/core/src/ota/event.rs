@@ -72,8 +72,6 @@ pub enum OtaPhaseSnapshot {
   Applying {
     phase: OtaPhase,
     write_percent: u32,
-    dwl_percent: u32,
-    dwl_bytes: u64,
   },
   Staged,
   Completed,
@@ -99,7 +97,7 @@ impl OtaPhaseSnapshot {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OtaPollEvent {
   ManifestPolled {
-    updated_at: String,
+    checked_at: String,
   },
   ManifestPollFailed {
     reason: String,

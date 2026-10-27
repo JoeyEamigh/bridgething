@@ -1,6 +1,7 @@
-import { Button, cx } from '@bridgething/ui';
+import { Button, cx, SectionHeader } from '@bridgething/ui';
 import type { ComponentChildren, VNode } from 'preact';
 import { useLocation } from 'preact-iso';
+import { useState } from 'preact/hooks';
 
 import { Icon } from '../lib/icons.tsx';
 
@@ -36,5 +37,18 @@ export function BackButton({ to, children }: { to?: string; children: ComponentC
       onClick={to === undefined ? back : () => route(to)}>
       {children}
     </Button>
+  );
+}
+
+export function Disclosure({ title, children }: { title: string; children: ComponentChildren }): VNode {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Section class={open ? 'mb-4' : undefined}>
+        <SectionHeader title={title} action={open ? 'hide' : 'show'} onAction={() => setOpen(!open)} />
+      </Section>
+      {open ? children : null}
+    </>
   );
 }

@@ -1,24 +1,24 @@
 import type { IconName } from './icons.tsx';
 
-export type PermissionCopy = { icon: IconName; title: string; subtitle?: string };
+export type PermissionCopy = { icon: IconName; title: string };
 
 export function humanizePermission(permission: string): PermissionCopy {
   switch (permission) {
     case 'net.fetch':
-      return { icon: 'globe', title: 'use the internet', subtitle: 'requests are relayed through this computer' };
+      return { icon: 'globe', title: 'internet' };
     case 'net.ws':
-      return { icon: 'wifi', title: 'real-time data', subtitle: 'websockets relayed through this computer' };
+      return { icon: 'wifi', title: 'websockets' };
     case 'net.proxy':
-      return { icon: 'plug', title: 'tunnel TCP traffic', subtitle: 'general TCP relayed through this computer' };
+      return { icon: 'plug', title: 'TCP tunnel' };
     case 'geo':
-      return { icon: 'pin', title: 'see your location', subtitle: 'forwarded from this computer' };
+      return { icon: 'pin', title: 'location' };
     case 'notifications':
-      return { icon: 'bell', title: 'show forwarded notifications' };
+      return { icon: 'bell', title: 'notifications' };
     case 'audio':
     case 'audio.tts':
-      return { icon: 'speaker', title: 'play sound', subtitle: 'plays through this computer' };
+      return { icon: 'speaker', title: 'sound' };
     case 'mic':
-      return { icon: 'mic', title: 'use the Car Thing microphone' };
+      return { icon: 'mic', title: 'microphone' };
     default:
       return { icon: 'shield', title: permission };
   }

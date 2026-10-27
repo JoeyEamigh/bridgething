@@ -1,4 +1,9 @@
-import { describeExtensionPermissions, listedWebapps, slotCandidates } from '@bridgething/catalog';
+import {
+  describeExtensionPermissions,
+  listedWebapps,
+  slotCandidates,
+  type CatalogAppListing,
+} from '@bridgething/catalog';
 import type { WebappInfo, WebappSlot, WebappSlots } from '@bridgething/companion-types';
 import {
   Button,
@@ -19,7 +24,8 @@ import type { VNode } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useState } from 'preact/hooks';
 
-import { BackButton, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
+import { InstallButton, useInstaller } from '../components/Install.tsx';
+import { BackButton, ErrorNote, Screen, Section } from '../components/Screen.tsx';
 import { useDesktop, type ExtensionEntry } from '../desktop.ts';
 import {
   EXTENSION_MISSING,
@@ -33,6 +39,7 @@ import { Icon } from '../lib/icons.tsx';
 import { humanizePermission } from '../lib/permissions.ts';
 import { WebappIcon } from '../lib/webapp-icon.tsx';
 import { PATHS } from '../routes.ts';
+import { storeListings } from '../stores/catalog.ts';
 import { extensions, webappActive, webappSlots, webapps } from '../stores/session.ts';
 
 export function AppsRoute(): VNode {
@@ -40,30 +47,23 @@ export function AppsRoute(): VNode {
   const list = listedWebapps(webapps.data.value);
   const failure = webapps.error.value;
   const pending = webapps.pending.value;
+  const active = webappActive.data.value;
+  const listings = installedListings();
 
   return (
     <Screen>
-      <ScreenHeader
-        eyebrow="webapps"
-        title="apps"
-        subtitle="what is installed on the connected Car Thing."
-        trailing={
-          <Button size="sm" icon={<Icon name="store" />} onClick={() => route(PATHS.store)}>
-            store
-          </Button>
-        }
-      />
+      <ScreenHeader title="apps" />
 
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
 
       <Section>
-        <SectionHeader title="installed" action="refresh" pending={pending} onAction={webapps.refresh} />
+        <SectionHeader title="installed" />
         {pending && list.length === 0 ? (
           <SectionEmpty>
             <Spinner class="mx-auto" />
           </SectionEmpty>
         ) : list.length === 0 ? (
-          <SectionEmpty>nothing installed, or nothing connected</SectionEmpty>
+          <SectionEmpty>no apps</SectionEmpty>
         ) : (
           <ListGroup>
             {list.map(app => (
@@ -71,9 +71,15 @@ export function AppsRoute(): VNode {
                 key={app.id}
                 icon={<WebappIcon id={app.id} iconHash={app.iconHash} name={app.name} size="sm" />}
                 title={app.name}
-                subtitle={app.description ?? `v${app.version}`}
+                subtitle={app.description ?? undefined}
                 value={`v${app.version}`}
-                trailing={<InstalledMark app={app} />}
+                trailing={
+                  <InstalledMark
+                    app={app}
+                    onScreen={active?.id === app.id}
+                    update={listings.get(app.id.toLowerCase())?.updateAvailable ?? false}
+                  />
+                }
                 chevron
                 onClick={() => route(PATHS.app(app.id))}
               />
@@ -89,16 +95,33 @@ export function AppsRoute(): VNode {
   );
 }
 
+function installedListings(): Map<string, CatalogAppListing> {
+  const { vouched, community } = storeListings();
+  return new Map(
+    [...vouched, ...community]
+      .filter(listing => listing.installedVersion !== null)
+      .map(listing => [listing.app.id.toLowerCase(), listing]),
+  );
+}
+
+function UpdateButton({ listing }: { listing: CatalogAppListing }): VNode {
+  const installer = useInstaller(listing);
+  return (
+    <>
+      <InstallButton listing={listing} installer={installer} />
+      {installer.failure ? <ErrorNote>{installer.failure}</ErrorNote> : null}
+      {installer.dialog}
+    </>
+  );
+}
+
 function OrphanedExtensions(): VNode | null {
   const orphans = orphanedExtensions(extensions.data.value);
   if (orphans.length === 0) return null;
 
   return (
     <Section>
-      <SectionHeader
-        title="extensions with no app"
-        hint="no Car Thing this computer knows about still has the app these came with"
-      />
+      <SectionHeader title="extensions with no app" />
       <div class="flex flex-col gap-6">
         {orphans.map(entry => (
           <div key={entry.id}>
@@ -109,7 +132,6 @@ function OrphanedExtensions(): VNode | null {
           </div>
         ))}
       </div>
-      <Hint>they keep running with the permissions they were installed with until you remove them.</Hint>
     </Section>
   );
 }
@@ -123,9 +145,7 @@ export function AppDetailRoute({ webappId }: { webappId: string }): VNode {
     return (
       <Screen>
         <BackButton to={PATHS.apps}>all apps</BackButton>
-        <SectionEmpty>
-          {pending ? <Spinner class="mx-auto" /> : 'this app is not installed on the connected Car Thing'}
-        </SectionEmpty>
+        <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : 'not installed'}</SectionEmpty>
       </Screen>
     );
   }
@@ -144,6 +164,7 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
 
   const builtin = webapp.source === 'builtin';
   const running = active?.id === webapp.id;
+  const listing = installedListings().get(webapp.id.toLowerCase()) ?? null;
 
   const act = async (kind: 'switch' | 'uninstall') => {
     setBusy(kind);
@@ -171,7 +192,7 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
         <div class="flex min-w-0 flex-1 flex-col gap-1.5">
           <h1 class="m-0 font-display text-hero font-medium tracking-display wrap-break-word">{webapp.name}</h1>
           <div class="flex flex-wrap items-center gap-1.5">
-            <Pill tone={builtin ? 'neutral' : 'accent'}>{builtin ? 'built-in' : 'installed'}</Pill>
+            {builtin ? <Pill tone="neutral">built-in</Pill> : null}
             {running ? <Pill tone="ok">on screen</Pill> : null}
             {webapp.role === 'launcher' ? <Pill tone="neutral">home screen</Pill> : null}
             {webapp.overlayHash ? <Pill tone="neutral">overlay</Pill> : null}
@@ -182,17 +203,28 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
 
       {webapp.description ? <p class="mb-6 text-body leading-relaxed text-muted">{webapp.description}</p> : null}
 
-      <div class="mb-8 flex gap-2">
+      <div class="mb-8 flex flex-wrap gap-2">
         <Button
           variant="primary"
           icon={<Icon name="play" />}
           loading={busy === 'switch'}
           disabled={running}
           onClick={() => void act('switch')}>
-          {running ? 'already on screen' : 'switch to this'}
+          {running ? 'on screen' : 'open on device'}
         </Button>
+        {listing?.updateAvailable ? <UpdateButton listing={listing} /> : null}
+        {hasSettings(webapp) ? (
+          <Button icon={<Icon name="gear" />} onClick={() => route(PATHS.appSettings(webapp.id))}>
+            settings
+          </Button>
+        ) : null}
+        {listing ? (
+          <Button icon={<Icon name="store" />} onClick={() => route(PATHS.storeApp(listing.app.id))}>
+            store page
+          </Button>
+        ) : null}
         {!builtin ? (
-          <Button variant="destructive" icon={<Icon name="trash" />} onClick={() => setConfirming(true)}>
+          <Button variant="ghost" icon={<Icon name="trash" />} class="ml-auto" onClick={() => setConfirming(true)}>
             uninstall
           </Button>
         ) : null}
@@ -204,63 +236,39 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
         open={confirming}
         onClose={() => setConfirming(false)}
         title={`uninstall ${webapp.name}?`}
-        subtitle={`v${webapp.version} is removed from the device. its settings go with it.`}
+        subtitle="its settings go with it"
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirming(false)}>
-              keep it
+              cancel
             </Button>
             <Button variant="destructive" loading={busy === 'uninstall'} onClick={() => void act('uninstall')}>
               uninstall
             </Button>
           </>
-        }>
-        <p class="m-0 text-body text-muted">
-          this cannot be undone from here. reinstalling pulls the bundle down again.
-        </p>
-      </Dialog>
+        }></Dialog>
 
       <Section>
-        <SectionHeader title="settings" />
-        {hasSettings(webapp) ? (
-          <Button icon={<Icon name="gear" />} onClick={() => route(PATHS.appSettings(webapp.id))}>
-            open {webapp.name} settings
-          </Button>
-        ) : (
-          <SectionEmpty>no settings</SectionEmpty>
-        )}
-      </Section>
-
-      <Section>
-        <SectionHeader title="what this app can do" />
+        <SectionHeader title="permissions" />
         {webapp.permissions.length === 0 ? (
-          <SectionEmpty>nothing beyond drawing on the screen</SectionEmpty>
+          <SectionEmpty>none</SectionEmpty>
         ) : (
           <ListGroup>
             {webapp.permissions.map(permission => {
               const copy = humanizePermission(permission);
-              return (
-                <ListRow
-                  key={permission}
-                  icon={<Icon name={copy.icon} />}
-                  title={copy.title}
-                  subtitle={copy.subtitle}
-                  value={permission}
-                />
-              );
+              return <ListRow key={permission} icon={<Icon name={copy.icon} />} title={copy.title} />;
             })}
           </ListGroup>
         )}
-        <Hint>granted at install. what this computer is willing to offer is in settings.</Hint>
       </Section>
 
       <ExtensionSection webapp={webapp} />
 
-      {webapp.provenance ? (
+      {webapp.provenance && !listing ? (
         <Section>
-          <SectionHeader title="where it came from" />
+          <SectionHeader title="source" />
           <ListGroup>
-            <ListRow icon={<Icon name="link" />} title="source catalog" subtitle={webapp.provenance} />
+            <ListRow icon={<Icon name="link" />} title={webapp.provenance} />
           </ListGroup>
         </Section>
       ) : null}
@@ -268,7 +276,17 @@ function AppDetail({ webapp }: { webapp: WebappInfo }): VNode {
   );
 }
 
-function InstalledMark({ app }: { app: WebappInfo }): VNode | null {
+function InstalledMark({
+  app,
+  onScreen,
+  update,
+}: {
+  app: WebappInfo;
+  onScreen: boolean;
+  update: boolean;
+}): VNode | null {
+  if (update) return <Pill tone="accent">update</Pill>;
+  if (onScreen) return <Pill tone="ok">on screen</Pill>;
   const entry = extensionFor(extensions.data.value, app.id);
   if (entry) {
     const copy = describeExtensionStatus(entry.status);
@@ -296,11 +314,8 @@ function ExtensionSection({ webapp }: { webapp: WebappInfo }): VNode | null {
 
   return (
     <Section>
-      <SectionHeader title="native extension" hint="a background process this app ships, running on this computer" />
+      <SectionHeader title="native extension" hint="runs on this computer" />
       {entry ? <ExtensionRow entry={entry} /> : <MissingExtensionRow permissions={declared?.permissions ?? []} />}
-      <Hint>
-        it runs whenever this app runs, device or no device. its permissions were granted when you installed the app.
-      </Hint>
     </Section>
   );
 }
@@ -354,7 +369,7 @@ function ExtensionRow({ entry }: { entry: ExtensionEntry }): VNode {
           icon={<Icon name={copy.icon} />}
           iconTint={entry.enabled ? copy.tint : 'default'}
           title={entry.enabled ? copy.label : 'turned off'}
-          subtitle={entry.enabled ? copy.detail : 'this extension does not run until you turn it back on'}
+          subtitle={entry.enabled ? copy.detail : undefined}
           value={`api v${entry.api}`}
           trailing={
             busy === 'toggle' ? (
@@ -369,11 +384,7 @@ function ExtensionRow({ entry }: { entry: ExtensionEntry }): VNode {
           }
         />
         {entry.permissions.length === 0 ? (
-          <ListRow
-            icon={<Icon name="shield" />}
-            title="talks only to your Car Thing"
-            subtitle="it asked for nothing on this computer"
-          />
+          <ListRow icon={<Icon name="shield" />} title="no access to this computer" />
         ) : (
           describeExtensionPermissions({ desktop: true, permissions: entry.permissions }).map((line, at) => (
             <ListRow
@@ -393,7 +404,7 @@ function ExtensionRow({ entry }: { entry: ExtensionEntry }): VNode {
           icon={<Icon name="file" />}
           loading={busy === 'folder'}
           onClick={() => void act('folder', () => session.openExtensionData(entry.id))}>
-          open data folder
+          data folder
         </Button>
         {needsRuntime(entry.status) ? (
           <Button
@@ -422,7 +433,7 @@ function ExtensionRow({ entry }: { entry: ExtensionEntry }): VNode {
   );
 }
 
-function SlotAssignment({ list }: { list: WebappInfo[] }): VNode {
+function SlotAssignment({ list }: { list: WebappInfo[] }): VNode | null {
   const session = useSession();
   const slots = webappSlots;
   const [busy, setBusy] = useState<WebappSlot | null>(null);
@@ -444,17 +455,19 @@ function SlotAssignment({ list }: { list: WebappInfo[] }): VNode {
   const overlays = slotCandidates(list, 'overlay');
   const held: WebappSlots = slots.data.value;
 
+  if (launchers.length === 0 && overlays.length === 0 && held.launcher === null && held.overlay === null) return null;
+
   return (
     <Section>
-      <SectionHeader title="roles" hint="which installed app provides each system surface" />
+      <SectionHeader title="roles" />
       {slots.error.value ? (
         <SectionEmpty>{slots.error.value}</SectionEmpty>
       ) : (
         <div class="flex flex-col gap-6">
           <SlotPicker
             title="home screen"
-            builtinLabel="built-in hub"
-            builtinDetail="the launcher that ships with bridgething"
+            builtinLabel="hub"
+            builtinDetail="built-in"
             candidates={launchers}
             selected={held.launcher}
             busy={busy === 'launcher'}
@@ -462,8 +475,8 @@ function SlotAssignment({ list }: { list: WebappInfo[] }): VNode {
           />
           <SlotPicker
             title="system overlay"
-            builtinLabel="built-in overlay"
-            builtinDetail="notifications, calls, pairing, volume"
+            builtinLabel="overlay"
+            builtinDetail="built-in"
             candidates={overlays}
             selected={held.overlay}
             busy={busy === 'overlay'}
@@ -521,7 +534,6 @@ function SlotPicker({
           />
         ))}
       </ListGroup>
-      {candidates.length === 0 ? <p class="mt-2 text-hint text-muted">no installed app offers this yet</p> : null}
     </div>
   );
 }

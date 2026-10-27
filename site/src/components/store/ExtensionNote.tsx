@@ -1,5 +1,4 @@
-import { describeExtensionPermissions, extensionRepoLabel, type AppExtension } from '@bridgething/catalog';
-import { webHref } from '../../lib/href';
+import { describeExtensionPermissions, extensionRepoLabel, type AppExtension, webHref } from '@bridgething/catalog';
 
 export function ExtensionBadge() {
   return <span class="pill pill-stable self-start">native extension</span>;

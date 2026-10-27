@@ -1,13 +1,13 @@
 import {
   Button,
+  cx,
+  describeError,
   Field,
   ListGroup,
   ListRow,
-  Pill,
   SectionEmpty,
   SectionHeader,
   Spinner,
-  describeError,
   useSession,
 } from '@bridgething/ui';
 import type { VNode } from 'preact';
@@ -19,8 +19,8 @@ import { ErrorNote, Section } from './Screen.tsx';
 
 export function ConnectFlow(): VNode {
   const session = useSession();
-  const found = endpoints.data.value;
   const linked = peers.value;
+  const found = endpoints.data.value.filter(endpoint => !linked.some(peer => peer.id === endpoint.url));
   const scanning = endpoints.pending.value;
 
   const [busy, setBusy] = useState<string | null>(null);
@@ -43,37 +43,27 @@ export function ConnectFlow(): VNode {
       {failure ? <ErrorNote>{failure}</ErrorNote> : null}
 
       <Section>
-        <SectionHeader
-          title="on your network"
-          hint="_bridgething._tcp"
-          action="rescan"
-          pending={scanning}
-          onAction={endpoints.refresh}
-        />
+        <SectionHeader title="nearby" action="rescan" pending={scanning} onAction={endpoints.refresh} />
         {scanning && found.length === 0 ? (
           <SectionEmpty>
             <Spinner class="mx-auto" />
           </SectionEmpty>
         ) : found.length === 0 ? (
-          <SectionEmpty>nothing announced itself. plug a Car Thing in, or check that it finished booting.</SectionEmpty>
+          <SectionEmpty>none found</SectionEmpty>
         ) : (
           <ListGroup>
-            {found.map(endpoint => {
-              const attached = linked.some(peer => peer.id === endpoint.url);
-              return (
-                <ListRow
-                  key={endpoint.id}
-                  icon={<Icon name="device" />}
-                  iconTint={attached ? 'accent' : 'default'}
-                  title={endpoint.nickname ?? endpoint.host}
-                  subtitle={endpoint.url}
-                  trailing={attached ? <Pill tone="ok">linked</Pill> : busy === endpoint.url ? <Spinner /> : undefined}
-                  chevron={!attached}
-                  disabled={busy !== null}
-                  onClick={attached ? undefined : () => void connect(endpoint.url)}
-                />
-              );
-            })}
+            {found.map(endpoint => (
+              <ListRow
+                key={endpoint.id}
+                icon={<Icon name="device" />}
+                title={endpoint.nickname ?? endpoint.host}
+                subtitle={endpoint.url}
+                trailing={busy === endpoint.url ? <Spinner /> : undefined}
+                chevron
+                disabled={busy !== null}
+                onClick={() => void connect(endpoint.url)}
+              />
+            ))}
           </ListGroup>
         )}
         {endpoints.error.value ? <ErrorNote>{endpoints.error.value}</ErrorNote> : null}
@@ -90,8 +80,10 @@ function DirectConnect({ busy, onConnect }: { busy: string | null; onConnect: (u
   const standing = defaultGateway.data.value;
   const [draft, setDraft] = useState('');
 
-  const announced = standing !== null && found.some(endpoint => endpoint.url === standing);
-  const attached = standing !== null && linked.some(peer => peer.id === standing);
+  const offered =
+    standing !== null &&
+    !found.some(endpoint => endpoint.url === standing) &&
+    !linked.some(peer => peer.id === standing);
   const typed = draft.trim();
 
   const submit = () => {
@@ -100,27 +92,25 @@ function DirectConnect({ busy, onConnect }: { busy: string | null; onConnect: (u
 
   return (
     <Section>
-      <SectionHeader title="by hand" hint="for a daemon that does not announce itself" />
-      {standing !== null && !announced ? (
+      <SectionHeader title="by address" />
+      {offered ? (
         <ListGroup>
           <ListRow
             icon={<Icon name="plug" />}
-            iconTint={attached ? 'accent' : 'default'}
             title="this computer"
             subtitle={standing}
-            trailing={attached ? <Pill tone="ok">linked</Pill> : busy === standing ? <Spinner /> : undefined}
-            chevron={!attached}
+            trailing={busy === standing ? <Spinner /> : undefined}
+            chevron
             disabled={busy !== null}
-            onClick={attached ? undefined : () => void onConnect(standing)}
+            onClick={() => void onConnect(standing)}
           />
         </ListGroup>
       ) : null}
-      <div class="mt-3 flex items-end gap-2">
+      <div class={cx('flex items-end gap-2', offered && 'mt-3')}>
         <Field
-          label="gateway url"
           value={draft}
           onInput={setDraft}
-          onCommit={submit}
+          onSubmit={submit}
           placeholder="ws://bridgething.local:8892/"
           type="url"
           disabled={busy !== null}

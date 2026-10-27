@@ -168,13 +168,6 @@ fn emit_run_store(steps: &[Value]) -> Vec<Value> {
       match call {
         "dismiss" => run = store.dismiss(device_id),
         "interrupt" => run = store.interrupt(device_id),
-        "note_meta" => {
-          run = store.note_meta(
-            device_id,
-            step["daemon_version"].as_str().expect("daemon_version"),
-            step["image_version"].as_str().expect("image_version"),
-          )
-        }
         "annotate_webapp" => {
           run = store.annotate_webapp(device_id, step["webapp_id"].as_str(), step["webapp_name"].as_str())
         }
@@ -233,7 +226,7 @@ const RUN_KEYS: [&str; 19] = [
   "ret_stage_received",
   "ret_stage_total",
   "ret_rate_micros",
-  "ret_dwl_percent",
+  "ret_write_percent",
   "ret_outcome",
   "ret_error",
   "ret_release_version",
@@ -281,7 +274,7 @@ fn put_run_fields(row: &mut Map<String, Value>, run: Option<&OtaRun>, run_ids: &
     "ret_rate_micros".into(),
     json!(run.rate_per_sec.map(|rate| (rate * 1e6).round() as i64)),
   );
-  row.insert("ret_dwl_percent".into(), json!(run.dwl_percent));
+  row.insert("ret_write_percent".into(), json!(run.write_percent));
   row.insert("ret_outcome".into(), json!(run.outcome.map(wire_outcome)));
   row.insert("ret_error".into(), json!(run.error));
   row.insert("ret_release_version".into(), json!(run.release_version));
@@ -306,6 +299,7 @@ fn change_kind(change: &OtaStoreChange) -> &'static str {
     OtaStoreChange::Run(_) => "run",
     OtaStoreChange::Available(_) => "available",
     OtaStoreChange::Poll(_) => "poll",
+    OtaStoreChange::Queue(_) => "queue",
   }
 }
 
@@ -343,7 +337,7 @@ fn parse_event(ingest: &Value) -> OtaPollEvent {
 
   match ingest["event"].as_str().expect("event") {
     "manifest_polled" => OtaPollEvent::ManifestPolled {
-      updated_at: ingest["updated_at"].as_str().expect("updated_at").into(),
+      checked_at: ingest["checked_at"].as_str().expect("checked_at").into(),
     },
     "manifest_poll_failed" => OtaPollEvent::ManifestPollFailed {
       reason: ingest["reason"].as_str().expect("reason").into(),
@@ -433,8 +427,6 @@ fn parse_snapshot(snapshot: &Value) -> OtaPhaseSnapshot {
     "applying" => OtaPhaseSnapshot::Applying {
       phase: parse_phase(&snapshot["ota_phase"]),
       write_percent: snapshot["write_percent"].as_u64().expect("write_percent") as u32,
-      dwl_percent: snapshot["dwl_percent"].as_u64().expect("dwl_percent") as u32,
-      dwl_bytes: snapshot["dwl_bytes"].as_u64().expect("dwl_bytes"),
     },
     other => panic!("unknown snapshot phase {other}"),
   }

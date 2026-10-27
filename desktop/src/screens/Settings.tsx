@@ -1,11 +1,4 @@
-import type {
-  AuthState,
-  CapabilityFlags,
-  LauncherGesture,
-  ProviderInfo,
-  ResumeTarget,
-  VoiceModelState,
-} from '@bridgething/companion-types';
+import type { AuthState, CapabilityFlags, ProviderInfo, VoiceModelState } from '@bridgething/companion-types';
 import {
   Button,
   ListGroup,
@@ -14,18 +7,16 @@ import {
   ScreenHeader,
   SectionEmpty,
   SectionHeader,
-  Segmented,
   Spinner,
   Switch,
   useSession,
 } from '@bridgething/ui';
-import { LAUNCHER_GESTURE_OPTIONS } from '@bridgething/ui/launcher-gesture';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type { VNode } from 'preact';
 import { useState } from 'preact/hooks';
 
-import { deviceName } from '@bridgething/client';
 import { Progress } from '../components/Progress.tsx';
-import { ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
+import { ErrorNote, Screen, Section } from '../components/Screen.tsx';
 import { SelfUpdate } from '../components/SelfUpdate.tsx';
 import { ServerLoginDialog } from '../components/ServerLoginDialog.tsx';
 import { useDesktop } from '../desktop.ts';
@@ -34,17 +25,13 @@ import { Icon, type IconName } from '../lib/icons.tsx';
 import { quit } from '../lib/lifecycle.ts';
 import { autostart, setAutostart } from '../stores/autostart.ts';
 import {
-  autoResume,
   capabilities,
   capabilitySupport,
   debugLogging,
-  deviceMeta,
   hostInfo,
   libraryProvider,
   providerPriority,
   providers,
-  resumeTarget,
-  selectedMeta,
   snapshot,
   voiceModel,
 } from '../stores/session.ts';
@@ -55,38 +42,27 @@ type Flag = {
   key: keyof CapabilityFlags;
   icon: IconName;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   unsupported?: (os: string) => string;
 };
 
 const NOTIFICATION_LIMITS: Record<string, string> = {
-  macos: 'macOS has no public way for an app to read the notifications going to other apps',
-  windows: 'Windows hands its notification listener only to packaged store installs, which this build is not',
+  macos: 'macOS has no API for this',
+  windows: 'needs a packaged install',
 };
 
 const FLAGS: Flag[] = [
-  { key: 'netFetch', icon: 'globe', title: 'HTTP proxy', subtitle: 'webapps reach the internet through this computer' },
-  { key: 'netWs', icon: 'wifi', title: 'WebSocket proxy', subtitle: 'relayed websockets for webapps' },
-  {
-    key: 'audioTts',
-    icon: 'speaker',
-    title: 'speaker',
-    subtitle: 'let the Car Thing play sound through this computer',
-  },
-  { key: 'geo', icon: 'pin', title: 'location', subtitle: 'share this computer notion of where it is' },
+  { key: 'netFetch', icon: 'globe', title: 'internet', subtitle: 'webapps go online through this computer' },
+  { key: 'netWs', icon: 'wifi', title: 'websockets' },
+  { key: 'audioTts', icon: 'speaker', title: 'speaker', subtitle: 'Car Thing audio plays here' },
+  { key: 'geo', icon: 'pin', title: 'location' },
   {
     key: 'notifications',
     icon: 'bell',
     title: 'notifications',
-    subtitle: 'forward desktop notifications to the device',
-    unsupported: os => NOTIFICATION_LIMITS[os] ?? 'this desktop exposes no notifications for bridgething to read',
+    unsupported: os => NOTIFICATION_LIMITS[os] ?? 'not supported here',
   },
-  {
-    key: 'voiceModel',
-    icon: 'mic',
-    title: 'voice understanding',
-    subtitle: 'handle free-form requests, not just the built-in phrases · downloads a model',
-  },
+  { key: 'voiceModel', icon: 'mic', title: 'voice understanding', subtitle: 'free-form requests · downloads a model' },
 ];
 
 export function SettingsScreen(): VNode {
@@ -96,22 +72,17 @@ export function SettingsScreen(): VNode {
   const flags = capabilities.value;
   const support = capabilitySupport.data.value;
   const host = hostInfo.value;
-  const meta = deviceMeta.value;
   const failure = snapshot.error.value;
   const pending = snapshot.pending.value;
 
   return (
     <Screen>
-      <ScreenHeader
-        eyebrow="companion"
-        title="settings"
-        subtitle="accounts, what this computer offers, and what it is."
-      />
+      <ScreenHeader title="settings" />
 
       <Section>
-        <SectionHeader title="accounts" hint="tap a signed-in account to prefer it for browsing" />
+        <SectionHeader title="accounts" />
         {list.filter(provider => provider.available).length === 0 ? (
-          <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : 'no providers are compiled in'}</SectionEmpty>
+          <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : 'none'}</SectionEmpty>
         ) : (
           <ListGroup>
             {list
@@ -123,6 +94,7 @@ export function SettingsScreen(): VNode {
                   preferred={preferred === provider.id}
                   browsing={browsing === provider.id}
                   order={list.map(entry => entry.id)}
+                  contested={list.filter(entry => entry.connected).length > 1}
                 />
               ))}
           </ListGroup>
@@ -136,52 +108,20 @@ export function SettingsScreen(): VNode {
       </Section>
 
       <Section>
-        <SectionHeader
-          title="what this computer offers"
-          hint="capabilities webapps on the Car Thing are allowed to reach for"
-        />
+        <SectionHeader title="shared with the Car Thing" />
         <CapabilityRows flags={flags} support={support} />
-        <Hint>a capability that is off here stays off no matter what a webapp asks for.</Hint>
       </Section>
 
       <Section>
-        <SectionHeader title="device" />
-        {meta.length > 0 ? (
-          <ListGroup>
-            {meta.map(entry => (
-              <ListRow
-                key={entry.deviceId}
-                icon={<Icon name="device" />}
-                title={deviceName(entry.meta)}
-                subtitle={`${entry.meta.osName} ${entry.meta.osVersion} · image ${entry.meta.imageVersion} · ${entry.meta.channel}`}
-                value={`v${entry.meta.daemonVersion}`}
-              />
-            ))}
-            <AutoResumeRow />
-            <ResumeTargetRow />
-            <LauncherGestureRow />
-          </ListGroup>
-        ) : (
-          <SectionEmpty>connect a Car Thing to see its details</SectionEmpty>
-        )}
-      </Section>
-
-      <Section>
-        <SectionHeader title="this app" />
+        <SectionHeader title="app" />
         <ListGroup>
           <AutostartRow />
           <DebugLoggingRow />
-          <ListRow
-            icon={<Icon name="signOut" />}
-            title="quit bridgething"
-            subtitle="the Car Thing keeps running whatever is on its screen"
-            destructive
-            onClick={() => void quit()}
-          />
+          <ListRow icon={<Icon name="signOut" />} title="quit" destructive onClick={() => void quit()} />
         </ListGroup>
       </Section>
 
-      <SelfUpdate version={host?.appVersion} />
+      <SelfUpdate />
 
       <Section>
         <SectionHeader title="about" />
@@ -189,7 +129,7 @@ export function SettingsScreen(): VNode {
           <ListRow
             icon={<Icon name="info" />}
             title={host?.appName ?? 'bridgething desktop'}
-            subtitle={host ? `${host.osName} ${host.osVersion}` : 'reading host info'}
+            subtitle={host ? `${host.osName} ${host.osVersion}` : undefined}
             value={host ? `v${host.appVersion}` : undefined}
           />
           {host ? (
@@ -200,7 +140,13 @@ export function SettingsScreen(): VNode {
               value={host.adapterVersion}
             />
           ) : null}
-          <ListRow icon={<Icon name="file" />} title="source" subtitle={<span class="select-all">{REPO_URL}</span>} />
+          <ListRow
+            icon={<Icon name="file" />}
+            title="source"
+            subtitle={REPO_URL}
+            chevron
+            onClick={() => void openUrl(REPO_URL)}
+          />
         </ListGroup>
       </Section>
     </Screen>
@@ -212,11 +158,13 @@ function ProviderRow({
   preferred,
   browsing,
   order,
+  contested,
 }: {
   provider: ProviderInfo;
   preferred: boolean;
   browsing: boolean;
   order: string[];
+  contested: boolean;
 }): VNode {
   const session = useDesktop();
   const [busy, setBusy] = useState(false);
@@ -264,10 +212,16 @@ function ProviderRow({
       icon={<Icon name="user" />}
       iconTint="accent"
       title={provider.displayName}
-      subtitle={browsing ? 'signed in · browsing' : (healthLine(provider) ?? 'signed in')}
+      subtitle={healthLine(provider) ?? (browsing ? 'browsing' : 'signed in')}
       trailing={
         <span class="flex shrink-0 items-center gap-2">
-          {preferred ? <Pill tone="ok">preferred</Pill> : null}
+          {!contested ? null : preferred ? (
+            <Pill tone="ok">preferred</Pill>
+          ) : (
+            <Button size="sm" variant="ghost" loading={busy} onClick={() => void promote()}>
+              prefer
+            </Button>
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -278,8 +232,6 @@ function ProviderRow({
           </Button>
         </span>
       }
-      disabled={busy}
-      onClick={preferred ? undefined : () => void promote()}
     />
   );
 }
@@ -395,7 +347,7 @@ function FlagRow({
       <ListRow
         icon={<Icon name={flag.icon} />}
         title={flag.title}
-        subtitle={flag.unsupported?.(hostInfo.value?.osName ?? '') ?? 'this computer has no way to provide this'}
+        subtitle={flag.unsupported?.(hostInfo.value?.osName ?? '') ?? 'not supported here'}
         trailing={<Pill>unavailable</Pill>}
         disabled
       />
@@ -410,7 +362,6 @@ function FlagRow({
       iconTint={flags[flag.key] ? 'accent' : 'default'}
       title={flag.title}
       subtitle={live ? modelLine(live) : flag.subtitle}
-      value={live?.status === 'ready' ? (live.version ?? undefined) : undefined}
       trailing={
         <Switch
           checked={flags[flag.key]}
@@ -427,13 +378,13 @@ function FlagRow({
 function modelLine(state: VoiceModelState): string {
   switch (state.status) {
     case 'downloading':
-      return `downloading the model · ${bytes(state.receivedBytes)} of ${bytes(state.totalBytes)}`;
+      return `downloading · ${bytes(state.receivedBytes)} of ${bytes(state.totalBytes)}`;
     case 'ready':
-      return 'the model is installed and understanding runs on this computer';
+      return 'runs on this computer';
     case 'failed':
-      return 'the model could not be installed';
+      return 'install failed';
     default:
-      return 'waiting for the model to download';
+      return 'waiting to download';
   }
 }
 
@@ -450,7 +401,7 @@ function VoiceModelNote({ state }: { state: VoiceModelState | null }): VNode | n
   }
 
   if (state.status === 'failed') {
-    return <ErrorNote>{state.error ?? 'the voice model could not be installed'}</ErrorNote>;
+    return <ErrorNote>{state.error ?? 'install failed'}</ErrorNote>;
   }
 
   return null;
@@ -463,12 +414,11 @@ function AutostartRow(): VNode {
     <ListRow
       icon={<Icon name="power" />}
       iconTint={enabled ? 'accent' : 'default'}
-      title="start with this computer"
-      subtitle="the tray app comes back on its own after a reboot"
+      title="open at login"
       trailing={
         <Switch
           checked={enabled}
-          label="start with this computer"
+          label="open at login"
           disabled={autostart.pending.value}
           onChange={next => {
             void setAutostart(next);
@@ -488,7 +438,6 @@ function DebugLoggingRow(): VNode {
       icon={<Icon name="terminal" />}
       iconTint={enabled ? 'accent' : 'default'}
       title="verbose logging"
-      subtitle="keep debug detail in this app's log, for when something needs chasing"
       trailing={
         <Switch
           checked={enabled}
@@ -498,82 +447,6 @@ function DebugLoggingRow(): VNode {
               await session.setDebugLogging(next);
               await debugLogging.refresh();
             })();
-          }}
-        />
-      }
-    />
-  );
-}
-
-function ResumeTargetRow(): VNode {
-  const session = useDesktop();
-  const target = resumeTarget.data.value;
-
-  return (
-    <ListRow
-      icon={<Icon name="speaker" />}
-      iconTint="default"
-      title="resume on"
-      subtitle="any speaker lets playback start on whatever the music app last used"
-      trailing={
-        <Segmented<ResumeTarget>
-          size="sm"
-          label="resume on"
-          options={[
-            { value: 'phoneOnly', label: 'phone only' },
-            { value: 'anySpeaker', label: 'any speaker' },
-          ]}
-          value={target}
-          onChange={next => {
-            void session.setDeviceResumeTarget(next);
-          }}
-        />
-      }
-    />
-  );
-}
-
-function LauncherGestureRow(): VNode {
-  const session = useDesktop();
-  const gesture = selectedMeta.value?.launcherGesture ?? 'fivePress';
-
-  return (
-    <ListRow
-      icon={<Icon name="grid" />}
-      iconTint="default"
-      title="jump back to apps"
-      subtitle="the m button gesture that opens the launcher from any app"
-      trailing={
-        <Segmented<LauncherGesture>
-          size="sm"
-          label="jump back to apps"
-          options={LAUNCHER_GESTURE_OPTIONS}
-          value={gesture}
-          onChange={next => {
-            void session.setLauncherGesture(next);
-          }}
-        />
-      }
-    />
-  );
-}
-
-function AutoResumeRow(): VNode {
-  const session = useDesktop();
-  const enabled = autoResume.data.value;
-
-  return (
-    <ListRow
-      icon={<Icon name="play" />}
-      iconTint={enabled ? 'accent' : 'default'}
-      title="resume playback on connect"
-      subtitle="wake the music app and pick up where it left off"
-      trailing={
-        <Switch
-          checked={enabled}
-          label="resume playback on connect"
-          onChange={next => {
-            void session.setDeviceAutoResume(next);
           }}
         />
       }

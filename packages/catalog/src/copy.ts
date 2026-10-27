@@ -2,15 +2,14 @@ import type { CatalogAppListing } from './resolve.ts';
 
 export const STORE_COPY = {
   appsTitle: 'apps',
-  appsHint: 'from your sources and the bridgething directory',
-  appsEmpty: 'the catalog exists but has no apps in it.',
-  communityTitle: 'community apps',
-  communityNote: 'these are unreviewed',
-  communityHint: 'from directory sources you have not added',
+  appsEmpty: 'no apps',
+  communityTitle: 'community',
+  communityNote: 'unreviewed',
+  communityHint: 'from sources you have not added',
   communityEmpty: 'nothing here',
   suggestedTitle: 'suggested sources',
   suggestedHint: 'listed in the bridgething directory',
-  suggestedEmpty: 'nothing the directory lists is missing from your sources.',
+  suggestedEmpty: 'none',
   needsFirmware: 'needs newer firmware',
   unpublished: 'not published yet',
 } as const;
@@ -24,7 +23,7 @@ export function countLine(listings: number, sources: number): string {
 }
 
 export function failureLine(failures: number): string {
-  return `${plural(failures, 'source')} could not be read.`;
+  return `${plural(failures, 'source')} unreachable`;
 }
 
 export function installsLabel(installs: number): string | null {

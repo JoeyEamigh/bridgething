@@ -30,7 +30,7 @@ import {
   installApp,
   useSourceListings,
 } from '../lib/catalog';
-import { useOtaProgress } from '../lib/ota';
+import { useOtaProgress, useQueuedInstall } from '../lib/ota';
 import {
   describePairOutcome,
   type PairNotice,
@@ -62,9 +62,9 @@ export function StoreAppScreen({ navigation, route }: Props) {
       : null;
   const deviceBusyElsewhere =
     progress != null && !progress.run.outcome && !installingThis;
+  const waiting = useQueuedInstall(deviceId, appId);
 
   const [failed, setFailed] = useState<string | null>(null);
-  const [installing, setInstalling] = useState<string | null>(null);
   const [asking, setAsking] = useState<AppVersion | null>(null);
   const [asked, setAsked] = useState<AppVersion | null>(null);
   const [pairing, setPairing] = useState(false);
@@ -96,13 +96,10 @@ export function StoreAppScreen({ navigation, route }: Props) {
   const install = async (version: AppVersion) => {
     if (!deviceId) return;
     setFailed(null);
-    setInstalling(version.version);
     try {
       await installApp(deviceId, listing, version);
     } catch (err) {
       setFailed(describeError(err));
-    } finally {
-      setInstalling(null);
     }
   };
 
@@ -210,12 +207,12 @@ export function StoreAppScreen({ navigation, route }: Props) {
             onPress={() => {
               if (newestCompatible) void install(newestCompatible);
             }}
-            disabled={!canAct || installing != null}
-            loading={installing === newestCompatible?.version}
+            disabled={!canAct || waiting != null}
+            loading={waiting?.version === newestCompatible?.version}
           >
             {incompatible
               ? 'needs a newer firmware'
-              : installing != null && deviceBusyElsewhere
+              : waiting != null && deviceBusyElsewhere
                 ? 'queued'
                 : updateAvailable
                   ? `update to v${newestCompatible?.version}`
@@ -285,7 +282,7 @@ export function StoreAppScreen({ navigation, route }: Props) {
               version={v}
               installedVersion={installedVersion}
               libVersion={libVersion}
-              busy={installing}
+              busy={waiting?.version ?? null}
               blocked={deviceId == null || installingThis != null}
               onInstall={() => start(v)}
             />

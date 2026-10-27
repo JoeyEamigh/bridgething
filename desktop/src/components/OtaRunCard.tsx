@@ -1,17 +1,52 @@
-import type { OtaRun } from '@bridgething/companion-types';
+import type { OtaRun, OtaRunProgress } from '@bridgething/companion-types';
 import { Button, Pill } from '@bridgething/ui';
 import type { VNode } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 
-import { bytes, rate } from '../lib/format.ts';
-import { isRunning, phaseWord, runTitle, runTone, stepIndex, stepLabel, stepPercent } from '../lib/ota.ts';
+import { useDesktop } from '../desktop.ts';
+import { rate } from '../lib/format.ts';
+import { isRunning, phaseWord, runTitle, runTone } from '../lib/ota.ts';
 import { Progress } from './Progress.tsx';
+
+const TICK_MS = 500;
+
+function useRunProgress(run: OtaRun): OtaRunProgress | null {
+  const session = useDesktop();
+  const [progress, setProgress] = useState<OtaRunProgress | null>(null);
+  const live = isRunning(run);
+
+  useEffect(() => {
+    let current = true;
+    const read = () => {
+      void session.otaRunProgress(run.deviceId).then(next => {
+        if (current) setProgress(next);
+      });
+    };
+    read();
+    const timer = live ? setInterval(read, TICK_MS) : undefined;
+    return () => {
+      current = false;
+      clearInterval(timer);
+    };
+  }, [session, run, live]);
+
+  return progress;
+}
+
+function eta(seconds: number | null | undefined): string | null {
+  if (seconds == null || seconds <= 0) return null;
+  if (seconds < 60) return `${seconds}s left`;
+  return `${Math.round(seconds / 60)}m left`;
+}
 
 export function OtaRunCard({ run, onDismiss }: { run: OtaRun; onDismiss?: () => void }): VNode {
   const tone = runTone(run);
   const live = isRunning(run);
-  const percent = stepPercent(run);
-  const label = stepLabel(run);
-  const moving = rate(run.ratePerSec);
+  const progress = useRunProgress(run);
+  const percent = run.outcome === 'succeeded' ? 100 : (progress?.percent ?? null);
+  const detail = [progress?.stepLabel, live ? rate(run.ratePerSec) : null, live ? eta(progress?.etaSeconds) : null]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div class="border border-rule bg-screen">
@@ -23,21 +58,10 @@ export function OtaRunCard({ run, onDismiss }: { run: OtaRun; onDismiss?: () => 
               {phaseWord(run)}
             </Pill>
           </div>
-          <span class="truncate text-hint text-muted">
-            {label ?? 'preparing'}
-            {run.steps.length > 0 ? ` · step ${stepIndex(run) + 1} of ${run.steps.length}` : ''}
-            {moving ? ` · ${moving}` : ''}
-          </span>
-          {run.stageTotal !== null && run.stageTotal > 0 ? (
-            <span class="font-mono text-hint text-dim">
-              {bytes(run.stageReceived ?? 0)} of {bytes(run.stageTotal)}
-            </span>
-          ) : null}
+          {detail ? <span class="truncate text-hint text-muted">{detail}</span> : null}
         </div>
         <div class="flex shrink-0 items-center gap-2">
-          {percent !== null ? (
-            <span class="font-mono text-body tabular-nums text-soft transition-colors duration-300">{percent}%</span>
-          ) : null}
+          {live && percent !== null ? <span class="font-mono text-body tabular-nums text-soft">{percent}%</span> : null}
           {!live && onDismiss ? (
             <Button size="sm" variant="ghost" onClick={onDismiss}>
               dismiss

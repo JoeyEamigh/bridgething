@@ -18,7 +18,7 @@ export function Dialog({
   subtitle?: ComponentChildren;
   footer?: ComponentChildren;
   class?: string;
-  children: ComponentChildren;
+  children?: ComponentChildren;
 }): VNode {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -51,7 +51,7 @@ export function Dialog({
             &times;
           </button>
         </div>
-        <div class="min-h-0 flex-1 overflow-auto px-4 py-4">{children}</div>
+        {children ? <div class="min-h-0 flex-1 overflow-auto px-4 py-4">{children}</div> : null}
         {footer ? <div class="flex shrink-0 justify-end gap-2 border-t border-rule px-4 py-3">{footer}</div> : null}
       </div>
     </dialog>

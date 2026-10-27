@@ -4295,7 +4295,7 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func importPickedMedia(ticket: UInt64, path: String, kind: MediaPickKind, cover: MediaCover?, mimeHint: String?) async throws  -> PickedMedia
     
-    func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?) async throws  -> WebappInfo
+    func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String?, webappName: String?, webappVersion: String?) async throws  -> WebappInfo
     
     func installWebappFromUrl(deviceId: String, request: WebappInstallRequest, sink: WebappBundleSink?) async throws  -> WebappInfo
     
@@ -4865,12 +4865,12 @@ open func importPickedMedia(ticket: UInt64, path: String, kind: MediaPickKind, c
         )
 }
     
-open func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String? = nil, webappName: String? = nil)async throws  -> WebappInfo  {
+open func installWebapp(deviceId: String, archivePath: String, provenance: String?, webappId: String? = nil, webappName: String? = nil, webappVersion: String? = nil)async throws  -> WebappInfo  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_install_webapp(
-                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(archivePath),FfiConverterOptionString.lower(provenance),FfiConverterOptionString.lower(webappId),FfiConverterOptionString.lower(webappName)
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterString.lower(archivePath),FfiConverterOptionString.lower(provenance),FfiConverterOptionString.lower(webappId),FfiConverterOptionString.lower(webappName),FfiConverterOptionString.lower(webappVersion)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_rust_buffer,
@@ -11097,8 +11097,6 @@ public protocol OtaRunStoreProtocol: AnyObject, Sendable {
     
     func interrupt(deviceId: String)  -> OtaRun?
     
-    func noteMeta(deviceId: String, daemonVersion: String, imageVersion: String)  -> OtaRun?
-    
     func openRunKind(deviceId: String)  -> OtaKind?
     
     func pollStatus()  -> OtaPollStatus
@@ -11214,18 +11212,6 @@ open func interrupt(deviceId: String) -> OtaRun?  {
     uniffi_bridgething_companion_fn_method_otarunstore_interrupt(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(deviceId),uniffiCallStatus
-    )
-})
-}
-    
-open func noteMeta(deviceId: String, daemonVersion: String, imageVersion: String) -> OtaRun?  {
-    return try!  FfiConverterOptionTypeOtaRun.lift(try! rustCall() {
-        uniffiCallStatus in
-    uniffi_bridgething_companion_fn_method_otarunstore_note_meta(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(deviceId),
-        FfiConverterString.lower(daemonVersion),
-        FfiConverterString.lower(imageVersion),uniffiCallStatus
     )
 })
 }
@@ -19424,6 +19410,118 @@ public func FfiConverterTypeOtaPollStatus_lower(_ value: OtaPollStatus) -> RustB
 }
 
 
+public struct OtaQueue: Equatable, Hashable {
+    public var deviceId: String
+    public var installs: [OtaQueuedInstall]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, installs: [OtaQueuedInstall]) {
+        self.deviceId = deviceId
+        self.installs = installs
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OtaQueue: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOtaQueue: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtaQueue {
+        return
+            try OtaQueue(
+                deviceId: FfiConverterString.read(from: &buf), 
+                installs: FfiConverterSequenceTypeOtaQueuedInstall.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OtaQueue, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterSequenceTypeOtaQueuedInstall.write(value.installs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaQueue_lift(_ buf: RustBuffer) throws -> OtaQueue {
+    return try FfiConverterTypeOtaQueue.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaQueue_lower(_ value: OtaQueue) -> RustBuffer {
+    return FfiConverterTypeOtaQueue.lower(value)
+}
+
+
+public struct OtaQueuedInstall: Equatable, Hashable {
+    public var webappId: String
+    public var webappName: String
+    public var version: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(webappId: String, webappName: String, version: String) {
+        self.webappId = webappId
+        self.webappName = webappName
+        self.version = version
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OtaQueuedInstall: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOtaQueuedInstall: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtaQueuedInstall {
+        return
+            try OtaQueuedInstall(
+                webappId: FfiConverterString.read(from: &buf), 
+                webappName: FfiConverterString.read(from: &buf), 
+                version: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OtaQueuedInstall, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.webappId, into: &buf)
+        FfiConverterString.write(value.webappName, into: &buf)
+        FfiConverterString.write(value.version, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaQueuedInstall_lift(_ buf: RustBuffer) throws -> OtaQueuedInstall {
+    return try FfiConverterTypeOtaQueuedInstall.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtaQueuedInstall_lower(_ value: OtaQueuedInstall) -> RustBuffer {
+    return FfiConverterTypeOtaQueuedInstall.lower(value)
+}
+
+
 public struct OtaReleaseArtifacts: Equatable, Hashable {
     public var daemon: ArtifactDigest?
     public var daemonZst: ArtifactDigest?
@@ -19510,7 +19608,7 @@ public struct OtaRun: Equatable, Hashable {
     public var stageReceived: UInt64?
     public var stageTotal: UInt64?
     public var ratePerSec: Double?
-    public var dwlPercent: UInt32?
+    public var writePercent: UInt32?
     public var outcome: OtaRunOutcome?
     public var error: String?
     public var releaseVersion: String?
@@ -19524,7 +19622,7 @@ public struct OtaRun: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(runId: String, deviceId: String, kind: OtaKind, phase: OtaRunPhase, steps: [OtaPlanStep], stepId: UInt32, startedAtMs: UInt64, phaseStartedAtMs: UInt64, stageReceived: UInt64?, stageTotal: UInt64?, ratePerSec: Double?, dwlPercent: UInt32?, outcome: OtaRunOutcome?, error: String?, releaseVersion: String?, daemonVersion: String?, imageVersion: String?, channel: String?, rootUrl: String?, resumable: Bool, webappId: String?, webappName: String?) {
+    public init(runId: String, deviceId: String, kind: OtaKind, phase: OtaRunPhase, steps: [OtaPlanStep], stepId: UInt32, startedAtMs: UInt64, phaseStartedAtMs: UInt64, stageReceived: UInt64?, stageTotal: UInt64?, ratePerSec: Double?, writePercent: UInt32?, outcome: OtaRunOutcome?, error: String?, releaseVersion: String?, daemonVersion: String?, imageVersion: String?, channel: String?, rootUrl: String?, resumable: Bool, webappId: String?, webappName: String?) {
         self.runId = runId
         self.deviceId = deviceId
         self.kind = kind
@@ -19536,7 +19634,7 @@ public struct OtaRun: Equatable, Hashable {
         self.stageReceived = stageReceived
         self.stageTotal = stageTotal
         self.ratePerSec = ratePerSec
-        self.dwlPercent = dwlPercent
+        self.writePercent = writePercent
         self.outcome = outcome
         self.error = error
         self.releaseVersion = releaseVersion
@@ -19576,7 +19674,7 @@ public struct FfiConverterTypeOtaRun: FfiConverterRustBuffer {
                 stageReceived: FfiConverterOptionUInt64.read(from: &buf), 
                 stageTotal: FfiConverterOptionUInt64.read(from: &buf), 
                 ratePerSec: FfiConverterOptionDouble.read(from: &buf), 
-                dwlPercent: FfiConverterOptionUInt32.read(from: &buf), 
+                writePercent: FfiConverterOptionUInt32.read(from: &buf), 
                 outcome: FfiConverterOptionTypeOtaRunOutcome.read(from: &buf), 
                 error: FfiConverterOptionString.read(from: &buf), 
                 releaseVersion: FfiConverterOptionString.read(from: &buf), 
@@ -19602,7 +19700,7 @@ public struct FfiConverterTypeOtaRun: FfiConverterRustBuffer {
         FfiConverterOptionUInt64.write(value.stageReceived, into: &buf)
         FfiConverterOptionUInt64.write(value.stageTotal, into: &buf)
         FfiConverterOptionDouble.write(value.ratePerSec, into: &buf)
-        FfiConverterOptionUInt32.write(value.dwlPercent, into: &buf)
+        FfiConverterOptionUInt32.write(value.writePercent, into: &buf)
         FfiConverterOptionTypeOtaRunOutcome.write(value.outcome, into: &buf)
         FfiConverterOptionString.write(value.error, into: &buf)
         FfiConverterOptionString.write(value.releaseVersion, into: &buf)
@@ -20448,10 +20546,11 @@ public struct SessionSnapshot: Equatable, Hashable {
     public var otaRuns: [OtaRun]
     public var otaAvailable: [OtaAvailable]
     public var otaPoll: OtaPollStatus
+    public var otaQueues: [OtaQueue]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(hostInfo: SessionHostInfo, providers: [ProviderInfo], providerPriority: [String], libraryProvider: String?, peers: [SessionPeer], ancsAuthStatuses: [AncsAuthStatusEntry], nowPlaying: NowPlaying?, deviceMeta: [DeviceMetaEntry], capabilityFlags: CapabilityFlags, voiceModel: VoiceModelState, otaPollConfig: OtaPollConfig?, webapps: [DeviceWebappsEntry], otaRuns: [OtaRun], otaAvailable: [OtaAvailable], otaPoll: OtaPollStatus) {
+    public init(hostInfo: SessionHostInfo, providers: [ProviderInfo], providerPriority: [String], libraryProvider: String?, peers: [SessionPeer], ancsAuthStatuses: [AncsAuthStatusEntry], nowPlaying: NowPlaying?, deviceMeta: [DeviceMetaEntry], capabilityFlags: CapabilityFlags, voiceModel: VoiceModelState, otaPollConfig: OtaPollConfig?, webapps: [DeviceWebappsEntry], otaRuns: [OtaRun], otaAvailable: [OtaAvailable], otaPoll: OtaPollStatus, otaQueues: [OtaQueue]) {
         self.hostInfo = hostInfo
         self.providers = providers
         self.providerPriority = providerPriority
@@ -20467,6 +20566,7 @@ public struct SessionSnapshot: Equatable, Hashable {
         self.otaRuns = otaRuns
         self.otaAvailable = otaAvailable
         self.otaPoll = otaPoll
+        self.otaQueues = otaQueues
     }
 
     
@@ -20499,7 +20599,8 @@ public struct FfiConverterTypeSessionSnapshot: FfiConverterRustBuffer {
                 webapps: FfiConverterSequenceTypeDeviceWebappsEntry.read(from: &buf), 
                 otaRuns: FfiConverterSequenceTypeOtaRun.read(from: &buf), 
                 otaAvailable: FfiConverterSequenceTypeOtaAvailable.read(from: &buf), 
-                otaPoll: FfiConverterTypeOtaPollStatus.read(from: &buf)
+                otaPoll: FfiConverterTypeOtaPollStatus.read(from: &buf), 
+                otaQueues: FfiConverterSequenceTypeOtaQueue.read(from: &buf)
         )
     }
 
@@ -20519,6 +20620,7 @@ public struct FfiConverterTypeSessionSnapshot: FfiConverterRustBuffer {
         FfiConverterSequenceTypeOtaRun.write(value.otaRuns, into: &buf)
         FfiConverterSequenceTypeOtaAvailable.write(value.otaAvailable, into: &buf)
         FfiConverterTypeOtaPollStatus.write(value.otaPoll, into: &buf)
+        FfiConverterSequenceTypeOtaQueue.write(value.otaQueues, into: &buf)
     }
 }
 
@@ -21626,15 +21728,17 @@ public struct WebappInstallRequest: Equatable, Hashable {
     public var provenance: String?
     public var webappId: String?
     public var webappName: String?
+    public var webappVersion: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(url: String, expected: ArtifactDigest?, provenance: String?, webappId: String?, webappName: String?) {
+    public init(url: String, expected: ArtifactDigest?, provenance: String?, webappId: String?, webappName: String?, webappVersion: String?) {
         self.url = url
         self.expected = expected
         self.provenance = provenance
         self.webappId = webappId
         self.webappName = webappName
+        self.webappVersion = webappVersion
     }
 
     
@@ -21657,7 +21761,8 @@ public struct FfiConverterTypeWebappInstallRequest: FfiConverterRustBuffer {
                 expected: FfiConverterOptionTypeArtifactDigest.read(from: &buf), 
                 provenance: FfiConverterOptionString.read(from: &buf), 
                 webappId: FfiConverterOptionString.read(from: &buf), 
-                webappName: FfiConverterOptionString.read(from: &buf)
+                webappName: FfiConverterOptionString.read(from: &buf), 
+                webappVersion: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -21667,6 +21772,7 @@ public struct FfiConverterTypeWebappInstallRequest: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.provenance, into: &buf)
         FfiConverterOptionString.write(value.webappId, into: &buf)
         FfiConverterOptionString.write(value.webappName, into: &buf)
+        FfiConverterOptionString.write(value.webappVersion, into: &buf)
     }
 }
 
@@ -25876,7 +25982,7 @@ public enum OtaPhaseSnapshot: Equatable, Hashable {
     )
     case streaming(asset: String, sent: UInt64, total: UInt64, ratePerSec: Double?, etaSeconds: Double?
     )
-    case applying(phase: OtaApplyPhase, writePercent: UInt32, dwlPercent: UInt32, dwlBytes: UInt64
+    case applying(phase: OtaApplyPhase, writePercent: UInt32
     )
     case staged
     case completed
@@ -25911,7 +26017,7 @@ public struct FfiConverterTypeOtaPhaseSnapshot: FfiConverterRustBuffer {
         case 3: return .streaming(asset: try FfiConverterString.read(from: &buf), sent: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf), ratePerSec: try FfiConverterOptionDouble.read(from: &buf), etaSeconds: try FfiConverterOptionDouble.read(from: &buf)
         )
         
-        case 4: return .applying(phase: try FfiConverterTypeOtaApplyPhase.read(from: &buf), writePercent: try FfiConverterUInt32.read(from: &buf), dwlPercent: try FfiConverterUInt32.read(from: &buf), dwlBytes: try FfiConverterUInt64.read(from: &buf)
+        case 4: return .applying(phase: try FfiConverterTypeOtaApplyPhase.read(from: &buf), writePercent: try FfiConverterUInt32.read(from: &buf)
         )
         
         case 5: return .staged
@@ -25950,12 +26056,10 @@ public struct FfiConverterTypeOtaPhaseSnapshot: FfiConverterRustBuffer {
             FfiConverterOptionDouble.write(etaSeconds, into: &buf)
             
         
-        case let .applying(phase,writePercent,dwlPercent,dwlBytes):
+        case let .applying(phase,writePercent):
             writeInt(&buf, Int32(4))
             FfiConverterTypeOtaApplyPhase.write(phase, into: &buf)
             FfiConverterUInt32.write(writePercent, into: &buf)
-            FfiConverterUInt32.write(dwlPercent, into: &buf)
-            FfiConverterUInt64.write(dwlBytes, into: &buf)
             
         
         case .staged:
@@ -25994,7 +26098,7 @@ public func FfiConverterTypeOtaPhaseSnapshot_lower(_ value: OtaPhaseSnapshot) ->
 
 public enum OtaPollEvent: Equatable, Hashable {
     
-    case manifestPolled(updatedAt: String
+    case manifestPolled(checkedAt: String
     )
     case manifestPollFailed(reason: String
     )
@@ -26029,7 +26133,7 @@ public struct FfiConverterTypeOtaPollEvent: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .manifestPolled(updatedAt: try FfiConverterString.read(from: &buf)
+        case 1: return .manifestPolled(checkedAt: try FfiConverterString.read(from: &buf)
         )
         
         case 2: return .manifestPollFailed(reason: try FfiConverterString.read(from: &buf)
@@ -26058,9 +26162,9 @@ public struct FfiConverterTypeOtaPollEvent: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .manifestPolled(updatedAt):
+        case let .manifestPolled(checkedAt):
             writeInt(&buf, Int32(1))
-            FfiConverterString.write(updatedAt, into: &buf)
+            FfiConverterString.write(checkedAt, into: &buf)
             
         
         case let .manifestPollFailed(reason):
@@ -26407,6 +26511,8 @@ public enum OtaStoreChange: Equatable, Hashable {
     )
     case poll(status: OtaPollStatus
     )
+    case queue(queue: OtaQueue
+    )
 
 
 
@@ -26437,6 +26543,9 @@ public struct FfiConverterTypeOtaStoreChange: FfiConverterRustBuffer {
         case 3: return .poll(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
         )
         
+        case 4: return .queue(queue: try FfiConverterTypeOtaQueue.read(from: &buf)
+        )
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -26458,6 +26567,11 @@ public struct FfiConverterTypeOtaStoreChange: FfiConverterRustBuffer {
         case let .poll(status):
             writeInt(&buf, Int32(3))
             FfiConverterTypeOtaPollStatus.write(status, into: &buf)
+            
+        
+        case let .queue(queue):
+            writeInt(&buf, Int32(4))
+            FfiConverterTypeOtaQueue.write(queue, into: &buf)
             
         }
     }
@@ -27383,6 +27497,8 @@ public enum SessionEvent: Equatable, Hashable {
     )
     case otaPollChanged(status: OtaPollStatus
     )
+    case otaQueueChanged(queue: OtaQueue
+    )
     case companionUpdateProgress(received: UInt64, total: UInt64
     )
     case resumed
@@ -27452,10 +27568,13 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
         case 15: return .otaPollChanged(status: try FfiConverterTypeOtaPollStatus.read(from: &buf)
         )
         
-        case 16: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
+        case 16: return .otaQueueChanged(queue: try FfiConverterTypeOtaQueue.read(from: &buf)
         )
         
-        case 17: return .resumed
+        case 17: return .companionUpdateProgress(received: try FfiConverterUInt64.read(from: &buf), total: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 18: return .resumed
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -27548,14 +27667,19 @@ public struct FfiConverterTypeSessionEvent: FfiConverterRustBuffer {
             FfiConverterTypeOtaPollStatus.write(status, into: &buf)
             
         
-        case let .companionUpdateProgress(received,total):
+        case let .otaQueueChanged(queue):
             writeInt(&buf, Int32(16))
+            FfiConverterTypeOtaQueue.write(queue, into: &buf)
+            
+        
+        case let .companionUpdateProgress(received,total):
+            writeInt(&buf, Int32(17))
             FfiConverterUInt64.write(received, into: &buf)
             FfiConverterUInt64.write(total, into: &buf)
             
         
         case .resumed:
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(18))
         
         }
     }
@@ -30564,6 +30688,56 @@ fileprivate struct FfiConverterSequenceTypeOtaPlanStep: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOtaQueue: FfiConverterRustBuffer {
+    typealias SwiftType = [OtaQueue]
+
+    public static func write(_ value: [OtaQueue], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOtaQueue.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OtaQueue] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OtaQueue]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOtaQueue.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOtaQueuedInstall: FfiConverterRustBuffer {
+    typealias SwiftType = [OtaQueuedInstall]
+
+    public static func write(_ value: [OtaQueuedInstall], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOtaQueuedInstall.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OtaQueuedInstall] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OtaQueuedInstall]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOtaQueuedInstall.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeOtaRun: FfiConverterRustBuffer {
     typealias SwiftType = [OtaRun]
 
@@ -31327,7 +31501,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_import_picked_media() != 21994) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 21517) {
+    if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp() != 19772) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_install_webapp_from_url() != 37415) {
@@ -31445,9 +31619,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_otarunstore_interrupt() != 47469) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_bridgething_companion_checksum_method_otarunstore_note_meta() != 19259) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_otarunstore_open_run_kind() != 10159) {

@@ -121,7 +121,7 @@ class SessionDevLaneTest {
         val before = runBlocking { companion.session.listWebapps(DEVICE_ID) }.map { it.id }.toSet()
 
         val installed = runBlocking {
-            companion.session.installWebappFromUrl(DEVICE_ID, WebappInstallRequest(url!!, null, url, null, null))
+            companion.session.installWebappFromUrl(DEVICE_ID, WebappInstallRequest(url!!, null, url, null, null, null))
         }
         assertEquals(url, installed.provenance)
         awaitEvent<SessionEvent.WebappsChanged> { it.entry.webapps.any { app -> app.id == installed.id } }

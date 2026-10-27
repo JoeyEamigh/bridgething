@@ -24,6 +24,8 @@ import com.margelo.nitro.bridgething.session.BridgethingOtaOutcome
 import com.margelo.nitro.bridgething.session.BridgethingOtaPhase
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollConfig
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
+import com.margelo.nitro.bridgething.session.BridgethingOtaQueue
+import com.margelo.nitro.bridgething.session.BridgethingOtaQueuedInstall
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRelease
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
@@ -76,6 +78,7 @@ import uniffi.bridgething_companion.OtaDiscoverManifest
 import uniffi.bridgething_companion.OtaKind
 import uniffi.bridgething_companion.OtaPollConfig
 import uniffi.bridgething_companion.OtaPollStatus
+import uniffi.bridgething_companion.OtaQueue
 import uniffi.bridgething_companion.OtaRun
 import uniffi.bridgething_companion.OtaRunOutcome
 import uniffi.bridgething_companion.OtaRunPhase
@@ -132,6 +135,7 @@ internal fun toRnSnapshot(snap: SessionSnapshot): BridgethingSessionSnapshot = B
     otaRuns = snap.otaRuns.map(::toRnOtaRun).toTypedArray(),
     otaAvailable = snap.otaAvailable.map(::toRnOtaAvailable).toTypedArray(),
     otaPoll = toRnOtaPollStatus(snap.otaPoll),
+    otaQueues = snap.otaQueues.map(::toRnOtaQueue).toTypedArray(),
 )
 
 internal fun toRnProviderInfo(info: ProviderInfo): BridgethingProviderInfo = BridgethingProviderInfo(
@@ -410,7 +414,7 @@ internal fun toRnOtaRun(run: OtaRun): BridgethingOtaRun = BridgethingOtaRun(
     stageReceived = run.stageReceived?.toDouble(),
     stageTotal = run.stageTotal?.toDouble(),
     ratePerSec = run.ratePerSec,
-    dwlPercent = run.dwlPercent?.toDouble(),
+    writePercent = run.writePercent?.toDouble(),
     outcome = run.outcome?.let(::toRnOtaOutcome),
     error = run.error,
     releaseVersion = run.releaseVersion,
@@ -471,6 +475,13 @@ internal fun toRnOtaAvailable(a: OtaAvailable): BridgethingOtaAvailable = Bridge
 
 internal fun toRnOtaPollStatus(s: OtaPollStatus): BridgethingOtaPollStatus =
     BridgethingOtaPollStatus(lastPolledAt = s.lastPolledAt, error = s.error)
+
+internal fun toRnOtaQueue(q: OtaQueue): BridgethingOtaQueue = BridgethingOtaQueue(
+    deviceId = q.deviceId,
+    installs = q.installs.map {
+        BridgethingOtaQueuedInstall(webappId = it.webappId, webappName = it.webappName, version = it.version)
+    }.toTypedArray(),
+)
 
 internal fun toRnOtaPollConfig(config: OtaPollConfig): BridgethingOtaPollConfig = BridgethingOtaPollConfig(
     intervalSeconds = config.intervalSeconds.toDouble(),

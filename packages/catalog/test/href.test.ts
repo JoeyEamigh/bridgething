@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { webHref } from './href';
+import { webHref } from '../src/href.ts';
 
 describe('webHref', () => {
   test('an https url passes through unchanged', () => {

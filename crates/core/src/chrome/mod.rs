@@ -22,6 +22,9 @@ const ENV_CHROME_PORT: &str = "BRIDGETHING_CHROME_PORT";
 const CHROME_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60 * 24 * 365 * 10);
 const CHROME_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const CHROME_CONNECT_BACKOFF: Duration = Duration::from_secs(1);
+const CHROME_CALL_TIMEOUT: Duration = Duration::from_secs(10);
+const TAB_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
+const TAB_DISCOVERY_POLL: Duration = Duration::from_millis(50);
 const ERROR_URL_PREFIX: &str = "chrome-error://";
 const BLANK_URL_PREFIX: &str = "about:blank";
 const STRANDED_CONFIRMATIONS: u8 = 2;
@@ -473,14 +476,25 @@ impl ChromeWorker {
       let tab = self.first_tab().await?;
       let op = op.clone();
 
-      match tokio::task::spawn_blocking(move || safe_call(label, || op(tab))).await {
-        Ok(Ok(value)) => return Some(value),
-        Ok(Err(e)) => {
+      match tokio::time::timeout(
+        CHROME_CALL_TIMEOUT,
+        tokio::task::spawn_blocking(move || safe_call(label, || op(tab))),
+      )
+      .await
+      {
+        Ok(Ok(Ok(value))) => return Some(value),
+        Ok(Ok(Err(e))) => {
           tracing::warn!("chrome {label} failed (attempt {attempt}): {e:?}; dropping connection");
           self.drop_browser();
         }
-        Err(e) => {
+        Ok(Err(e)) => {
           tracing::warn!("chrome {label} task died (attempt {attempt}): {e:?}; dropping connection");
+          self.drop_browser();
+        }
+        Err(_) => {
+          tracing::warn!(
+            "chrome {label} got no answer within {CHROME_CALL_TIMEOUT:?} (attempt {attempt}); dropping connection"
+          );
           self.drop_browser();
         }
       }
@@ -498,38 +512,27 @@ impl ChromeWorker {
     if self.browser.is_none() {
       self.connect_browser().await;
     }
-    let browser = self.browser.take()?;
-
-    let (browser, registered, tab) = tokio::task::spawn_blocking(move || {
-      let registered = catch_panic("register_missing_tabs", || browser.register_missing_tabs());
-      let tab = match browser.get_tabs().lock() {
-        Ok(guard) => Ok(guard.iter().find(|t| is_web_page(&t.get_url())).cloned()),
+    let deadline = tokio::time::Instant::now() + TAB_DISCOVERY_TIMEOUT;
+    loop {
+      let found = match self.browser.as_ref()?.get_tabs().lock() {
+        Ok(tabs) => Ok(tabs.iter().find(|tab| is_web_page(&tab.get_url())).cloned()),
         Err(e) => Err(format!("tabs mutex poisoned: {e:?}")),
       };
-      (browser, registered, tab)
-    })
-    .await
-    .ok()?;
-
-    if let Err(e) = registered {
-      tracing::warn!("{e:?}; dropping cached browser");
-      self.connected.store(false, std::sync::atomic::Ordering::SeqCst);
-      return None;
-    }
-    let tab = match tab {
-      Ok(tab) => tab,
-      Err(e) => {
-        tracing::error!("{e}; dropping cached browser");
-        self.connected.store(false, std::sync::atomic::Ordering::SeqCst);
-        return None;
+      match found {
+        Ok(Some(tab)) => return Some(tab),
+        Ok(None) if tokio::time::Instant::now() < deadline => tokio::time::sleep(TAB_DISCOVERY_POLL).await,
+        Ok(None) => {
+          tracing::warn!("chrome reports no page tab; dropping cached browser");
+          self.drop_browser();
+          return None;
+        }
+        Err(e) => {
+          tracing::error!("{e}; dropping cached browser");
+          self.drop_browser();
+          return None;
+        }
       }
-    };
-
-    self.browser = Some(browser);
-    if tab.is_none() {
-      tracing::warn!("chrome reports no tabs");
     }
-    tab
   }
 
   async fn connect_browser(&mut self) {
@@ -574,16 +577,6 @@ where
   match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
     Ok(Ok(r)) => Ok(r),
     Ok(Err(e)) => Err(e),
-    Err(p) => anyhow::bail!("{label} panicked: {p:?}"),
-  }
-}
-
-fn catch_panic<F>(label: &str, f: F) -> anyhow::Result<()>
-where
-  F: FnOnce(),
-{
-  match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-    Ok(()) => Ok(()),
     Err(p) => anyhow::bail!("{label} panicked: {p:?}"),
   }
 }

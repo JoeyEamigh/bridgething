@@ -22,6 +22,26 @@ describe('disconnect contract', () => {
     );
   });
 
+  test('an install queued behind an update is still queued after a foreground', () => {
+    const r = rig();
+    const waiting = { webappId: 'app', webappName: 'App', version: '1.2.0' };
+    r.emit('peerConnected', peer());
+    r.emit('otaQueueChanged', { deviceId: DEVICE, installs: [waiting] });
+
+    r.emit('resumed', {
+      ...snapshot([peer()]),
+      otaQueues: [{ deviceId: DEVICE, installs: [waiting] }],
+    });
+
+    expect(r.ota.useOtaStore.getState().queues[DEVICE]?.installs).toEqual([
+      waiting,
+    ]);
+
+    r.emit('otaQueueChanged', { deviceId: DEVICE, installs: [] });
+
+    expect(r.ota.useOtaStore.getState().queues[DEVICE]?.installs).toEqual([]);
+  });
+
   test('webapps for a device are not rendered as installed once it is gone', () => {
     const r = rig();
     r.emit('peerConnected', peer());

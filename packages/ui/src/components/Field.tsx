@@ -1,5 +1,5 @@
 import type { ComponentChildren, VNode } from 'preact';
-import { useId } from 'preact/hooks';
+import { useId, useRef } from 'preact/hooks';
 
 import { cx } from '../cx.ts';
 
@@ -18,6 +18,7 @@ export function Field({
   value,
   onInput,
   onCommit,
+  onSubmit,
   placeholder,
   type = 'text',
   disabled = false,
@@ -30,6 +31,7 @@ export function Field({
   value: string;
   onInput: (next: string) => void;
   onCommit?: (value: string) => void;
+  onSubmit?: (value: string) => void;
   placeholder?: string;
   type?: keyof typeof INPUT_TYPES;
   disabled?: boolean;
@@ -37,6 +39,7 @@ export function Field({
   class?: string;
 }): VNode {
   const id = useId();
+  const input = useRef<HTMLInputElement>(null);
 
   return (
     <div class={cx('flex flex-col', className)}>
@@ -52,6 +55,7 @@ export function Field({
         )}>
         {icon ? <span class="flex shrink-0 items-center text-dim">{icon}</span> : null}
         <input
+          ref={input}
           id={id}
           {...INPUT_TYPES[type]}
           value={value}
@@ -61,7 +65,9 @@ export function Field({
           onInput={event => onInput(event.currentTarget.value)}
           onBlur={event => onCommit?.(event.currentTarget.value)}
           onKeyDown={event => {
-            if (event.key === 'Enter') onCommit?.(event.currentTarget.value);
+            if (event.key !== 'Enter') return;
+            onCommit?.(event.currentTarget.value);
+            onSubmit?.(event.currentTarget.value);
           }}
         />
         {clearable && value.length > 0 ? (
@@ -70,7 +76,10 @@ export function Field({
             aria-label="clear"
             disabled={disabled}
             class="shrink-0 px-1 font-mono text-body text-dim transition-colors hover:text-off-white focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
-            onClick={() => onInput('')}>
+            onClick={() => {
+              onInput('');
+              input.current?.focus();
+            }}>
             &times;
           </button>
         ) : null}

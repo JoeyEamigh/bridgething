@@ -2,11 +2,15 @@ mod stub;
 
 #[cfg(feature = "swupdate")]
 mod ffi;
+#[cfg(any(feature = "swupdate", test))]
+mod meter;
 
 use std::path::Path;
 
 use libbridgething::OtaPhase;
 use tokio::sync::watch;
+
+use super::slots::Slot;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProgressTick {
@@ -14,15 +18,7 @@ pub struct ProgressTick {
   pub percent: u8,
   pub step: u8,
   pub nsteps: u8,
-  pub dwl_percent: u8,
-  pub dwl_bytes: u32,
   pub eta_ms: Option<u32>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Selector {
-  pub software_set: String,
-  pub running_mode: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -41,7 +37,7 @@ pub enum Error {
 
 pub async fn install_swu<F>(
   swu_path: &Path,
-  selector: &Selector,
+  target: Slot,
   progress: &F,
   cancel_rx: &mut watch::Receiver<bool>,
 ) -> Result<(), Error>
@@ -50,7 +46,7 @@ where
 {
   #[cfg(feature = "swupdate")]
   if crate::paths::is_on_device() {
-    return ffi::install_swu(swu_path, selector, progress, cancel_rx).await;
+    return ffi::install_swu(swu_path, target, progress, cancel_rx).await;
   }
-  stub::install_swu(swu_path, selector, progress, cancel_rx).await
+  stub::install_swu(swu_path, target, progress, cancel_rx).await
 }

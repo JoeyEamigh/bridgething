@@ -66,7 +66,7 @@ export function Connect({ pending }: { pending: PendingInstall | null }): VNode 
             label="host"
             value={host}
             onInput={setHost}
-            onCommit={() => {
+            onSubmit={() => {
               if (!busy) connect();
             }}
             hint="more than one thing on this machine? they announce as bridgething-<serial>.local."

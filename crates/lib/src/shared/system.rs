@@ -114,7 +114,11 @@ pub struct OtaProgress {
   pub percent: u8,
   pub step: u8,
   pub nsteps: u8,
+  /// Mirrors `percent`.
+  #[serde(default)]
   pub dwl_percent: u8,
+  /// Always 0.
+  #[serde(default)]
   pub dwl_bytes: u32,
   pub eta_ms: Option<u32>,
 }

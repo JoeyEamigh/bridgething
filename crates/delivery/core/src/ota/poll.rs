@@ -84,8 +84,8 @@ mod tests {
       autopush::{LINK_STABILITY_MS, MIN_POLL_INTERVAL_SECONDS},
       event::{OtaPollEvent, OtaStepKind},
       harness::{
-        DEVICE, FakeDevice, FakeFetch, ManifestFixture, OTHER_DEVICE, Spool, TestClock, digest_of, linked_gateway,
-        meta, pattern, route_into,
+        DEVICE, EPOCH_MS, FakeDevice, FakeFetch, ManifestFixture, OTHER_DEVICE, Spool, TestClock, digest_of,
+        linked_gateway, meta, pattern, route_into,
       },
       manifest::OtaArtifactUrls,
       service::{OtaService, OtaServiceDeps},
@@ -218,7 +218,7 @@ mod tests {
   }
 
   #[tokio::test(start_paused = true)]
-  async fn a_poll_reports_when_the_manifest_was_last_updated() {
+  async fn a_poll_reports_when_this_host_checked_not_when_the_manifest_was_published() {
     let mut rig = rig().await;
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
 
@@ -228,10 +228,15 @@ mod tests {
       matches!(event, OtaPollEvent::ManifestPolled { .. })
     })
     .await;
-    assert!(matches!(
-      event,
-      OtaPollEvent::ManifestPolled { ref updated_at } if updated_at == "2026-08-03T00:00:00Z"
-    ));
+    let OtaPollEvent::ManifestPolled { checked_at } = event else {
+      unreachable!()
+    };
+    let checked = chrono::DateTime::parse_from_rfc3339(&checked_at).expect("an rfc3339 stamp");
+    assert_eq!(
+      u64::try_from(checked.timestamp_millis()).unwrap() / 60_000,
+      EPOCH_MS / 60_000,
+      "the stamp is the clock at the check, got {checked_at}"
+    );
   }
 
   #[tokio::test(start_paused = true)]
@@ -239,10 +244,13 @@ mod tests {
     let mut rig = rig().await;
     publish(&rig.fetch, &serve_release(&rig.fetch, "prod"));
     rig.service.set_poll_config(Some(config(false)));
-    next_event(&mut rig.events, |event| {
+    let OtaPollEvent::ManifestPolled { checked_at: good } = next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::ManifestPolled { .. })
     })
-    .await;
+    .await
+    else {
+      unreachable!()
+    };
 
     rig.fetch.fail_with("dns went away");
     rig.service.poll_now().await;
@@ -252,7 +260,7 @@ mod tests {
     })
     .await;
     let status = rig.service.retained_poll_status().await;
-    assert_eq!(status.last_polled_at.as_deref(), Some("2026-08-03T00:00:00Z"));
+    assert_eq!(status.last_polled_at, Some(good));
     assert!(status.error.is_some(), "the failure is still reported alongside it");
   }
 
@@ -968,9 +976,19 @@ mod tests {
     rig.device.announce_meta(meta("0.8.0", "2026.05.0", CHANNEL));
     hold_link_open().await;
     rig.service.set_poll_config(Some(config(true)));
-    rig.device.await_ota_begin().await;
+    let (request_id, begin) = rig.device.await_ota_begin().await;
+    rig.device.ack_begin(request_id, begin.transfer.total_size);
+    rig.device.progress(OtaPhase::Reboot, 100);
+    next_event(&mut rig.events, |event| {
+      matches!(event, OtaPollEvent::Progress { step_id: 5, .. })
+    })
+    .await;
 
-    rig.device.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
+    rig.service.release(DEVICE).await;
+    let (gateway, back) = linked_gateway();
+    rig.service.adopt(DEVICE, gateway.clone()).await;
+    route_into(&gateway, &rig.service, DEVICE);
+    back.announce_meta(meta("0.9.0", "2026.06.0", CHANNEL));
 
     let updated = next_event(&mut rig.events, |event| matches!(event, OtaPollEvent::Updated { .. })).await;
     assert!(
@@ -1140,7 +1158,7 @@ mod tests {
 
     let (request_id, begin) = rig.device.await_ota_begin().await;
     rig.device.ack_begin(request_id, begin.transfer.total_size);
-    rig.device.progress_full(OtaPhase::Reboot, 100, 100, 0);
+    rig.device.progress(OtaPhase::Reboot, 100);
 
     let progress = next_event(&mut rig.events, |event| {
       matches!(event, OtaPollEvent::Progress { step_id: 5, .. })

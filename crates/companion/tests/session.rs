@@ -1606,6 +1606,64 @@ async fn opening_the_log_stream_seeds_the_session_so_far_ahead_of_the_lines_it_o
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn history_keeps_the_time_the_device_logged_it_and_live_lines_keep_their_arrival() {
+  let link = Arc::new(HandLink::default());
+  let (session, _heard, _spool) = session(link.clone());
+  session.start();
+  link.connect(DEVICE).await;
+  assert!(
+    eventually(|| session.peer_for(DEVICE).is_some()).await,
+    "the link came up"
+  );
+
+  let toggling = streaming(&session, &link).await;
+  let tail = awaited(&link, |msg| matches!(msg, GatewayToBridgeSystemMsg::LogsTail(_))).await;
+  let earlier = LogEntry {
+    ts_unix_s: 1_700_000_000,
+    ..log_line("an hour of history")
+  };
+  let later = LogEntry {
+    ts_unix_s: 1_700_000_042,
+    ..log_line("a minute of history")
+  };
+  link.say(
+    DEVICE,
+    answering(
+      tail,
+      BridgeToGatewaySystemMsg::LogsTailReply(LogsTailReply {
+        entries: vec![earlier, later],
+      })
+      .into(),
+    ),
+  );
+  toggling.await.expect("the toggle settled");
+  link.say(DEVICE, said(log_line("live")));
+  assert!(
+    eventually(|| session.log_ring().tail(10).len() == 3).await,
+    "history and the live line both landed"
+  );
+
+  let stamps = session
+    .log_ring()
+    .tail(10)
+    .into_iter()
+    .map(|record| (record.message, record.ts_unix_ms))
+    .collect::<Vec<_>>();
+  assert_eq!(
+    stamps[..2],
+    [
+      ("an hour of history".to_owned(), 1_700_000_000_000),
+      ("a minute of history".to_owned(), 1_700_000_042_000),
+    ],
+    "each replayed line carries the moment the device logged it"
+  );
+  assert!(
+    stamps[2].1 > 1_700_000_042_000,
+    "a live line is stamped when it arrived, got {stamps:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_stream_switched_off_while_its_subscribe_was_in_flight_hands_the_tap_back() {
   let link = Arc::new(HandLink::default());
   let (session, heard, _spool) = session(link.clone());

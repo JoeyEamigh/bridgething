@@ -1487,6 +1487,7 @@ impl Session {
     let ota_runs = self.ota.retained_runs().await;
     let ota_available = self.ota.retained_available().await;
     let ota_poll = self.ota.retained_poll_status().await;
+    let ota_queues = self.ota.retained_queues().await;
 
     SessionSnapshot {
       host_info: SessionHostInfo {
@@ -1522,6 +1523,7 @@ impl Session {
       ota_runs: ota_runs.into_iter().map(Into::into).collect(),
       ota_available: ota_available.into_iter().map(Into::into).collect(),
       ota_poll: ota_poll.into(),
+      ota_queues: ota_queues.into_iter().map(Into::into).collect(),
     }
   }
 }

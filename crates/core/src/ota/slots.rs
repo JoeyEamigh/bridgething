@@ -12,13 +12,6 @@ pub enum Slot {
 }
 
 impl Slot {
-  pub fn selector(self) -> &'static str {
-    match self {
-      Slot::A => "slot_a",
-      Slot::B => "slot_b",
-    }
-  }
-
   fn tries_var(self) -> &'static str {
     match self {
       Slot::A => "slot_a_tries",

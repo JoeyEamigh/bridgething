@@ -224,7 +224,7 @@ const OTA_PHASES: Record<OtaPhase, { label: string; rank: number }> = {
 };
 
 function isNewRun(prev: OtaProgress, next: OtaProgress): boolean {
-  return next.step < prev.step || OTA_PHASES[next.phase].rank < OTA_PHASES[prev.phase].rank;
+  return OTA_PHASES[next.phase].rank < OTA_PHASES[prev.phase].rank;
 }
 
 function OtaOverlay({ snapshot, onDismiss }: { snapshot: OtaSnapshot; onDismiss: () => void }) {

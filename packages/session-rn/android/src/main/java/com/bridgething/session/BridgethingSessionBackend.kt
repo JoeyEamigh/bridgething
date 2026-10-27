@@ -17,6 +17,7 @@ import com.margelo.nitro.bridgething.session.BridgethingNowPlaying
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingOtaAvailable
 import com.margelo.nitro.bridgething.session.BridgethingOtaPollStatus
+import com.margelo.nitro.bridgething.session.BridgethingOtaQueue
 import com.margelo.nitro.bridgething.session.BridgethingOtaProgress
 import com.margelo.nitro.bridgething.session.BridgethingOtaRun
 import com.margelo.nitro.bridgething.session.BridgethingOtaManifest
@@ -127,6 +128,7 @@ public interface BridgethingSessionBackend {
         provenance: String?,
         webappId: String?,
         webappName: String?,
+        webappVersion: String?,
     ): BridgethingWebappInfo
 
     public suspend fun reconnectPeer(deviceId: String)
@@ -174,6 +176,7 @@ public interface BridgethingSessionBackend {
     public fun setOnOtaAvailableChanged(callback: (BridgethingOtaAvailable) -> Unit)
 
     public fun setOnOtaPollChanged(callback: (BridgethingOtaPollStatus) -> Unit)
+    public fun setOnOtaQueueChanged(callback: (BridgethingOtaQueue) -> Unit)
     public fun setOnCompanionUpdateProgress(callback: (Double, Double) -> Unit)
 
     public fun setOnResumed(callback: (BridgethingSessionSnapshot) -> Unit)

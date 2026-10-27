@@ -1,4 +1,4 @@
-import type { OtaAvailable, OtaPollConfig, OtaRun, OtaRunPhase } from '@bridgething/companion-types';
+import type { OtaPollConfig, OtaRun, OtaRunPhase } from '@bridgething/companion-types';
 import type { Tone } from '@bridgething/ui';
 
 const DEFAULT_OTA_ROOT_URL = 'https://ota.bridgething.com';
@@ -26,32 +26,6 @@ export function isRunning(run: OtaRun | undefined): run is OtaRun {
   return run !== undefined && run.outcome === null;
 }
 
-export function hasActivity(run: OtaRun | undefined, available: OtaAvailable | undefined): boolean {
-  if (run && run.outcome !== 'succeeded') return true;
-  return Boolean(available?.releaseVersion);
-}
-
-export function stepIndex(run: OtaRun): number {
-  return Math.max(
-    0,
-    run.steps.findIndex(step => step.id === run.stepId),
-  );
-}
-
-export function stepLabel(run: OtaRun): string | null {
-  return run.steps[stepIndex(run)]?.label ?? null;
-}
-
-export function stepPercent(run: OtaRun): number | null {
-  if (run.outcome === 'succeeded') return 100;
-  if (run.phase === 'writing' || run.phase === 'confirming') {
-    return run.dwlPercent === null ? null : Math.max(0, Math.min(100, Math.round(run.dwlPercent)));
-  }
-  const total = run.stageTotal ?? 0;
-  if (total <= 0) return null;
-  return Math.max(0, Math.min(100, Math.round(((run.stageReceived ?? 0) / total) * 100)));
-}
-
 const PHASE_WORDS: Record<OtaRunPhase, string> = {
   idle: 'queued',
   downloading: 'downloading',
@@ -68,6 +42,7 @@ export function phaseWord(run: OtaRun): string {
   if (run.outcome === 'cancelled') return 'cancelled';
   if (run.outcome === 'failed') return 'failed';
   if (run.outcome === 'succeeded') return 'done';
+  if (run.phase === 'reboot' && run.kind !== 'image') return 'restarting';
   return PHASE_WORDS[run.phase];
 }
 

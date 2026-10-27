@@ -1,4 +1,8 @@
+use std::time::Duration;
+
 use bridgething::DaemonConfig;
+
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
 
 const USAGE: &str = "usage: bridgething [--dev]
 
@@ -6,8 +10,7 @@ const USAGE: &str = "usage: bridgething [--dev]
   -h      print this message
 ";
 
-#[tokio::main]
-async fn main() {
+fn main() {
   let mut config = DaemonConfig::real();
 
   for arg in std::env::args().skip(1) {
@@ -21,5 +24,10 @@ async fn main() {
     }
   }
 
-  bridgething::run_daemon(config).await;
+  let runtime = tokio::runtime::Builder::new_multi_thread()
+    .enable_all()
+    .build()
+    .expect("the tokio runtime builds");
+  runtime.block_on(bridgething::run_daemon(config));
+  runtime.shutdown_timeout(SHUTDOWN_GRACE);
 }
