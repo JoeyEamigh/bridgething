@@ -3,6 +3,7 @@ import {
   type BridgethingResumeTarget,
 } from '@bridgething/session-react-native';
 import { describeError } from '@bridgething/ui/errors';
+import { LAUNCHER_GESTURE_OPTIONS } from '@bridgething/ui/launcher-gesture';
 import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 
@@ -355,15 +356,6 @@ function CompanionLaunchRow({
     </View>
   );
 }
-
-const LAUNCHER_GESTURE_OPTIONS: ReadonlyArray<{
-  value: BridgethingLauncherGesture;
-  label: string;
-}> = [
-  { value: 'longPress', label: 'hold m' },
-  { value: 'fivePress', label: 'press m 5x' },
-  { value: 'doublePress', label: 'press m 2x' },
-];
 
 const RESUME_TARGET_OPTIONS: ReadonlyArray<{
   value: BridgethingResumeTarget;

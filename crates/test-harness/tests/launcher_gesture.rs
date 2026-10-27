@@ -160,3 +160,28 @@ async fn a_change_made_on_the_device_reaches_the_companion() {
   };
   assert_eq!(changed.gesture, LauncherGesture::LongPress);
 }
+
+#[tokio::test]
+async fn every_gesture_outlives_the_daemon() {
+  let mut harness = Harness::start().await.expect("harness start");
+  for gesture in [
+    LauncherGesture::DoublePress,
+    LauncherGesture::LongPress,
+    LauncherGesture::FivePress,
+  ] {
+    let client = harness.connect_command_client().await.expect("command client");
+    client
+      .system()
+      .launcher_gesture_set(LauncherGestureSet { gesture })
+      .await
+      .expect("gesture set");
+    while harness.state().meta.launcher_gesture() != gesture {
+      tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    harness = harness.restart().await.expect("restart");
+    let client = harness.connect_command_client().await.expect("command client");
+    let announced = client.system().version_request().await.expect("version");
+    assert_eq!(announced.launcher_gesture, gesture, "the choice outlives the daemon");
+  }
+}

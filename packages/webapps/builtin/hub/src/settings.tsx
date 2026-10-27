@@ -12,6 +12,7 @@ import {
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
 import { clockText } from './clock.ts';
+import { GESTURES } from './gesture.ts';
 import { factoryReset } from './power.ts';
 import { wireErrorText } from './wire-error.ts';
 
@@ -357,15 +358,7 @@ function GesturePanel({ client }: { client: BridgethingClient }) {
   return (
     <div className="flex flex-col gap-5">
       <Card title="launcher gesture" hint="how you jump back to apps">
-        <Choices
-          value={gesture}
-          onChoose={choose}
-          options={[
-            { value: 'longPress', label: 'hold m', hint: 'press and hold the m button for a moment' },
-            { value: 'fivePress', label: 'press m 5 times', hint: 'tap the m button five times, quickly' },
-            { value: 'doublePress', label: 'press m twice', hint: 'tap the m button twice, quickly' },
-          ]}
-        />
+        <Choices value={gesture} onChoose={choose} options={GESTURES} />
       </Card>
     </div>
   );
@@ -431,7 +424,7 @@ function Choices<T extends string | boolean>({
 }: {
   value: T | null;
   onChoose: (next: T) => void;
-  options: { value: T; label: string; hint: string }[];
+  options: ReadonlyArray<{ value: T; label: string; hint: string }>;
 }) {
   return (
     <div className="flex flex-col gap-2">

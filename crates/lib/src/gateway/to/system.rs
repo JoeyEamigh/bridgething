@@ -42,6 +42,7 @@ pub struct DeviceNicknameRejected {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 pub struct LauncherGestureReply {
+  #[serde(default, deserialize_with = "crate::shared::launcher_gesture_or_default")]
   pub gesture: LauncherGesture,
 }
 

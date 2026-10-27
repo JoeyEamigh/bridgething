@@ -7,12 +7,9 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import frame from './carthing-frame.png';
+import { GESTURES, practiceFor } from './gesture.ts';
 
 const PHASE_KEY = 'onboarding_phase';
-
-const GESTURE_PRESSES = 5;
-const GESTURE_WINDOW_MS = 1500;
-const GESTURE_HOLD_MS = 800;
 
 type Step = 'pair' | 'gesture-choice' | 'gesture';
 
@@ -161,7 +158,7 @@ function GestureChoiceStep({
     setSaving(true);
     await client.system.launcherGestureSet({ gesture }).catch(() => {});
     const stored = await client.system.launcherGestureGet({ timeoutMs: 2000 }).catch(() => null);
-    onNext(stored?.ok ? stored.response.gesture : 'fivePress');
+    onNext(stored?.ok ? stored.response.gesture : gesture);
   };
 
   return (
@@ -172,39 +169,51 @@ function GestureChoiceStep({
       </div>
 
       <div className="flex w-full max-w-104 flex-col gap-3">
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => choose('longPress')}
-          className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
-          <span>
-            <span className="block font-mono text-row text-off-white">hold m</span>
-            <span className="block pt-1 text-body text-soft">press and hold the m button for a moment.</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => choose('fivePress')}
-          className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
-          <span>
-            <span className="block font-mono text-row text-off-white">press m 5 times</span>
-            <span className="block pt-1 text-body text-soft">tap the m button five times, quickly.</span>
-          </span>
-        </button>
+        {GESTURES.map(option => (
+          <button
+            key={option.value}
+            type="button"
+            disabled={saving}
+            onClick={() => choose(option.value)}
+            className="flex items-center justify-between border border-accent bg-accent-soft px-5 py-4 text-left transition active:opacity-80 disabled:opacity-60">
+            <span>
+              <span className="block font-mono text-row text-off-white">{option.label}</span>
+              <span className="block pt-1 text-body text-soft">{option.hint}.</span>
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
 function GestureStep({ gesture, onNext }: { gesture: LauncherGesture; onNext: () => void }) {
-  if (gesture === 'longPress') {
-    return <LongPressPracticeStep onNext={onNext} />;
+  const practice = practiceFor(gesture);
+  if (practice.kind === 'hold') {
+    return <HoldPracticeStep key={gesture} holdMs={practice.holdMs} prompt={practice.prompt} onNext={onNext} />;
   }
-  return <FivePressPracticeStep onNext={onNext} />;
+  return (
+    <PressPracticeStep
+      key={gesture}
+      count={practice.count}
+      windowMs={practice.windowMs}
+      prompt={practice.prompt}
+      onNext={onNext}
+    />
+  );
 }
 
-function FivePressPracticeStep({ onNext }: { onNext: () => void }) {
+function PressPracticeStep({
+  count,
+  windowMs,
+  prompt,
+  onNext,
+}: {
+  count: number;
+  windowMs: number;
+  prompt: string;
+  onNext: () => void;
+}) {
   const [presses, setPresses] = useState(0);
   const finish = useRef(onNext);
   finish.current = onNext;
@@ -216,17 +225,17 @@ function FivePressPracticeStep({ onNext }: { onNext: () => void }) {
 
     const prune = () => {
       const now = performance.now();
-      hits = hits.filter(t => now - t < GESTURE_WINDOW_MS);
+      hits = hits.filter(t => now - t < windowMs);
       setPresses(hits.length);
       clearTimeout(timer);
-      if (hits.length > 0) timer = setTimeout(prune, GESTURE_WINDOW_MS - (now - hits[0]));
+      if (hits.length > 0) timer = setTimeout(prune, windowMs - (now - hits[0]));
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (fired || e.repeat || e.code !== 'KeyM') return;
       hits.push(performance.now());
       prune();
-      if (hits.length >= GESTURE_PRESSES) {
+      if (hits.length >= count) {
         fired = true;
         clearTimeout(timer);
         finish.current();
@@ -238,19 +247,17 @@ function FivePressPracticeStep({ onNext }: { onNext: () => void }) {
       document.removeEventListener('keydown', onKeyDown);
       clearTimeout(timer);
     };
-  }, []);
+  }, [count, windowMs]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-8 pt-4 pb-8">
       <div className="font-display text-hero font-medium tracking-display text-off-white">jump back to apps</div>
-      <div className="max-w-104 text-center text-body text-soft">
-        push m five times, quickly, to return here from any app. give it a go.
-      </div>
+      <div className="max-w-104 text-center text-body text-soft">{prompt}</div>
 
       <GestureHint />
 
       <div className="flex items-center gap-2.5">
-        {Array.from({ length: GESTURE_PRESSES }, (_, i) => (
+        {Array.from({ length: count }, (_, i) => (
           <div
             key={i}
             className={`size-2.5 border transition ${i < presses ? 'border-accent bg-accent' : 'border-rule-strong'}`}
@@ -261,7 +268,7 @@ function FivePressPracticeStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-function LongPressPracticeStep({ onNext }: { onNext: () => void }) {
+function HoldPracticeStep({ holdMs, prompt, onNext }: { holdMs: number; prompt: string; onNext: () => void }) {
   const [holding, setHolding] = useState(false);
   const finish = useRef(onNext);
   finish.current = onNext;
@@ -276,7 +283,7 @@ function LongPressPracticeStep({ onNext }: { onNext: () => void }) {
       timer = setTimeout(() => {
         fired = true;
         finish.current();
-      }, GESTURE_HOLD_MS);
+      }, holdMs);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -292,14 +299,12 @@ function LongPressPracticeStep({ onNext }: { onNext: () => void }) {
       document.removeEventListener('keyup', onKeyUp);
       clearTimeout(timer);
     };
-  }, []);
+  }, [holdMs]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-8 pt-4 pb-8">
       <div className="font-display text-hero font-medium tracking-display text-off-white">jump back to apps</div>
-      <div className="max-w-104 text-center text-body text-soft">
-        hold the m button down until the bar fills. give it a go.
-      </div>
+      <div className="max-w-104 text-center text-body text-soft">{prompt}</div>
 
       <GestureHint />
 
@@ -308,7 +313,7 @@ function LongPressPracticeStep({ onNext }: { onNext: () => void }) {
           className="h-full bg-accent"
           style={{
             width: holding ? '100%' : '0%',
-            transition: holding ? `width ${GESTURE_HOLD_MS}ms linear` : 'none',
+            transition: holding ? `width ${holdMs}ms linear` : 'none',
           }}
         />
       </div>
