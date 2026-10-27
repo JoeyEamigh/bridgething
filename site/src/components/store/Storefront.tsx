@@ -7,6 +7,7 @@ import {
   type Shelf as ShelfModel,
   STORE_COPY,
 } from '@bridgething/catalog';
+import { Carousel, cx, SLIDE_ART, SLIDE_TEXT } from '@bridgething/ui';
 import { appDetailPath, browsePath, SOURCES_PATH } from '../../lib/app-routes';
 import type { StoreData } from '../../lib/directory-client';
 import { useStore } from '../../lib/use-store';
@@ -20,21 +21,21 @@ import {
   IconTile,
   kindOrAuthor,
   Notice,
+  RailShelf,
   RankRow,
-  Row,
   SearchBox,
   ShelfHeader,
-  ShotRow,
+  ShotTile,
 } from './parts';
 
-function Hero({ listing }: { listing: CatalogAppListing }) {
+function Slide({ listing, first }: { listing: CatalogAppListing; first: boolean }) {
   const app = listing.app;
   return (
-    <section class="mb-14 grid grid-cols-1 items-center gap-6 lg:grid-cols-[3fr_2fr] lg:gap-12">
-      <a href={appDetailPath(app.id)} class="block border-b-0">
-        <AppFrame app={app} shot={firstShot(app)} size="lg" eager />
+    <div class="grid grid-cols-1 items-center gap-6 lg:grid-cols-[3fr_2fr] lg:gap-12">
+      <a href={appDetailPath(app.id)} class={cx('block border-b-0', SLIDE_ART)}>
+        <AppFrame app={app} shot={firstShot(app)} size="lg" eager={first} />
       </a>
-      <div class="flex flex-col gap-4">
+      <div class={cx('flex flex-col gap-4', SLIDE_TEXT)}>
         <p class="text-accent m-0 font-mono text-sm">featured</p>
         <div class="flex items-center gap-4">
           <AppIcon app={app} size={56} />
@@ -57,15 +58,26 @@ function Hero({ listing }: { listing: CatalogAppListing }) {
           ) : null}
         </div>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function Hero({ listings }: { listings: CatalogAppListing[] }) {
+  const first = listings[0];
+  return (
+    <Carousel
+      items={listings}
+      label="featured apps"
+      keyOf={listing => `${listing.sourceUrl} ${listing.app.id}`}
+      render={listing => <Slide listing={listing} first={listing === first} />}
+      class="mb-14"
+    />
   );
 }
 
 function shotMeta(shelf: ShelfModel): (listing: CatalogAppListing) => string {
-  if (shelf.id === 'launchers' || shelf.id === 'overlays') {
-    return listing => installsLabel(listing.installs) ?? listing.app.author;
-  }
   if (shelf.id === 'updated') return listing => listing.newestCompatible?.version ?? kindOrAuthor(listing);
+  if (shelf.more.filter !== null) return listing => installsLabel(listing.installs) ?? listing.app.author;
   return kindOrAuthor;
 }
 
@@ -73,14 +85,11 @@ function Shelf({ shelf }: { shelf: ShelfModel }) {
   const href = browsePath(shelf.more);
   if (shelf.id === 'essentials') {
     return (
-      <section class="mb-14">
-        <ShelfHeader title={shelf.title} href={href} />
-        <Row>
-          {shelf.listings.map(listing => (
-            <IconTile key={listing.app.id} listing={listing} />
-          ))}
-        </Row>
-      </section>
+      <RailShelf title={shelf.title} href={href}>
+        {shelf.listings.map(listing => (
+          <IconTile key={listing.app.id} listing={listing} />
+        ))}
+      </RailShelf>
     );
   }
   if (shelf.id === 'popular') {
@@ -104,10 +113,25 @@ function Shelf({ shelf }: { shelf: ShelfModel }) {
       </section>
     );
   }
+  const meta = shotMeta(shelf);
+  return (
+    <RailShelf title={shelf.title} href={href}>
+      {shelf.listings.map(listing => (
+        <ShotTile key={listing.app.id} listing={listing} meta={meta(listing)} />
+      ))}
+    </RailShelf>
+  );
+}
+
+function AllApps({ listings }: { listings: CatalogAppListing[] }) {
   return (
     <section class="mb-14">
-      <ShelfHeader title={shelf.title} href={href} />
-      <ShotRow listings={shelf.listings} meta={shotMeta(shelf)} />
+      <ShelfHeader title="all apps" />
+      <ul class="bg-screen m-0 grid list-none grid-cols-1 border-t border-l border-white/10 p-0 md:grid-cols-2 lg:grid-cols-3">
+        {listings.map(listing => (
+          <RankRow key={listing.app.id} listing={listing} class="border-r border-b border-white/10" />
+        ))}
+      </ul>
     </section>
   );
 }
@@ -123,7 +147,7 @@ export function Storefront({ data }: { data?: StoreData | null }) {
     [catalog, loaded],
   );
 
-  const chips = useMemo(() => (catalog && front ? chipsFor(catalog.listings, front.categories) : []), [catalog, front]);
+  const chips = useMemo(() => (front ? chipsFor(front.all.length, front.filters) : []), [front]);
 
   return (
     <>
@@ -139,14 +163,15 @@ export function Storefront({ data }: { data?: StoreData | null }) {
 
       {front === null ? (
         <Notice>{failed ? 'could not reach the catalog. try reloading the page.' : 'loading…'}</Notice>
-      ) : front.shelves.length === 0 ? (
+      ) : front.all.length === 0 ? (
         <Notice>{STORE_COPY.empty}</Notice>
       ) : (
         <>
-          {front.featured ? <Hero listing={front.featured} /> : null}
+          {front.featured.length > 0 ? <Hero listings={front.featured} /> : null}
           {front.shelves.map(shelf => (
             <Shelf key={shelf.id} shelf={shelf} />
           ))}
+          <AllApps listings={front.all} />
         </>
       )}
 

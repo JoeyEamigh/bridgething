@@ -70,8 +70,8 @@ android {
             ?: "com.bridgething.gateway")
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 32
-        versionName "0.15.2"
+        versionCode 33
+        versionName "0.15.3"
 
         manifestPlaceholders = [appAuthRedirectScheme: 'bridgething']
 

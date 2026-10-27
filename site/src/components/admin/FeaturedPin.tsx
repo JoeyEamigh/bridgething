@@ -1,7 +1,8 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import {
-  featuredListing,
+  featuredListings,
+  pinnedListing,
   search,
   sourceLine,
   type CatalogAppListing,
@@ -69,14 +70,12 @@ export function FeaturedPin({ token }: { token: string }) {
     return () => controller.abort();
   }, [token]);
 
-  const pinned = useMemo(
-    () => (catalog && pin ? (catalog.listings.find(listing => samePin(pin, listing)) ?? null) : null),
+  const pinned = useMemo(() => (catalog ? pinnedListing(catalog.listings, pin ?? null) : null), [catalog, pin]);
+  const today = useMemo(
+    () => (catalog ? featuredListings(catalog.listings, pin ?? null, new Date()) : []),
     [catalog, pin],
   );
-  const rotating = useMemo(
-    () => (catalog && !pin ? featuredListing(catalog.listings, null, new Date()) : null),
-    [catalog, pin],
-  );
+  const drawn = (pinned ? today.slice(1) : today).map(listing => listing.app.name).join(', ');
   const matches = useMemo(() => (catalog ? search(catalog.listings, query).slice(0, RESULTS) : []), [catalog, query]);
 
   async function run(change: () => Promise<StorePin | null>) {
@@ -123,15 +122,15 @@ export function FeaturedPin({ token }: { token: string }) {
             ) : pin ? (
               <div class="flex items-center justify-between gap-3 px-4 py-3">
                 <p class="text-warn m-0 font-mono text-sm break-all">
-                  pinned {pin.app_id} is not in the store right now, so the rotation shows instead
+                  pinned {pin.app_id} is not in the store right now, so today's draw shows instead
                 </p>
                 {unpin}
               </div>
-            ) : (
-              <p class="m-0 px-4 py-3 font-mono text-sm text-white/50">
-                nothing pinned. rotating today: {rotating ? rotating.app.name : 'nothing with a screenshot'}
-              </p>
-            )}
+            ) : null}
+            <p class="m-0 border-t border-white/10 px-4 py-3 font-mono text-sm text-white/50 first:border-t-0">
+              {pinned ? 'alongside it today: ' : 'drawn today: '}
+              {drawn || 'nothing with a screenshot'}
+            </p>
           </div>
 
           <input

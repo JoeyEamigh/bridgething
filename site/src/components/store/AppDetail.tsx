@@ -18,12 +18,13 @@ import {
   type StoreSource,
   webHref,
 } from '@bridgething/catalog';
+import { RailArrows, useRail } from '@bridgething/ui';
 import { filterPath, storeRoute, STORE_PATH } from '../../lib/app-routes';
 import type { StoreData } from '../../lib/directory-client';
 import { installListing } from '../../lib/pending-install';
 import { currentHref, useStore } from '../../lib/use-store';
 import { ExtensionBadge, ExtensionNote } from './ExtensionNote';
-import { AppFrame, AppIcon, IconTile, installable, Notice, Row, screenshots, ShelfHeader } from './parts';
+import { AppFrame, AppIcon, IconTile, installable, Notice, Rail, RailShelf, screenshots } from './parts';
 
 export type BakedApp = { app: AppEntry; source: StoreSource };
 
@@ -128,6 +129,7 @@ function Detail({ listing, source, more }: Resolved) {
   const homepage = webHref(app.homepage);
   const repo = webHref(app.source);
   const shots = screenshots(app);
+  const shotRail = useRail();
   const kind = listingKindLabel(listing);
   const category = appCategories(app)[0];
   const kindHref =
@@ -181,13 +183,14 @@ function Detail({ listing, source, more }: Resolved) {
 
       {shots.length > 0 ? (
         <div class="mb-10">
-          <Row>
+          <Rail rail={shotRail}>
             {shots.map((shot, index) => (
-              <div key={shot} class="w-72 shrink-0 snap-start sm:w-96 lg:w-[calc((100%-3rem)/3)]">
+              <div key={shot} class="w-72 shrink-0 snap-start sm:w-96 lg:w-[calc((100%-4.5rem)/3.25)]">
                 <AppFrame app={app} shot={shot} size="md" eager={index === 0} />
               </div>
             ))}
-          </Row>
+          </Rail>
+          <RailArrows rail={shotRail} class="mt-2 justify-end" />
         </div>
       ) : null}
 
@@ -275,14 +278,11 @@ function Detail({ listing, source, more }: Resolved) {
         ) : null}
       </Section>
       {more.length > 0 ? (
-        <section class="mb-10">
-          <ShelfHeader title={`more from ${app.author}`} href={author} />
-          <Row>
-            {more.map(other => (
-              <IconTile key={other.app.id} listing={other} />
-            ))}
-          </Row>
-        </section>
+        <RailShelf title={`more from ${app.author}`} href={author} class="mb-10">
+          {more.map(other => (
+            <IconTile key={other.app.id} listing={other} />
+          ))}
+        </RailShelf>
       ) : null}
 
       <footer class="flex flex-col gap-1 border-t border-white/15 pt-4 font-mono text-xs text-white/40">

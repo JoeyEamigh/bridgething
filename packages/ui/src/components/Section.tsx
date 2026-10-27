@@ -6,6 +6,7 @@ import { Spinner } from './Spinner.tsx';
 export function SectionHeader({
   title,
   hint,
+  trailing,
   action,
   onAction,
   pending = false,
@@ -13,6 +14,7 @@ export function SectionHeader({
 }: {
   title: ComponentChildren;
   hint?: ComponentChildren;
+  trailing?: ComponentChildren;
   action?: ComponentChildren;
   onAction?: () => void;
   pending?: boolean;
@@ -24,6 +26,7 @@ export function SectionHeader({
         <span class="font-mono text-eyebrow tracking-[0.18em] text-muted uppercase">{title}</span>
         {hint ? <span class="text-hint text-muted">{hint}</span> : null}
       </div>
+      {trailing}
       {action ? (
         <button
           type="button"

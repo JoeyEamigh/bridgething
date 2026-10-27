@@ -35,6 +35,7 @@ export {
 export { type BoxSize, type Tone } from './tokens.ts';
 
 export { Button, type ButtonSize, type ButtonVariant } from './components/Button.tsx';
+export { Carousel, SLIDE_ART, SLIDE_TEXT } from './components/Carousel.tsx';
 export { DeviceFrame } from './components/DeviceFrame.tsx';
 export { Dialog } from './components/Dialog.tsx';
 export { Field } from './components/Field.tsx';
@@ -42,6 +43,7 @@ export { IconBadge } from './components/IconBadge.tsx';
 export { ListGroup } from './components/ListGroup.tsx';
 export { ListRow, type RowTint } from './components/ListRow.tsx';
 export { Pill } from './components/Pill.tsx';
+export { RAIL_SCROLL, RailArrows, useRail, type Rail } from './components/Rail.tsx';
 export { RemoteIcon } from './components/RemoteIcon.tsx';
 export { ScreenHeader } from './components/ScreenHeader.tsx';
 export { SectionEmpty, SectionHeader } from './components/Section.tsx';

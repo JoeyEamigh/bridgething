@@ -3,7 +3,7 @@ import { appCategories } from '../src/categories.ts';
 import type { CatalogAppListing } from '../src/resolve.ts';
 import type { MergedCatalog } from '../src/sources.ts';
 import { storeCatalog } from '../src/store.ts';
-import { browse, featuredListing, moreFromAuthor, search, storefront } from '../src/storefront.ts';
+import { browse, featuredListings, moreFromAuthor, search, storefront } from '../src/storefront.ts';
 import type { AppEntry, AppVersion, Catalog } from '../src/types.ts';
 
 const OFFICIAL = 'https://apps.bridgething.com/catalog.json';
@@ -212,29 +212,50 @@ describe('browse', () => {
   });
 });
 
-describe('featuredListing', () => {
+describe('featuredListings', () => {
   const shot = { screenshots: ['https://example.com/1.png'] };
-  const a = listing(app('A', shot), 10, 9);
-  const b = listing(app('B', shot), 50, 1);
+  const shots = ['A', 'B', 'C', 'D', 'E', 'F'].map((name, index) => listing(app(name, shot), 10 * (index + 1), index));
   const bare = listing(app('Bare'), 500, 50);
+  const names = (picked: CatalogAppListing[]) => picked.map(l => l.app.name);
 
-  test('a pin wins over the rotation', () => {
-    expect(featuredListing([a, b, bare], { app_id: bare.app.id, source_url: LISTED }, NOW)).toBe(bare);
+  test('three apps with a screenshot, none repeated', () => {
+    const picked = featuredListings([...shots, bare], null, NOW);
+    expect(picked).toHaveLength(3);
+    expect(new Set(picked).size).toBe(3);
+    expect(picked).not.toContain(bare);
   });
 
-  test('a pin for an app no source lists falls back to the rotation', () => {
-    expect(featuredListing([a, b], { app_id: id(), source_url: OFFICIAL }, NOW)).not.toBeNull();
+  test('a pin leads and two more are drawn around it', () => {
+    const picked = featuredListings([...shots, bare], { app_id: bare.app.id, source_url: LISTED }, NOW);
+    expect(picked[0]).toBe(bare);
+    expect(picked).toHaveLength(3);
+    expect(picked.slice(1)).not.toContain(bare);
   });
 
-  test('rotation only features apps with a screenshot, and is stable within a day', () => {
-    const first = featuredListing([a, b, bare], null, NOW);
-    expect(first === a || first === b).toBe(true);
-    expect(featuredListing([a, b, bare], null, new Date('2026-10-27T23:59:00Z'))).toBe(first);
-    expect(featuredListing([a, b, bare], null, new Date('2026-10-28T00:01:00Z'))).not.toBe(first);
+  test('a pin for an app no source lists still draws three', () => {
+    expect(featuredListings(shots, { app_id: id(), source_url: OFFICIAL }, NOW)).toHaveLength(3);
   });
 
-  test('nothing is featured when no app has a screenshot', () => {
-    expect(featuredListing([bare], null, NOW)).toBeNull();
+  test('the draw holds for a utc day, ignores listing order, and changes with the day', () => {
+    const today = names(featuredListings(shots, null, NOW));
+    expect(names(featuredListings([...shots].reverse(), null, new Date('2026-10-27T23:59:00Z')))).toEqual(today);
+    const week = Array.from({ length: 7 }, (_, day) =>
+      names(featuredListings(shots, null, new Date(NOW.getTime() + (day + 1) * 86_400_000))).join(),
+    );
+    expect(week.some(draw => draw !== today.join())).toBe(true);
+  });
+
+  test('installs weight the draw', () => {
+    const heavy = listing(app('Heavy', shot), 10_000);
+    const light = Array.from({ length: 20 }, (_, index) => listing(app(`Light ${index}`, shot)));
+    const days = Array.from({ length: 30 }, (_, day) => new Date(NOW.getTime() + day * 86_400_000));
+    const hits = days.filter(day => featuredListings([heavy, ...light], null, day).includes(heavy)).length;
+    expect(hits).toBeGreaterThan(20);
+  });
+
+  test('fewer than three candidates features what there is', () => {
+    expect(featuredListings([shots[0]!, bare], null, NOW)).toEqual([shots[0]!]);
+    expect(featuredListings([bare], null, NOW)).toEqual([]);
   });
 });
 
@@ -260,11 +281,11 @@ describe('official apps', () => {
       'WeatherThing',
       'Radio',
     ]);
-    expect(front.featured?.official).toBe(false);
+    expect(front.featured.some(l => l.official)).toBe(false);
   });
 
   test('a pin can still feature one', () => {
-    expect(featuredListing(all, { app_id: weather.app.id, source_url: OFFICIAL }, NOW)).toBe(weather);
+    expect(featuredListings(all, { app_id: weather.app.id, source_url: OFFICIAL }, NOW)[0]).toBe(weather);
   });
 
   test('they still show up by category and in search', () => {
@@ -293,14 +314,92 @@ describe('storefront', () => {
     expect(thin.shelves.some(shelf => shelf.id === 'essentials')).toBe(false);
   });
 
-  test('empty shelves are dropped and category chips only count categories in use', () => {
+  test('popular shows from one app, every other shelf needs four, and chips cover only kinds and categories in use', () => {
     const front = storefront({
-      listings: [listing(app('Radio', { categories: ['music'] }), 1), listing(app('Plain'), 2)],
+      listings: [
+        listing(app('Radio', { categories: ['music'] }), 1),
+        listing(app('Plain'), 2),
+        listing(app('Metro', { versions: [ver('1.0.0', '2026-10-17T00:00:00Z', { role: 'launcher' })] }), 3),
+      ],
       pin: null,
       now: NOW,
     });
-    expect(front.shelves.map(shelf => shelf.id)).toEqual(['popular', 'new']);
-    expect(front.categories).toEqual([{ category: 'music', label: 'music', count: 1 }]);
+    expect(front.shelves.map(shelf => shelf.id)).toEqual(['popular']);
+    expect(front.filters.map(({ key, label }) => ({ key, label }))).toEqual([
+      { key: 'launchers', label: 'home screens' },
+      { key: 'c:music', label: 'music' },
+    ]);
+  });
+
+  test('a category with four apps gets its own shelf', () => {
+    const music = ['A', 'B', 'C', 'D'].map((name, index) =>
+      listing(app(name, { categories: ['music'], author: name }), index + 1),
+    );
+    const front = storefront({ listings: music, pin: null, now: NOW });
+    const shelf = front.shelves.find(entry => entry.id === 'category:music');
+    expect(shelf?.title).toBe('music');
+    expect(shelf?.listings.map(l => l.app.name)).toEqual(['D', 'C', 'B', 'A']);
+    expect(shelf?.more).toEqual({ filter: { kind: 'category', category: 'music' }, sort: 'popular' });
+  });
+
+  test('a card shelf holds at most two apps per author', () => {
+    const prolific = Array.from({ length: 6 }, (_, index) =>
+      listing(app(`O-${index}`, { author: 'Ousa' }), 10 - index),
+    );
+    const others = ['P', 'Q', 'R'].map(name => listing(app(name, { author: name })));
+    const front = storefront({ listings: [...prolific, ...others], pin: null, now: NOW });
+    const fresh = front.shelves.find(shelf => shelf.id === 'new');
+    expect(fresh?.listings.filter(l => l.app.author === 'Ousa')).toHaveLength(2);
+    expect(fresh?.listings).toHaveLength(5);
+  });
+
+  test('trending, new and recently updated never repeat each other or the featured apps', () => {
+    const shot = { screenshots: ['https://example.com/1.png'] };
+    const day = (month: number, index: number) => new Date(Date.UTC(2026, month, 1, index)).toISOString();
+    const apps = Array.from({ length: 30 }, (_, index) =>
+      listing(
+        app(`App ${index}`, {
+          ...shot,
+          author: `author ${index}`,
+          versions: [ver('1.1.0', day(9, index)), ver('1.0.0', day(8, 30 - index))],
+        }),
+        index,
+        index,
+      ),
+    );
+    const front = storefront({ listings: apps, pin: null, now: NOW });
+    const seen = [
+      ...front.featured,
+      ...front.shelves
+        .filter(shelf => shelf.id === 'trending' || shelf.id === 'new' || shelf.id === 'updated')
+        .flatMap(shelf => shelf.listings),
+    ].map(l => l.app.id);
+    expect(front.shelves.map(shelf => shelf.id)).toEqual(expect.arrayContaining(['trending', 'new', 'updated']));
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  test('a dropped shelf does not hide its apps from the shelves after it', () => {
+    const apps = ['A', 'B', 'C', 'D'].map((name, index) =>
+      listing(
+        app(name, {
+          author: name,
+          versions: [ver('1.1.0', `2026-10-1${index}T00:00:00Z`), ver('1.0.0', `2026-09-1${index}T00:00:00Z`)],
+        }),
+        0,
+        index < 2 ? 1 : 0,
+      ),
+    );
+    const front = storefront({ listings: apps, pin: null, now: NOW });
+    expect(front.shelves.map(shelf => shelf.id)).toEqual(['new']);
+  });
+
+  test('all lists every app by name', () => {
+    const apps = [listing(app('Mid'), 1), listing(app('High'), 9), listing(app('Low'), 5, 0, true)];
+    expect(storefront({ listings: apps, pin: null, now: NOW }).all.map(l => l.app.name)).toEqual([
+      'High',
+      'Low',
+      'Mid',
+    ]);
   });
 });
 

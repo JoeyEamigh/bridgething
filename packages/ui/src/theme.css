@@ -49,6 +49,19 @@
   --radius-none: 0;
 }
 
+@theme {
+  --animate-carousel: carousel 7s linear forwards;
+
+  @keyframes carousel {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+}
+
 :root {
   color-scheme: only dark;
 }

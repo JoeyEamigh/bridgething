@@ -5,8 +5,9 @@ import {
   type CatalogAppListing,
   type Shelf,
 } from '@bridgething/catalog';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  AccessibilityInfo,
   ScrollView,
   Text,
   TextInput,
@@ -58,7 +59,12 @@ export function SearchField({
   );
 }
 
-export type Chip = { key: string; label: string; onPress?: () => void };
+export type Chip = {
+  key: string;
+  label: string;
+  count?: number;
+  onPress?: () => void;
+};
 
 export function ChipRow({ chips, active }: { chips: Chip[]; active: string }) {
   return (
@@ -80,6 +86,9 @@ export function ChipRow({ chips, active }: { chips: Chip[]; active: string }) {
                 style={TEXT.hint}
               >
                 {chip.label}
+                {chip.count === undefined ? null : (
+                  <Text className="opacity-55">{` ${chip.count}`}</Text>
+                )}
               </Text>
             </View>
           </Press>
@@ -111,19 +120,22 @@ export function HorizontalRail({
   );
 }
 
-export function FeaturedHero({
+const FEATURE_MS = 7000;
+
+function FeaturedSlide({
   listing,
   deviceId,
+  width,
   onOpen,
 }: {
   listing: CatalogAppListing;
   deviceId: string | null;
+  width: number;
   onOpen: () => void;
 }) {
-  const { width } = useWindowDimensions();
   const kind = listingKindLabel(listing);
   return (
-    <View className="mb-8">
+    <View style={{ width, paddingHorizontal: SPACE.gutter }}>
       <Press onPress={onOpen} testID="store-featured">
         <DeviceFrame
           uri={listing.app.screenshots?.[0]}
@@ -168,6 +180,83 @@ export function FeaturedHero({
           onOpen={onOpen}
         />
       </View>
+    </View>
+  );
+}
+
+function useReduceMotion(): boolean {
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setStill);
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setStill,
+    );
+    return () => subscription.remove();
+  }, []);
+  return still;
+}
+
+export function FeaturedCarousel({
+  listings,
+  deviceId,
+  onOpen,
+}: {
+  listings: CatalogAppListing[];
+  deviceId: string | null;
+  onOpen: (listing: CatalogAppListing) => void;
+}) {
+  const { width } = useWindowDimensions();
+  const rail = useRef<ScrollView>(null);
+  const [shown, setShown] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const still = useReduceMotion();
+  const index = shown < listings.length ? shown : 0;
+
+  useEffect(() => {
+    if (listings.length < 2 || dragging || still) return;
+    const timer = setTimeout(() => {
+      const next = (index + 1) % listings.length;
+      rail.current?.scrollTo({ x: next * width, animated: true });
+      setShown(next);
+    }, FEATURE_MS);
+    return () => clearTimeout(timer);
+  }, [index, dragging, still, listings.length, width]);
+
+  return (
+    <View className="mb-8">
+      <ScrollView
+        ref={rail}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        style={{ marginHorizontal: -SPACE.gutter }}
+        onScrollBeginDrag={() => setDragging(true)}
+        onScrollEndDrag={() => setDragging(false)}
+        onMomentumScrollEnd={event =>
+          setShown(Math.round(event.nativeEvent.contentOffset.x / width))
+        }
+      >
+        {listings.map(listing => (
+          <FeaturedSlide
+            key={`${listing.sourceUrl}:${listing.app.id}`}
+            listing={listing}
+            deviceId={deviceId}
+            width={width}
+            onOpen={() => onOpen(listing)}
+          />
+        ))}
+      </ScrollView>
+      {listings.length > 1 ? (
+        <View className="mt-3 flex-row gap-1">
+          {listings.map((listing, dot) => (
+            <View
+              key={`${listing.sourceUrl}:${listing.app.id}`}
+              className={`h-0.5 w-8 ${dot === index ? 'bg-accent' : 'bg-rule-strong'}`}
+            />
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

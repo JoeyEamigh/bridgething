@@ -7,7 +7,7 @@ import {
   search,
   SORT_LABELS,
   STORE_COPY,
-  storefront,
+  storeFilters,
   type CatalogAppListing,
   type StoreSort,
 } from '@bridgething/catalog';
@@ -97,11 +97,10 @@ export function StoreBrowse({ data, href }: { data?: StoreData | null; href?: st
     [initial, text],
   );
 
-  const chips = useMemo(() => {
-    if (!catalog || !loaded) return [];
-    const { categories } = storefront({ listings: catalog.listings, pin: null, now: new Date(loaded.apps.updated_at) });
-    return chipsFor(catalog.listings, categories);
-  }, [catalog, loaded]);
+  const chips = useMemo(
+    () => (catalog ? chipsFor(catalog.listings.length, storeFilters(catalog.listings)) : []),
+    [catalog],
+  );
 
   const shown = useMemo(() => (catalog && view ? results(catalog.listings, view) : []), [catalog, view]);
 

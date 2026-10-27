@@ -1,12 +1,24 @@
 import {
+  filterKey,
   installsLabel,
   listingKindLabel,
   webHref,
   type CatalogAppListing,
-  type CategoryCount,
+  type FilterChip,
   type StoreFilter,
 } from '@bridgething/catalog';
-import { cx, DeviceFrame, Spinner } from '@bridgething/ui';
+import {
+  Carousel,
+  cx,
+  DeviceFrame,
+  RAIL_SCROLL,
+  RailArrows,
+  SectionHeader,
+  SLIDE_ART,
+  SLIDE_TEXT,
+  Spinner,
+  useRail,
+} from '@bridgething/ui';
 import frame from '@bridgething/ui/car-thing-frame.webp';
 import type { ComponentChildren, VNode } from 'preact';
 
@@ -49,58 +61,42 @@ export function Screenshot({
 
 export function Chips({
   active,
-  categories,
-  launchers,
-  overlays,
+  total,
+  filters,
   action,
 }: {
   active: StoreFilter | null;
-  categories: CategoryCount[];
-  launchers: boolean;
-  overlays: boolean;
+  total: number;
+  filters: FilterChip[];
   action?: ComponentChildren;
 }): VNode {
-  const chips: { label: string; href: string; on: boolean }[] = [
-    { label: 'all', href: PATHS.store, on: active === null },
-  ];
-  if (launchers) {
-    chips.push({
-      label: 'home screens',
-      href: PATHS.storeBrowse({ filter: { kind: 'launchers' }, sort: 'popular' }),
-      on: active?.kind === 'launchers',
-    });
-  }
-  if (overlays) {
-    chips.push({
-      label: 'overlays',
-      href: PATHS.storeBrowse({ filter: { kind: 'overlays' }, sort: 'popular' }),
-      on: active?.kind === 'overlays',
-    });
-  }
-  for (const entry of categories) {
-    chips.push({
+  const current = active ? filterKey(active) : 'all';
+  const chips: { key: string; label: string; href: string; count?: number }[] = [
+    { key: 'all', label: 'all', count: total, href: PATHS.store },
+    ...filters.map(entry => ({
+      key: entry.key,
       label: entry.label,
-      href: PATHS.storeBrowse({ filter: { kind: 'category', category: entry.category }, sort: 'popular' }),
-      on: active?.kind === 'category' && active.category === entry.category,
-    });
-  }
+      href: PATHS.storeBrowse({ filter: entry.filter, sort: 'popular' }),
+    })),
+  ];
 
   return (
     <div class="mb-8 flex items-start gap-4">
       <nav aria-label="categories" class="flex min-w-0 flex-1 flex-wrap gap-1.5">
         {chips.map(chip => (
           <a
-            key={chip.label}
+            key={chip.key}
             href={chip.href}
-            aria-current={chip.on ? 'page' : undefined}
+            aria-current={chip.key === current ? 'page' : undefined}
             class={cx(
-              'border px-2.5 py-1 font-mono text-hint whitespace-nowrap',
+              'flex gap-1.5 border px-2.5 py-1 font-mono text-hint whitespace-nowrap',
               LINK,
-              chip.on
+              chip.key === current
                 ? 'border-accent bg-accent-soft text-accent'
                 : 'border-rule text-soft hover:border-edge hover:text-off-white',
             )}>
             {chip.label}
+            {chip.count === undefined ? null : <span class="opacity-55 tabular-nums">{chip.count}</span>}
           </a>
         ))}
       </nav>
@@ -123,60 +119,87 @@ export function RefreshAction({ pending, onRefresh }: { pending: boolean; onRefr
   );
 }
 
-export function Featured({ listing }: { listing: CatalogAppListing }): VNode {
+function FeaturedSlide({ listing }: { listing: CatalogAppListing }): VNode {
   const installer = useInstaller(listing);
   const { app } = listing;
   const href = toApp(listing);
   const byline = [app.author, listingKindLabel(listing)].filter(Boolean).join(' · ');
 
   return (
-    <section class="@container mb-10">
-      <div class="grid gap-x-7 gap-y-4 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @2xl:items-end">
-        <a href={href} class={cx('block min-w-0 hover:opacity-90', LINK)}>
-          <Screenshot listing={listing} />
+    <div class="grid gap-x-7 gap-y-4 @2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @2xl:items-end">
+      <a href={href} class={cx('block min-w-0 hover:opacity-90', LINK, SLIDE_ART)}>
+        <Screenshot listing={listing} />
+      </a>
+      <div class={cx('flex min-w-0 flex-col gap-3', SLIDE_TEXT)}>
+        <span class="font-mono text-eyebrow tracking-[0.18em] text-accent uppercase">featured</span>
+        <a href={href} class={cx('flex min-w-0 flex-col gap-1 hover:text-accent', LINK)}>
+          <span class="font-display text-title font-medium tracking-display wrap-break-word @2xl:text-[1.75rem]">
+            {app.name}
+          </span>
+          <span class="truncate text-body text-muted">{byline}</span>
         </a>
-        <div class="flex min-w-0 flex-col gap-3">
-          <span class="font-mono text-eyebrow tracking-[0.18em] text-accent uppercase">featured</span>
-          <a href={href} class={cx('flex min-w-0 flex-col gap-1 hover:text-accent', LINK)}>
-            <span class="font-display text-title font-medium tracking-display wrap-break-word @2xl:text-[1.75rem]">
-              {app.name}
-            </span>
-            <span class="truncate text-body text-muted">{byline}</span>
-          </a>
-          <p class="m-0 line-clamp-3 text-body leading-relaxed text-soft">{app.description}</p>
-          <div class="flex items-center gap-3 pt-1">
-            <InstallButton listing={listing} installer={installer} />
-          </div>
-          {installer.failure ? <p class="m-0 text-hint text-err">{installer.failure}</p> : null}
+        <p class="m-0 line-clamp-3 text-body leading-relaxed text-soft">{app.description}</p>
+        <div class="flex items-center gap-3 pt-1">
+          <InstallButton listing={listing} installer={installer} />
         </div>
+        {installer.failure ? <p class="m-0 text-hint text-err">{installer.failure}</p> : null}
       </div>
       {installer.dialog}
+    </div>
+  );
+}
+
+export function Featured({ listings }: { listings: CatalogAppListing[] }): VNode {
+  return (
+    <div class="@container mb-10">
+      <Carousel
+        items={listings}
+        label="featured apps"
+        keyOf={listing => `${listing.sourceUrl}:${listing.app.id}`}
+        render={listing => <FeaturedSlide listing={listing} />}
+      />
+    </div>
+  );
+}
+
+export function RailSection({
+  title,
+  onSeeAll,
+  children,
+}: {
+  title: string;
+  onSeeAll: () => void;
+  children: ComponentChildren;
+}): VNode {
+  const rail = useRail();
+  return (
+    <section class="mb-9">
+      <SectionHeader title={title} trailing={<RailArrows rail={rail} />} action="see all" onAction={onSeeAll} />
+      <div ref={rail.ref} class={cx('flex snap-x gap-4 pb-3', RAIL_SCROLL)}>
+        {children}
+      </div>
     </section>
   );
 }
 
-export function AppTiles({ listings, href = toApp }: { listings: CatalogAppListing[]; href?: ListingHref }): VNode {
-  return (
-    <Shelf>
-      {listings.map(listing => (
-        <a
-          key={`${listing.sourceUrl}:${listing.app.id}`}
-          href={href(listing)}
-          class={cx('group flex w-20 shrink-0 snap-start flex-col gap-2', LINK)}>
-          <CatalogIcon
-            url={listing.app.icon}
-            name={listing.app.name}
-            size="xl"
-            class="border border-rule transition-colors group-hover:border-edge"
-          />
-          <span class="flex min-w-0 flex-col">
-            <span class="truncate text-body text-off-white">{listing.app.name}</span>
-            <span class="truncate font-mono text-eyebrow text-dim">{listingKindLabel(listing) ?? ''}</span>
-          </span>
-        </a>
-      ))}
-    </Shelf>
-  );
+export function AppTiles({ listings, href = toApp }: { listings: CatalogAppListing[]; href?: ListingHref }): VNode[] {
+  return listings.map(listing => (
+    <a
+      key={`${listing.sourceUrl}:${listing.app.id}`}
+      href={href(listing)}
+      class={cx('group flex w-20 shrink-0 snap-start flex-col gap-2', LINK)}>
+      <CatalogIcon
+        url={listing.app.icon}
+        name={listing.app.name}
+        size="xl"
+        class="border border-rule transition-colors group-hover:border-edge"
+      />
+      <span class="flex min-w-0 flex-col">
+        <span class="truncate text-body text-off-white">{listing.app.name}</span>
+        <span class="truncate font-mono text-eyebrow text-dim">{listingKindLabel(listing) ?? ''}</span>
+      </span>
+    </a>
+  ));
 }
 
 export function ShelfCards({
@@ -187,20 +210,16 @@ export function ShelfCards({
   listings: CatalogAppListing[];
   meta: (listing: CatalogAppListing) => string | null;
   href?: ListingHref;
-}): VNode {
-  return (
-    <Shelf>
-      {listings.map(listing => (
-        <AppCard
-          key={`${listing.sourceUrl}:${listing.app.id}`}
-          listing={listing}
-          meta={meta(listing)}
-          href={href(listing)}
-          class="w-64 shrink-0 snap-start"
-        />
-      ))}
-    </Shelf>
-  );
+}): VNode[] {
+  return listings.map(listing => (
+    <AppCard
+      key={`${listing.sourceUrl}:${listing.app.id}`}
+      listing={listing}
+      meta={meta(listing)}
+      href={href(listing)}
+      class="w-64 shrink-0 snap-start"
+    />
+  ));
 }
 
 export function CardGrid({
@@ -253,11 +272,15 @@ function AppCard({
   );
 }
 
-function Shelf({ children }: { children: ComponentChildren }): VNode {
-  return <div class="flex snap-x gap-4 overflow-x-auto pb-3">{children}</div>;
-}
-
-export function RankedList({ listings, href = toApp }: { listings: CatalogAppListing[]; href?: ListingHref }): VNode {
+export function AppColumns({
+  listings,
+  ranked = false,
+  href = toApp,
+}: {
+  listings: CatalogAppListing[];
+  ranked?: boolean;
+  href?: ListingHref;
+}): VNode {
   const half = Math.ceil(listings.length / 2);
   const columns = [listings.slice(0, half), listings.slice(half)].filter(column => column.length > 0);
 
@@ -270,7 +293,7 @@ export function RankedList({ listings, href = toApp }: { listings: CatalogAppLis
               <AppRow
                 key={`${listing.sourceUrl}:${listing.app.id}`}
                 listing={listing}
-                rank={index * half + offset + 1}
+                rank={ranked ? index * half + offset + 1 : undefined}
                 href={href(listing)}
                 detail={[listing.app.author, installsLabel(listing.installs)].filter(Boolean).join(' · ')}
               />

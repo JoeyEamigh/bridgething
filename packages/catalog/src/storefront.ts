@@ -14,7 +14,7 @@ export type StoreSort = 'popular' | 'trending' | 'new' | 'updated';
 
 export type BrowseQuery = { filter: StoreFilter | null; sort: StoreSort };
 
-export type ShelfId = 'essentials' | 'popular' | 'launchers' | 'trending' | 'new' | 'overlays' | 'updated';
+export type ShelfId = 'essentials' | 'popular' | 'trending' | 'new' | 'updated' | StoreKind | `category:${Category}`;
 
 export type Shelf = {
   id: ShelfId;
@@ -23,19 +23,24 @@ export type Shelf = {
   more: BrowseQuery;
 };
 
-export type CategoryCount = { category: Category; label: string; count: number };
+export type ChipFilter = Exclude<StoreFilter, { kind: 'author' }>;
+
+export type FilterChip = { filter: ChipFilter; key: string; label: string };
 
 export type Storefront = {
-  featured: CatalogAppListing | null;
+  featured: CatalogAppListing[];
   shelves: Shelf[];
-  categories: CategoryCount[];
+  filters: FilterChip[];
+  all: CatalogAppListing[];
 };
 
 export const SHELF_SIZE = 10;
 
-const FEATURE_POOL = 5;
+export const FEATURED_COUNT = 3;
 
-const MIN_SHELF: Partial<Record<ShelfId, number>> = { essentials: 4, trending: 3 };
+const MIN_SHELF = 4;
+
+const AUTHOR_CAP = 2;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -45,6 +50,17 @@ export const SORT_LABELS: Record<StoreSort, string> = {
   new: 'new',
   updated: 'recently updated',
 };
+
+export function filterKey(filter: StoreFilter): string {
+  switch (filter.kind) {
+    case 'category':
+      return `c:${filter.category}`;
+    case 'author':
+      return `by:${filter.author}`;
+    default:
+      return filter.kind;
+  }
+}
 
 export function filterLabel(filter: StoreFilter): string {
   switch (filter.kind) {
@@ -162,25 +178,45 @@ function utcDay(now: Date): number {
   return Math.floor(now.getTime() / DAY_MS);
 }
 
-export function featuredListing(
-  listings: CatalogAppListing[],
-  pin: StorePin | null,
-  now: Date,
-): CatalogAppListing | null {
-  if (pin) {
-    const id = pin.app_id.toLowerCase();
-    const pinned =
-      listings.find(listing => listing.app.id.toLowerCase() === id && listing.sourceUrl === pin.source_url) ??
-      listings.find(listing => listing.app.id.toLowerCase() === id);
-    if (pinned) return pinned;
-  }
+export function pinnedListing(listings: CatalogAppListing[], pin: StorePin | null): CatalogAppListing | null {
+  if (!pin) return null;
+  const id = pin.app_id.toLowerCase();
+  return (
+    listings.find(listing => listing.app.id.toLowerCase() === id && listing.sourceUrl === pin.source_url) ??
+    listings.find(listing => listing.app.id.toLowerCase() === id) ??
+    null
+  );
+}
 
+function dailyRandom(now: Date): () => number {
+  let state = utcDay(now) >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let mixed = Math.imul(state ^ (state >>> 15), state | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function featureWeight(listing: CatalogAppListing): number {
+  return Math.sqrt(1 + rankedInstalls(listing) + 4 * rankedTrending(listing));
+}
+
+export function featuredListings(listings: CatalogAppListing[], pin: StorePin | null, now: Date): CatalogAppListing[] {
+  const pinned = pinnedListing(listings, pin);
+  const picked = pinned ? [pinned] : [];
   const pool = listings
-    .filter(listing => hasScreenshot(listing) && !listing.official)
-    .sort(COMPARE.trending)
-    .slice(0, FEATURE_POOL);
-  if (pool.length === 0) return null;
-  return pool[utcDay(now) % pool.length]!;
+    .filter(listing => hasScreenshot(listing) && !listing.official && listing !== pinned)
+    .sort((a, b) => a.app.id.localeCompare(b.app.id) || a.sourceUrl.localeCompare(b.sourceUrl));
+  const random = dailyRandom(now);
+
+  while (picked.length < FEATURED_COUNT && pool.length > 0) {
+    const weights = pool.map(featureWeight);
+    let roll = random() * weights.reduce((sum, weight) => sum + weight, 0);
+    const index = weights.findIndex(weight => (roll -= weight) < 0);
+    picked.push(pool.splice(index === -1 ? pool.length - 1 : index, 1)[0]!);
+  }
+  return picked;
 }
 
 function essentials(listings: CatalogAppListing[]): CatalogAppListing[] {
@@ -199,53 +235,79 @@ function essentials(listings: CatalogAppListing[]): CatalogAppListing[] {
   return [...picked.values()].sort(COMPARE.popular);
 }
 
+function varied(sorted: CatalogAppListing[], shown: Set<string>): CatalogAppListing[] {
+  const perAuthor = new Map<string, number>();
+  const picked: CatalogAppListing[] = [];
+  for (const listing of sorted) {
+    if (picked.length === SHELF_SIZE) break;
+    if (shown.has(listing.app.id)) continue;
+    const author = listing.app.author.trim().toLowerCase();
+    const held = perAuthor.get(author) ?? 0;
+    if (held === AUTHOR_CAP) continue;
+    perAuthor.set(author, held + 1);
+    picked.push(listing);
+  }
+  return picked;
+}
+
+export function storeFilters(listings: CatalogAppListing[]): FilterChip[] {
+  const filters: ChipFilter[] = [
+    { kind: 'launchers' },
+    { kind: 'overlays' },
+    ...CATEGORIES.map(category => ({ kind: 'category', category }) as const),
+  ];
+  return filters
+    .filter(filter => listings.some(listing => matchesFilter(listing, filter)))
+    .map(filter => ({ filter, key: filterKey(filter), label: filterLabel(filter) }));
+}
+
 export function storefront(args: { listings: CatalogAppListing[]; pin: StorePin | null; now: Date }): Storefront {
   const { listings, pin, now } = args;
-  const top = (query: BrowseQuery) => browse(listings, query).slice(0, SHELF_SIZE);
+  const featured = featuredListings(listings, pin, now);
+  const shown = new Set(featured.map(listing => listing.app.id));
 
-  const candidates: Shelf[] = [
+  const ranked = browse(listings, { filter: null, sort: 'popular' });
+
+  const sorted = (id: 'trending' | 'new' | 'updated'): Shelf => {
+    const more: BrowseQuery = { filter: null, sort: id };
+    const picked = varied(browse(listings, more), shown);
+    if (picked.length >= MIN_SHELF) for (const listing of picked) shown.add(listing.app.id);
+    return { id, title: SORT_LABELS[id], listings: picked, more };
+  };
+  const filtered = (id: ShelfId, filter: ChipFilter): Shelf => {
+    const more: BrowseQuery = { filter, sort: 'popular' };
+    return { id, title: filterLabel(filter), listings: varied(browse(listings, more), new Set()), more };
+  };
+
+  const shelves: Shelf[] = [
     { id: 'essentials', title: 'essentials', listings: essentials(listings), more: { filter: null, sort: 'popular' } },
     {
       id: 'popular',
       title: 'popular',
-      listings: top({ filter: null, sort: 'popular' }).filter(listing => rankedInstalls(listing) > 0),
+      listings: ranked.filter(listing => rankedInstalls(listing) > 0).slice(0, SHELF_SIZE),
       more: { filter: null, sort: 'popular' },
     },
-    {
-      id: 'launchers',
-      title: 'home screens',
-      listings: top({ filter: { kind: 'launchers' }, sort: 'popular' }),
-      more: { filter: { kind: 'launchers' }, sort: 'popular' },
-    },
-    { id: 'trending', title: 'trending', listings: top({ filter: null, sort: 'trending' }), more: { filter: null, sort: 'trending' } },
-    { id: 'new', title: 'new', listings: top({ filter: null, sort: 'new' }), more: { filter: null, sort: 'new' } },
-    {
-      id: 'overlays',
-      title: 'overlays',
-      listings: top({ filter: { kind: 'overlays' }, sort: 'popular' }),
-      more: { filter: { kind: 'overlays' }, sort: 'popular' },
-    },
-    {
-      id: 'updated',
-      title: 'recently updated',
-      listings: top({ filter: null, sort: 'updated' }),
-      more: { filter: null, sort: 'updated' },
-    },
+    sorted('trending'),
+    sorted('new'),
+    filtered('launchers', { kind: 'launchers' }),
+    ...CATEGORIES.map(category => filtered(`category:${category}`, { kind: 'category', category })),
+    filtered('overlays', { kind: 'overlays' }),
+    sorted('updated'),
   ];
 
-  const shelves = candidates.filter(shelf => shelf.listings.length >= (MIN_SHELF[shelf.id] ?? 1));
-
-  const categories = CATEGORIES.map(category => ({
-    category,
-    label: CATEGORY_LABELS[category],
-    count: listings.filter(listing => appCategories(listing.app).includes(category)).length,
-  })).filter(entry => entry.count > 0);
-
-  return { featured: featuredListing(listings, pin, now), shelves, categories };
+  return {
+    featured,
+    shelves: shelves.filter(shelf => shelf.listings.length >= (shelf.id === 'popular' ? 1 : MIN_SHELF)),
+    filters: storeFilters(listings),
+    all: [...listings].sort(byName),
+  };
 }
 
 function words(text: string): string[] {
-  return text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }
 
 function relevance(listing: CatalogAppListing, query: string, tokens: string[]): number {

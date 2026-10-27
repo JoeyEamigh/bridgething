@@ -18,7 +18,7 @@ import { Spinner } from '../components/Spinner';
 import { ListingRow } from '../components/store/listing';
 import {
   ChipRow,
-  FeaturedHero,
+  FeaturedCarousel,
   SearchField,
   StoreShelf,
   type Chip,
@@ -42,7 +42,7 @@ export function StoreScreen({ navigation }: Props) {
   const deviceId = connectedPeers(peers)[0]?.id ?? null;
 
   const { listings } = useStoreCatalog(deviceId);
-  const { featured, shelves, categories } = useStorefront(listings);
+  const { featured, shelves, filters, all } = useStorefront(listings);
   const ready = useStoreReady();
   const refreshing = useCatalog(s => s.refreshing);
   const failures = useCatalog(s => s.failures);
@@ -79,22 +79,11 @@ export function StoreScreen({ navigation }: Props) {
   const searching = query.trim().length > 0;
 
   const chips: Chip[] = [
-    { key: 'all', label: 'all' },
-    ...shelves
-      .filter(shelf => shelf.id === 'launchers' || shelf.id === 'overlays')
-      .map(shelf => ({
-        key: shelf.id,
-        label: shelf.title,
-        onPress: () => browseTo(shelf.more),
-      })),
-    ...categories.map(entry => ({
-      key: entry.category,
+    { key: 'all', label: 'all', count: all.length },
+    ...filters.map(entry => ({
+      key: entry.key,
       label: entry.label,
-      onPress: () =>
-        browseTo({
-          filter: { kind: 'category', category: entry.category },
-          sort: 'popular',
-        }),
+      onPress: () => browseTo({ filter: entry.filter, sort: 'popular' }),
     })),
   ];
 
@@ -119,11 +108,11 @@ export function StoreScreen({ navigation }: Props) {
   ) : ready && listings.length > 0 ? (
     <>
       <ChipRow chips={chips} active="all" />
-      {featured ? (
-        <FeaturedHero
-          listing={featured}
+      {featured.length > 0 ? (
+        <FeaturedCarousel
+          listings={featured}
           deviceId={deviceId}
-          onOpen={() => open(featured)}
+          onOpen={open}
         />
       ) : null}
       {shelves.map(shelf => (
@@ -135,6 +124,19 @@ export function StoreScreen({ navigation }: Props) {
           onSeeAll={() => browseTo(shelf.more)}
         />
       ))}
+      <View className="mb-8" testID="store-all">
+        <SectionHeader title="all apps" />
+        <ListGroup>
+          {all.map(listing => (
+            <ListingRow
+              key={listing.app.id}
+              listing={listing}
+              deviceId={deviceId}
+              onOpen={() => open(listing)}
+            />
+          ))}
+        </ListGroup>
+      </View>
     </>
   ) : !reachable ? (
     <Note tone="warn" action="retry" onAction={() => void refreshCatalog()}>

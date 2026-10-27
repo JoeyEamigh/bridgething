@@ -3,8 +3,6 @@ import {
   changelogText,
   failureLine,
   installsLabel,
-  isLauncher,
-  isOverlay,
   listingKindLabel,
   normalizeSourceUrl,
   OFFICIAL_CATALOG_URL,
@@ -13,6 +11,7 @@ import {
   search,
   SORT_LABELS,
   STORE_COPY,
+  storeFilters,
   storefront,
   type AppExtension,
   type CatalogAppListing,
@@ -40,12 +39,13 @@ import { useMemo, useState } from 'preact/hooks';
 import { ConfirmInstall, InstallButton, useInstaller } from '../components/Install.tsx';
 import { BackButton, Disclosure, ErrorNote, Hint, Screen, Section } from '../components/Screen.tsx';
 import {
+  AppColumns,
   AppList,
   AppTiles,
   CardGrid,
   Chips,
   Featured,
-  RankedList,
+  RailSection,
   RefreshAction,
   ShelfCards,
 } from '../components/Storefront.tsx';
@@ -123,9 +123,8 @@ function StoreHome({ store }: { store: StoreListings }): VNode {
     <>
       <Chips
         active={null}
-        categories={front.categories}
-        launchers={listings.some(isLauncher)}
-        overlays={listings.some(isOverlay)}
+        total={front.all.length}
+        filters={front.filters}
         action={<RefreshAction pending={pending} onRefresh={refresh} />}
       />
 
@@ -133,7 +132,7 @@ function StoreHome({ store }: { store: StoreListings }): VNode {
         <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : STORE_COPY.empty}</SectionEmpty>
       ) : (
         <>
-          {front.featured ? <Featured key={front.featured.app.id} listing={front.featured} /> : null}
+          {front.featured.length > 0 ? <Featured listings={front.featured} /> : null}
 
           {updates.length > 0 ? (
             <Section>
@@ -149,6 +148,11 @@ function StoreHome({ store }: { store: StoreListings }): VNode {
           {front.shelves.map(shelf => (
             <ShelfSection key={shelf.id} shelf={shelf} />
           ))}
+
+          <Section>
+            <SectionHeader title="all apps" />
+            <AppColumns listings={front.all} />
+          </Section>
         </>
       )}
     </>
@@ -157,18 +161,24 @@ function StoreHome({ store }: { store: StoreListings }): VNode {
 
 function ShelfSection({ shelf }: { shelf: Shelf }): VNode {
   const { route } = useLocation();
+  const seeAll = () => route(PATHS.storeBrowse(shelf.more));
 
+  if (shelf.id === 'popular') {
+    return (
+      <Section>
+        <SectionHeader title={shelf.title} action="see all" onAction={seeAll} />
+        <AppColumns listings={shelf.listings} ranked />
+      </Section>
+    );
+  }
   return (
-    <Section>
-      <SectionHeader title={shelf.title} action="see all" onAction={() => route(PATHS.storeBrowse(shelf.more))} />
+    <RailSection title={shelf.title} onSeeAll={seeAll}>
       {shelf.id === 'essentials' ? (
         <AppTiles listings={shelf.listings} />
-      ) : shelf.id === 'popular' ? (
-        <RankedList listings={shelf.listings} />
       ) : (
         <ShelfCards listings={shelf.listings} meta={META[shelf.more.sort]} />
       )}
-    </Section>
+    </RailSection>
   );
 }
 
@@ -188,7 +198,7 @@ export function StoreBrowseRoute({ query }: { query: Record<string, string> }): 
   const { listings, pending } = storeListings();
   const browsing = browseQuery(query);
   const { filter, sort } = browsing;
-  const categories = useMemo(() => storefront({ listings, pin: null, now: new Date() }).categories, [listings]);
+  const filters = useMemo(() => storeFilters(listings), [listings]);
   const shown = browse(listings, browsing);
   const narrowed = filter !== null && filter.kind !== 'author';
 
@@ -210,14 +220,7 @@ export function StoreBrowseRoute({ query }: { query: Record<string, string> }): 
         }
       />
 
-      {narrowed ? (
-        <Chips
-          active={filter}
-          categories={categories}
-          launchers={listings.some(isLauncher)}
-          overlays={listings.some(isOverlay)}
-        />
-      ) : null}
+      {narrowed ? <Chips active={filter} total={listings.length} filters={filters} /> : null}
 
       {shown.length === 0 ? (
         <SectionEmpty>{pending ? <Spinner class="mx-auto" /> : STORE_COPY.empty}</SectionEmpty>

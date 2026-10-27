@@ -1,18 +1,16 @@
 import type { ComponentChildren } from 'preact';
 import {
-  filterLabel,
+  filterKey,
   installsLabel,
-  isLauncher,
-  isOverlay,
   listingKindLabel,
   STORE_COPY,
   type AppEntry,
   type CatalogAppListing,
-  type CategoryCount,
+  type FilterChip,
   type StoreFilter,
   webHref,
 } from '@bridgething/catalog';
-import { DeviceFrame } from '@bridgething/ui';
+import { cx, DeviceFrame, RAIL_SCROLL, RailArrows, useRail, type Rail as RailState } from '@bridgething/ui';
 import { appDetailPath, filterPath, SEARCH_PATH, STORE_PATH } from '../../lib/app-routes';
 import { hideOnError } from '../../lib/img';
 import { installListing, isPlaceholderDownload } from '../../lib/pending-install';
@@ -123,24 +121,49 @@ export function kindOrAuthor(listing: CatalogAppListing): string {
   return listingKindLabel(listing) ?? listing.app.author;
 }
 
-export function ShelfHeader({ title, href }: { title: string; href?: string }) {
+export function ShelfHeader({ title, href, trailing }: { title: string; href?: string; trailing?: ComponentChildren }) {
   return (
-    <header class="mb-4 flex items-baseline justify-between gap-3 border-b border-white/20 pb-2">
+    <header class="mb-4 flex items-center justify-between gap-3 border-b border-white/20 pb-2">
       <h2 class="m-0 text-xl">{title}</h2>
-      {href ? (
-        <a href={href} class="border-b-0 font-mono text-sm text-white/50 hover:text-white">
-          see all
-        </a>
-      ) : null}
+      <span class="flex items-center gap-4">
+        {href ? (
+          <a href={href} class="border-b-0 font-mono text-sm text-white/50 hover:text-white">
+            see all
+          </a>
+        ) : null}
+        {trailing}
+      </span>
     </header>
   );
 }
 
-export function Row({ children }: { children: ComponentChildren }) {
+export function Rail({ rail, children }: { rail: RailState; children: ComponentChildren }) {
   return (
-    <div class="-mx-6 flex snap-x snap-mandatory scroll-px-6 [scrollbar-width:thin] gap-4 overflow-x-auto px-6 pb-2 sm:gap-6">
+    <div
+      ref={rail.ref}
+      class={cx('-mx-6 flex snap-x snap-mandatory scroll-px-6 gap-4 px-6 pb-2 sm:gap-6', RAIL_SCROLL)}>
       {children}
     </div>
+  );
+}
+
+export function RailShelf({
+  title,
+  href,
+  class: extra = 'mb-14',
+  children,
+}: {
+  title: string;
+  href?: string;
+  class?: string;
+  children: ComponentChildren;
+}) {
+  const rail = useRail();
+  return (
+    <section class={extra}>
+      <ShelfHeader title={title} href={href} trailing={<RailArrows rail={rail} />} />
+      <Rail rail={rail}>{children}</Rail>
+    </section>
   );
 }
 
@@ -169,25 +192,29 @@ export function ShotCard({ listing, meta }: { listing: CatalogAppListing; meta: 
   );
 }
 
-export function ShotRow({ listings, meta }: { listings: CatalogAppListing[]; meta: (l: CatalogAppListing) => string }) {
+export function ShotTile({ listing, meta }: { listing: CatalogAppListing; meta: string }) {
   return (
-    <Row>
-      {listings.map(listing => (
-        <div
-          key={listing.app.id}
-          class="w-64 shrink-0 snap-start sm:w-[calc((100%-1.5rem)/2)] lg:w-[calc((100%-4.5rem)/4)]">
-          <ShotCard listing={listing} meta={meta(listing)} />
-        </div>
-      ))}
-    </Row>
+    <div class="w-64 shrink-0 snap-start sm:w-[calc((100%-3rem)/2.25)] lg:w-[calc((100%-6rem)/4.25)]">
+      <ShotCard listing={listing} meta={meta} />
+    </div>
   );
 }
 
-export function RankRow({ listing, rank }: { listing: CatalogAppListing; rank: number }) {
+export function RankRow({
+  listing,
+  rank,
+  class: extra,
+}: {
+  listing: CatalogAppListing;
+  rank?: number;
+  class?: string;
+}) {
   const sub = [listing.app.author, installsLabel(listing.installs)].filter(Boolean).join(' · ');
   return (
-    <li class="flex items-center gap-3 px-3 py-2.5 sm:px-4">
-      <span class="w-5 shrink-0 font-mono text-sm text-white/35 tabular-nums">{rank}</span>
+    <li class={cx('flex min-w-0 items-center gap-3 px-3 py-2.5 sm:px-4', extra)}>
+      {rank === undefined ? null : (
+        <span class="w-5 shrink-0 font-mono text-sm text-white/35 tabular-nums">{rank}</span>
+      )}
       <a href={appDetailPath(listing.app.id)} class="group flex min-w-0 flex-1 items-center gap-3 border-b-0">
         <AppIcon app={listing.app} size={44} />
         <span class="min-w-0">
@@ -230,48 +257,36 @@ export function SearchBox({ value, onInput }: { value: string; onInput?: (text: 
   );
 }
 
-export type Chip = { key: string; label: string; href: string };
-
-function filterKey(filter: StoreFilter): string {
-  return filter.kind === 'category'
-    ? `c:${filter.category}`
-    : filter.kind === 'author'
-      ? `by:${filter.author}`
-      : filter.kind;
-}
+export type Chip = { key: string; label: string; href: string; count?: number };
 
 export function activeChip(filter: StoreFilter | null): string {
   return filter ? filterKey(filter) : 'all';
 }
 
-export function chipsFor(listings: CatalogAppListing[], categories: CategoryCount[]): Chip[] {
-  const kinds: StoreFilter[] = [];
-  if (listings.some(isLauncher)) kinds.push({ kind: 'launchers' });
-  if (listings.some(isOverlay)) kinds.push({ kind: 'overlays' });
-  const filters: StoreFilter[] = [
-    ...kinds,
-    ...categories.map(entry => ({ kind: 'category', category: entry.category }) as const),
-  ];
+export function chipsFor(total: number, filters: FilterChip[]): Chip[] {
   return [
-    { key: 'all', label: 'all', href: STORE_PATH },
-    ...filters.map(filter => ({ key: filterKey(filter), label: filterLabel(filter), href: filterPath(filter) })),
+    { key: 'all', label: 'all', href: STORE_PATH, count: total },
+    ...filters.map(entry => ({ key: entry.key, label: entry.label, href: filterPath(entry.filter) })),
   ];
 }
 
 export function Chips({ chips, active }: { chips: Chip[]; active: string }) {
   return (
-    <nav aria-label="categories" class="-mx-6 flex [scrollbar-width:none] gap-2 overflow-x-auto px-6 pb-1">
+    <nav
+      aria-label="categories"
+      class={cx('-mx-6 flex gap-2 px-6 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0', RAIL_SCROLL)}>
       {chips.map(chip => (
         <a
           key={chip.key}
           href={chip.href}
           aria-current={chip.key === active ? 'page' : undefined}
-          class={`shrink-0 border px-3 py-1.5 font-mono text-xs whitespace-nowrap ${
+          class={`flex shrink-0 gap-1.5 border px-3 py-1.5 font-mono text-xs whitespace-nowrap ${
             chip.key === active
               ? 'border-accent text-accent bg-accent-soft'
               : 'border-white/15 text-white/60 hover:border-white/40 hover:text-white'
           }`}>
           {chip.label}
+          {chip.count === undefined ? null : <span class="tabular-nums opacity-55">{chip.count}</span>}
         </a>
       ))}
     </nav>
