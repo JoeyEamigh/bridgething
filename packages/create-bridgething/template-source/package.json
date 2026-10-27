@@ -17,6 +17,7 @@
     "shot": "bridgething-source shot",
     "catalog": "bridgething-source catalog",
     "publish": "bridgething-source publish",
+    "submit": "bridgething-source submit",
     "skills": "bridgething-source skills",
     "format": "prettier --write \"*.json\" \"*.js\""
   },

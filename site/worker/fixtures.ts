@@ -1,6 +1,5 @@
-import { OFFICIAL_CATALOG_URL, type AppEntry, type Catalog } from '@bridgething/catalog';
+import { OFFICIAL_CATALOG_URL, type AppEntry, type Catalog, type SourceStatus } from '@bridgething/catalog';
 import { storeCatalog } from './catalogs.ts';
-import type { SourceStatus } from './directory.ts';
 
 export const NOW = '2026-07-24T12:00:00.000Z';
 export const LATER = '2026-07-25T12:00:00.000Z';

@@ -32,7 +32,7 @@ export function SubmitSource({ onSubmitted }: { onSubmitted: (entry: DirectoryEn
     setOutcome(null);
 
     try {
-      const { entry, created } = await submitSource(candidate);
+      const { entry, created } = await submitSource(candidate, { origin: window.location.origin });
       setUrl('');
       setOutcome({ kind: 'ok', message: submitted(entry, created) });
       onSubmitted(entry);

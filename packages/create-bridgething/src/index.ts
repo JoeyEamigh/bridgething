@@ -23,6 +23,7 @@ const SOURCE_TEMPLATE_DIR = join(PACKAGE_ROOT, 'template-source');
 const SKILL_IN_APP = join('.claude', 'skills', 'bridgething');
 
 const SDK_VERSIONS = readJson<Record<string, string>>(join(PACKAGE_ROOT, 'template-versions.json'));
+const OWN = readJson<{ name: string; version: string }>(join(PACKAGE_ROOT, 'package.json'));
 
 const ESBUILD_VERSION = '^0.28.2';
 const DENO_VERSION = '2.9.6';
@@ -273,7 +274,14 @@ function linkAgentGuides(root: string, appDir: string): void {
   const rootSkill = join(root, SKILL_IN_APP);
   const appSkill = join(appDir, SKILL_IN_APP);
 
-  if (!existsSync(rootSkill)) move(appSkill, rootSkill);
+  if (!existsSync(rootSkill)) {
+    move(appSkill, rootSkill);
+    writeJson(join(rootSkill, '.source.json'), {
+      package: OWN.name,
+      version: OWN.version,
+      fetched_at: new Date().toISOString(),
+    });
+  }
   linkOrCopy(relative(dirname(appSkill), rootSkill), appSkill, rootSkill);
 
   for (const link of [join(root, 'AGENTS.md'), join(appDir, 'AGENTS.md')]) {
@@ -400,7 +408,7 @@ Done. ${target}
 Fill in the description in apps/${details.app}/public/manifest.json.
 
 Push to ${repoUrl}, then in Settings > Pages set the branch to gh-pages, folder / (root).
-Your catalog ends up at at ${base}/catalog.v1.json, which you can submit to the bridgething store.
+Your catalog ends up at ${base}/catalog.v1.json. Once it loads, "bun run submit" lists it in the bridgething store.
 
   bun run new <slug>   add another app to this source
   bun run bump ${details.app} [version]

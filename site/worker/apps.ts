@@ -1,5 +1,5 @@
-import { OFFICIAL_CATALOG_URL } from '@bridgething/catalog';
-import { byAttestedThenName, toDirectoryView, type SourceStatus } from './directory.ts';
+import { OFFICIAL_CATALOG_URL, type SourceStatus } from '@bridgething/catalog';
+import { byAttestedThenName, toDirectoryView } from './directory.ts';
 import { installCountsStatement, toInstallCounts } from './installs.ts';
 import { listSourcesStatement, toRecords } from './sources.ts';
 

@@ -2,34 +2,13 @@ import {
   normalizeSourceUrl as normalizeCatalogUrl,
   SourceUrlError,
   type Catalog,
+  type DirectoryEntry,
   type RecommendedSource,
 } from '@bridgething/catalog';
 
 export { SourceUrlError };
 
-export type SourceStatus = 'quarantined' | 'listed' | 'attested' | 'rejected';
-
-export const SOURCE_STATUSES: SourceStatus[] = ['quarantined', 'listed', 'attested', 'rejected'];
-
-export type SourceRecord = {
-  url: string;
-  name: string;
-  description: string | null;
-  homepage: string | null;
-  icon: string | null;
-  status: SourceStatus;
-  submitted_at: string;
-  reviewed_at: string | null;
-  reviewed_by: string | null;
-  app_count: number;
-  last_checked_at: string;
-  last_check_ok: boolean;
-  last_check_error: string | null;
-  downloads_cors_ok: boolean | null;
-  note: string | null;
-};
-
-export type DirectoryEntry = Omit<SourceRecord, 'note' | 'reviewed_by'>;
+export type SourceRecord = DirectoryEntry & { reviewed_by: string | null; note: string | null };
 
 export const NAME_MAX_LEN = 120;
 export const DESCRIPTION_MAX_LEN = 400;

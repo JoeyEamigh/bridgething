@@ -1,4 +1,5 @@
-import { normalizeSourceUrl, SourceUrlError, type SourceRecord, type SourceStatus } from './directory.ts';
+import type { SourceStatus } from '@bridgething/catalog';
+import { normalizeSourceUrl, SourceUrlError, type SourceRecord } from './directory.ts';
 import { storeCatalog } from './catalogs.ts';
 import { probeCatalog } from './probe.ts';
 

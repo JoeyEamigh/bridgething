@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/catalog",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "The catalog.v1 schema, validator and resolution rules for the bridgething webapp store. Use it to publish a source or to write a client that reads one.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",

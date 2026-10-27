@@ -7,6 +7,69 @@ export const SOURCE_DIRECTORY_URL = 'https://bridgething.com/api/sources.json';
 
 export const DIRECTORY_ORIGIN = 'https://bridgething.com';
 
+export type SourceStatus = 'quarantined' | 'listed' | 'attested' | 'rejected';
+
+export const SOURCE_STATUSES: SourceStatus[] = ['quarantined', 'listed', 'attested', 'rejected'];
+
+export type DirectoryEntry = {
+  url: string;
+  name: string;
+  description: string | null;
+  homepage: string | null;
+  icon: string | null;
+  status: SourceStatus;
+  submitted_at: string;
+  reviewed_at: string | null;
+  app_count: number;
+  last_checked_at: string;
+  last_check_ok: boolean;
+  last_check_error: string | null;
+  downloads_cors_ok: boolean | null;
+};
+
+export class DirectoryApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = 'DirectoryApiError';
+  }
+}
+
+export async function unwrapDirectory<T>(response: Response): Promise<T> {
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new DirectoryApiError(`the directory returned ${response.status} with no readable body`, response.status);
+  }
+
+  if (!response.ok) {
+    const message = (body as { error?: unknown })?.error;
+    throw new DirectoryApiError(
+      typeof message === 'string' ? message : `the directory returned ${response.status}`,
+      response.status,
+    );
+  }
+
+  return body as T;
+}
+
+export async function submitSource(
+  url: string,
+  init?: { origin?: string },
+): Promise<{ entry: DirectoryEntry; created: boolean }> {
+  const origin = init?.origin ?? DIRECTORY_ORIGIN;
+  const response = await fetch(`${origin}/api/sources`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ url }),
+  });
+  const body = await unwrapDirectory<{ source: DirectoryEntry }>(response);
+  return { entry: body.source, created: response.status === 201 };
+}
+
 export type SourceFailure = { url: string; reason: string };
 
 export type CatalogSnapshot = {

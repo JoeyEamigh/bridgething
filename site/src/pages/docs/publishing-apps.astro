@@ -90,10 +90,10 @@ const newest = entry.versions[0];`;
   <section class="mb-14">
     <h2 class={refdes}>start with the scaffold</h2>
     <p class="text-white/70">
-      <code>bun create bridgething</code> does all of this for you. it asks for a source name, a github repo and a first
-      app, and writes a repo that holds your webapps and publishes them. run <code>bun run new &lt;app&gt;</code> to add
-      another, then push to main. github actions builds each app, hosts the bundles on github pages with the right
-      headers, and publishes the catalog.
+      <code>bun create bridgething</code> does all of this for you. it asks for a source name, a github repo and a first app,
+      and writes a repo that holds your webapps and publishes them. run <code>bun run new &lt;app&gt;</code> to add another,
+      then push to main. github actions builds each app, hosts the bundles on github pages with the right headers, and publishes
+      the catalog.
     </p>
   </section>
 
@@ -122,8 +122,8 @@ const newest = entry.versions[0];`;
     <p class="text-white/70">
       <code>screenshots</code> is up to six https urls of the app running on a device, 800x480. the store card uses the first
       one, and the listing shows the rest. with the thing plugged in, chromium answers CDP at
-      <code>bridgething.local:9222</code>, so <code>Page.captureScreenshot</code> against the kiosk target gives you an
-      exact 800x480 png. the scaffold wraps that as <code>bun run shot &lt;app&gt;</code>.
+      <code>bridgething.local:9222</code>, so <code>Page.captureScreenshot</code> against the kiosk target gives you an exact
+      800x480 png. the scaffold wraps that as <code>bun run shot &lt;app&gt;</code>.
     </p>
     <p class="text-white/70">
       <code>min_libbridgething_version</code> is dotted semver, no leading <code>v</code>. the store installs the newest
@@ -204,13 +204,17 @@ const newest = entry.versions[0];`;
     <h2 class={refdes}>getting listed</h2>
     <p class="text-white/70">the directory is how people find you without the url.</p>
     <p class="text-white/70">
-      submit yours on the <a href="/apps">apps page</a>. the url must be reachable over https, parse as
-      <code>catalog.v1</code>, and send <code>Access-Control-Allow-Origin</code>.
+      run <code>bun run submit</code> from a scaffolded source, or paste the url on the <a href="/apps">apps page</a>.
+      the url must be reachable over https, parse as <code>catalog.v1</code>, and send
+      <code>Access-Control-Allow-Origin</code>.
     </p>
     <p class="text-white/70">
-      a new source is <strong>unreviewed</strong>: named under a collapsed section, apps hidden. a reviewer moves it to
-      <strong>listed</strong>, which shows its apps under community apps and offers it in the phone app.
-      <strong>vouched for</strong> puts your apps next to the official ones.
+      a new source is <strong>listed</strong> right away: its apps show under community apps and the phone app offers it.
+      a reviewer can hold one as <strong>unreviewed</strong>, named under a collapsed section with its apps hidden, or
+      mark it <strong>vouched for</strong>, which puts your apps next to the official ones.
+    </p>
+    <p class="text-white/70">
+      the directory rechecks every source on its own, so a new version shows up without submitting again.
     </p>
     <p class="text-white/70">
       a source that goes down is reported and stays in the directory. apps installed from it keep working.

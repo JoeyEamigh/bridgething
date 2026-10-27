@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DirectoryApiError,
   fetchCatalog,
   fetchMergedApps,
   fetchSources,
@@ -9,6 +10,8 @@ import {
   reportInstalled,
   SOURCE_DIRECTORY_URL,
   SourceUrlError,
+  submitSource,
+  type DirectoryEntry,
 } from '../src/sources.ts';
 import type { Catalog } from '../src/types.ts';
 
@@ -229,29 +232,96 @@ describe('fetchMergedApps', () => {
 
   test('install counts come back as the directory reported them', async () => {
     const counts = [{ app_id: APP_ID, source_url: THIRD_PARTY, count: 7, versions: {} }];
-    const apps = await withFetch(
-      merged({ updated_at: 'now', catalogs: [], failures: [], installs: counts }),
-      () => fetchMergedApps(),
+    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [], installs: counts }), () =>
+      fetchMergedApps(),
     );
 
     expect(apps.installs).toEqual(counts);
   });
 
   test('a directory that reports no counts reads as no counts, not as a broken response', async () => {
-    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [] }), () =>
-      fetchMergedApps(),
-    );
+    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [] }), () => fetchMergedApps());
 
     expect(apps.installs).toEqual([]);
   });
 
   test('a counts field of the wrong shape is discarded rather than passed to the store', async () => {
-    const apps = await withFetch(
-      merged({ updated_at: 'now', catalogs: [], failures: [], installs: 'lots' }),
-      () => fetchMergedApps(),
+    const apps = await withFetch(merged({ updated_at: 'now', catalogs: [], failures: [], installs: 'lots' }), () =>
+      fetchMergedApps(),
     );
 
     expect(apps.installs).toEqual([]);
+  });
+});
+
+describe('submitSource', () => {
+  const ENTRY: DirectoryEntry = {
+    url: THIRD_PARTY,
+    name: 'Third',
+    description: null,
+    homepage: null,
+    icon: null,
+    status: 'listed',
+    submitted_at: '2026-10-27T00:00:00Z',
+    reviewed_at: null,
+    app_count: 1,
+    last_checked_at: '2026-10-27T00:00:00Z',
+    last_check_ok: true,
+    last_check_error: null,
+    downloads_cors_ok: true,
+  };
+
+  function answer(status: number, body: unknown, seen: { url: string; init: RequestInit }[] = []): typeof fetch {
+    return ((url: string, init: RequestInit) => {
+      seen.push({ url, init });
+      return Promise.resolve(new Response(JSON.stringify(body), { status }));
+    }) as unknown as typeof fetch;
+  }
+
+  test('posts the catalog url to the directory', async () => {
+    const seen: { url: string; init: RequestInit }[] = [];
+    await withFetch(answer(201, { source: ENTRY }, seen), () => submitSource(THIRD_PARTY));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe('https://bridgething.com/api/sources');
+    expect(seen[0]!.init.method).toBe('POST');
+    expect(JSON.parse(String(seen[0]!.init.body))).toEqual({ url: THIRD_PARTY });
+  });
+
+  test('a page on the directory itself posts to its own origin', async () => {
+    const seen: { url: string; init: RequestInit }[] = [];
+    await withFetch(answer(201, { source: ENTRY }, seen), () =>
+      submitSource(THIRD_PARTY, { origin: 'https://preview.bridgething.com' }),
+    );
+
+    expect(seen[0]!.url).toBe('https://preview.bridgething.com/api/sources');
+  });
+
+  test('a 201 is a new listing and a 200 is a refresh of an existing one', async () => {
+    const fresh = await withFetch(answer(201, { source: ENTRY }), () => submitSource(THIRD_PARTY));
+    const again = await withFetch(answer(200, { source: ENTRY }), () => submitSource(THIRD_PARTY));
+
+    expect(fresh).toEqual({ entry: ENTRY, created: true });
+    expect(again).toEqual({ entry: ENTRY, created: false });
+  });
+
+  test('a refusal carries the directory reason and status', async () => {
+    const refused = withFetch(answer(422, { error: 'the catalog did not send Access-Control-Allow-Origin' }), () =>
+      submitSource(THIRD_PARTY),
+    );
+
+    await expect(refused).rejects.toThrow(
+      new DirectoryApiError('the catalog did not send Access-Control-Allow-Origin', 422),
+    );
+    await expect(refused).rejects.toMatchObject({ status: 422 });
+  });
+
+  test('a refusal without a readable body still names the status', async () => {
+    const broken = (() => Promise.resolve(new Response('<html>', { status: 502 }))) as unknown as typeof fetch;
+
+    await expect(withFetch(broken, () => submitSource(THIRD_PARTY))).rejects.toThrow(
+      'the directory returned 502 with no readable body',
+    );
   });
 });
 

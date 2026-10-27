@@ -20,4 +20,5 @@ export {
 export { UserError, appsDir, siteDir, sourceRoot } from './paths.ts';
 export { publish } from './publish.ts';
 export { shot } from './shot.ts';
-export { download as downloadSkill, skills, skillsDir, type Stamp } from './skills.ts';
+export { download as downloadSkill, skills, skillsDir, toolkitDrift, type Stamp, type Toolkit } from './skills.ts';
+export { submit } from './submit.ts';

@@ -1,6 +1,6 @@
 {
   "name": "@bridgething/source",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "The toolkit for running a bridgething webapp source: build, bundle, version, validate and publish a catalog.v1 to GitHub Pages.",
   "license": "MIT",
   "author": "Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com> (https://github.com/JoeyEamigh)",
@@ -47,7 +47,8 @@
     "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "bun test"
   },
   "dependencies": {
     "@bridgething/catalog": "workspace:*"
@@ -56,6 +57,7 @@
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
     "@types/node": "^26.1.1"
   }
 }

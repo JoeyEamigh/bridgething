@@ -36,7 +36,7 @@ Now-playing and library data come from the phone's Spotify, so render a placehol
 
 Every surface: `player asset config store doc blob capabilities library audio notifications phone peer geo net hardware bluetooth system time voice lyrics webapp forward`. Each method is an event, a request, or a command.
 
-Methods, types, and examples: `.claude/skills/bridgething/reference/sdk.md`. That skill lives once at the repo root and every app symlinks it, so it is one copy for the whole workspace. `bun run skills` refreshes it from the published `create-bridgething`; `bun run check` says when it is behind.
+Methods, types, and examples: `.claude/skills/bridgething/reference/sdk.md`. That skill lives once at the repo root and every app symlinks it, so it is one copy for the whole workspace. `bun run skills` refreshes it from the published `create-bridgething`; it and `bun run check` say when the skill is behind, when `@bridgething/source` is older than the skill expects, and when `package.json` lacks a script the skill uses.
 
 ## Working on one app
 
@@ -54,7 +54,7 @@ bun run --cwd apps/<slug> update       # brings the device to the latest bridget
 
 An app with a variant or an extension carries its own `apps/<slug>/CLAUDE.md` with the parts specific to it.
 
-Running and driving the app: `.claude/skills/bridgething/reference/develop.md`. Push, zip, update: `.claude/skills/bridgething/reference/ship.md`. The desktop-side Deno extension and its permission model, for an app with an `extension/` directory: `.claude/skills/bridgething/reference/extension.md`.
+Running and driving the app: `.claude/skills/bridgething/reference/develop.md`. Push, zip, publish to the store, update: `.claude/skills/bridgething/reference/ship.md`. The desktop-side Deno extension and its permission model, for an app with an `extension/` directory: `.claude/skills/bridgething/reference/extension.md`.
 
 ## The three files that describe an app
 
@@ -91,6 +91,8 @@ bun run check
 `check` is the whole gate and is exactly what CI runs: typecheck, build, bundle, generate the catalog, validate it against `catalog.v1` and the cross-reference invariants. Run it before claiming anything works.
 
 Pushing to main publishes. `bun run publish --dry-run` assembles the exact bytes that would be pushed, into `site/`, without pushing.
+
+The store only shows a source that has been submitted to it. Once the first publish is live, ask the user whether they want it in the bridgething store, and run `bun run submit` only on a yes, because a listing is public. The store rechecks listed sources on its own, so a later version needs no second submit.
 
 ## Publishing rules that are not negotiable
 

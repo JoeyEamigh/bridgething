@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { validate } from '@bridgething/catalog';
+import { validate, type SourceStatus } from '@bridgething/catalog';
 import {
   normalizeSourceUrl,
   SourceUrlError,
   toCatalogDocument,
   toDirectoryView,
   type SourceRecord,
-  type SourceStatus,
 } from './directory.ts';
 
 function record(url: string, status: SourceStatus, name = url): SourceRecord {

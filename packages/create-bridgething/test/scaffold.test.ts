@@ -217,6 +217,16 @@ describe('the agent guides', () => {
     );
   });
 
+  test('the skill is stamped with the scaffold that wrote it, so drift checks have a baseline', () => {
+    const own = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as { name: string; version: string };
+    const stamp = JSON.parse(plain.readRoot('.claude', 'skills', 'bridgething', '.source.json')) as {
+      package: string;
+      version: string;
+    };
+    expect(stamp.package).toBe(own.name);
+    expect(stamp.version).toBe(own.version);
+  });
+
   test('agents that read AGENTS.md find the same skill, at the root and in an app', () => {
     for (const dir of [plain.root, plain.dir]) {
       expect(lstatSync(join(dir, '.agents', 'skills')).isSymbolicLink()).toBe(true);

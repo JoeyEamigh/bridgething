@@ -1,8 +1,9 @@
+import { SOURCE_STATUSES, type SourceStatus } from '@bridgething/catalog';
 import { APP_DETAIL_SHELL, appIdFromPath } from '../src/lib/app-routes.ts';
 import { mergedApps, storeData } from './apps.ts';
 import { isAdmin } from './auth.ts';
 import { refreshCatalogs } from './catalogs.ts';
-import { SOURCE_STATUSES, toCatalogDocument, toDirectoryView, type SourceStatus } from './directory.ts';
+import { toCatalogDocument, toDirectoryView } from './directory.ts';
 import type { Env } from './env.ts';
 import { recordInstalled } from './installs.ts';
 import {

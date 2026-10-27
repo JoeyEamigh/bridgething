@@ -31,6 +31,26 @@ Anyone with a bridgething Car Thing installs that zip from the companion app.
 
 Raise `version` in `public/manifest.json` before you share an update. Keep `id`.
 
+## Publish to the store
+
+From the repo root, `bun run bump <slug> <major | minor | patch>` moves the
+version, then a push to main runs the publish workflow. It builds every new
+version into `catalog.v1.json` on the `gh-pages` branch. GitHub Pages has to
+serve that branch from `/ (root)` (repo Settings > Pages), and the catalog lands
+at `base_url` from `source.json` plus `/catalog.v1.json`.
+
+Until the source is submitted, the store does not show it, and only people who
+paste that URL into the companion app can install from it. Once the first
+publish is live and the catalog URL loads, ask the user whether they want it in
+the bridgething store. A listing is public, so submit only on a yes:
+
+```bash
+bun run submit   # lists the source, or refreshes an existing listing
+```
+
+The store rechecks every listed source on its own, so later versions appear
+without another submit. Run it again to pick one up right away.
+
 ## Keep the device on the latest bridgething
 
 ```bash

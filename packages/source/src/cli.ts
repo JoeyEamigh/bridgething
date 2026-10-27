@@ -7,6 +7,7 @@ import { fail, siteDir, UserError } from './paths.ts';
 import { publish } from './publish.ts';
 import { shot, SHOT_USAGE } from './shot.ts';
 import { reportSkillDrift, skills } from './skills.ts';
+import { submit } from './submit.ts';
 
 const USAGE = `Usage: bridgething-source <command> [options]
 
@@ -16,6 +17,7 @@ const USAGE = `Usage: bridgething-source <command> [options]
   shot               capture the device screen into an app's screenshots/
   catalog            stage the catalog into site/ without pushing
   publish            build every unpublished version and push the catalog branch
+  submit             list this source in the bridgething store, or refresh its listing
   skills             refresh the /bridgething agent skill from the registry
 
 ${BUMP_USAGE}
@@ -63,6 +65,8 @@ async function main(): Promise<void> {
       return catalog();
     case 'publish':
       return publish(argv);
+    case 'submit':
+      return submit();
     case 'skills':
       return skills(argv);
     default:

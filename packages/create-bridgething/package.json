@@ -1,6 +1,6 @@
 {
   "name": "create-bridgething",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "type": "module",
   "description": "Scaffold a bridgething app source: webapps for the Spotify Car Thing, published as a catalog.v1 on GitHub Pages.",
   "license": "MIT",

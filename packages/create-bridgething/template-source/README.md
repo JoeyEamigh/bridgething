@@ -9,7 +9,7 @@ Webapps for the Spotify Car Thing running [bridgething](https://bridgething.com)
 1. Push this repo to `https://github.com/__REPO_OWNER__/__REPO_NAME__`.
 2. In **Settings > Pages**, set the source to **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`.
 
-The catalog is published to `__BASE_URL__/catalog.v1.json`, which can be submitted to <bridgething.com/apps>
+The catalog is published to `__BASE_URL__/catalog.v1.json`. Once it loads, `bun run submit` lists it in the [bridgething store](https://bridgething.com/apps).
 
 ## Develop
 
@@ -45,7 +45,7 @@ bun run bump __APP_SLUG__ patch -m "Fix the wind direction arrow"
 git commit -am "__APP_SLUG__: fix the wind direction arrow" && git push
 ```
 
-Pushing to main builds the apps and regenerates the catalog.
+Pushing to main builds the apps and regenerates the catalog. The store rechecks listed sources on its own; `bun run submit` refreshes right away.
 
 ## Agent skill
 
@@ -53,5 +53,5 @@ Pushing to main builds the apps and regenerates the catalog.
 
 ```sh
 bun run skills           # refresh it from the published create-bridgething
-bun run skills --check   # check whether it is behind
+bun run skills --check   # check whether it, the toolkit, or the scripts it uses are behind
 ```
