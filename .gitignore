@@ -78,3 +78,5 @@ packages/browser/wasm/
 # codegen stages per-invocation next to its output; a killed run can leave one behind
 .*.staging.*/
 .dev-extension
+
+.claude/worktrees/
