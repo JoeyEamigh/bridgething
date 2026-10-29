@@ -7,8 +7,9 @@ use libbridgething::{
     ClientToBridgeBlobMsgRequest, ClientToBridgeBluetoothMsg, ClientToBridgeCapabilitiesMsgRequest,
     ClientToBridgeConfigMsgRequest, ClientToBridgeDocMsgRequest, ClientToBridgeGeoMsg, ClientToBridgeHardwareMsg,
     ClientToBridgeLibraryMsg, ClientToBridgeLyricsMsg, ClientToBridgeMsg, ClientToBridgeMsgData, ClientToBridgeNetMsg,
-    ClientToBridgeNotificationsMsg, ClientToBridgePhoneMsg, ClientToBridgePlayerMsg, ClientToBridgeStoreMsgRequest,
-    ClientToBridgeSystemMsg, ClientToBridgeTimeMsgRequest, ClientToBridgeVoiceMsg, ClientToBridgeWebappMsg,
+    ClientToBridgeNotificationsMsg, ClientToBridgePhoneMsg, ClientToBridgePlayerMsg, ClientToBridgePresenceMsgRequest,
+    ClientToBridgeStoreMsgRequest, ClientToBridgeSystemMsg, ClientToBridgeTimeMsgRequest, ClientToBridgeVoiceMsg,
+    ClientToBridgeWebappMsg,
   },
 };
 use serde::{Deserialize, Serialize};
@@ -56,6 +57,7 @@ pub enum RecvMsgData {
   Player(ClientToBridgePlayerMsg),
   Store(ClientToBridgeStoreMsgRequest),
   System(ClientToBridgeSystemMsg),
+  Presence(ClientToBridgePresenceMsgRequest),
   Time(ClientToBridgeTimeMsgRequest),
   Voice(ClientToBridgeVoiceMsg),
   Webapp(ClientToBridgeWebappMsg),
@@ -119,6 +121,10 @@ impl From<ClientToBridgeMsg> for RecvMsgData {
         None => Self::Hole,
       },
       ClientToBridgeMsgData::System(inner) => Self::System(inner),
+      ClientToBridgeMsgData::Presence(inner) => match inner.into_request() {
+        Some(req) => Self::Presence(req),
+        None => Self::Hole,
+      },
       ClientToBridgeMsgData::Time(inner) => match inner.into_request() {
         Some(req) => Self::Time(req),
         None => Self::Hole,

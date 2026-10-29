@@ -14,6 +14,7 @@ mod notifications;
 mod phone;
 mod player;
 pub use player::SpotifyWakeGate;
+mod presence;
 mod system;
 mod time;
 mod tunnel;
@@ -38,6 +39,7 @@ use net::*;
 use notifications::*;
 use phone::*;
 use player::*;
+use presence::*;
 use system::*;
 use time::*;
 use tunnel::*;
@@ -199,6 +201,11 @@ impl GatewayHandler {
           tokio::spawn(async move { req.dispatch(&SystemHandler::new(handle, ota)).await });
         } else if let Some(cmd) = system_msg.into_command() {
           tokio::spawn(async move { cmd.dispatch(&SystemHandler::new(handle, ota)).await });
+        }
+      }
+      GatewayToBridgeMsgData::Presence(presence_msg) => {
+        if let Some(event) = presence_msg.into_event() {
+          tokio::spawn(async move { event.dispatch(&PresenceHandler::new(handle)).await });
         }
       }
       GatewayToBridgeMsgData::Time(time_msg) => {

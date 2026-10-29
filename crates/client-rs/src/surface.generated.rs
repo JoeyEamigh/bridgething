@@ -69,6 +69,10 @@ impl Client {
   pub fn player(&self) -> PlayerSurface<'_> {
     PlayerSurface(self)
   }
+  /// The `Presence` surface.
+  pub fn presence(&self) -> PresenceSurface<'_> {
+    PresenceSurface(self)
+  }
   /// The `System` surface.
   pub fn system(&self) -> SystemSurface<'_> {
     SystemSurface(self)
@@ -648,6 +652,27 @@ impl<'a> PlayerSurface<'a> {
       ready(match msg {
         Ok(msg) => match msg.data {
           BridgeToClientMsgData::Player(inner) => inner.into_event(),
+          _ => None,
+        },
+        Err(_) => None,
+      })
+    })
+  }
+}
+
+/// Methods scoped to the `Presence` wire surface.
+pub struct PresenceSurface<'a>(&'a Client);
+
+impl<'a> PresenceSurface<'a> {
+  pub async fn get(&self) -> Result<PresenceSnapshot, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(PresenceGet).await
+  }
+  /// Stream of `Presence` events.
+  pub fn events(&self) -> impl Stream<Item = BridgeToClientPresenceMsgEvent> + 'static {
+    BroadcastStream::new(self.0.events()).filter_map(|msg| {
+      ready(match msg {
+        Ok(msg) => match msg.data {
+          BridgeToClientMsgData::Presence(inner) => inner.into_event(),
           _ => None,
         },
         Err(_) => None,

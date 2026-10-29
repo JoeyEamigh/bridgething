@@ -56,8 +56,8 @@ use player::Player;
 // don't pub anything else from core so that dead code lints still work
 pub use state::{AppState, State};
 use state::{
-  AudioManager, DeviceStore, KvStore, MetaStore, RouteTable, StateAssembly, TelephonyManager, TimeManager, WebappBlobs,
-  WebappRegistry,
+  AudioManager, DeviceStore, KvStore, MetaStore, PresenceManager, RouteTable, StateAssembly, TelephonyManager,
+  TimeManager, WebappBlobs, WebappRegistry,
 };
 pub use systemd::power::{ResetRig, ResetSupport, RigError};
 use systemd::{
@@ -273,6 +273,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     .await
     .expect("failed to initialize ALS manager")
     .spawn();
+  let (presence, presence_handle) = PresenceManager::init(bus.clone(), als.clone());
   let (mic, mic_handle) = MicManager::init(
     bus.clone(),
     bluetooth.clone(),
@@ -367,6 +368,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     time,
     audio,
     als,
+    presence,
     mic,
     devices,
     kv,
@@ -383,6 +385,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     asset_cache_handle,
     transfer_handle,
     als_handle,
+    presence_handle,
     mic_handle,
   });
 

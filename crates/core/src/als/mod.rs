@@ -106,6 +106,7 @@ struct Inner {
   samples: VecDeque<u32>,
   current_ticks: u32,
   max_brightness: u32,
+  presence_cap: f32,
 }
 
 impl Inner {
@@ -121,7 +122,12 @@ impl Inner {
       samples: VecDeque::with_capacity(cap),
       current_ticks,
       max_brightness,
+      presence_cap: 1.0,
     }
+  }
+
+  fn cap_ticks(&self) -> u32 {
+    self.level_to_ticks(self.presence_cap)
   }
 
   fn snapshot(&self) -> HardwareState {
@@ -205,6 +211,7 @@ fn ease_step(current: u32, target: u32, ease_pct: f32) -> u32 {
 enum Cmd {
   SetMode(BrightnessMode, oneshot::Sender<Result<(), AlsError>>),
   SetLevel(f32, oneshot::Sender<Result<Result<(), HardwareError>, AlsError>>),
+  CapBrightness(f32),
 }
 
 #[derive(Debug, Clone)]
@@ -294,6 +301,14 @@ impl AlsManager {
     reply_rx.await.map_err(|_| AlsError::Closed)?
   }
 
+  pub async fn set_presence_cap(&self, cap: f32) -> Result<(), AlsError> {
+    self
+      .tx
+      .send(Cmd::CapBrightness(cap.clamp(0.0, 1.0)))
+      .await
+      .map_err(|_| AlsError::Closed)
+  }
+
   pub async fn set_level(&self, level: f32) -> Result<Result<(), HardwareError>, AlsError> {
     let (reply_tx, reply_rx) = oneshot::channel();
     self
@@ -360,7 +375,7 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
             .map(|m| guard.target_for_raw(m))
             .unwrap_or(guard.current_ticks)
         };
-        (ticks, guard.config.backlight_dir.clone())
+        (ticks.min(guard.cap_ticks()), guard.config.backlight_dir.clone())
       };
       if let Err(err) = write_brightness(&dir, write_ticks).await {
         tracing::error!(dir = %dir.display(), ticks = write_ticks, "als: backlight write failed: {err}");
@@ -389,7 +404,7 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
       let (mismatch, write_ticks, dir) = {
         let guard = inner.read().await;
         let mismatch = guard.mode != BrightnessMode::Manual;
-        let ticks = (!mismatch).then(|| guard.level_to_ticks(level));
+        let ticks = (!mismatch).then(|| guard.level_to_ticks(level).min(guard.cap_ticks()));
         (mismatch, ticks, guard.config.backlight_dir.clone())
       };
       if let Some(ticks) = write_ticks
@@ -420,15 +435,40 @@ async fn handle_cmd(cmd: Cmd, inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) {
       let _ = reply.send(Ok(outcome));
       broadcast(bus, BridgeToClientHardwareMsg::BrightnessChanged(brightness)).await;
     }
+    Cmd::CapBrightness(cap) => {
+      let (raised, ticks, dir) = {
+        let mut guard = inner.write().await;
+        let raised = cap > guard.presence_cap;
+        guard.presence_cap = cap;
+        let wanted = match guard.mode {
+          BrightnessMode::Manual => guard.level_to_ticks(guard.manual_level),
+          BrightnessMode::Auto => guard
+            .median()
+            .map(|m| guard.target_for_raw(m))
+            .unwrap_or(guard.max_brightness),
+        };
+        (
+          raised,
+          wanted.min(guard.cap_ticks()),
+          guard.config.backlight_dir.clone(),
+        )
+      };
+      tracing::debug!(cap, raised, ticks, "als: presence cap changed");
+      if raised && let Ok(()) = write_brightness(&dir, ticks).await {
+        let brightness = {
+          let mut guard = inner.write().await;
+          guard.current_ticks = ticks;
+          guard.snapshot().brightness
+        };
+        broadcast(bus, BridgeToClientHardwareMsg::BrightnessChanged(brightness)).await;
+      }
+    }
   }
 }
 
 async fn poll_once(inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) -> Result<(), AlsError> {
   let als_path = inner.read().await.config.als_path.clone();
-  let sample = match read_raw(&als_path).await {
-    Ok(v) => v,
-    Err(_) => return Ok(()),
-  };
+  let sample = read_raw(&als_path).await.ok();
   if inner.read().await.max_brightness == 0 {
     let dir = inner.read().await.config.backlight_dir.clone();
     let max = read_max_brightness(&dir).await?;
@@ -448,15 +488,27 @@ async fn poll_once(inner: &Arc<RwLock<Inner>>, bus: &WireEventBus) -> Result<(),
 
   let (ticks_to_write, dir, prev_level) = {
     let mut guard = inner.write().await;
-    guard.push_sample(sample);
+    if let Some(sample) = sample {
+      guard.push_sample(sample);
+    }
     let prev_level = guard.ambient_level();
 
+    let cap = guard.cap_ticks();
+    let target = match guard.mode {
+      BrightnessMode::Auto => match guard.median() {
+        Some(m) => Some(guard.target_for_raw(m).min(cap)),
+        None => (guard.current_ticks > cap).then_some(cap),
+      },
+      BrightnessMode::Manual => Some(guard.level_to_ticks(guard.manual_level).min(cap)),
+    };
     let mut ticks_to_write: Option<u32> = None;
-    if guard.mode == BrightnessMode::Auto
-      && let Some(m) = guard.median()
-    {
-      let target = guard.target_for_raw(m);
-      let next = ease_step(guard.current_ticks, target, guard.config.ease_pct);
+    if let Some(target) = target {
+      let ease = if cap < guard.max_brightness {
+        0.4
+      } else {
+        guard.config.ease_pct
+      };
+      let next = ease_step(guard.current_ticks, target, ease);
       if next != guard.current_ticks {
         ticks_to_write = Some(next);
       }
@@ -662,5 +714,109 @@ mod tests {
       .trim()
       .to_string();
     assert_eq!(panel, "107", "the panel itself is restored to the manual level");
+  }
+
+  fn backlight_at(root: &Path, ticks: u32) -> PathBuf {
+    let backlight = root.join("backlight");
+    std::fs::create_dir_all(&backlight).expect("scratch backlight");
+    std::fs::write(backlight.join("max_brightness"), "255\n").expect("max_brightness");
+    std::fs::write(backlight.join("actual_brightness"), format!("{ticks}\n")).expect("actual_brightness");
+    std::fs::write(backlight.join("brightness"), format!("{ticks}\n")).expect("brightness");
+    backlight
+  }
+
+  fn panel(backlight: &Path) -> u32 {
+    std::fs::read_to_string(backlight.join("brightness"))
+      .expect("panel brightness")
+      .trim()
+      .parse()
+      .expect("numeric brightness")
+  }
+
+  async fn settles_at(backlight: &Path, ticks: u32) -> bool {
+    for _ in 0..200 {
+      if panel(backlight) == ticks {
+        return true;
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    false
+  }
+
+  async fn polling_manager_at(root: &Path) -> (AlsManager, JoinHandle<()>) {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let config = AlsConfig {
+      poll_interval: Duration::from_millis(10),
+      als_path: root.join("in_intensity0_raw"),
+      backlight_dir: root.join("backlight"),
+      prefs_path: root.join("als.json"),
+      ..Default::default()
+    };
+    AlsManager::init(WireEventBus::new(client_man), config)
+      .await
+      .expect("als init")
+      .spawn()
+  }
+
+  #[tokio::test]
+  async fn a_presence_cap_lowers_the_panel_and_lifting_it_restores_the_level() {
+    let root = scratch("als-test-cap-restore");
+    let backlight = backlight_at(&root, 255);
+    let (manager, _rig) = polling_manager_at(&root).await;
+    manager.set_mode(BrightnessMode::Manual).await.expect("mode switch");
+    manager
+      .set_level(0.5)
+      .await
+      .expect("level write")
+      .expect("manual level");
+    assert_eq!(panel(&backlight), 128);
+
+    manager.set_presence_cap(0.2).await.expect("cap");
+    assert!(
+      settles_at(&backlight, 51).await,
+      "the panel fades to the cap: {}",
+      panel(&backlight)
+    );
+    let held = manager.snapshot().await.brightness;
+    assert_eq!(held.mode, BrightnessMode::Manual);
+    assert!(
+      (held.level - 0.5).abs() < f32::EPSILON,
+      "the cap does not rewrite the chosen level"
+    );
+
+    manager.set_presence_cap(1.0).await.expect("cap");
+    assert!(
+      settles_at(&backlight, 128).await,
+      "the panel returns to the chosen level: {}",
+      panel(&backlight)
+    );
+  }
+
+  #[tokio::test]
+  async fn a_level_chosen_under_a_cap_waits_for_the_cap_to_lift() {
+    let root = scratch("als-test-cap-level");
+    let backlight = backlight_at(&root, 255);
+    let (manager, _rig) = polling_manager_at(&root).await;
+    manager.set_mode(BrightnessMode::Manual).await.expect("mode switch");
+    manager.set_presence_cap(0.0).await.expect("cap");
+    assert!(
+      settles_at(&backlight, 0).await,
+      "the panel goes dark: {}",
+      panel(&backlight)
+    );
+
+    manager
+      .set_level(0.9)
+      .await
+      .expect("level write")
+      .expect("manual level");
+    assert_eq!(panel(&backlight), 0, "a level change cannot light a capped panel");
+
+    manager.set_presence_cap(1.0).await.expect("cap");
+    assert!(
+      settles_at(&backlight, 230).await,
+      "the new level applies once the cap lifts: {}",
+      panel(&backlight)
+    );
   }
 }

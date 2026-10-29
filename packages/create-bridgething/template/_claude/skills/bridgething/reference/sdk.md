@@ -430,6 +430,7 @@ Read a surface's class in `dispatch.generated.d.ts` for its exact methods.
 | Surface | What it does | Notable methods |
 | --- | --- | --- |
 | `player` | now-playing and transport | onSnapshot, stateGet, play, pause, resume, skipNext, skipPrev, seekTo, setShuffle, setRepeat, queueGet |
+| `presence` | whether the screen should be lit, from the host display state | get, onSnapshot, onChanged |
 | `asset` | fetch blobs by opaque id | get, preload, onReady, onCleared |
 | `store` | per-webapp key and value | get, put, delete |
 | `config` | user settings from the manifest | get, list, onChanged |

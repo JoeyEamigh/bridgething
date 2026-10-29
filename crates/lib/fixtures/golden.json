@@ -912,6 +912,54 @@
       "framed_hex": "dead020000000000000000000000006f83a26964c4100192f2a0bbb07c00a000000000000001a46d65746181a46b696e64a56576656e74a46461746182a474797065a9617574686f72697479a46461746182a56576656e74a772656c65617365a46461746181a573636f7065b26e6f77506c6179696e67506c61796261636b"
     },
     {
+      "name": "gateway_to_bridge/presence-update-heartbeat",
+      "description": "host reports its display is dimmed and promises another report within ten seconds",
+      "direction": "gateway_to_bridge",
+      "priority": "normal",
+      "decoded_json": {
+        "data": {
+          "data": {
+            "data": {
+              "display": "dim",
+              "heartbeatS": 10,
+              "idleS": 312
+            },
+            "event": "update"
+          },
+          "type": "presence"
+        },
+        "id": "0192f2a0-bbb0-7c00-a000-000000000001",
+        "meta": {
+          "kind": "event"
+        }
+      },
+      "msgpack_hex": "83a26964c4100192f2a0bbb07c00a000000000000001a46d65746181a46b696e64a56576656e74a46461746182a474797065a870726573656e6365a46461746182a56576656e74a6757064617465a46461746183a7646973706c6179a364696da569646c6553cd0138aa686561727462656174530a",
+      "framed_hex": "dead020000000000000000000000007583a26964c4100192f2a0bbb07c00a000000000000001a46d65746181a46b696e64a56576656e74a46461746182a474797065a870726573656e6365a46461746182a56576656e74a6757064617465a46461746183a7646973706c6179a364696da569646c6553cd0138aa686561727462656174530a"
+    },
+    {
+      "name": "gateway_to_bridge/presence-update-release",
+      "description": "host hands the screen back to the device with a report that never expires",
+      "direction": "gateway_to_bridge",
+      "priority": "normal",
+      "decoded_json": {
+        "data": {
+          "data": {
+            "data": {
+              "display": "active"
+            },
+            "event": "update"
+          },
+          "type": "presence"
+        },
+        "id": "0192f2a0-bbb0-7c00-a000-000000000001",
+        "meta": {
+          "kind": "event"
+        }
+      },
+      "msgpack_hex": "83a26964c4100192f2a0bbb07c00a000000000000001a46d65746181a46b696e64a56576656e74a46461746182a474797065a870726573656e6365a46461746182a56576656e74a6757064617465a46461746181a7646973706c6179a6616374697665",
+      "framed_hex": "dead020000000000000000000000006383a26964c4100192f2a0bbb07c00a000000000000001a46d65746181a46b696e64a56576656e74a46461746182a474797065a870726573656e6365a46461746182a56576656e74a6757064617465a46461746181a7646973706c6179a6616374697665"
+    },
+    {
       "name": "gateway_to_bridge/webapp-list-request",
       "description": "gateway asks the daemon to enumerate installed and built-in webapps",
       "direction": "gateway_to_bridge",
