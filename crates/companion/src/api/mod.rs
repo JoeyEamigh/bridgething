@@ -16,7 +16,7 @@ use crate::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, GeoProvider,
     HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
     MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend,
-    SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
+    PresenceBackend, SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
     log::{api_from_wire, wire_from_api},
   },
   provider::ResumeTarget,
@@ -238,6 +238,13 @@ pub struct WebappInstallRequest {
 pub struct CompanionSession {
   session: Arc<Session>,
   log_inbox: Arc<LogInbox>,
+}
+
+impl CompanionSession {
+  /// Desktop only. Mobile hosts have no display to follow, so this stays out of the FFI surface.
+  pub fn set_presence_backend(&self, presence: Arc<dyn PresenceBackend>) {
+    self.session.set_presence_backend(presence);
+  }
 }
 
 #[uniffi::export(async_runtime = "tokio")]

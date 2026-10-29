@@ -32,7 +32,7 @@ use bridgething_companion::{
   backend::{
     AudioBackend, ConnectivityInbox, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler,
     LogLevel, LogSink, MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner,
-    NotificationBackend, SecretStore, SpeechRecognizer, StreamBackend, VolumeBackend,
+    NotificationBackend, PresenceBackend, SecretStore, SpeechRecognizer, StreamBackend, VolumeBackend,
   },
   store::{JsonFile, stored},
 };
@@ -47,6 +47,7 @@ pub struct Platform {
   pub stream: Option<Arc<dyn StreamBackend>>,
   pub audio: Option<Arc<dyn AudioBackend>>,
   pub volume: Option<Arc<dyn VolumeBackend>>,
+  pub presence: Option<Arc<dyn PresenceBackend>>,
   pub connectivity: Option<Arc<dyn ConnectivityMonitor>>,
   pub image: Option<Arc<dyn ImageScaler>>,
   pub transcoder: Option<Arc<dyn MediaTranscoder>>,

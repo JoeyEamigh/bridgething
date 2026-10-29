@@ -28,12 +28,18 @@ use std::{
 
 use bridgething_companion::{
   api::{PeerLinkStatus, SessionEvent, WebappInstallRequest},
-  backend::{ExtensionHost, ExtensionMessage, VolumeBackend, VolumeInbox, VolumeLevel},
+  backend::{
+    ExtensionHost, ExtensionMessage, HostDisplay, PresenceBackend, PresenceInbox, PresenceReport, VolumeBackend,
+    VolumeInbox, VolumeLevel,
+  },
   provider::{Provider, ProviderError},
 };
 use bridgething_delivery::ota::{event::OtaPhaseSnapshot, stream::FileSource};
 use bridgething_gateway::route;
-use libbridgething::{CompanionAuthorityScope, MediaItem, Playback, PlaybackState, PlayerState};
+use libbridgething::{
+  CompanionAuthorityScope, DisplayState, MediaItem, Playback, PlaybackState, PlayerState, PresenceSettings,
+  PresenceSource,
+};
 use serde::Serialize;
 
 use crate::{
@@ -90,6 +96,42 @@ impl VolumeBackend for FakeVolume {
   fn volume_up(&self) {}
   fn volume_down(&self) {}
   fn mute_toggle(&self) {}
+}
+
+pub struct FakePresence {
+  inbox: Mutex<Option<Arc<PresenceInbox>>>,
+  report: Mutex<PresenceReport>,
+}
+
+impl FakePresence {
+  pub fn showing(display: HostDisplay) -> Arc<Self> {
+    Arc::new(Self {
+      inbox: Mutex::new(None),
+      report: Mutex::new(PresenceReport { display, idle_s: 0 }),
+    })
+  }
+
+  pub fn changed_to(&self, display: HostDisplay) {
+    *self.report.lock().unwrap() = PresenceReport { display, idle_s: 0 };
+    let inbox = self.inbox.lock().unwrap().clone();
+    if let Some(inbox) = inbox {
+      inbox.on_changed(display, 0);
+    }
+  }
+}
+
+impl PresenceBackend for FakePresence {
+  fn start(&self, inbox: Arc<PresenceInbox>) {
+    *self.inbox.lock().unwrap() = Some(inbox);
+  }
+
+  fn stop(&self) {
+    self.inbox.lock().unwrap().take();
+  }
+
+  fn snapshot(&self) -> PresenceReport {
+    *self.report.lock().unwrap()
+  }
 }
 
 const ARTIFACT_BYTES: usize = 512 * 1024;
@@ -1114,5 +1156,175 @@ async fn a_restarted_phone_with_no_network_still_shows_the_car_its_last_library(
     browse_root(&airplane).await,
     Some(7),
     "a fresh daemon and a fresh companion still render the page the phone kept on disk"
+  );
+}
+
+fn screen(rig: &Rig) -> (DisplayState, PresenceSource) {
+  let info = rig.harness.state().presence.snapshot().presence;
+  (info.display, info.source)
+}
+
+async fn follow_the_host(rig: &Rig) {
+  rig
+    .harness
+    .state()
+    .presence
+    .set_settings(PresenceSettings {
+      follow_host: true,
+      ..PresenceSettings::default()
+    })
+    .await
+    .expect("a device can be told to follow the host");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_that_is_not_told_to_follow_the_host_leaves_its_screen_alone() {
+  let presence = FakePresence::showing(HostDisplay::Off);
+  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+  rig.settle().await;
+  tokio::time::sleep(Duration::from_millis(500)).await;
+
+  assert_eq!(
+    screen(&rig),
+    (DisplayState::Active, PresenceSource::None),
+    "the host display is asleep and the device was not asked to care"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_with_a_display_tells_the_device_when_it_connects() {
+  let presence = FakePresence::showing(HostDisplay::Off);
+  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+  rig.settle().await;
+
+  follow_the_host(&rig).await;
+
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.source == PresenceSource::Host,
+        SETTLE
+      )
+      .await,
+    "the device never heard the host's display state"
+  );
+  assert_eq!(screen(&rig), (DisplayState::Off, PresenceSource::Host));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_device_screen_follows_the_host_display() {
+  let presence = FakePresence::showing(HostDisplay::Active);
+  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+  rig.settle().await;
+  follow_the_host(&rig).await;
+
+  presence.changed_to(HostDisplay::Off);
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Off,
+        SETTLE
+      )
+      .await,
+    "the host display went to sleep and the device screen stayed lit"
+  );
+
+  presence.changed_to(HostDisplay::Active);
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Active,
+        SETTLE
+      )
+      .await,
+    "the host display woke and the device screen stayed dark"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_that_shuts_down_hands_the_screen_back() {
+  let presence = FakePresence::showing(HostDisplay::Off);
+  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+  rig.settle().await;
+  follow_the_host(&rig).await;
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Off,
+        SETTLE
+      )
+      .await,
+    "the host display was asleep and the device screen stayed lit"
+  );
+
+  rig.session.stop().await;
+
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Active,
+        SETTLE
+      )
+      .await,
+    "a host that quit left the device screen dark"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_that_quits_hands_the_screen_to_the_timers() {
+  let presence = FakePresence::showing(HostDisplay::Off);
+  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+  rig.settle().await;
+  rig
+    .harness
+    .state()
+    .presence
+    .set_settings(PresenceSettings {
+      follow_host: true,
+      sleep_after_s: Some(5),
+      ..PresenceSettings::default()
+    })
+    .await
+    .expect("a device can follow the host and keep a sleep timer");
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Off,
+        SETTLE
+      )
+      .await,
+    "the host display was asleep and the device screen stayed lit"
+  );
+
+  rig.session.stop().await;
+
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| state.presence.snapshot().presence.display == DisplayState::Active,
+        SETTLE
+      )
+      .await,
+    "a host that quit left the device screen dark"
+  );
+  assert!(
+    rig
+      .harness
+      .wait_for(
+        |state| {
+          let info = state.presence.snapshot().presence;
+          (info.display, info.source) == (DisplayState::Off, PresenceSource::Timer)
+        },
+        SETTLE
+      )
+      .await,
+    "with the host gone the device falls back to its own sleep timer"
   );
 }

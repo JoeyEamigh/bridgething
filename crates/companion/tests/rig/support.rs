@@ -10,7 +10,8 @@ use std::{
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, SessionEvent},
   backend::{
-    ExtensionHost, HttpTransport, ImageScaler, LinkDevice, LinkInbox, LinkTransport, MediaTranscoder, VolumeBackend,
+    ExtensionHost, HttpTransport, ImageScaler, LinkDevice, LinkInbox, LinkTransport, MediaTranscoder, PresenceBackend,
+    VolumeBackend,
   },
   session::Session,
 };
@@ -303,6 +304,7 @@ pub struct Setup {
   pub extensions: Option<Arc<dyn ExtensionHost>>,
   pub http: Option<Arc<dyn HttpTransport>>,
   pub volume: Option<Arc<dyn VolumeBackend>>,
+  pub presence: Option<Arc<dyn PresenceBackend>>,
   pub image: Option<Arc<dyn ImageScaler>>,
   pub transcoder: Option<Arc<dyn MediaTranscoder>>,
   pub cache_dir: Option<PathBuf>,
@@ -343,6 +345,14 @@ impl Rig {
     Self::launch(Setup {
       recording: true,
       volume: Some(volume),
+      ..Setup::default()
+    })
+    .await
+  }
+
+  pub async fn with_presence(presence: Arc<dyn PresenceBackend>) -> Self {
+    Self::launch(Setup {
+      presence: Some(presence),
       ..Setup::default()
     })
     .await
@@ -419,6 +429,9 @@ impl Rig {
       backends,
       heard.clone(),
     );
+    if let Some(presence) = setup.presence {
+      companion.set_presence_backend(presence);
+    }
     let session = companion.session().clone();
     session.start();
 
