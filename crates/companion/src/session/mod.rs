@@ -50,7 +50,8 @@ use crate::{
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
-    LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
+    HostDisplay, LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, PresenceBackend,
+    PresenceInbox, PresenceReport, VolumeInbox, VolumeLevel,
   },
   cache::PhoneCache,
   dayparting::Dayparting,
@@ -202,6 +203,8 @@ pub struct Session {
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
   volume_pump: Mutex<Option<JoinHandle<()>>>,
+  presence: Mutex<Option<Arc<dyn PresenceBackend>>>,
+  presence_pump: Mutex<Option<JoinHandle<()>>>,
   arbitration: Mutex<Option<JoinHandle<()>>>,
   updates: Mutex<Option<JoinHandle<()>>>,
   handle_sweep: Mutex<Option<JoinHandle<()>>>,
@@ -344,6 +347,8 @@ impl Session {
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
       volume_pump: Mutex::new(None),
+      presence: Mutex::new(None),
+      presence_pump: Mutex::new(None),
       arbitration: Mutex::new(None),
       updates: Mutex::new(None),
       handle_sweep: Mutex::new(None),
@@ -698,6 +703,16 @@ impl Session {
       }
       tokio::task::spawn_blocking(move || volume.start(inbox));
     }
+    if let Some(presence) = self.presence_backend() {
+      let (inbox, reports) = PresenceInbox::channel();
+      let session = self.clone();
+      let backend = presence.clone();
+      let pump = tokio::spawn(async move { session.pump_presence(backend, reports).await });
+      if let Some(previous) = self.presence_pump.lock().unwrap().replace(pump) {
+        previous.abort();
+      }
+      tokio::task::spawn_blocking(move || presence.start(inbox));
+    }
     let Some(transport) = self.backends.link.clone() else {
       return;
     };
@@ -762,6 +777,35 @@ impl Session {
     }
   }
 
+  /// Report the host display state the moment it changes, and again every `PRESENCE_HEARTBEAT` so
+  /// the device can tell a quiet host from a gone one.
+  async fn pump_presence(
+    self: Arc<Self>,
+    backend: Arc<dyn crate::backend::PresenceBackend>,
+    mut reports: mpsc::UnboundedReceiver<PresenceReport>,
+  ) {
+    let mut beat = tokio::time::interval(PRESENCE_HEARTBEAT);
+    beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+      let report = tokio::select! {
+        received = reports.recv() => match received {
+          Some(report) => report,
+          None => return,
+        },
+        _ = beat.tick() => {
+          let backend = backend.clone();
+          match tokio::task::spawn_blocking(move || backend.snapshot()).await {
+            Ok(report) => report,
+            Err(_) => continue,
+          }
+        }
+      };
+      for (_, gateway) in self.live_gateways() {
+        let _ = gateway.presence().update(host_presence(report)).await;
+      }
+    }
+  }
+
   async fn pump_connectivity(self: Arc<Self>, mut edges: mpsc::UnboundedReceiver<bool>) {
     while let Some(online) = edges.recv().await {
       self.cache.set_online(online);
@@ -776,12 +820,18 @@ impl Session {
   }
 
   pub async fn stop(&self) {
+    if self.presence_backend().is_some() {
+      for (_, gateway) in self.live_gateways() {
+        let _ = gateway.presence().update(release_presence()).await;
+      }
+    }
     self.networks.lock().unwrap().clear();
     for held in [
       &self.models_watch,
       &self.inbox,
       &self.connectivity_pump,
       &self.volume_pump,
+      &self.presence_pump,
       &self.arbitration,
       &self.updates,
       &self.handle_sweep,
@@ -795,6 +845,9 @@ impl Session {
     }
     if let Some(volume) = self.backends.volume.clone() {
       let _ = tokio::task::spawn_blocking(move || volume.stop()).await;
+    }
+    if let Some(presence) = self.presence_backend() {
+      let _ = tokio::task::spawn_blocking(move || presence.stop()).await;
     }
     for device_id in self.device_ids() {
       self.teardown(&device_id).await;
@@ -1075,6 +1128,7 @@ impl Session {
     self.hub.peer_connected(&device.id).await;
     self.push_time(gateway).await;
     self.push_volume(gateway).await;
+    self.push_presence(gateway).await;
 
     if let Some(geo) = &peer.geo {
       geo.start().await;
@@ -1113,6 +1167,24 @@ impl Session {
         muted: level.muted,
       })
       .await;
+  }
+
+  pub fn set_presence_backend(&self, presence: Arc<dyn PresenceBackend>) {
+    *self.presence.lock().unwrap() = Some(presence);
+  }
+
+  fn presence_backend(&self) -> Option<Arc<dyn PresenceBackend>> {
+    self.presence.lock().unwrap().clone()
+  }
+
+  pub async fn push_presence(&self, gateway: &Gateway) {
+    let Some(presence) = self.presence_backend() else {
+      return;
+    };
+    let Ok(report) = tokio::task::spawn_blocking(move || presence.snapshot()).await else {
+      return;
+    };
+    let _ = gateway.presence().update(host_presence(report)).await;
   }
 
   pub async fn push_time(&self, gateway: &Gateway) {
@@ -1405,6 +1477,30 @@ async fn release_log_tap(gateway: &Gateway, token: String) {
     .system()
     .logs_unsubscribe(libbridgething::gateway::LogsUnsubscribe { token })
     .await;
+}
+
+const PRESENCE_HEARTBEAT: std::time::Duration = std::time::Duration::from_secs(5);
+
+const RELEASE_HEARTBEAT_S: u16 = 1;
+
+fn release_presence() -> libbridgething::HostPresence {
+  libbridgething::HostPresence {
+    display: libbridgething::DisplayState::Active,
+    idle_s: None,
+    heartbeat_s: Some(RELEASE_HEARTBEAT_S),
+  }
+}
+
+fn host_presence(report: PresenceReport) -> libbridgething::HostPresence {
+  libbridgething::HostPresence {
+    display: match report.display {
+      HostDisplay::Active => libbridgething::DisplayState::Active,
+      HostDisplay::Dim => libbridgething::DisplayState::Dim,
+      HostDisplay::Off => libbridgething::DisplayState::Off,
+    },
+    idle_s: Some(report.idle_s),
+    heartbeat_s: Some(PRESENCE_HEARTBEAT.as_secs() as u16),
+  }
 }
 
 fn time_info(clock: HostClock) -> TimeInfo {

@@ -15,6 +15,7 @@ pub mod net;
 pub mod nlu;
 pub mod notifications;
 pub mod phone;
+pub mod presence;
 pub mod secrets;
 pub mod speech;
 pub mod stream;
@@ -59,6 +60,7 @@ pub use phone::{
   PhoneCall, PhoneCallDirection, PhoneCallEnded, PhoneCallService, PhoneCallStatus, PhoneCommand, PhoneEvent,
   PhoneInbox, PhoneInitiate, PhoneState, PhoneStateSink, RegistrationStatus,
 };
+pub use presence::{HostDisplay, PresenceBackend, PresenceInbox, PresenceReport};
 pub use secrets::SecretStore;
 pub use speech::{PrepareEvent, PrepareSink, SpeechRecognizer, SpeechSegment, Transcription, TranscriptionSink};
 pub use stream::{
