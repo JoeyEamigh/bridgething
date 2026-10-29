@@ -19,6 +19,7 @@ import type {
   GatewayCapabilities,
   GeoAccuracy,
   GeoError,
+  HostPresence,
   HttpHeader,
   InitiateCallType,
   ItemKind,
@@ -362,6 +363,7 @@ export type GatewayToBridgeMsgData =
   | { type: 'notifications'; data: GatewayToBridgeNotificationsMsg }
   | { type: 'phone'; data: GatewayToBridgePhoneMsg }
   | { type: 'player'; data: GatewayToBridgePlayerMsg }
+  | { type: 'presence'; data: GatewayToBridgePresenceMsg }
   | { type: 'system'; data: GatewayToBridgeSystemMsg }
   | { type: 'time'; data: GatewayToBridgeTimeMsg }
   | { type: 'transfer'; data: GatewayToBridgeTransferMsg }
@@ -406,6 +408,8 @@ export type GatewayToBridgePlayerMsg =
   | { event: 'requestSpotifyWake'; data: SpotifyWakeRequest }
   | { event: 'snapshotAck'; data: PlayerSnapshotAck }
   | { event: 'errorReply'; data: PlayerErrorReply };
+
+export type GatewayToBridgePresenceMsg = { event: 'update'; data: HostPresence };
 
 export type GatewayToBridgeSystemMsg =
   | { event: 'otaBegin'; data: OtaBegin }

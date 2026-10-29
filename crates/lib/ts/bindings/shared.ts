@@ -226,6 +226,11 @@ export type Diagnostics = {
 export type DismissReason = 'userDismissed' | 'acted' | 'remoteDismissed';
 
 /**
+ * How lit the device screen should be. The host maps its own display and idle state onto this.
+ */
+export type DisplayState = 'active' | 'dim' | 'off';
+
+/**
  * Both the webapp and the companion app write it, and the last write wins. Values are strings.
  */
 export type DocEntry = { key: string; value: string };
@@ -297,6 +302,27 @@ export type HardwareState = {
    * 0 to 100.
    */
   ambientLevel: number;
+};
+
+/**
+ * What a connected host says about its own display, so the device screen can follow it.
+ *
+ * A device with no presence-reporting host leaves the screen to the brightness mode. Once a host
+ * reports with `heartbeatS`, the device blanks if that host goes quiet. A report without
+ * `heartbeatS` never expires, so a host that is shutting down sends `active` without one to hand
+ * the screen back.
+ */
+export type HostPresence = {
+  display: DisplayState;
+  /**
+   * Seconds since the host user last touched an input device.
+   */
+  idleS: number | null;
+  /**
+   * Seconds until the host reports again. The device blanks after three missed reports, and never
+   * sooner than 60 seconds. Omit it for a one-off report that does not expire.
+   */
+  heartbeatS: number | null;
 };
 
 export type HttpHeader = { name: string; value: string };
@@ -919,6 +945,13 @@ export type Position = {
    */
   tsUnixS: number;
 };
+
+export type PresenceInfo = { display: DisplayState; source: PresenceSource };
+
+/**
+ * Why the device screen is in its current state.
+ */
+export type PresenceSource = 'none' | 'host' | 'failsafe' | 'localWake';
 
 export type Priority = 'normal' | 'bulk' | 'background';
 

@@ -1,6 +1,7 @@
 pub mod chaos;
 pub mod install;
 pub mod ota;
+pub mod presence;
 pub mod session;
 pub mod webapp;
 

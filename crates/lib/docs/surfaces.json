@@ -820,6 +820,28 @@
       "handlers": []
     },
     {
+      "name": "presence",
+      "title": "Presence",
+      "description": "Whether the screen should be lit, as decided from the host display state. A webapp or native\nrenderer that draws every frame should stop drawing while `display` is `off`. `get` returns the\nstate on demand and `onChanged` reports every later change.",
+      "events": [
+        {
+          "method": "onChanged",
+          "payload": "PresenceSnapshot",
+          "payload_ref": "PresenceSnapshot"
+        }
+      ],
+      "requests": [
+        {
+          "method": "get",
+          "description": "Returns the current screen presence state.",
+          "response": "PresenceSnapshot",
+          "response_event": "onSnapshot"
+        }
+      ],
+      "commands": [],
+      "handlers": []
+    },
+    {
       "name": "system",
       "title": "System",
       "description": "Device identity, health, logs, and power control for a webapp. `versionRequest` and\n`diagnosticsGet` return the daemon version and a health snapshot, `logsTail` returns a batch of\nlog entries, and `logsSubscribe` streams them as `onLogEntry`. `onOtaProgress` and\n`onOtaFinished` track a software update.",
@@ -2128,6 +2150,24 @@
           "name": "mode",
           "type": "BrightnessMode",
           "type_ref": "BrightnessMode"
+        }
+      ]
+    },
+    "DisplayState": {
+      "kind": "enum",
+      "description": "How lit the device screen should be. The host maps its own display and idle state onto this.",
+      "variants": [
+        {
+          "name": "Active",
+          "description": "Full brightness, as set by the brightness mode."
+        },
+        {
+          "name": "Dim",
+          "description": "Capped to a low level. The host is idle but its display is still on."
+        },
+        {
+          "name": "Off",
+          "description": "Backlight off. The host display is asleep, or the host went away."
         }
       ]
     },
@@ -5328,6 +5368,53 @@
           "name": "tsUnixS",
           "type": "number",
           "description": "Fix time, not arrival time."
+        }
+      ]
+    },
+    "PresenceInfo": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "display",
+          "type": "DisplayState",
+          "type_ref": "DisplayState"
+        },
+        {
+          "name": "source",
+          "type": "PresenceSource",
+          "type_ref": "PresenceSource"
+        }
+      ]
+    },
+    "PresenceSnapshot": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "presence",
+          "type": "PresenceInfo",
+          "type_ref": "PresenceInfo"
+        }
+      ]
+    },
+    "PresenceSource": {
+      "kind": "enum",
+      "description": "Why the device screen is in its current state.",
+      "variants": [
+        {
+          "name": "None",
+          "description": "No host is managing the screen, so the brightness mode is in charge."
+        },
+        {
+          "name": "Host",
+          "description": "The host reported this state."
+        },
+        {
+          "name": "Failsafe",
+          "description": "The host promised reports and stopped sending them."
+        },
+        {
+          "name": "LocalWake",
+          "description": "A button or knob press woke the screen."
         }
       ]
     },

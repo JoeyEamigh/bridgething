@@ -129,6 +129,9 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
         }
 
         let key = KeyCode::new(ev.code());
+        if ev.value() == 1 {
+          state.presence.touch();
+        }
 
         if let Some(window) = presses.as_mut() {
           let pressed = if key == KeyCode::KEY_M { Key::Launcher } else { Key::Other };

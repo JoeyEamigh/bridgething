@@ -7,7 +7,7 @@ use bridgething_host_gateway::{
   chaos::ChaosConfig,
   init_logging, install,
   ota::{self, PushRequest, PushShape},
-  run_open, webapp,
+  presence, run_open, webapp,
 };
 use clap::{Parser, Subcommand};
 use libbridgething::OtaKind;
@@ -64,6 +64,12 @@ enum Command {
   },
   SwitchWebapp {
     id: Uuid,
+  },
+  /// Report a host display state (active, dim, off). `--hold` keeps heartbeating for that many seconds.
+  Presence {
+    state: String,
+    #[arg(long, default_value_t = 0)]
+    hold: u64,
   },
   Install {
     bundle: PathBuf,
@@ -168,6 +174,7 @@ async fn main() -> anyhow::Result<()> {
       .await
     }
     Command::SwitchWebapp { id } => webapp::run_switch(&cli.url, chaos, id).await,
+    Command::Presence { state, hold } => presence::run_presence(&cli.url, chaos, &state, hold).await,
     Command::Install { bundle, provenance } => {
       install::run_install(&cli.url, chaos, &resolve(fixture, &bundle), provenance.as_deref()).await
     }
