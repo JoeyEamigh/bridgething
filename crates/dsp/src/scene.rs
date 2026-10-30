@@ -97,6 +97,7 @@ pub struct SceneEstimator {
   recent_alpha: f64,
   gate_alpha: f64,
   noise_frames: usize,
+  prior_scaled: bool,
   pooled_bearing: Option<f64>,
   gate_reference: Vec<Complex64>,
   freeze_limit: usize,
@@ -131,6 +132,7 @@ impl SceneEstimator {
       recent_alpha: decay(config.recent_tau_s, hop_s),
       gate_alpha: decay(config.gate_tau_s, hop_s),
       noise_frames: 0,
+      prior_scaled: false,
       pooled_bearing: None,
       gate_reference: Vec::new(),
       freeze_limit: (config.max_freeze_s / hop_s).ceil() as usize,
@@ -180,15 +182,25 @@ impl SceneEstimator {
     self.point_like = gate_total / bins >= self.config.gate_threshold;
     self.frozen_for = if self.point_like { self.frozen_for + 1 } else { 0 };
     let frozen = self.point_like && (self.holding || self.frozen_for <= self.freeze_limit);
+    let scale_prior = !frozen && !self.prior_scaled && frame_broadband > 0.0;
 
     for (bin, (recent, noise)) in self.recent.iter_mut().zip(self.noise.iter_mut()).enumerate() {
       let snapshot: [Complex64; CHANNELS] =
         std::array::from_fn(|p| Complex64::new(spectra[p][bin].re as f64, spectra[p][bin].im as f64));
       accumulate(recent, &snapshot, self.recent_alpha);
+      if scale_prior {
+        let weight = snapshot.iter().map(Complex64::norm_sqr).sum::<f64>() / CHANNELS as f64 * (1.0 - self.noise_alpha);
+        for row in noise.iter_mut() {
+          for value in row.iter_mut() {
+            *value *= weight;
+          }
+        }
+      }
       if !frozen {
         accumulate(noise, &snapshot, self.noise_alpha);
       }
     }
+    self.prior_scaled |= scale_prior;
     if !frozen {
       self.noise_frames = self.noise_frames.saturating_add(1);
     }
@@ -281,6 +293,7 @@ impl SceneEstimator {
     }
     self.broadband = 0.0;
     self.noise_frames = 0;
+    self.prior_scaled = false;
     self.pooled_bearing = None;
     self.gate_reference.clear();
     self.frozen_for = 0;
@@ -555,6 +568,32 @@ mod tests {
           .total_cmp(&(frequencies[*b] - freq_hz).abs())
       })
       .unwrap()
+  }
+
+  #[test]
+  fn the_noise_estimate_converges_the_same_at_any_capture_level() {
+    let (mut loud, mut quiet) = (estimator(), estimator());
+    let mut seed = 11;
+    let field = [(-50.0, 1.0, 0.0), (20.0, 0.5, 0.0)];
+    for _ in 0..80 {
+      let spectra = frame(&field, 0.05, &mut seed);
+      let attenuated: [Box<[Complex32; BINS]>; CHANNELS] =
+        std::array::from_fn(|position| Box::new(spectra[position].map(|value| value * 1e-3)));
+      loud.observe(&spectra);
+      quiet.observe(&attenuated);
+    }
+    let bin = bin_near(1500.0);
+    let (loud, quiet) = (normalized(&loud.noise[bin]), normalized(&quiet.noise[bin]));
+    for i in 0..CHANNELS {
+      for j in 0..CHANNELS {
+        assert!(
+          (loud[i][j] - quiet[i][j]).norm() < 1e-6,
+          "the quiet capture is still reading the prior at [{i}][{j}]: {} against {}",
+          quiet[i][j],
+          loud[i][j]
+        );
+      }
+    }
   }
 
   #[test]

@@ -17,12 +17,23 @@ impl NotificationsHandler {
   pub fn new(handle: MsgHandle) -> Self {
     Self { handle }
   }
+
+  fn note_origin(&self, notification: &Notification) {
+    if let Some(origin) = self.handle.address {
+      self
+        .handle
+        .state
+        .notification_origins
+        .note(notification.id.clone(), origin);
+    }
+  }
 }
 
 impl GatewayToBridgeNotificationsMsgEventDispatch for NotificationsHandler {
   type Output = HandlerResult;
 
   async fn posted(&self, params: Notification) -> HandlerResult {
+    self.note_origin(&params);
     self
       .handle
       .state
@@ -33,6 +44,7 @@ impl GatewayToBridgeNotificationsMsgEventDispatch for NotificationsHandler {
   }
 
   async fn updated(&self, params: Notification) -> HandlerResult {
+    self.note_origin(&params);
     self
       .handle
       .state
@@ -43,6 +55,7 @@ impl GatewayToBridgeNotificationsMsgEventDispatch for NotificationsHandler {
   }
 
   async fn removed(&self, params: NotificationRemoved) -> HandlerResult {
+    self.handle.state.notification_origins.forget(&params.id);
     self
       .handle
       .state

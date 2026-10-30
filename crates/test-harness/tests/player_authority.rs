@@ -4,7 +4,7 @@ use bridgething_gateway::Gateway;
 use bridgething_iap2::csm::now_playing::{
   MediaItemAttributes as Iap2MediaItem, NowPlayingUpdate as Iap2NowPlaying, PlaybackAttributes, PlaybackState,
 };
-use bridgething_test_harness::{Harness, Iap2Source, Iap2SourceDriver};
+use bridgething_test_harness::{Harness, Iap2Source, Iap2SourceDriver, MockWsClient};
 use libbridgething::{
   CompanionAuthorityScope, GatewayCapabilities, GatewayInfo, MediaItem, Playback, PlaybackState as WirePlaybackState,
   PlayerState, QueueItem,
@@ -84,9 +84,9 @@ fn queue_item(uri: &str, title: &str, artist: &str) -> QueueItem {
   }
 }
 
-async fn companion_owned_harness() -> (Harness, Gateway) {
+async fn companion_owned_harness() -> (Harness, Gateway, MockWsClient) {
   let harness = Harness::start().await.expect("harness start");
-  let _modern = harness.connect_modern_client().await.expect("modern client");
+  let modern = harness.connect_modern_client().await.expect("modern client");
   let registered = harness.wait_for(|s| s.client_man.client_count() >= 1, CONVERGE).await;
   assert!(registered, "modern client never registered");
 
@@ -120,12 +120,12 @@ async fn companion_owned_harness() -> (Harness, Gateway) {
     )
     .await;
   assert!(converged, "companion never took now-playing authority");
-  (harness, phone)
+  (harness, phone, modern)
 }
 
 #[tokio::test]
 async fn iap2_chatter_during_companion_playback_is_broadcast_silent() {
-  let (harness, _phone) = companion_owned_harness().await;
+  let (harness, _phone, _modern) = companion_owned_harness().await;
   let source = harness.iap2_source().await.expect("iap2 source");
 
   tokio::time::sleep(Duration::from_millis(2_500)).await;
@@ -163,7 +163,7 @@ async fn iap2_chatter_during_companion_playback_is_broadcast_silent() {
 
 #[tokio::test]
 async fn youtube_flip_is_one_hard_cut_not_a_burst() {
-  let (harness, _phone) = companion_owned_harness().await;
+  let (harness, _phone, _modern) = companion_owned_harness().await;
   let source = harness.iap2_source().await.expect("iap2 source");
 
   let mut frames = harness.observe_frames();
@@ -233,7 +233,7 @@ async fn youtube_flip_is_one_hard_cut_not_a_burst() {
 
 #[tokio::test]
 async fn context_switch_survives_a_stale_iap2_echo() {
-  let (harness, phone) = companion_owned_harness().await;
+  let (harness, phone, _modern) = companion_owned_harness().await;
   let source = harness.iap2_source().await.expect("iap2 source");
 
   phone

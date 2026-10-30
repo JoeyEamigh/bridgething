@@ -30,7 +30,13 @@ export function DeviceFrame({
         }}>
         {children}
       </div>
-      <img src={frame} alt="" aria-hidden="true" draggable={false} class="pointer-events-none absolute inset-0 size-full" />
+      <img
+        src={frame}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        class="pointer-events-none absolute inset-0 size-full"
+      />
     </div>
   );
 }

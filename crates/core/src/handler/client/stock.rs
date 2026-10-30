@@ -4,10 +4,7 @@ use base64::Engine as _;
 use libbridgething::{
   BrowseEntry, ItemKind, ItemRef, LibraryItem, QueuePosition,
   client::ClientLegacyStockCommand,
-  gateway::{
-    self, BridgeToGatewayLibraryMsgCommand, BridgeToGatewayPlayerMsgCommand, LibraryBrowseRequest,
-    LibraryFavoritesContainsRequest,
-  },
+  gateway::{self, BridgeToGatewayLibraryMsgCommand, LibraryBrowseRequest, LibraryFavoritesContainsRequest},
   stock::{StockPreset, StockSetPreset},
   wire::RequestError,
 };
@@ -21,6 +18,7 @@ use crate::{
     interapp::{stock_art, stock_art_id},
     presets,
   },
+  transport::TransportResult,
 };
 
 const DJ_PLAYLIST_URI: &str = "spotify:playlist:37i9dQZF1EYkqdzj48dyYq";
@@ -392,34 +390,13 @@ impl LegacyStockHandler {
   }
 
   async fn spotify_queue_uri(&self, uri: String) -> HandlerResult {
-    if !self.has_gateway() {
-      return self.ack().await;
-    }
-    self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayPlayerMsgCommand::Queue(gateway::QueueUri {
-        uri,
-        position: QueuePosition::Append,
-      }))
-      .await;
-    self.ack().await
+    let outcome = self.handle.transport.queue_uri(uri, QueuePosition::Append).await;
+    self.ack_after("queue_uri", outcome).await
   }
 
   async fn spotify_set_podcast_playback_speed(&self, playback_speed: usize) -> HandlerResult {
-    if !self.has_gateway() {
-      return self.ack().await;
-    }
-    self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayPlayerMsgCommand::SetSpeed(gateway::SetSpeed {
-        speed: playback_speed as f32 / 100.0,
-      }))
-      .await;
-    self.ack().await
+    let outcome = self.handle.transport.set_speed(playback_speed as f32 / 100.0).await;
+    self.ack_after("set_podcast_playback_speed", outcome).await
   }
 
   async fn spotify_set_preset(&self, requests: Vec<StockSetPreset>) -> HandlerResult {
@@ -451,25 +428,19 @@ impl LegacyStockHandler {
   }
 
   async fn spotify_set_saved(&self, id: Option<String>, uri: Option<String>, saved: bool) -> HandlerResult {
-    if let Some(item_uri) = uri.or(id)
-      && self.has_gateway()
-      && !crate::player::is_synthetic_uri(&item_uri)
-    {
-      self
-        .handle
-        .bluetooth
-        .gateway_man
-        .broadcast_command(BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
-          item: ItemRef {
-            uri: item_uri,
-            kind: ItemKind::Track,
-            persistent_id: None,
-          },
-          liked: saved,
-        }))
-        .await;
-    }
-    self.ack().await
+    let Some(item_uri) = uri.or(id).filter(|uri| !crate::player::is_synthetic_uri(uri)) else {
+      return self.ack().await;
+    };
+    let favorite = BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
+      item: ItemRef {
+        uri: item_uri,
+        kind: ItemKind::Track,
+        persistent_id: None,
+      },
+      liked: saved,
+    });
+    let outcome = self.handle.transport.forward("favorites_set", favorite).await;
+    self.ack_after("set_saved", outcome).await
   }
 
   async fn spotify_summon_dj(&self) -> HandlerResult {
@@ -643,18 +614,17 @@ impl LegacyStockHandler {
   }
 
   async fn forward_play(&self, uri: String) -> HandlerResult {
-    if crate::player::is_synthetic_uri(&uri) || !self.has_gateway() {
+    if crate::player::is_synthetic_uri(&uri) {
       return self.ack().await;
     }
-    self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayPlayerMsgCommand::Play(gateway::PlayUri {
-        uri,
-        context: None,
-      }))
-      .await;
+    let outcome = self.handle.transport.play_uri(uri, None).await;
+    self.ack_after("play_uri", outcome).await
+  }
+
+  async fn ack_after(&self, verb: &str, outcome: TransportResult) -> HandlerResult {
+    if let Err(err) = outcome {
+      tracing::debug!(%err, "stock {verb} failed");
+    }
     self.ack().await
   }
 

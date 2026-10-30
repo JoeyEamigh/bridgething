@@ -2739,6 +2739,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot(): Int
 
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_device_log_verbosity(): Int
+
     external fun uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_device_set_nickname(): Int
@@ -2790,6 +2792,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_auto_resume(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming(): Int
+
+    external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_verbosity(): Int
 
     external fun uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target(): Int
 
@@ -3425,6 +3429,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_bridgething_companion_fn_method_companionsession_device_log_verbosity(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_bridgething_companion_fn_method_companionsession_device_resume_target(
         `ptr`: Long,
         `deviceId`: RustBuffer.ByValue,
@@ -3578,6 +3587,11 @@ internal object UniffiLib {
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(
         `ptr`: Long,
         `enabled`: Byte,
+    ): Long
+
+    external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_log_verbosity(
+        `ptr`: Long,
+        `verbosity`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_bridgething_companion_fn_method_companionsession_set_device_resume_target(
@@ -6074,6 +6088,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot() != 3371) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_log_verbosity() != 21476) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target() != 35275) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -6150,6 +6167,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming() != 49632) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_verbosity() != 36350) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
@@ -13402,6 +13422,8 @@ public interface CompanionSessionInterface {
 
     fun `deviceLogSnapshot`(`limit`: kotlin.UInt): List<DeviceLogLine>
 
+    fun `deviceLogVerbosity`(): LogLevel?
+
     fun `deviceResumeTarget`(`deviceId`: kotlin.String): ResumeTarget
 
     suspend fun `deviceSetNickname`(
@@ -13509,6 +13531,8 @@ public interface CompanionSessionInterface {
     )
 
     suspend fun `setDeviceLogStreaming`(`enabled`: kotlin.Boolean)
+
+    suspend fun `setDeviceLogVerbosity`(`verbosity`: LogLevel?)
 
     suspend fun `setDeviceResumeTarget`(
         `deviceId`: kotlin.String,
@@ -14045,6 +14069,18 @@ open class CompanionSession :
                     UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_log_snapshot(
                         it,
                         FfiConverterUInt.lower(`limit`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `deviceLogVerbosity`(): LogLevel? =
+        FfiConverterOptionalTypeLogLevel.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_device_log_verbosity(
+                        it,
                         _status,
                     )
                 }
@@ -14636,6 +14672,24 @@ open class CompanionSession :
                 UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(
                     uniffiHandle,
                     FfiConverterBoolean.lower(`enabled`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_bridgething_companion_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `setDeviceLogVerbosity`(`verbosity`: LogLevel?) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_bridgething_companion_fn_method_companionsession_set_device_log_verbosity(
+                    uniffiHandle,
+                    FfiConverterOptionalTypeLogLevel.lower(`verbosity`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_bridgething_companion_rust_future_poll_void(future, callback, continuation) },
@@ -41527,6 +41581,38 @@ public object FfiConverterOptionalTypeWebappResourceOrigin : FfiConverterRustBuf
         } else {
             buf.put(1)
             FfiConverterTypeWebappResourceOrigin.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeLogLevel : FfiConverterRustBuffer<LogLevel?> {
+    override fun read(buf: ByteBuffer): LogLevel? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeLogLevel.read(buf)
+    }
+
+    override fun allocationSize(value: LogLevel?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeLogLevel.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: LogLevel?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeLogLevel.write(value, buf)
         }
     }
 }

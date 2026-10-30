@@ -99,9 +99,11 @@ impl Iap2OutboundObserve for Harness {
 impl Iap2SourceDriver for Harness {
   type Source = HarnessIap2Source;
   async fn iap2_source(&self) -> Result<HarnessIap2Source> {
+    let addr = self.iap2_peer();
+    self.identify_iphone(addr).await?;
     Ok(HarnessIap2Source {
       iap2: self.inject.iap2.clone(),
-      addr: self.iap2_peer(),
+      addr,
     })
   }
 }

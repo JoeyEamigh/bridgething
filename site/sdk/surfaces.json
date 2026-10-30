@@ -1,5 +1,5 @@
 {
-  "version": "0.15.1",
+  "version": "0.16.0",
   "surfaces": [
     {
       "name": "asset",
@@ -3148,6 +3148,12 @@
           "name": "filter",
           "type": "string",
           "optional": true
+        },
+        {
+          "name": "verbosity",
+          "type": "LogLevel",
+          "optional": true,
+          "type_ref": "LogLevel"
         }
       ]
     },
@@ -5834,6 +5840,10 @@
         {
           "name": "forward",
           "type": "boolean"
+        },
+        {
+          "name": "voice",
+          "type": "boolean"
         }
       ]
     },
@@ -6108,6 +6118,12 @@
         },
         {
           "name": "BadSlots"
+        },
+        {
+          "name": "StaleTurn"
+        },
+        {
+          "name": "NoCompanion"
         },
         {
           "name": "Internal"

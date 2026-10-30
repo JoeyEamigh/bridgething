@@ -18,7 +18,7 @@ pub struct Diagnostics {
   pub boot_id: String,
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum LogLevel {

@@ -72,6 +72,7 @@ struct Announced {
   host: HostInfo,
   flags: CapabilityFlags,
   geo_usable: bool,
+  voice: bool,
 }
 
 pub struct Hub {
@@ -85,7 +86,13 @@ pub struct Hub {
 }
 
 impl Hub {
-  pub fn new(link: Arc<dyn OutboundLink>, host: HostInfo, flags: CapabilityFlags, host_owns_volume: bool) -> Arc<Self> {
+  pub fn new(
+    link: Arc<dyn OutboundLink>,
+    host: HostInfo,
+    flags: CapabilityFlags,
+    host_owns_volume: bool,
+    voice: bool,
+  ) -> Arc<Self> {
     Arc::new(Self {
       now_playing: NowPlayingHub::init(link.clone(), host_owns_volume),
       link,
@@ -108,6 +115,7 @@ impl Hub {
         host,
         flags,
         geo_usable: true,
+        voice,
       }),
     })
   }
@@ -337,9 +345,14 @@ impl Hub {
   }
 
   pub fn compose_capabilities(&self) -> GatewayCapabilities {
-    let (host, flags, geo_usable) = {
+    let (host, flags, geo_usable, voice) = {
       let announced = self.announced.lock().unwrap();
-      (announced.host.clone(), announced.flags, announced.geo_usable)
+      (
+        announced.host.clone(),
+        announced.flags,
+        announced.geo_usable,
+        announced.voice,
+      )
     };
     let library = ProviderRegistry::library(self);
     let supports_targets = self
@@ -371,6 +384,7 @@ impl Hub {
         lyrics: true,
         playback_targets: supports_targets,
         forward: false,
+        voice,
       },
       audio: AudioCapabilities::default(),
       music_provider: library

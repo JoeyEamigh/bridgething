@@ -90,8 +90,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
 
   async fn ws_open(&self, params: NetWsOpen) -> HandlerResult {
     let open = params;
-    let snapshot = self.handle.state.capabilities.snapshot();
-    if snapshot.gateway.is_none() {
+    let Some(primary) = self.handle.state.capabilities.primary_addr() else {
       return self
         .handle
         .respond_err::<NetWsOpen>(NetWsErrorReply {
@@ -101,8 +100,8 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
         })
         .await
         .map_err(Into::into);
-    }
-    if !snapshot.available.net_ws {
+    };
+    if !self.handle.state.capabilities.snapshot().available.net_ws {
       return self
         .handle
         .respond_err::<NetWsOpen>(NetWsErrorReply {
@@ -115,7 +114,6 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
     }
 
     let connection_id = open.connection_id;
-    let primary = self.handle.state.capabilities.primary_addr();
     self
       .handle
       .state
@@ -128,7 +126,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
       protocols: open.protocols,
       headers: open.headers,
     };
-    match self.handle.bluetooth.gateway_man.request(primary, outbound).await {
+    match self.handle.bluetooth.gateway_man.request(Some(primary), outbound).await {
       Ok(reply) => {
         self
           .handle
@@ -176,7 +174,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
     let send = params;
     let owner = self.handle.state.ws_routes.lookup(send.connection_id);
     let gateway = self.handle.state.ws_routes.gateway_of(send.connection_id);
-    if owner != Some(self.handle.from) {
+    let Some(gateway) = gateway.filter(|_| owner == Some(self.handle.from)) else {
       tracing::warn!(
         connection_id = %send.connection_id,
         ?owner,
@@ -184,7 +182,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
         "net.ws.send for unknown or non-owned connection; dropping"
       );
       return Ok(());
-    }
+    };
     let outbound = BridgeToGatewayNetMsgCommand::WsSend(gateway::NetWsSend {
       connection_id: send.connection_id,
       frame: send.frame,
@@ -197,7 +195,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
     let close = params;
     let gateway = self.handle.state.ws_routes.gateway_of(close.connection_id);
     let owner = self.handle.state.ws_routes.drop_id(close.connection_id);
-    if owner != Some(self.handle.from) {
+    let Some(gateway) = gateway.filter(|_| owner == Some(self.handle.from)) else {
       tracing::warn!(
         connection_id = %close.connection_id,
         ?owner,
@@ -205,7 +203,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
         "net.ws.close for unknown or non-owned connection; dropping"
       );
       return Ok(());
-    }
+    };
     let outbound = BridgeToGatewayNetMsgCommand::WsClose(gateway::NetWsClose {
       connection_id: close.connection_id,
       code: close.code,
@@ -217,22 +215,22 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
 
   async fn stream_open(&self, params: NetStreamOpen) -> HandlerResult {
     let open = params;
-    let snapshot = self.handle.state.capabilities.snapshot();
-    if snapshot.gateway.is_none() || !snapshot.available.net_fetch {
-      let error = if snapshot.gateway.is_none() {
-        NetError::NoGateway
-      } else {
-        NetError::Unavailable
-      };
-      let event = BridgeToClientNetMsgEvent::StreamError(libbridgething::StreamError {
-        stream_id: open.stream_id,
-        error,
-      });
-      let _ = self.handle.state.bus.send_event(self.handle.from, event).await;
-      return Ok(());
-    }
+    let primary = match self.handle.state.capabilities.primary_addr() {
+      Some(primary) if self.handle.state.capabilities.snapshot().available.net_fetch => primary,
+      unusable => {
+        let error = match unusable {
+          Some(_) => NetError::Unavailable,
+          None => NetError::NoGateway,
+        };
+        let event = BridgeToClientNetMsgEvent::StreamError(libbridgething::StreamError {
+          stream_id: open.stream_id,
+          error,
+        });
+        let _ = self.handle.state.bus.send_event(self.handle.from, event).await;
+        return Ok(());
+      }
+    };
 
-    let primary = self.handle.state.capabilities.primary_addr();
     self
       .handle
       .state
@@ -250,7 +248,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
     let cancel = params;
     let gateway = self.handle.state.stream_routes.gateway_of(cancel.stream_id);
     let owner = self.handle.state.stream_routes.drop_id(cancel.stream_id);
-    if owner != Some(self.handle.from) {
+    let Some(gateway) = gateway.filter(|_| owner == Some(self.handle.from)) else {
       tracing::warn!(
         stream_id = %cancel.stream_id,
         ?owner,
@@ -258,7 +256,7 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
         "net.stream.cancel for unknown or non-owned stream; dropping"
       );
       return Ok(());
-    }
+    };
     let outbound = BridgeToGatewayNetMsgCommand::StreamCancel(gateway::NetStreamCancel {
       stream_id: cancel.stream_id,
     });
@@ -268,19 +266,17 @@ impl ClientToBridgeNetMsgDispatch for NetHandler {
 }
 
 pub async fn cleanup_owner_routes(handle: &MsgHandle) {
-  let ws_ids = handle.state.ws_routes.drain_for_owner(handle.from);
-  for connection_id in ws_ids {
+  for (connection_id, gateway) in handle.state.ws_routes.drain_for_owner(handle.from) {
     let outbound = BridgeToGatewayNetMsgCommand::WsClose(gateway::NetWsClose {
       connection_id,
       code: Some(1001),
       reason: Some("webapp disconnected".into()),
     });
-    handle.bluetooth.gateway_man.broadcast_command_bulk(outbound).await;
+    handle.bluetooth.gateway_man.command_bulk(gateway, outbound).await;
   }
 
-  let stream_ids = handle.state.stream_routes.drain_for_owner(handle.from);
-  for stream_id in stream_ids {
+  for (stream_id, gateway) in handle.state.stream_routes.drain_for_owner(handle.from) {
     let outbound = BridgeToGatewayNetMsgCommand::StreamCancel(gateway::NetStreamCancel { stream_id });
-    handle.bluetooth.gateway_man.broadcast_command_bulk(outbound).await;
+    handle.bluetooth.gateway_man.command_bulk(gateway, outbound).await;
   }
 }

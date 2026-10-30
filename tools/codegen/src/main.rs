@@ -36,8 +36,8 @@ fn main() -> Result<()> {
     "rust" => gen_rust()?,
     "docs" => gen_docs()?,
     "all" => {
-      gen_typescript()?;
       gen_rust()?;
+      gen_typescript()?;
       gen_docs()?;
     }
     other => bail!("unknown target {other:?}; expected one of: ts, companion, rust, docs, all"),

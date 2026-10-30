@@ -211,6 +211,7 @@ fn gateway_capabilities() -> GatewayCapabilities {
       lyrics: true,
       playback_targets: true,
       forward: false,
+      voice: true,
     },
     audio: AudioCapabilities {
       earcons: vec![],

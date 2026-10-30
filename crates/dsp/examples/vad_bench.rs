@@ -10,7 +10,7 @@ use bridgething_dsp::{
   geometry::CHANNELS,
   pipeline::{Beamformer, Config, to_pcm16},
   scene::{self, TargetEvidence},
-  vad::{Config as VadConfig, FRAME_SAMPLES, TurnEnd, VoiceEndpointer},
+  vad::{Config as VadConfig, FRAME_SAMPLES, LevelReference, Leveling, TurnEnd, VoiceEndpointer},
 };
 
 const RATE: f64 = 16_000.0;
@@ -20,6 +20,8 @@ const PATIENCE: usize = 48_000;
 const HANGOVERS_MS: [u64; 2] = [800, 1200];
 const THRESHOLDS: [f32; 2] = [0.50, 0.60];
 const FLOORS: [f32; 6] = [0.0, 0.05, 0.10, 0.20, 0.30, 0.45];
+const LEVELS_DB: [f64; 4] = [0.0, -20.0, -30.0, -40.0];
+const CEILINGS_DBFS: [Option<f32>; 5] = [None, Some(-30.0), Some(-33.0), Some(-36.0), Some(-38.0)];
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
@@ -32,6 +34,7 @@ enum Kind {
 struct Turn {
   archetype: String,
   arm_at: usize,
+  talker_heard_by: usize,
   speech_end: usize,
   limit: usize,
   pause: Option<usize>,
@@ -87,6 +90,27 @@ impl FrontEnd {
   }
 }
 
+fn attenuate(interleaved: &[i32], db: f64) -> Vec<i32> {
+  let scale = 10f64.powf(db / 20.0);
+  interleaved
+    .iter()
+    .map(|sample| (*sample as f64 * scale) as i32)
+    .collect()
+}
+
+fn gain_at(front: &FrontEnd, heard_by: usize, ceiling: Option<f32>) -> f32 {
+  let Some(floor_ceiling_dbfs) = ceiling else { return 1.0 };
+  let leveling = Leveling {
+    floor_ceiling_dbfs,
+    ..Leveling::default()
+  };
+  let window = (leveling.window.as_secs_f64() * RATE) as usize;
+  let end = heard_by.min(front.mono.len());
+  let mut reference = LevelReference::new(leveling);
+  reference.observe(&front.mono[end.saturating_sub(window)..end]);
+  reference.gain()
+}
+
 fn front_end(interleaved: &[i32], marks: &[usize], streaming: bool) -> FrontEnd {
   let mut beamformer = Beamformer::new(Config {
     adaptation: Some(scene::Config::default()),
@@ -140,15 +164,21 @@ fn front_end(interleaved: &[i32], marks: &[usize], streaming: bool) -> FrontEnd 
 
 fn turns_of(meta: &Scene, kind: Kind, total: usize) -> Vec<Turn> {
   let spans = meta.spans();
-  let turn = |arm_at: usize, speech_end: usize, limit: usize, pause: Option<usize>| Turn {
+  let window = (Leveling::default().window.as_secs_f64() * RATE) as usize;
+  let stand_in = |(start, len): (usize, usize)| start + len.min(window);
+  let turn = |arm_at: usize, talker_heard_by: usize, speech_end: usize, limit: usize, pause: Option<usize>| Turn {
     archetype: meta.archetype.clone(),
     arm_at,
+    talker_heard_by,
     speech_end,
     limit: limit.min(total),
     pause,
   };
   match kind {
-    Kind::Silent => vec![turn(meta.speech_start.saturating_sub(LEAD), 0, total, None)],
+    Kind::Silent => {
+      let arm_at = meta.speech_start.saturating_sub(LEAD);
+      vec![turn(arm_at, arm_at, 0, total, None)]
+    }
     Kind::Turns => spans
       .iter()
       .enumerate()
@@ -157,6 +187,7 @@ fn turns_of(meta: &Scene, kind: Kind, total: usize) -> Vec<Turn> {
         let next = spans.get(index + 1).map_or(usize::MAX, |(start, _)| *start);
         turn(
           start.saturating_sub(LEAD).max(floor),
+          stand_in((*start, *len)),
           start + len,
           (start + len + PATIENCE).min(next),
           None,
@@ -165,7 +196,13 @@ fn turns_of(meta: &Scene, kind: Kind, total: usize) -> Vec<Turn> {
       .collect(),
     Kind::Command => match spans.as_slice() {
       [(wake_start, wake_len), (start, len)] => {
-        vec![turn(wake_start + wake_len, start + len, start + len + PATIENCE, None)]
+        vec![turn(
+          wake_start + wake_len,
+          wake_start + wake_len,
+          start + len,
+          start + len + PATIENCE,
+          None,
+        )]
       }
       _ => Vec::new(),
     },
@@ -178,6 +215,7 @@ fn turns_of(meta: &Scene, kind: Kind, total: usize) -> Vec<Turn> {
       }
       vec![turn(
         first.0.saturating_sub(LEAD),
+        stand_in(*first),
         last.0 + last.1,
         last.0 + last.1 + PATIENCE,
         Some(last.0 - (first.0 + first.1)),
@@ -191,8 +229,8 @@ struct Cost {
   frames: usize,
 }
 
-fn run_turn(front: &FrontEnd, turn: &Turn, config: VadConfig, cost: &mut Cost) -> Outcome {
-  let mut endpointer = VoiceEndpointer::new(config);
+fn run_turn(front: &FrontEnd, turn: &Turn, config: VadConfig, ceiling: Option<f32>, cost: &mut Cost) -> Outcome {
+  let mut endpointer = VoiceEndpointer::new(config, gain_at(front, turn.talker_heard_by, ceiling));
   let mut outcome = Outcome {
     turns: 1,
     ..Outcome::default()
@@ -266,6 +304,8 @@ fn main() {
   let mut by_pause: BTreeMap<(u64, u32, u32, &'static str), Outcome> = BTreeMap::new();
   let mut unmarked_silent: BTreeMap<(u64, u32, u32), Outcome> = BTreeMap::new();
   let mut by_command: BTreeMap<(String, u64, u32, u32), Outcome> = BTreeMap::new();
+  let mut by_level: BTreeMap<(Kind, String, i64, Option<i32>), Outcome> = BTreeMap::new();
+  let shipping = Some(Leveling::default().floor_ceiling_dbfs);
   let mut cost = Cost {
     elapsed: Duration::ZERO,
     frames: 0,
@@ -318,6 +358,25 @@ fn main() {
         spread.entry(bucket).or_default().push(*evidence);
       }
 
+      for level in LEVELS_DB {
+        let quieter;
+        let front = if level == 0.0 {
+          &front
+        } else {
+          quieter = front_end(&attenuate(&interleaved, level), &marks, *kind == Kind::Command);
+          &quieter
+        };
+        for turn in &turns {
+          for ceiling in CEILINGS_DBFS {
+            let outcome = run_turn(front, turn, VadConfig::default(), ceiling, &mut cost);
+            by_level
+              .entry((*kind, label.clone(), level as i64, ceiling.map(|c| c as i32)))
+              .or_default()
+              .absorb(&outcome);
+          }
+        }
+      }
+
       for turn in &turns {
         for (hangover, threshold, floor) in &grid {
           let config = VadConfig {
@@ -326,7 +385,7 @@ fn main() {
             spatial_floor: *floor,
             ..VadConfig::default()
           };
-          let outcome = run_turn(&front, turn, config, &mut cost);
+          let outcome = run_turn(&front, turn, config, shipping, &mut cost);
           let key = (*kind, *hangover, threshold.to_bits(), floor.to_bits());
           by_setting.entry(key).or_default().absorb(&outcome);
           by_archetype
@@ -346,7 +405,7 @@ fn main() {
               .absorb(&outcome);
           }
           if let Some(unmarked) = unmarked.as_ref() {
-            let outcome = run_turn(unmarked, turn, config, &mut cost);
+            let outcome = run_turn(unmarked, turn, config, shipping, &mut cost);
             unmarked_silent
               .entry((*hangover, threshold.to_bits(), floor.to_bits()))
               .or_default()
@@ -437,6 +496,26 @@ fn main() {
         outcome.turns
       );
     }
+  }
+
+  println!(
+    "\nlevel robustness at the shipping config: the scene attenuated, the detector leveled to {} dBFS with the floor held under a ceiling",
+    Leveling::default().talker_dbfs
+  );
+  println!(
+    "{:>28} {:>8} {:>10} {:>10} {:>11} {:>12} {:>12} {:>7}",
+    "set", "level dB", "ceiling", "false cut", "onset miss", "onset fired", "never closed", "turns"
+  );
+  for ((_, label, level, ceiling), outcome) in &by_level {
+    let ceiling = ceiling.map_or_else(|| "unleveled".to_string(), |c| format!("{c} dBFS"));
+    println!(
+      "{label:>28} {level:>8} {ceiling:>10} {:>10.4} {:>11.4} {:>12.4} {:>12.4} {:>7}",
+      outcome.rate(outcome.cuts),
+      outcome.rate(outcome.onset_missed),
+      outcome.rate(outcome.onset_fired),
+      outcome.rate(outcome.never_closed),
+      outcome.turns
+    );
   }
 
   if !by_pause.is_empty() {

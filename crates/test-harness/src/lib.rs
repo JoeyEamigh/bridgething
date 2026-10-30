@@ -26,6 +26,10 @@ pub use chrome::ChromeView;
 #[cfg(target_os = "linux")]
 pub use device::DeviceHarness;
 use futures::StreamExt;
+use libbridgething::{
+  Device, DeviceType, LinkKind, PeerIap2Status,
+  gateway::{BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayVoiceMsg},
+};
 pub use reset::FakeResetRig;
 pub use seam::{
   CommandDriver, FrameObserve, GatewayDriver, HarnessIap2Source, Iap2OutboundObserve, Iap2Source, Iap2SourceDriver,
@@ -40,6 +44,8 @@ use uuid::Uuid;
 
 const DUPLEX_BUF: usize = 256 * 1024;
 const FRAME_OBSERVER_CAPACITY: usize = 256;
+const IDENTIFY_DEADLINE: Duration = Duration::from_secs(5);
+const VOICE_TURN_DEADLINE: Duration = Duration::from_secs(5);
 
 pub struct Harness {
   state: State,
@@ -183,6 +189,51 @@ impl Harness {
       .await
   }
 
+  pub async fn identify_iphone(&self, mac: Address) -> Result<()> {
+    let peers = self.state.peers.clone();
+    peers
+      .ensure_exists(
+        mac,
+        Device {
+          name: "test-iphone".into(),
+          device_type: DeviceType::Ios,
+          id: mac.to_string(),
+          kind: LinkKind::Bluetooth,
+          default: false,
+        },
+      )
+      .await;
+    peers.set_iap2(mac, PeerIap2Status::Identified).await;
+    let up = self
+      .wait_for(
+        |s| s.peers.snapshot().peers.get(&mac).is_some_and(|p| p.has_useful_link()),
+        IDENTIFY_DEADLINE,
+      )
+      .await;
+    anyhow::ensure!(up, "iap2 peer {mac} never reached a useful link");
+    Ok(())
+  }
+
+  pub async fn resolving_voice_turn(&self, listener: &Gateway) -> Result<Uuid> {
+    let mut inbound = listener.events();
+    let client = self.connect_command_client().await?;
+    client.voice().push_to_talk().await?;
+    let opened = next_voice(&mut inbound, |voice| match voice {
+      BridgeToGatewayVoiceMsg::StreamOpen(open) => Some(open.stream_id),
+      _ => None,
+    })
+    .await
+    .ok_or_else(|| anyhow::anyhow!("the listener never saw the turn open"))?;
+    client.voice().release().await?;
+    next_voice(&mut inbound, |voice| match voice {
+      BridgeToGatewayVoiceMsg::StreamClose(close) if close.stream_id == opened => Some(()),
+      _ => None,
+    })
+    .await
+    .ok_or_else(|| anyhow::anyhow!("the listener never saw turn {opened} close"))?;
+    Ok(opened)
+  }
+
   pub fn iap2_peer(&self) -> Address {
     let n = self.next_peer.fetch_add(1, Ordering::Relaxed);
     Address([0xA9, 0x00, 0x00, 0x00, 0x00, n])
@@ -301,6 +352,31 @@ impl FrameObserver {
       }
     }
   }
+}
+
+async fn next_voice<T>(
+  inbound: &mut broadcast::Receiver<BridgeToGatewayMsg>,
+  pick: impl Fn(BridgeToGatewayVoiceMsg) -> Option<T>,
+) -> Option<T> {
+  tokio::time::timeout(VOICE_TURN_DEADLINE, async {
+    loop {
+      match inbound.recv().await {
+        Ok(BridgeToGatewayMsg {
+          data: BridgeToGatewayMsgData::Voice(voice),
+          ..
+        }) => {
+          if let Some(hit) = pick(voice) {
+            return Some(hit);
+          }
+        }
+        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => continue,
+        Err(broadcast::error::RecvError::Closed) => return None,
+      }
+    }
+  })
+  .await
+  .ok()
+  .flatten()
 }
 
 pub fn proptest_cases(default: u32) -> u32 {

@@ -186,6 +186,18 @@ pub struct LogsSubscribe {
   pub source: LogSource,
   pub levels: Vec<LogLevel>,
   pub filter: Option<String>,
+  #[serde(default)]
+  pub verbosity: Option<LogLevel>,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct LogsSetVerbosity {
+  pub token: String,
+  #[serde(default)]
+  pub verbosity: Option<LogLevel>,
 }
 
 #[serde_with::skip_serializing_none]
@@ -232,6 +244,8 @@ pub enum GatewayToBridgeSystemMsg {
   LogsSubscribe(LogsSubscribe),
   #[bridge_command]
   LogsUnsubscribe(LogsUnsubscribe),
+  #[bridge_command]
+  LogsSetVerbosity(LogsSetVerbosity),
   #[bridge_response]
   KeepaliveAck(KeepaliveAck),
 }

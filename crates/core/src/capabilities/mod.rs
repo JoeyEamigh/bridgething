@@ -11,6 +11,7 @@ use libbridgething::{
   Capabilities, CompanionAuthorityScope, GatewayCapabilities, SurfaceAvailability,
   client::{BridgeToClientCapabilitiesMsgEvent, CapabilitiesSnapshot},
 };
+use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::{
@@ -31,6 +32,7 @@ struct Inner {
   extensions: RwLock<HashMap<Address, HashSet<Uuid>>>,
   active_webapp: RwLock<Option<Uuid>>,
   announce_seq: AtomicU64,
+  primary: watch::Sender<Option<Address>>,
   bus: WireEventBus,
   authority: AuthorityRegistry,
 }
@@ -50,6 +52,7 @@ impl CapabilitiesRegistry {
         extensions: RwLock::new(HashMap::new()),
         active_webapp: RwLock::new(None),
         announce_seq: AtomicU64::new(0),
+        primary: watch::channel(None).0,
         bus,
         authority,
       }),
@@ -153,18 +156,26 @@ impl CapabilitiesRegistry {
     self.inner.bus.send_event(to, event).await
   }
 
+  pub fn primary_subscription_rx(&self) -> watch::Receiver<Option<Address>> {
+    self.inner.primary.subscribe()
+  }
+
   pub fn primary_addr(&self) -> Option<Address> {
     let announces = self.inner.announces.read().expect("announces lock poisoned");
     self.elect_addr(&announces)
   }
 
   pub fn companion_for_scheme(&self, scheme: &str) -> Option<Address> {
+    self.elect_where(|caps| caps.uri_schemes.iter().any(|s| s == scheme))
+  }
+
+  pub fn voice_listener(&self) -> Option<Address> {
+    self.elect_where(|caps| caps.available.voice)
+  }
+
+  fn elect_where(&self, offers: impl Fn(&GatewayCapabilities) -> bool) -> Option<Address> {
     let announces = self.inner.announces.read().expect("announces lock poisoned");
-    let claims = |addr: &Address| {
-      announces
-        .get(addr)
-        .is_some_and(|a| a.caps.uri_schemes.iter().any(|s| s == scheme))
-    };
+    let claims = |addr: &Address| announces.get(addr).is_some_and(|a| offers(&a.caps));
     self
       .elect_addr(&announces)
       .filter(claims)
@@ -186,6 +197,7 @@ impl CapabilitiesRegistry {
     let elected = self.elect_addr(&announces);
     let primary = elected.and_then(|addr| announces.get(&addr)).map(|a| &a.caps);
     let authority = self.inner.authority.live_scopes();
+    let voice = announces.values().any(|a| a.caps.available.voice);
     let mut uri_schemes: Vec<String> = Vec::new();
     for addr in elected.into_iter().chain(ranked(&announces)) {
       let Some(announce) = announces.get(&addr) else { continue };
@@ -201,6 +213,7 @@ impl CapabilitiesRegistry {
         gateway: Some(caps.gateway.clone()),
         available: SurfaceAvailability {
           forward,
+          voice,
           ..caps.available
         },
         authority,
@@ -230,6 +243,12 @@ impl CapabilitiesRegistry {
       let mut guard = self.inner.snapshot.write().expect("capabilities lock poisoned");
       *guard = snapshot.clone();
     }
+    let primary = self.primary_addr();
+    self.inner.primary.send_if_modified(|held| {
+      let changed = *held != primary;
+      *held = primary;
+      changed
+    });
     let event = BridgeToClientCapabilitiesMsgEvent::Update(CapabilitiesSnapshot { capabilities: snapshot });
     match self.inner.bus.broadcast_event(event).await {
       Ok(()) => Ok(()),
@@ -344,6 +363,7 @@ mod tests {
       lyrics: true,
       playback_targets: true,
       forward: false,
+      voice: true,
     };
     let caps = caps_with(vec!["spotify:", "Apple-Music"], claimed);
     let _ = reg.set_announce(addr, caps).await;
@@ -393,6 +413,65 @@ mod tests {
     assert_eq!(reg.snapshot().uri_schemes, vec!["http", "https"]);
     assert_eq!(reg.companion_for_scheme("https"), Some(desktop));
     assert_eq!(reg.companion_for_scheme("spotify"), None);
+  }
+
+  fn listening() -> SurfaceAvailability {
+    SurfaceAvailability {
+      voice: true,
+      ..SurfaceAvailability::default()
+    }
+  }
+
+  #[tokio::test]
+  async fn the_voice_listener_is_a_companion_that_announced_voice() {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let bus = WireEventBus::new(client_man);
+    let reg = CapabilitiesRegistry::new(bus, AuthorityRegistry::new());
+
+    let phone: Address = "00:11:22:33:44:55".parse().unwrap();
+    let desktop: Address = "66:77:88:99:AA:BB".parse().unwrap();
+    let _ = reg.set_announce(desktop, caps_with(vec!["https"], listening())).await;
+    let _ = reg
+      .set_announce(phone, caps_with(vec!["spotify"], SurfaceAvailability::default()))
+      .await;
+
+    assert_eq!(reg.primary_addr(), Some(phone));
+    assert_eq!(
+      reg.voice_listener(),
+      Some(desktop),
+      "the primary has no voice pipeline, so the one that does listens"
+    );
+    assert!(
+      reg.snapshot().available.voice,
+      "a webapp sees voice is available whichever companion offers it"
+    );
+
+    let _ = reg.clear_companion(desktop).await;
+    assert_eq!(reg.voice_listener(), None);
+    assert!(!reg.snapshot().available.voice);
+  }
+
+  #[tokio::test]
+  async fn the_primary_listens_when_more_than_one_companion_can() {
+    let (client_man, _listener) = crate::net::create_client_manager();
+    let bus = WireEventBus::new(client_man);
+    let auth = AuthorityRegistry::new();
+    let reg = CapabilitiesRegistry::new(bus, auth);
+
+    let phone: Address = "00:11:22:33:44:55".parse().unwrap();
+    let desktop: Address = "66:77:88:99:AA:BB".parse().unwrap();
+    let _ = reg.set_announce(phone, caps_with(vec!["spotify"], listening())).await;
+    let _ = reg.set_announce(desktop, caps_with(vec!["https"], listening())).await;
+    assert_eq!(
+      reg.voice_listener(),
+      Some(desktop),
+      "the latest announce leads with no claim"
+    );
+
+    let _ = reg
+      .claim_authority(phone, CompanionAuthorityScope::NowPlayingPlayback, None)
+      .await;
+    assert_eq!(reg.voice_listener(), Some(phone), "a claim elects the phone");
   }
 
   #[tokio::test]

@@ -154,12 +154,18 @@ impl VoiceHandler for VoiceDispatcher {
   }
 
   async fn dispatched(&self, payload: VoiceDispatched) -> Result<(), WireError> {
-    tracing::debug!(intent = %payload.intent, target = ?payload.target, "voice turn landed");
+    tracing::debug!(stream = %payload.stream_id, intent = %payload.intent, target = ?payload.target, "voice turn landed");
     Ok(())
   }
 
   async fn dispatch_failed(&self, payload: VoiceDispatchFailed) -> Result<(), WireError> {
-    tracing::warn!(intent = %payload.intent, code = ?payload.code, msg = %payload.msg, "voice turn refused");
+    tracing::warn!(
+      stream = %payload.stream_id,
+      intent = %payload.intent,
+      code = ?payload.code,
+      msg = %payload.msg,
+      "voice turn refused"
+    );
     Ok(())
   }
 }
@@ -263,6 +269,7 @@ impl Inner {
     if let Err(error) = self
       .link
       .command(GatewayToBridgeVoiceMsgCommand::Dispatch(VoiceDispatch {
+        stream_id: turn.stream_id,
         resolved: Box::new(resolved),
         stage: Some(stage),
         asr_confidence,

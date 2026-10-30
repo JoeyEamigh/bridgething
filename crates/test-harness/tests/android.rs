@@ -160,23 +160,8 @@ async fn iap2_control_blip_does_not_flap_stock_connection() {
   let harness = Harness::start().await.expect("harness start");
 
   let mac = Address([0xF0, 0x0D, 0xBE, 0xEF, 0x00, 0x01]);
-  let device = Device {
-    name: "test-iphone".into(),
-    device_type: DeviceType::Ios,
-    id: mac.to_string(),
-    kind: LinkKind::Bluetooth,
-    default: false,
-  };
+  harness.identify_iphone(mac).await.expect("identify iphone");
   let peers = harness.state().peers.clone();
-  peers.ensure_exists(mac, device).await;
-  peers.set_iap2(mac, PeerIap2Status::Identified).await;
-  let up = harness
-    .wait_for(
-      |s| s.peers.snapshot().peers.get(&mac).is_some_and(|p| p.has_useful_link()),
-      CONVERGE,
-    )
-    .await;
-  assert!(up, "iap2 peer never reached a useful link");
 
   let mut stock = harness.connect_stock_client().await.expect("stock client");
 
@@ -248,16 +233,8 @@ async fn bluez_device_churn_does_not_drop_iap2_peer() {
   let harness = Harness::start().await.expect("harness start");
 
   let mac = Address([0xF0, 0x0D, 0xBE, 0xEF, 0x00, 0x02]);
+  harness.identify_iphone(mac).await.expect("identify iphone");
   let peers = harness.state().peers.clone();
-  peers.ensure_exists(mac, ios_device(mac)).await;
-  peers.set_iap2(mac, PeerIap2Status::Identified).await;
-  let up = harness
-    .wait_for(
-      |s| s.peers.snapshot().peers.get(&mac).is_some_and(|p| p.has_useful_link()),
-      CONVERGE,
-    )
-    .await;
-  assert!(up, "iap2 peer never reached a useful link");
 
   let mut stock = harness.connect_stock_client().await.expect("stock client");
 
@@ -294,16 +271,8 @@ async fn bluez_forget_completes_deferred_removal() {
   let harness = Harness::start().await.expect("harness start");
 
   let mac = Address([0xF0, 0x0D, 0xBE, 0xEF, 0x00, 0x03]);
+  harness.identify_iphone(mac).await.expect("identify iphone");
   let peers = harness.state().peers.clone();
-  peers.ensure_exists(mac, ios_device(mac)).await;
-  peers.set_iap2(mac, PeerIap2Status::Identified).await;
-  let up = harness
-    .wait_for(
-      |s| s.peers.snapshot().peers.get(&mac).is_some_and(|p| p.has_useful_link()),
-      CONVERGE,
-    )
-    .await;
-  assert!(up, "iap2 peer never reached a useful link");
 
   peers.remove_bluez(mac).await;
   peers.set_iap2(mac, PeerIap2Status::None).await;

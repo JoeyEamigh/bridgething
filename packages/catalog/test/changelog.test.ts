@@ -10,7 +10,9 @@ describe('changelogText', () => {
 
   test('turns list items into bullets and folds their continuation lines in', () => {
     expect(
-      changelogText('Nine new styles:\n- **Speedometer**: one big dial,\n  the needle sweeping.\n- **Sheet music**: a score.'),
+      changelogText(
+        'Nine new styles:\n- **Speedometer**: one big dial,\n  the needle sweeping.\n- **Sheet music**: a score.',
+      ),
     ).toBe('Nine new styles:\n• Speedometer: one big dial, the needle sweeping.\n• Sheet music: a score.');
   });
 

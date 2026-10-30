@@ -40,6 +40,99 @@ impl Default for Config {
   }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Leveling {
+  pub talker_dbfs: f32,
+  pub floor_ceiling_dbfs: f32,
+  pub min_gain_db: f32,
+  pub max_gain_db: f32,
+  pub window: Duration,
+  pub talker_percentile: f32,
+  pub floor_percentile: f32,
+}
+
+impl Default for Leveling {
+  fn default() -> Self {
+    Self {
+      talker_dbfs: -23.0,
+      floor_ceiling_dbfs: -36.0,
+      min_gain_db: -12.0,
+      max_gain_db: 40.0,
+      window: Duration::from_millis(1500),
+      talker_percentile: 0.8,
+      floor_percentile: 0.2,
+    }
+  }
+}
+
+pub struct LevelReference {
+  leveling: Leveling,
+  pending: Vec<f32>,
+  energies: VecDeque<f32>,
+  capacity: usize,
+}
+
+impl LevelReference {
+  pub fn new(leveling: Leveling) -> Self {
+    let capacity = frames_in(leveling.window).max(1);
+    Self {
+      leveling,
+      pending: Vec::with_capacity(FRAME_SAMPLES * 2),
+      energies: VecDeque::with_capacity(capacity),
+      capacity,
+    }
+  }
+
+  pub fn observe(&mut self, samples: &[f32]) {
+    self.pending.extend_from_slice(samples);
+    let whole = self.pending.len() / FRAME_SAMPLES * FRAME_SAMPLES;
+    for frame in self.pending[..whole].as_chunks::<FRAME_SAMPLES>().0 {
+      if self.energies.len() == self.capacity {
+        self.energies.pop_front();
+      }
+      self
+        .energies
+        .push_back(frame.iter().map(|sample| sample * sample).sum::<f32>() / FRAME_SAMPLES as f32);
+    }
+    self.pending.drain(..whole);
+  }
+
+  fn percentile_dbfs(&self, percentile: f32) -> Option<f32> {
+    if self.energies.is_empty() {
+      return None;
+    }
+    let mut sorted: Vec<f32> = self.energies.iter().copied().collect();
+    sorted.sort_by(f32::total_cmp);
+    let index = ((sorted.len() - 1) as f32 * percentile).round() as usize;
+    Some(10.0 * sorted[index].max(1e-12).log10())
+  }
+
+  pub fn talker_dbfs(&self) -> Option<f32> {
+    self.percentile_dbfs(self.leveling.talker_percentile)
+  }
+
+  pub fn floor_dbfs(&self) -> Option<f32> {
+    self.percentile_dbfs(self.leveling.floor_percentile)
+  }
+
+  pub fn gain(&self) -> f32 {
+    let (Some(talker), Some(floor)) = (self.talker_dbfs(), self.floor_dbfs()) else {
+      return 1.0;
+    };
+    let Leveling {
+      talker_dbfs,
+      floor_ceiling_dbfs,
+      min_gain_db,
+      max_gain_db,
+      ..
+    } = self.leveling;
+    let db = (talker_dbfs - talker)
+      .min(floor_ceiling_dbfs - floor)
+      .clamp(min_gain_db, max_gain_db);
+    10f32.powf(db / 20.0)
+  }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct OnsetTrace {
   pub peak_acoustic_run: usize,
@@ -58,6 +151,7 @@ enum Phase {
 
 pub struct VoiceEndpointer {
   config: Config,
+  gain: f32,
   detector: Box<Detector>,
   pending: Vec<f32>,
   scratch: [f32; FRAME_SAMPLES],
@@ -75,8 +169,9 @@ pub struct VoiceEndpointer {
 }
 
 impl VoiceEndpointer {
-  pub fn new(config: Config) -> Self {
+  pub fn new(config: Config, gain: f32) -> Self {
     Self {
+      gain,
       detector: Detector::default_boxed(),
       pending: Vec::with_capacity(FRAME_SAMPLES * 2),
       scratch: [0.0; FRAME_SAMPLES],
@@ -124,7 +219,7 @@ impl VoiceEndpointer {
 
   fn score_frame(&mut self) -> f32 {
     for sample in &mut self.scratch {
-      *sample = sample.clamp(-1.0, 1.0);
+      *sample = (*sample * self.gain).clamp(-1.0, 1.0);
     }
     self.detector.predict_f32(&self.scratch)
   }
@@ -257,7 +352,7 @@ mod tests {
   }
 
   fn scores(samples: &[f32]) -> (f32, f32) {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     let (mut low, mut high) = (f32::MAX, f32::MIN);
     for frame in samples.as_chunks::<FRAME_SAMPLES>().0 {
       endpointer.scratch.copy_from_slice(frame);
@@ -305,14 +400,14 @@ mod tests {
 
   #[test]
   fn a_silent_turn_closes_when_the_onset_window_runs_out() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     assert_eq!(feed(&mut endpointer, &quiet_frames(60)), Some(TurnEnd::NoOnset));
     assert!(!endpointer.speech_seen());
   }
 
   #[test]
   fn the_onset_window_is_honoured_to_the_frame() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     let window = frames_in(config().onset);
     assert_eq!(feed(&mut endpointer, &quiet_frames(window - 1)), None);
     assert_eq!(feed(&mut endpointer, &quiet_frames(1)), Some(TurnEnd::NoOnset));
@@ -320,7 +415,7 @@ mod tests {
 
   #[test]
   fn speech_then_silence_closes_on_the_hangover() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     assert_eq!(feed(&mut endpointer, &voiced_frames(20)), None);
     assert!(endpointer.speech_seen());
     assert_eq!(
@@ -331,7 +426,7 @@ mod tests {
 
   #[test]
   fn silence_shorter_than_the_hangover_does_not_end_the_turn() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     feed(&mut endpointer, &voiced_frames(20));
     let pause = frames_in(config().hangover) - 1;
     assert_eq!(feed(&mut endpointer, &quiet_frames(pause)), None);
@@ -344,7 +439,7 @@ mod tests {
 
   #[test]
   fn speech_arriving_late_still_beats_the_onset_window() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     let window = frames_in(config().onset);
     assert_eq!(feed(&mut endpointer, &quiet_frames(window - 8)), None);
     assert_eq!(feed(&mut endpointer, &voiced_frames(20)), None);
@@ -353,7 +448,7 @@ mod tests {
 
   #[test]
   fn a_single_voiced_frame_is_too_short_to_open_a_turn() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     let click = voiced_frames(1);
     feed(&mut endpointer, &click);
     assert!(!endpointer.speech_seen(), "one frame is below the debounce");
@@ -362,7 +457,7 @@ mod tests {
 
   #[test]
   fn a_closed_turn_never_reports_twice() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     feed(&mut endpointer, &voiced_frames(20));
     assert_eq!(
       feed(&mut endpointer, &quiet_frames(40)),
@@ -374,7 +469,7 @@ mod tests {
 
   #[test]
   fn samples_shorter_than_a_frame_accumulate_across_calls() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     let quiet = quiet_frames(60);
     let mut end = None;
     for chunk in quiet.chunks(100) {
@@ -385,7 +480,7 @@ mod tests {
 
   #[test]
   fn spatial_evidence_below_the_floor_keeps_a_loud_interferer_from_opening_a_turn() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     assert_eq!(
       feed_with(&mut endpointer, &voiced_frames(60), judged(0.05)),
       Some(TurnEnd::NoOnset)
@@ -395,14 +490,14 @@ mod tests {
 
   #[test]
   fn spatial_evidence_above_the_floor_leaves_the_acoustic_decision_alone() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), judged(0.8)), None);
     assert!(endpointer.speech_seen());
   }
 
   #[test]
   fn a_gate_that_shuts_mid_turn_runs_the_hangover_down_and_closes() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     feed_with(&mut endpointer, &voiced_frames(20), judged(0.8));
     assert!(endpointer.speech_seen());
     assert_eq!(
@@ -414,7 +509,7 @@ mod tests {
 
   #[test]
   fn the_gate_is_inert_when_the_beamformer_resolved_no_bearing() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), None), None);
     assert!(
       endpointer.speech_seen(),
@@ -424,15 +519,15 @@ mod tests {
 
   #[test]
   fn a_zero_floor_passes_every_frame_the_detector_calls_voice() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     assert_eq!(feed_with(&mut endpointer, &voiced_frames(20), judged(0.0)), None);
     assert!(endpointer.speech_seen());
   }
 
   #[test]
   fn the_detector_scores_gated_frames_so_its_state_does_not_diverge() {
-    let mut open = VoiceEndpointer::new(gated());
-    let mut vetoed = VoiceEndpointer::new(gated());
+    let mut open = VoiceEndpointer::new(gated(), 1.0);
+    let mut vetoed = VoiceEndpointer::new(gated(), 1.0);
     let speech = voiced_frames(20);
     for frame in speech.chunks(FRAME_SAMPLES) {
       open.observe(frame, judged(0.8));
@@ -472,7 +567,7 @@ mod tests {
 
   #[test]
   fn a_short_command_with_two_off_target_frames_still_opens_the_turn() {
-    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    let mut endpointer = VoiceEndpointer::new(shipping_floor(), 1.0);
     let evidence: Vec<Option<TargetEvidence>> = (0..12)
       .map(|frame| judged(if frame == 3 || frame == 7 { 0.05 } else { 0.6 }))
       .collect();
@@ -489,7 +584,7 @@ mod tests {
 
   #[test]
   fn a_command_the_gate_band_cannot_hear_opens_on_its_voicing() {
-    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    let mut endpointer = VoiceEndpointer::new(shipping_floor(), 1.0);
     feed_with(&mut endpointer, &voiced_frames(12), dark(0.0));
     assert!(
       endpointer.speech_seen(),
@@ -499,7 +594,7 @@ mod tests {
 
   #[test]
   fn an_interferer_the_gate_band_places_elsewhere_still_cannot_open_a_turn() {
-    let mut endpointer = VoiceEndpointer::new(shipping_floor());
+    let mut endpointer = VoiceEndpointer::new(shipping_floor(), 1.0);
     assert_eq!(
       feed_with(&mut endpointer, &voiced_frames(400), judged(0.05)),
       Some(TurnEnd::NoOnset)
@@ -509,7 +604,7 @@ mod tests {
 
   #[test]
   fn an_open_turn_keeps_the_per_frame_gate_where_the_band_abstains() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     feed_with(&mut endpointer, &voiced_frames(20), judged(0.8));
     assert!(endpointer.speech_seen());
     assert_eq!(
@@ -521,7 +616,7 @@ mod tests {
 
   #[test]
   fn target_speech_beginning_under_a_voiced_interferer_still_opens_the_turn() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     let evidence: Vec<Option<TargetEvidence>> = (0..30)
       .map(|frame| judged(if frame < 15 { 0.05 } else { 0.8 }))
       .collect();
@@ -531,7 +626,7 @@ mod tests {
 
   #[test]
   fn the_onset_trace_explains_a_turn_that_never_opened() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     let window = frames_in(gated().onset);
     assert_eq!(
       feed_with(&mut endpointer, &voiced_frames(60), judged(0.05)),
@@ -547,7 +642,7 @@ mod tests {
 
   #[test]
   fn the_onset_trace_counts_frames_the_band_abstained_on() {
-    let mut endpointer = VoiceEndpointer::new(gated());
+    let mut endpointer = VoiceEndpointer::new(gated(), 1.0);
     feed_with(&mut endpointer, &voiced_frames(2), dark(0.0));
     assert_eq!(feed(&mut endpointer, &quiet_frames(60)), Some(TurnEnd::NoOnset));
     let trace = endpointer.onset_trace();
@@ -556,9 +651,150 @@ mod tests {
     assert!(trace.peak_acoustic_run >= 2, "peak run {}", trace.peak_acoustic_run);
   }
 
+  fn attenuated(samples: Vec<f32>, db: f32) -> Vec<f32> {
+    let scale = 10f32.powf(db / 20.0);
+    samples.into_iter().map(|sample| sample * scale).collect()
+  }
+
+  fn hiss(count: usize, db: f32) -> Vec<f32> {
+    let mut seed = 0x9e37_79b9u32;
+    let amplitude = 10f32.powf(db / 20.0) * 3f32.sqrt();
+    (0..count * FRAME_SAMPLES)
+      .map(|_| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        (seed as f32 / u32::MAX as f32 * 2.0 - 1.0) * amplitude
+      })
+      .collect()
+  }
+
+  fn wake_word_at(db: f32) -> Vec<f32> {
+    let mut samples = quiet_frames(30);
+    samples.extend(attenuated(voiced_frames(50), db));
+    samples.extend(quiet_frames(14));
+    samples
+  }
+
+  fn referenced(leveling: Leveling, samples: &[f32]) -> LevelReference {
+    let mut reference = LevelReference::new(leveling);
+    reference.observe(samples);
+    reference
+  }
+
+  fn native_talker() -> Leveling {
+    Leveling {
+      talker_dbfs: referenced(Leveling::default(), &voiced_frames(60))
+        .talker_dbfs()
+        .unwrap(),
+      ..Leveling::default()
+    }
+  }
+
+  fn gain_db(reference: &LevelReference) -> f32 {
+    20.0 * reference.gain().log10()
+  }
+
+  #[test]
+  fn a_quiet_talker_opens_a_turn_once_the_wake_word_sets_the_gain() {
+    let quiet = attenuated(voiced_frames(20), -36.0);
+    let mut unlevelled = VoiceEndpointer::new(config(), 1.0);
+    feed(&mut unlevelled, &quiet);
+    assert!(
+      !unlevelled.speech_seen(),
+      "the fixture is not quiet enough to need leveling"
+    );
+
+    let gain = referenced(native_talker(), &wake_word_at(-36.0)).gain();
+    let mut levelled = VoiceEndpointer::new(config(), gain);
+    feed(&mut levelled, &quiet);
+    assert!(
+      levelled.speech_seen(),
+      "gain {gain} did not lift the talker into the detector's range"
+    );
+  }
+
+  #[test]
+  fn leveled_silence_still_runs_the_onset_window_out() {
+    let gain = referenced(native_talker(), &wake_word_at(-36.0)).gain();
+    let mut endpointer = VoiceEndpointer::new(config(), gain);
+    assert_eq!(feed(&mut endpointer, &quiet_frames(60)), Some(TurnEnd::NoOnset));
+  }
+
+  #[test]
+  fn the_gain_is_the_same_at_any_capture_level() {
+    let leveling = Leveling::default();
+    let loud = referenced(leveling, &wake_word_at(-6.0));
+    let quiet = referenced(leveling, &wake_word_at(-36.0));
+    assert!(
+      (gain_db(&quiet) - gain_db(&loud) - 30.0).abs() < 0.01,
+      "{} dB against {} dB",
+      gain_db(&quiet),
+      gain_db(&loud)
+    );
+  }
+
+  #[test]
+  fn a_wake_word_over_a_quiet_room_lands_on_the_talker_target() {
+    let leveling = Leveling::default();
+    let reference = referenced(leveling, &wake_word_at(-30.0));
+    let talker = reference.talker_dbfs().unwrap();
+    assert!(
+      (talker + gain_db(&reference) - leveling.talker_dbfs).abs() < 0.01,
+      "talker {talker} plus gain {} missed the target",
+      gain_db(&reference)
+    );
+  }
+
+  #[test]
+  fn a_wake_word_over_a_loud_bed_is_held_to_the_floor_ceiling() {
+    let leveling = Leveling::default();
+    let mut samples = hiss(94, -50.0);
+    for (sample, voiced) in samples[30 * FRAME_SAMPLES..]
+      .iter_mut()
+      .zip(attenuated(voiced_frames(50), -30.0))
+    {
+      *sample += voiced;
+    }
+    let reference = referenced(leveling, &samples);
+    let floor = reference.floor_dbfs().unwrap();
+    assert!(
+      (floor + gain_db(&reference) - leveling.floor_ceiling_dbfs).abs() < 0.01,
+      "floor {floor} plus gain {} broke the ceiling",
+      gain_db(&reference)
+    );
+    assert!(
+      reference.talker_dbfs().unwrap() + gain_db(&reference) < leveling.talker_dbfs,
+      "the ceiling did not bind"
+    );
+  }
+
+  #[test]
+  fn the_reference_forgets_what_fell_out_of_its_window() {
+    let leveling = Leveling::default();
+    let window = frames_in(leveling.window);
+    let mut reference = referenced(leveling, &voiced_frames(window));
+    reference.observe(&attenuated(voiced_frames(window), -30.0));
+    let quiet = referenced(leveling, &attenuated(voiced_frames(window), -30.0));
+    assert!((reference.talker_dbfs().unwrap() - quiet.talker_dbfs().unwrap()).abs() < 0.01);
+  }
+
+  #[test]
+  fn the_gain_is_bounded_both_ways() {
+    let leveling = Leveling::default();
+    assert!((gain_db(&referenced(leveling, &quiet_frames(60))) - leveling.max_gain_db).abs() < 0.01);
+    let clipped = referenced(leveling, &vec![1.0; 60 * FRAME_SAMPLES]);
+    assert!((gain_db(&clipped) - leveling.min_gain_db).abs() < 0.01);
+  }
+
+  #[test]
+  fn an_empty_reference_leaves_the_stream_alone() {
+    assert_eq!(LevelReference::new(Leveling::default()).gain(), 1.0);
+  }
+
   #[test]
   fn a_partial_trailing_frame_is_kept_for_the_next_call() {
-    let mut endpointer = VoiceEndpointer::new(config());
+    let mut endpointer = VoiceEndpointer::new(config(), 1.0);
     endpointer.observe(&quiet_frames(1)[..FRAME_SAMPLES / 2], None);
     assert_eq!(endpointer.armed_frames, 0, "half a frame is not a decision");
     endpointer.observe(&quiet_frames(1)[..FRAME_SAMPLES / 2], None);

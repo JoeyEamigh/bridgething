@@ -28,6 +28,7 @@ mod geo_watchers;
 pub mod log_tap;
 mod lyrics;
 pub mod meta;
+mod notification_origins;
 mod playback_targets;
 mod root_browse;
 pub mod routes;
@@ -40,9 +41,10 @@ mod webapps;
 pub use audio::{AudioError, AudioManager};
 pub use blobs::WebappBlobs;
 pub use browse_content::BrowseContentCache;
-pub use geo_watchers::{GeoLastFix, GeoWatchers, WatchAggregate, WatchChange};
+pub use geo_watchers::{GeoHandover, GeoLastFix, GeoLease, GeoWatchers};
 pub use log_tap::{LogTap, LogTapLayer};
 pub use lyrics::LyricsCache;
+pub use notification_origins::NotificationOrigins;
 pub use playback_targets::{PlaybackTargetError, PlaybackTargetStore};
 pub use root_browse::RootBrowseCache;
 pub use routes::RouteTable;
@@ -84,6 +86,7 @@ pub struct AppState {
   pub stream_routes: RouteTable,
   pub geo_watchers: GeoWatchers,
   pub geo_last_fix: GeoLastFix,
+  pub notification_origins: NotificationOrigins,
   pub log_tap: LogTap,
   pub tunnel_routes: TunnelRoutes,
   pub playback_targets: PlaybackTargetStore,
@@ -132,6 +135,7 @@ impl AppState {
       stream_routes,
       geo_watchers,
       geo_last_fix,
+      notification_origins,
       log_tap,
       tunnel_routes,
       playback_targets,
@@ -169,6 +173,7 @@ impl AppState {
       stream_routes,
       geo_watchers,
       geo_last_fix,
+      notification_origins,
       log_tap,
       tunnel_routes,
       playback_targets,
@@ -360,6 +365,7 @@ pub struct StateAssembly {
   pub stream_routes: RouteTable,
   pub geo_watchers: GeoWatchers,
   pub geo_last_fix: GeoLastFix,
+  pub notification_origins: NotificationOrigins,
   pub log_tap: LogTap,
   pub tunnel_routes: TunnelRoutes,
   pub playback_targets: PlaybackTargetStore,

@@ -2,6 +2,7 @@ use bridgething_macros::BridgeEnum;
 use derive_more::derive::Debug;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uuid::Uuid;
 
 use crate::{NluResolvedIntent, NluStage, VoiceCaptureReason};
 
@@ -17,6 +18,8 @@ pub struct VoiceMicOpen {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 pub struct VoiceDispatch {
+  #[ts(type = "string")]
+  pub stream_id: Uuid,
   pub resolved: Box<NluResolvedIntent>,
   pub stage: Option<NluStage>,
   pub asr_confidence: Option<f32>,

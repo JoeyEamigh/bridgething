@@ -8,6 +8,7 @@ use bridgething_companion::{
     WebappInstallRequest, WebappSlot, WebappSlots,
     ota::{OtaAvailable, OtaDiscoverManifest, OtaLane, OtaPollStatus, OtaRun, OtaRunProgress},
   },
+  backend::LogLevel,
   provider::ResumeTarget,
 };
 use bridgething_delivery::{
@@ -187,6 +188,11 @@ pub async fn device_resume_target(shell: State<'_, Arc<Shell>>) -> Answer<Resume
 #[tauri::command]
 pub async fn device_log_streaming(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
   Ok(shell.log_streaming())
+}
+
+#[tauri::command]
+pub async fn device_log_verbosity(shell: State<'_, Arc<Shell>>) -> Answer<Option<LogLevel>> {
+  Ok(shell.session().device_log_verbosity())
 }
 
 #[tauri::command]
@@ -444,6 +450,13 @@ pub async fn set_device_resume_target(shell: State<'_, Arc<Shell>>, target: Resu
 #[tauri::command]
 pub async fn set_device_log_streaming(shell: State<'_, Arc<Shell>>, enabled: bool) -> Answer<()> {
   shell.set_log_streaming(enabled).await;
+  shell.announce(Hint::bare(hints::LOGS));
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn set_device_log_verbosity(shell: State<'_, Arc<Shell>>, verbosity: Option<LogLevel>) -> Answer<()> {
+  shell.session().set_device_log_verbosity(verbosity).await;
   shell.announce(Hint::bare(hints::LOGS));
   Ok(())
 }

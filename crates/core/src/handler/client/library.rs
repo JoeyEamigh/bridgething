@@ -3,11 +3,12 @@ use std::time::Duration;
 use libbridgething::{
   BrowseResult, LibraryError,
   client::{
-    BridgeToClientMsgData, ClientToBridgeLibraryMsgDispatch, FavoritesSet as ClientFavoritesSet,
-    FavoritesSetMany as ClientFavoritesSetMany, FavoritesToggle as ClientFavoritesToggle, LibraryBrowse,
-    LibraryBrowseReply, LibraryErrorReply, LibraryFavoritesContains, LibraryFavoritesContainsReply,
-    LibraryFavoritesList, LibraryFavoritesListReply, LibraryRecommendations, LibraryRecommendationsReply,
-    LibraryResolveContext, LibraryResolveContextReply, LibrarySearch, LibrarySearchReply,
+    BridgeToClientLibraryMsgEvent, BridgeToClientMsgData, ClientToBridgeLibraryMsgDispatch,
+    FavoritesSet as ClientFavoritesSet, FavoritesSetMany as ClientFavoritesSetMany,
+    FavoritesToggle as ClientFavoritesToggle, LibraryBrowse, LibraryBrowseReply, LibraryErrorReply,
+    LibraryFavoritesContains, LibraryFavoritesContainsReply, LibraryFavoritesList, LibraryFavoritesListReply,
+    LibraryRecommendations, LibraryRecommendationsReply, LibraryResolveContext, LibraryResolveContextReply,
+    LibrarySearch, LibrarySearchReply,
   },
   gateway::{
     self, BridgeToGatewayLibraryMsgCommand, BrowseReply, FavoritesContainsReply, LibraryBrowseRequest,
@@ -42,8 +43,14 @@ impl LibraryHandler {
     self.handle.state.capabilities.snapshot().gateway.is_some()
   }
 
-  async fn forward_command(&self, cmd: BridgeToGatewayLibraryMsgCommand) -> HandlerResult {
-    self.handle.bluetooth.gateway_man.broadcast_command(cmd).await;
+  async fn forward_command(&self, verb: &'static str, cmd: BridgeToGatewayLibraryMsgCommand) -> HandlerResult {
+    if let Err(err) = self.handle.transport.forward(verb, cmd).await {
+      tracing::debug!(%err, "library {verb} reached no companion");
+      let event = BridgeToClientLibraryMsgEvent::ErrorEvent(LibraryErrorReply {
+        error: LibraryError::NoGateway,
+      });
+      self.handle.state.bus.send_event(self.handle.from, event).await?;
+    }
     Ok(())
   }
 
@@ -308,18 +315,22 @@ impl ClientToBridgeLibraryMsgDispatch for LibraryHandler {
 
   async fn favorites_toggle(&self, params: ClientFavoritesToggle) -> HandlerResult {
     self
-      .forward_command(BridgeToGatewayLibraryMsgCommand::FavoritesToggle(
-        gateway::FavoritesToggle { item: params.item },
-      ))
+      .forward_command(
+        "favorites_toggle",
+        BridgeToGatewayLibraryMsgCommand::FavoritesToggle(gateway::FavoritesToggle { item: params.item }),
+      )
       .await
   }
 
   async fn favorites_set(&self, params: ClientFavoritesSet) -> HandlerResult {
     self
-      .forward_command(BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
-        item: params.item,
-        liked: params.liked,
-      }))
+      .forward_command(
+        "favorites_set",
+        BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
+          item: params.item,
+          liked: params.liked,
+        }),
+      )
       .await
   }
 
@@ -333,9 +344,10 @@ impl ClientToBridgeLibraryMsgDispatch for LibraryHandler {
       })
       .collect();
     self
-      .forward_command(BridgeToGatewayLibraryMsgCommand::FavoritesSetMany(
-        gateway::FavoritesSetMany { entries },
-      ))
+      .forward_command(
+        "favorites_set_many",
+        BridgeToGatewayLibraryMsgCommand::FavoritesSetMany(gateway::FavoritesSetMany { entries }),
+      )
       .await
   }
 }

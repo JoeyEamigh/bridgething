@@ -183,6 +183,7 @@ async fn boot_with_scaler(http: Arc<dyn HttpTransport>, scaler: Option<Arc<dyn I
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let backend = FakeStreamBackend::new();

@@ -59,6 +59,8 @@ export interface DesktopSession extends CompanionSession {
 
   deviceAutoResume(): Promise<boolean>;
   deviceLogStreaming(): Promise<boolean>;
+  deviceLogVerbosity(): Promise<api.LogLevel | null>;
+  setDeviceLogVerbosity(verbosity: api.LogLevel | null): Promise<void>;
 
   deviceResumeTarget(): Promise<api.ResumeTarget>;
 

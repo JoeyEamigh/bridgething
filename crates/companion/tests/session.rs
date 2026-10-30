@@ -53,7 +53,7 @@ use bridgething_gateway::SystemHandler;
 use device_meta::meta;
 use fakes::FakeSource;
 use libbridgething::{
-  AncsAuthState, LogEntry, NluSlots, NluTargetType, VoiceCaptureReason,
+  AncsAuthState, LogEntry, LogLevel, NluSlots, NluTargetType, VoiceCaptureReason,
   gateway::{
     BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewaySystemMsg, BridgeToGatewayVoiceMsg, GatewayToBridgeMsg,
     GatewayToBridgeMsgData, GatewayToBridgeSystemMsg, GatewayToBridgeVoiceMsg, LogsSubscribeReply, LogsTailReply,
@@ -432,6 +432,38 @@ async fn a_voice_turn_through_a_live_session_carries_the_uri_the_provider_resolv
     "the session has to install the attached provider's resolver, not leave the dispatcher bare"
   );
   assert_eq!(source.catalog().searched(), ["the strokes"]);
+}
+
+fn announced_voice(msgs: &[GatewayToBridgeMsg]) -> Option<bool> {
+  msgs.iter().rev().find_map(|msg| match &msg.data {
+    GatewayToBridgeMsgData::Capabilities(libbridgething::gateway::GatewayToBridgeCapabilitiesMsg::Announce(caps)) => {
+      Some(caps.available.voice)
+    }
+    _ => None,
+  })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_that_can_transcribe_announces_voice_and_one_that_cannot_does_not() {
+  let hearing = Arc::new(HandLink::default());
+  let (listener, _heard, _spool) = session_hearing(hearing.clone(), Arc::new(SaidAloud("pause".into())));
+  listener.start();
+  hearing.connect(DEVICE).await;
+  assert!(
+    eventually(|| announced_voice(&hearing.heard_by(DEVICE)) == Some(true)).await,
+    "a companion with a recognizer never told the daemon it can take a voice turn"
+  );
+
+  let deaf = Arc::new(HandLink::default());
+  let (bystander, _heard, _spool) = session(deaf.clone());
+  bystander.start();
+  deaf.connect(DEVICE).await;
+  assert!(eventually(|| announced_voice(&deaf.heard_by(DEVICE)).is_some()).await);
+  assert_eq!(
+    announced_voice(&deaf.heard_by(DEVICE)),
+    Some(false),
+    "a companion with no recognizer must never be handed a turn's audio"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1677,6 +1709,74 @@ async fn history_keeps_the_time_the_device_logged_it_and_live_lines_keep_their_a
   assert_eq!(
     announced, stamps,
     "the live event carries the same stamp the ring kept, so a seeded burst does not read as one instant"
+  );
+}
+
+fn verbosity_asks(msgs: &[GatewayToBridgeMsg]) -> Vec<(Option<String>, Option<LogLevel>)> {
+  msgs
+    .iter()
+    .filter_map(|msg| match &msg.data {
+      GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::LogsSubscribe(payload)) => {
+        Some((None, payload.verbosity))
+      }
+      GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::LogsSetVerbosity(payload)) => {
+        Some((Some(payload.token.clone()), payload.verbosity))
+      }
+      _ => None,
+    })
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_log_stream_opens_at_the_verbosity_already_chosen() {
+  let link = Arc::new(HandLink::default());
+  let (session, _heard, _spool) = session(link.clone());
+  session.start();
+  link.connect(DEVICE).await;
+  assert!(
+    eventually(|| session.peer_for(DEVICE).is_some()).await,
+    "the link came up"
+  );
+
+  session.set_device_log_verbosity(Some(LogLevel::Trace)).await;
+  let _toggling = streaming(&session, &link).await;
+
+  assert_eq!(
+    verbosity_asks(&link.heard_by(DEVICE)),
+    vec![(None, Some(LogLevel::Trace))],
+    "the subscribe carries the chosen verbosity instead of a second round trip"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn changing_the_verbosity_retunes_the_open_stream_and_back() {
+  let link = Arc::new(HandLink::default());
+  let (session, _heard, _spool) = session(link.clone());
+  session.start();
+  link.connect(DEVICE).await;
+  assert!(
+    eventually(|| session.peer_for(DEVICE).is_some()).await,
+    "the link came up"
+  );
+
+  let _toggling = streaming(&session, &link).await;
+  awaited(&link, |msg| matches!(msg, GatewayToBridgeSystemMsg::LogsTail(_))).await;
+
+  session.set_device_log_verbosity(Some(LogLevel::Debug)).await;
+  session.set_device_log_verbosity(None).await;
+
+  assert!(
+    eventually(|| verbosity_asks(&link.heard_by(DEVICE)).len() == 3).await,
+    "both retunes reached the device, got {:?}",
+    verbosity_asks(&link.heard_by(DEVICE))
+  );
+  assert_eq!(
+    verbosity_asks(&link.heard_by(DEVICE)),
+    vec![
+      (None, None),
+      (Some("tap-1".to_owned()), Some(LogLevel::Debug)),
+      (Some("tap-1".to_owned()), None),
+    ]
   );
 }
 

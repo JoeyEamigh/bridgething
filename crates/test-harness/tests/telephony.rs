@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use bridgething::{Address, ClientMode, TappedFrame};
+use bridgething::{ClientMode, TappedFrame};
 use bridgething_iap2::{SessionEvent, csm::telephony::CallStateUpdate};
 use bridgething_test_harness::Harness;
-use libbridgething::{Device, DeviceType, LinkKind, PeerIap2Status};
 use serde_json::Value;
 
 const CONVERGE: Duration = Duration::from_secs(3);
@@ -17,30 +16,6 @@ fn ringing_incoming(call_id: &str) -> CallStateUpdate {
     call_uuid: Some(call_id.into()),
     ..Default::default()
   }
-}
-
-async fn identify_ios_peer(harness: &Harness, mac: Address) {
-  let peers = harness.state().peers.clone();
-  peers
-    .ensure_exists(
-      mac,
-      Device {
-        name: "test-iphone".into(),
-        device_type: DeviceType::Ios,
-        id: mac.to_string(),
-        kind: LinkKind::Bluetooth,
-        default: false,
-      },
-    )
-    .await;
-  peers.set_iap2(mac, PeerIap2Status::Identified).await;
-  let up = harness
-    .wait_for(
-      |s| s.peers.snapshot().peers.get(&mac).is_some_and(|p| p.has_useful_link()),
-      CONVERGE,
-    )
-    .await;
-  assert!(up, "iap2 peer never reached a useful link");
 }
 
 fn stock_call_info(frame: &TappedFrame) -> Option<Value> {
@@ -76,7 +51,7 @@ async fn iap2_incoming_call_reaches_stock_with_pascal_case_fields() {
   assert!(registered, "stock client never registered");
 
   let phone = harness.iap2_peer();
-  identify_ios_peer(&harness, phone).await;
+  harness.identify_iphone(phone).await.expect("identify iphone");
   harness
     .inject_iap2(phone, SessionEvent::CallStateUpdate(ringing_incoming("call-1")))
     .await

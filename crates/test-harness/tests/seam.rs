@@ -308,12 +308,13 @@ where
 
 async fn transport_routes_to_iap2_and_refuses_unknown_shuffle<T>(tier: &T) -> anyhow::Result<()>
 where
-  T: CommandDriver + Iap2OutboundObserve,
+  T: CommandDriver + Iap2SourceDriver + Iap2OutboundObserve,
 {
   const PLAY_PAUSE: u8 = 0x01;
   const SHUFFLE: u8 = 0x40;
 
   let mut outbound = tier.iap2_outbound().await?;
+  let _iphone = tier.iap2_source().await?;
   let client = tier.command_client().await?;
 
   client

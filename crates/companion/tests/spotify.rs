@@ -364,6 +364,7 @@ async fn boot_full(initial: Cluster, secrets: Arc<MemorySecrets>, product: Optio
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let http = FakeHttp::new();

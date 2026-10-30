@@ -10,10 +10,20 @@ use std::{
   time::{Duration, Instant},
 };
 
+use libbridgething::LogLevel;
+use tracing::{Subscriber, metadata::LevelFilter};
+use tracing_subscriber::{
+  EnvFilter, Layer,
+  filter::{Directive, Filtered},
+  registry::LookupSpan,
+  reload,
+};
+
+use crate::state::LogTapLayer;
+
 const ENV_TRACE_DIR: &str = "BRIDGETHING_TRACE_DIR";
 const ENV_TRACE_FILTER: &str = "BRIDGETHING_TRACE_FILTER";
-const TRACE_FILE_DIRECTIVES: &str =
-  "bridgething=trace,libbridgething=trace,bridgething_iap2=trace,bridgething_mfi=trace";
+const DAEMON_CRATES: [&str; 4] = ["bridgething", "libbridgething", "bridgething_iap2", "bridgething_mfi"];
 const TRACE_FILE_NAME: &str = "bridgething.log";
 const TRACE_FILE_CAP_BYTES: u64 = 32 * 1024 * 1024;
 const TRACE_ROTATED_KEEP: usize = 3;
@@ -22,14 +32,11 @@ const TRACE_CHANNEL_CAP: usize = 65_536;
 
 static CONSOLE_GUARD: OnceLock<tracing_appender::non_blocking::WorkerGuard> = OnceLock::new();
 
-pub fn init_logger(tap: crate::state::LogTapLayer) {
-  use tracing::metadata::LevelFilter;
+pub fn init_logger(tap: LogTapLayer) {
   use tracing_subscriber::{
-    EnvFilter, Layer, filter::Directive, fmt, fmt::format::FmtSpan, prelude::__tracing_subscriber_SubscriberExt,
-    util::SubscriberInitExt,
+    fmt, fmt::format::FmtSpan, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
   };
 
-  // directives for debug builds
   #[cfg(debug_assertions)]
   let default_directive = Directive::from(LevelFilter::TRACE);
 
@@ -40,30 +47,19 @@ pub fn init_logger(tap: crate::state::LogTapLayer) {
     "bridgething=trace,bridgething::ws::connection::send=debug,bridgething::net=debug,libbridgething=trace,bridgething_iap2=trace,bridgething_mfi=trace".to_string()
   };
 
-  // directives for release builds
   #[cfg(not(debug_assertions))]
   let default_directive = Directive::from(LevelFilter::WARN);
 
   #[cfg(not(debug_assertions))]
-  let filter_directives = if let Ok(filter) = std::env::var("RUST_LOG") {
-    filter
-  } else {
-    "bridgething=info,libbridgething=info,bridgething_iap2=info,bridgething_mfi=info".to_string()
-  };
+  let filter_directives = std::env::var("RUST_LOG").unwrap_or_else(|_| crate_directives(LevelFilter::INFO));
 
-  let make_filter = |directives: &str| {
-    EnvFilter::builder()
-      .with_default_directive(default_directive.clone())
-      .parse_lossy(directives)
-  };
-
-  let file_directives = std::env::var(ENV_TRACE_FILTER).unwrap_or_else(|_| TRACE_FILE_DIRECTIVES.to_string());
+  let file_directives = std::env::var(ENV_TRACE_FILTER).unwrap_or_else(|_| crate_directives(LevelFilter::TRACE));
   let file_layer = trace_file_writer().map(|writer| {
     fmt::layer()
       .with_ansi(false)
       .with_span_events(FmtSpan::CLOSE)
       .with_writer(writer)
-      .with_filter(make_filter(&file_directives))
+      .with_filter(env_filter(&default_directive, &file_directives))
   });
 
   let (console_writer, console_guard) = tracing_appender::non_blocking(std::io::stderr());
@@ -74,13 +70,59 @@ pub fn init_logger(tap: crate::state::LogTapLayer) {
       fmt::layer()
         .with_span_events(FmtSpan::CLOSE)
         .with_writer(console_writer)
-        .with_filter(make_filter(&filter_directives)),
+        .with_filter(env_filter(&default_directive, &filter_directives)),
     )
-    .with(tap.with_filter(make_filter(&filter_directives)))
+    .with(tunable_tap(tap, default_directive, filter_directives))
     .with(file_layer)
     .init();
 
   tracing::debug!("initialized logger");
+}
+
+fn env_filter(default: &Directive, directives: &str) -> EnvFilter {
+  EnvFilter::builder()
+    .with_default_directive(default.clone())
+    .parse_lossy(directives)
+}
+
+fn crate_directives(level: LevelFilter) -> String {
+  DAEMON_CRATES.map(|name| format!("{name}={level}")).join(",")
+}
+
+fn level_filter(level: LogLevel) -> LevelFilter {
+  match level {
+    LogLevel::Trace => LevelFilter::TRACE,
+    LogLevel::Debug => LevelFilter::DEBUG,
+    LogLevel::Info => LevelFilter::INFO,
+    LogLevel::Warn => LevelFilter::WARN,
+    LogLevel::Error => LevelFilter::ERROR,
+  }
+}
+
+fn tap_directives(base: &str, verbosity: Option<LogLevel>) -> String {
+  match verbosity {
+    None => base.to_string(),
+    Some(level) => format!("{base},{}", crate_directives(level_filter(level))),
+  }
+}
+
+fn tunable_tap<S>(
+  tap: LogTapLayer,
+  default: Directive,
+  base: String,
+) -> Filtered<LogTapLayer, reload::Layer<EnvFilter, S>, S>
+where
+  S: Subscriber + for<'a> LookupSpan<'a>,
+{
+  let (filter, handle) = reload::Layer::new(env_filter(&default, &base));
+  tap.bind_verbosity(move |verbosity| {
+    let directives = tap_directives(&base, verbosity);
+    match handle.reload(env_filter(&default, &directives)) {
+      Ok(()) => tracing::info!(?verbosity, %directives, "device log stream filter retuned"),
+      Err(err) => tracing::warn!(?verbosity, "device log stream filter could not be retuned: {err}"),
+    }
+  });
+  tap.with_filter(filter)
 }
 
 fn trace_file_writer() -> Option<TraceFileTx> {
@@ -260,7 +302,81 @@ pub async fn wait_for_signal() {
 
 #[cfg(test)]
 mod tests {
+  use std::{future::Future, pin::Pin};
+
+  use libbridgething::LogSource;
+  use tracing_subscriber::prelude::*;
+
   use super::*;
+  use crate::state::{
+    LogTap,
+    log_tap::{LogOwner, LogSink},
+  };
+
+  fn quiet_sink() -> LogSink {
+    Box::new(|_| Box::pin(async { true }) as Pin<Box<dyn Future<Output = bool> + Send>>)
+  }
+
+  fn seen(tap: &LogTap, message: &str) -> bool {
+    tap
+      .tail(LogSource::Daemon, &[], None, 512)
+      .iter()
+      .any(|entry| entry.message == message)
+  }
+
+  #[tokio::test]
+  async fn the_stream_filter_rises_with_a_subscriber_and_falls_back_when_it_leaves() {
+    let (tap, layer) = LogTap::new();
+    let subscriber = tracing_subscriber::registry().with(tunable_tap(
+      layer,
+      Directive::from(LevelFilter::WARN),
+      crate_directives(LevelFilter::INFO),
+    ));
+    let _scope = tracing::subscriber::set_default(subscriber);
+    let owner = LogOwner::Gateway(None);
+
+    tracing::debug!(target: "bridgething::mic", "debug-at-default");
+    tracing::info!(target: "bridgething::mic", "info-at-default");
+
+    let token = tap.subscribe(
+      owner,
+      quiet_sink(),
+      LogSource::Daemon,
+      Vec::new(),
+      None,
+      Some(LogLevel::Trace),
+    );
+    tracing::trace!(target: "bridgething::mic", "trace-while-raised");
+    tracing::trace!(target: "hyper::proto", "foreign-trace-while-raised");
+
+    tap.unsubscribe(token);
+    tracing::debug!(target: "bridgething::mic", "debug-after-revert");
+
+    assert!(seen(&tap, "info-at-default"));
+    assert!(!seen(&tap, "debug-at-default"), "the default filter let debug through");
+    assert!(
+      seen(&tap, "trace-while-raised"),
+      "a trace subscriber never raised the filter"
+    );
+    assert!(
+      !seen(&tap, "foreign-trace-while-raised"),
+      "raising the daemon must not open other crates past the unit's base level"
+    );
+    assert!(
+      !seen(&tap, "debug-after-revert"),
+      "the filter stayed raised after the subscriber left"
+    );
+  }
+
+  #[test]
+  fn raising_layers_the_daemon_crates_over_the_unit_default() {
+    let base = "warn,bridgething=info,bridgething::net=warn";
+    assert_eq!(tap_directives(base, None), base);
+    assert_eq!(
+      tap_directives(base, Some(LogLevel::Debug)),
+      "warn,bridgething=info,bridgething::net=warn,bridgething=debug,libbridgething=debug,bridgething_iap2=debug,bridgething_mfi=debug"
+    );
+  }
 
   fn temp_dir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("bridgething-trace-test-{}", uuid::Uuid::now_v7()));

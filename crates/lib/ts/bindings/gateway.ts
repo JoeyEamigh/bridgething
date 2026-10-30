@@ -423,6 +423,7 @@ export type GatewayToBridgeSystemMsg =
   | { event: 'logsTail'; data: LogsTail }
   | { event: 'logsSubscribe'; data: LogsSubscribe }
   | { event: 'logsUnsubscribe'; data: LogsUnsubscribe }
+  | { event: 'logsSetVerbosity'; data: LogsSetVerbosity }
   | { event: 'keepaliveAck'; data: KeepaliveAck };
 
 export type GatewayToBridgeTimeMsg = { event: 'snapshot'; data: TimeInfo };
@@ -509,7 +510,14 @@ export type LibraryScope = 'saved' | 'playlists';
 
 export type LibrarySearchRequest = { query: string; kinds: Array<ItemKind> | null; limit: number; offset: number };
 
-export type LogsSubscribe = { source: LogSource; levels: Array<LogLevel>; filter: string | null };
+export type LogsSetVerbosity = { token: string; verbosity?: LogLevel | null };
+
+export type LogsSubscribe = {
+  source: LogSource;
+  levels: Array<LogLevel>;
+  filter: string | null;
+  verbosity?: LogLevel | null;
+};
 
 export type LogsSubscribeReply = { token: string };
 
@@ -694,11 +702,21 @@ export type VoiceCloseReason = 'endOfSpeech' | 'cancelled' | 'muted' | 'error';
 
 export type VoiceCodec = 'opus';
 
-export type VoiceDispatch = { resolved: NluResolvedIntent; stage: NluStage | null; asrConfidence: number | null };
+export type VoiceDispatch = {
+  streamId: string;
+  resolved: NluResolvedIntent;
+  stage: NluStage | null;
+  asrConfidence: number | null;
+};
 
-export type VoiceDispatchFailed = { code: VoiceDispatchErrorCode; intent: string; msg: string };
+export type VoiceDispatchFailed = { streamId: string; code: VoiceDispatchErrorCode; intent: string; msg: string };
 
-export type VoiceDispatched = { target: VoiceDispatchTarget; intent: string; webappId: string | null };
+export type VoiceDispatched = {
+  streamId: string;
+  target: VoiceDispatchTarget;
+  intent: string;
+  webappId: string | null;
+};
 
 export type VoiceFormat = { codec: VoiceCodec; sampleRateHz: number; channels: number };
 

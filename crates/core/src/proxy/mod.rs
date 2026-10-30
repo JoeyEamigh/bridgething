@@ -20,7 +20,7 @@ use tokio::{
 use uuid::Uuid;
 
 use crate::{
-  bluetooth::BluetoothMan,
+  bluetooth::{Address, BluetoothMan},
   state::{State, TunnelInbound},
 };
 
@@ -149,7 +149,7 @@ async fn handle_session(
     return Ok(());
   }
 
-  bridge(stream, inbound_rx, consumed_rx, bluetooth, state, tunnel_id).await;
+  bridge(stream, inbound_rx, consumed_rx, bluetooth, state, primary, tunnel_id).await;
   Ok(())
 }
 
@@ -234,7 +234,7 @@ fn tunnel_error_to_socks_rep(err: &RequestError<TunnelErrorReply>) -> u8 {
   }
 }
 
-async fn send_ack(bluetooth: &BluetoothMan, tunnel_id: Uuid, unacked: &mut u32) {
+async fn send_ack(bluetooth: &BluetoothMan, gateway: Address, tunnel_id: Uuid, unacked: &mut u32) {
   if *unacked == 0 {
     return;
   }
@@ -243,7 +243,7 @@ async fn send_ack(bluetooth: &BluetoothMan, tunnel_id: Uuid, unacked: &mut u32) 
     consumed: *unacked,
   });
   *unacked = 0;
-  bluetooth.gateway_man.broadcast_command(cmd).await;
+  bluetooth.gateway_man.send_command(gateway, cmd).await;
 }
 
 async fn bridge(
@@ -252,6 +252,7 @@ async fn bridge(
   mut consumed_rx: watch::Receiver<u64>,
   bluetooth: BluetoothMan,
   state: State,
+  gateway: Address,
   tunnel_id: Uuid,
 ) {
   let (mut socks_read, mut socks_write) = stream.into_split();
@@ -271,7 +272,7 @@ async fn bridge(
             }
             unacked = unacked.saturating_add(bytes.len() as u32);
             if unacked >= TUNNEL_ACK_INTERVAL_BYTES {
-              send_ack(&bt_for_inbound, inbound_tunnel_id, &mut unacked).await;
+              send_ack(&bt_for_inbound, gateway, inbound_tunnel_id, &mut unacked).await;
             }
           }
           Some(TunnelInbound::Closed(reason)) => {
@@ -282,7 +283,7 @@ async fn bridge(
           None => break,
         },
         _ = tokio::time::sleep(TUNNEL_ACK_FLUSH), if unacked > 0 => {
-          send_ack(&bt_for_inbound, inbound_tunnel_id, &mut unacked).await;
+          send_ack(&bt_for_inbound, gateway, inbound_tunnel_id, &mut unacked).await;
         }
       }
     }
@@ -322,7 +323,7 @@ async fn bridge(
             tunnel_id: outbound_tunnel_id,
             bytes,
           });
-          bt_for_outbound.gateway_man.broadcast_command_bulk(cmd).await;
+          bt_for_outbound.gateway_man.command_bulk(gateway, cmd).await;
         }
         Err(err) => {
           tracing::trace!(?err, tunnel_id = %outbound_tunnel_id, "SOCKS read failed; closing tunnel");
@@ -351,6 +352,6 @@ async fn bridge(
       tunnel_id,
       reason: None,
     });
-    bluetooth.gateway_man.broadcast_command_bulk(close).await;
+    bluetooth.gateway_man.command_bulk(gateway, close).await;
   }
 }

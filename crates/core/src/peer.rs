@@ -20,7 +20,10 @@ use crate::{
   capabilities::CapabilitiesRegistry,
   net::{WSError, WireEventBus},
   player::Player,
-  state::{AudioManager, LogTap, PlaybackTargetStore, RouteTable, TelephonyManager, TunnelRoutes, log_tap::LogOwner},
+  state::{
+    AudioManager, LogTap, NotificationOrigins, PlaybackTargetStore, RouteTable, TelephonyManager, TunnelRoutes,
+    log_tap::LogOwner,
+  },
   stock::{broadcast_stock_connection, broadcast_stock_disconnection},
 };
 
@@ -114,6 +117,7 @@ impl PeerTracker {
     ws_routes: RouteTable,
     stream_routes: RouteTable,
     tunnel_routes: TunnelRoutes,
+    notification_origins: NotificationOrigins,
     log_tap: LogTap,
   ) -> Self {
     let (cmd_tx, cmd_rx) = mpsc::channel(PEER_CMD_CAPACITY);
@@ -131,6 +135,7 @@ impl PeerTracker {
       ws_routes,
       stream_routes,
       tunnel_routes,
+      notification_origins,
       log_tap,
     ));
     Self { cmd_tx, snapshot_rx }
@@ -154,6 +159,15 @@ impl PeerTracker {
         PeerCompanionStatus::Connected(info) => Some(info.clone()),
         _ => None,
       })
+  }
+
+  pub fn iap2_identified(&self) -> bool {
+    self
+      .snapshot_rx
+      .borrow()
+      .peers
+      .values()
+      .any(|peer| peer.iap2 == PeerIap2Status::Identified)
   }
 
   pub async fn upsert(&self, mac: Address, device: Device) {
@@ -245,6 +259,7 @@ struct PeerActor {
   ws_routes: RouteTable,
   stream_routes: RouteTable,
   tunnel_routes: TunnelRoutes,
+  notification_origins: NotificationOrigins,
   log_tap: LogTap,
   snapshot_tx: watch::Sender<PeerSnapshot>,
   cmd_tx: mpsc::Sender<PeerCommand>,
@@ -268,6 +283,7 @@ async fn run_actor(
   ws_routes: RouteTable,
   stream_routes: RouteTable,
   tunnel_routes: TunnelRoutes,
+  notification_origins: NotificationOrigins,
   log_tap: LogTap,
 ) {
   let mut actor = PeerActor {
@@ -282,6 +298,7 @@ async fn run_actor(
     ws_routes,
     stream_routes,
     tunnel_routes,
+    notification_origins,
     log_tap,
     snapshot_tx,
     cmd_tx,
@@ -636,10 +653,14 @@ impl PeerActor {
       }
     }
 
-    if let Some(addr) = diff.gateway_link_lost
-      && let Err(err) = self.capabilities.forget_extensions(addr).await
-    {
-      tracing::warn!(?err, "failed to clear the running extension set on gateway link loss");
+    if let Some(addr) = diff.gateway_link_lost {
+      if let Err(err) = self.capabilities.forget_extensions(addr).await {
+        tracing::warn!(?err, "failed to clear the running extension set on gateway link loss");
+      }
+      let drained = self.log_tap.drain_for_owner(LogOwner::Gateway(Some(addr)));
+      if !drained.is_empty() {
+        tracing::debug!(count = drained.len(), %addr, "drained gateway log subscriptions on gateway link loss");
+      }
     }
 
     if let Some(addr) = diff.companion_lost {
@@ -655,10 +676,7 @@ impl PeerActor {
       if let Err(err) = self.telephony.clear_companion(addr).await {
         tracing::warn!(?err, "failed to clear companion calls on disconnect");
       }
-      let drained = self.log_tap.drain_for_owner(LogOwner::Gateway(Some(addr)));
-      if !drained.is_empty() {
-        tracing::debug!(count = drained.len(), %addr, "drained gateway log subscriptions on companion disconnect");
-      }
+      self.notification_origins.drop_for(addr);
       self.tear_down_net_routes(addr).await;
     }
   }

@@ -75,6 +75,8 @@ pub struct VoiceStreamClose {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 pub struct VoiceDispatched {
+  #[ts(type = "string")]
+  pub stream_id: Uuid,
   pub target: VoiceDispatchTarget,
   pub intent: String,
   pub webapp_id: Option<String>,
@@ -85,6 +87,8 @@ pub struct VoiceDispatched {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 pub struct VoiceDispatchFailed {
+  #[ts(type = "string")]
+  pub stream_id: Uuid,
   pub code: VoiceDispatchErrorCode,
   pub intent: String,
   pub msg: String,

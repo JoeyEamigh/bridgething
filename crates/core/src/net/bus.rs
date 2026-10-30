@@ -46,13 +46,6 @@ impl WireEventBus {
     self.client_man.broadcast_event_to_scopes(scopes, event).await
   }
 
-  pub async fn broadcast_command<C: WireCommand<BridgeToClientMsgData> + Clone>(
-    &self,
-    cmd: C,
-  ) -> Result<(), Vec<WSError>> {
-    self.client_man.broadcast_command(cmd).await
-  }
-
   pub async fn send(
     &self,
     id: Uuid,

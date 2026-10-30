@@ -117,6 +117,7 @@ impl ClientToBridgeSystemMsgDispatch for SystemHandler {
       params.source,
       params.levels,
       params.filter,
+      None,
     );
     Ok(
       self

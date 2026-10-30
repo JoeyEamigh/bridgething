@@ -5,7 +5,7 @@ mod bluetooth;
 mod capabilities;
 mod config;
 mod doc;
-mod geo;
+pub(crate) mod geo;
 mod hardware;
 mod library;
 mod lyrics;
@@ -223,7 +223,7 @@ impl ClientHandler {
           reason
         );
         net::cleanup_owner_routes(&handle).await;
-        geo::cleanup_owner_watchers(&handle).await;
+        geo::cleanup_owner_watchers(&handle);
         handle
           .state
           .log_tap

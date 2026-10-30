@@ -89,6 +89,7 @@ async fn signed_in(config: &SubsonicConfig) -> Live {
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let backend = FakeStreamBackend::new();

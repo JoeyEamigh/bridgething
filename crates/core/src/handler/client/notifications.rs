@@ -18,17 +18,27 @@ impl NotificationsHandler {
     Self { handle }
   }
 
-  async fn has_gateway(&self) -> bool {
-    if self.handle.state.capabilities.snapshot().gateway.is_some() {
-      return true;
+  async fn invoke(
+    &self,
+    params: ClientNotificationInvoke,
+    action: fn(gateway::NotificationInvoke) -> BridgeToGatewayNotificationsMsgCommand,
+  ) -> HandlerResult {
+    match self.handle.state.notification_origins.origin_of(&params.id) {
+      Some(origin) => {
+        let cmd = action(gateway::NotificationInvoke { id: params.id });
+        self.handle.bluetooth.gateway_man.send_command(origin, cmd).await;
+      }
+      None => {
+        tracing::debug!(id = %params.id, "notification action for a notification no connected companion posted");
+        let event = BridgeToClientNotificationsMsgEvent::ErrorEvent(NotificationsErrorReply {
+          error: NotificationsError::NoTarget,
+        });
+        if let Err(err) = self.handle.state.bus.send_event(self.handle.from, event).await {
+          tracing::warn!(?err, "failed to report notification action failure to webapp");
+        }
+      }
     }
-    let event = BridgeToClientNotificationsMsgEvent::ErrorEvent(NotificationsErrorReply {
-      error: NotificationsError::NoTarget,
-    });
-    if let Err(err) = self.handle.state.bus.send_event(self.handle.from, event).await {
-      tracing::warn!(?err, "failed to report notification action failure to webapp");
-    }
-    false
+    Ok(())
   }
 }
 
@@ -39,39 +49,17 @@ impl ClientToBridgeNotificationsMsgDispatch for NotificationsHandler {
     if self.handle.bluetooth.le.try_invoke_positive(&params.id).await {
       return Ok(());
     }
-    if !self.has_gateway().await {
-      return Ok(());
-    }
     self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayNotificationsMsgCommand::InvokePositive(to_gateway(
-        params,
-      )))
-      .await;
-    Ok(())
+      .invoke(params, BridgeToGatewayNotificationsMsgCommand::InvokePositive)
+      .await
   }
 
   async fn invoke_negative(&self, params: ClientNotificationInvoke) -> HandlerResult {
     if self.handle.bluetooth.le.try_invoke_negative(&params.id).await {
       return Ok(());
     }
-    if !self.has_gateway().await {
-      return Ok(());
-    }
     self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayNotificationsMsgCommand::InvokeNegative(to_gateway(
-        params,
-      )))
-      .await;
-    Ok(())
+      .invoke(params, BridgeToGatewayNotificationsMsgCommand::InvokeNegative)
+      .await
   }
-}
-
-fn to_gateway(invoke: ClientNotificationInvoke) -> gateway::NotificationInvoke {
-  gateway::NotificationInvoke { id: invoke.id }
 }

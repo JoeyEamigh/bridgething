@@ -1,19 +1,18 @@
 use libbridgething::{
   ItemKind, ItemRef, NluDirection, NluPhoneAction, NluPlaybackSpeed, NluRepeatMode, NluResolvedIntent, NluScope,
-  NluSlots, NluTargetType, PlayContext, RepeatMode, VoiceDispatchErrorCode, VoiceDispatchTarget,
+  NluSlots, NluTargetType, PlayContext, QueuePosition, RepeatMode, VoiceDispatchErrorCode, VoiceDispatchTarget,
   client::{
     BridgeToClientVoiceMsgEvent, VoiceActivity, VoiceActivityError, VoiceDisplayIntent, VoiceIntent, VoicePhase,
   },
   gateway::{
-    self, BridgeToGatewayAudioMsgCommand, BridgeToGatewayLibraryMsgCommand, BridgeToGatewayPlayerMsgCommand,
-    BridgeToGatewayVoiceMsg, GatewayToBridgeVoiceMsgCommandDispatch, VoiceCloseReason, VoiceDispatch,
-    VoiceDispatchFailed, VoiceDispatched, VoiceMicOpen,
+    self, BridgeToGatewayLibraryMsgCommand, BridgeToGatewayVoiceMsg, GatewayToBridgeVoiceMsgCommandDispatch,
+    VoiceCloseReason, VoiceDispatch, VoiceDispatchFailed, VoiceDispatched, VoiceMicOpen,
   },
 };
 use uuid::Uuid;
 
 use super::{HandlerResult, MsgHandle, webapp::navigate_url_for_active};
-use crate::{chrome::ChromeCommand, state::TelephonyManager};
+use crate::{chrome::ChromeCommand, mic::MicError, state::TelephonyManager, transport::TransportResult};
 
 type Routed = Result<(VoiceDispatchTarget, Option<Uuid>), (VoiceDispatchErrorCode, String)>;
 
@@ -51,16 +50,33 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
 
   async fn dispatch(&self, params: VoiceDispatch) -> HandlerResult {
     let VoiceDispatch {
+      stream_id,
       resolved,
       stage,
       asr_confidence,
     } = params;
     tracing::info!(
-      "({:?}) voice dispatch: intent={} transcript={:?} asr_confidence={asr_confidence:?}",
+      "({:?}) voice dispatch for {stream_id}: intent={} transcript={:?} asr_confidence={asr_confidence:?}",
       &self.handle.address,
       resolved.intent,
       resolved.transcript,
     );
+
+    let claimed = match self.handle.state.mic.claim(stream_id).await {
+      Ok(claimed) => claimed,
+      Err(err) => {
+        tracing::info!(
+          "({:?}) voice dispatch for {stream_id} dropped: {err}",
+          &self.handle.address
+        );
+        let code = match err {
+          MicError::NotResolving(_) => VoiceDispatchErrorCode::StaleTurn,
+          _ => VoiceDispatchErrorCode::Internal,
+        };
+        self.refuse(stream_id, &resolved.intent, code, err.to_string()).await;
+        return Ok(());
+      }
+    };
 
     let turn = VoiceActivity {
       transcript: Some(resolved.transcript.clone()),
@@ -68,7 +84,7 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
       intent: Some(resolved.intent.clone()),
       slots: resolved.slots.clone(),
       stage,
-      ..VoiceActivity::new(VoicePhase::Done)
+      ..claimed
     };
 
     let outcome = match self.route(&resolved).await {
@@ -77,6 +93,7 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
         self
           .handle
           .send_info(BridgeToGatewayVoiceMsg::Dispatched(VoiceDispatched {
+            stream_id,
             target,
             intent: resolved.intent.clone(),
             webapp_id: webapp_id.map(|id| id.to_string()),
@@ -89,14 +106,7 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
       }
       Err((code, msg)) => {
         tracing::debug!("({:?}) voice dispatch refused: {code:?}: {msg}", &self.handle.address);
-        self
-          .handle
-          .send_info(BridgeToGatewayVoiceMsg::DispatchFailed(VoiceDispatchFailed {
-            code,
-            intent: resolved.intent.clone(),
-            msg: msg.clone(),
-          }))
-          .await;
+        self.refuse(stream_id, &resolved.intent, code, msg.clone()).await;
         VoiceActivity {
           phase: VoicePhase::Failed,
           error: Some(VoiceActivityError { code, msg }),
@@ -113,59 +123,51 @@ impl GatewayToBridgeVoiceMsgCommandDispatch for VoiceHandler {
 }
 
 impl VoiceHandler {
+  async fn refuse(&self, stream_id: Uuid, intent: &str, code: VoiceDispatchErrorCode, msg: String) {
+    self
+      .handle
+      .send_info(BridgeToGatewayVoiceMsg::DispatchFailed(VoiceDispatchFailed {
+        stream_id,
+        code,
+        intent: intent.to_owned(),
+        msg,
+      }))
+      .await;
+  }
+
   async fn route(&self, resolved: &NluResolvedIntent) -> Routed {
     let slots = &resolved.slots;
     match resolved.intent.as_str() {
       "PLAY" if slots.has_catalog_slots() => self.play_catalog(slots).await,
-      "PLAY" => {
-        self.handle.transport.play().await;
-        Ok((VoiceDispatchTarget::Playback, None))
-      }
-      "PAUSE" => {
-        self.handle.transport.pause().await;
-        Ok((VoiceDispatchTarget::Playback, None))
-      }
+      "PLAY" => played(self.handle.transport.play().await),
+      "PAUSE" => played(self.handle.transport.pause().await),
       "NEXT" => {
         for _ in 0..skip_count(slots)? {
-          self.handle.transport.next().await;
+          played(self.handle.transport.next().await)?;
         }
         Ok((VoiceDispatchTarget::Playback, None))
       }
-      "PREVIOUS" if slots.scope == Some(NluScope::Restart) => {
-        self.handle.transport.seek_to(0).await;
-        Ok((VoiceDispatchTarget::Playback, None))
-      }
-      "PREVIOUS" => {
-        self.handle.transport.prev(false).await;
-        Ok((VoiceDispatchTarget::Playback, None))
-      }
+      "PREVIOUS" if slots.scope == Some(NluScope::Restart) => played(self.handle.transport.seek_to(0).await),
+      "PREVIOUS" => played(self.handle.transport.prev(false).await),
       "SET_SHUFFLE" => {
         let enabled = slots.enabled.ok_or_else(|| bad("SET_SHUFFLE without `enabled`"))?;
-        self.handle.transport.set_shuffle(enabled).await;
-        Ok((VoiceDispatchTarget::Playback, None))
+        played(self.handle.transport.set_shuffle(enabled).await)
       }
       "SET_REPEAT" => {
         let mode = slots
           .repeat_mode
           .ok_or_else(|| bad("SET_REPEAT without `repeatMode`"))?;
-        self.handle.transport.set_repeat(repeat_mode(mode)).await;
-        Ok((VoiceDispatchTarget::Playback, None))
+        played(self.handle.transport.set_repeat(repeat_mode(mode)).await)
       }
       "SEEK_RELATIVE" => {
         let seconds = slots.seconds.ok_or_else(|| bad("SEEK_RELATIVE without `seconds`"))?;
         let current = self.handle.state.player.position_ms() as i64;
         let target = (current + seconds as i64 * 1000).max(0) as u32;
-        self.handle.transport.seek_to(target).await;
-        Ok((VoiceDispatchTarget::Playback, None))
+        played(self.handle.transport.seek_to(target).await)
       }
       "SET_PLAYBACK_SPEED" => {
         let speed = slots.speed.ok_or_else(|| bad("SET_PLAYBACK_SPEED without `speed`"))?;
-        self
-          .send_player(BridgeToGatewayPlayerMsgCommand::SetSpeed(gateway::SetSpeed {
-            speed: playback_speed(speed),
-          }))
-          .await;
-        Ok((VoiceDispatchTarget::Playback, None))
+        played(self.handle.transport.set_speed(playback_speed(speed)).await)
       }
       "SET_VOLUME" => self.set_volume(slots).await,
       "PRESET_PLAY" => self.play_preset(slots).await,
@@ -175,13 +177,7 @@ impl VoiceHandler {
           VoiceDispatchErrorCode::PlaybackFailed,
           "no resolved uri to queue".into(),
         ))?;
-        self
-          .send_player(BridgeToGatewayPlayerMsgCommand::Queue(gateway::QueueUri {
-            uri,
-            position: libbridgething::QueuePosition::Append,
-          }))
-          .await;
-        Ok((VoiceDispatchTarget::Playback, None))
+        played(self.handle.transport.queue_uri(uri, QueuePosition::Append).await)
       }
       "THUMBS_UP" => self.thumbs_up(slots).await,
       "ADD_TO_PLAYLIST" => Err((
@@ -234,35 +230,26 @@ impl VoiceHandler {
   }
 
   async fn play_catalog(&self, slots: &NluSlots) -> Routed {
-    self
-      .send_player(BridgeToGatewayPlayerMsgCommand::Play(play_uri(slots)?))
-      .await;
-    Ok((VoiceDispatchTarget::Playback, None))
+    let gateway::PlayUri { uri, context } = play_uri(slots)?;
+    played(self.handle.transport.play_uri(uri, context).await)
   }
 
   async fn set_volume(&self, slots: &NluSlots) -> Routed {
     if let Some(muted) = slots.mute {
-      self
-        .send_audio(BridgeToGatewayAudioMsgCommand::SetMute(gateway::SetMute { muted }))
-        .await;
-      return Ok((VoiceDispatchTarget::Playback, None));
+      return played(self.handle.transport.set_mute(muted).await);
     }
     if let Some(level) = slots.level {
-      self
-        .send_audio(BridgeToGatewayAudioMsgCommand::SetVolume(gateway::SetVolume {
-          level: (level.min(100) as f32) / 100.0,
-        }))
-        .await;
-      return Ok((VoiceDispatchTarget::Playback, None));
+      return played(self.handle.transport.set_volume((level.min(100) as f32) / 100.0).await);
     }
-    match slots
-      .direction
-      .ok_or_else(|| bad("SET_VOLUME without direction, level, or mute"))?
-    {
-      NluDirection::Up => self.handle.transport.volume_up().await,
-      NluDirection::Down => self.handle.transport.volume_down().await,
-    }
-    Ok((VoiceDispatchTarget::Playback, None))
+    played(
+      match slots
+        .direction
+        .ok_or_else(|| bad("SET_VOLUME without direction, level, or mute"))?
+      {
+        NluDirection::Up => self.handle.transport.volume_up().await,
+        NluDirection::Down => self.handle.transport.volume_down().await,
+      },
+    )
   }
 
   async fn play_preset(&self, slots: &NluSlots) -> Routed {
@@ -278,13 +265,7 @@ impl VoiceHandler {
         VoiceDispatchErrorCode::PlaybackFailed,
         format!("preset {slot} is empty"),
       ))?;
-    self
-      .send_player(BridgeToGatewayPlayerMsgCommand::Play(gateway::PlayUri {
-        uri,
-        context: None,
-      }))
-      .await;
-    Ok((VoiceDispatchTarget::Playback, None))
+    played(self.handle.transport.play_uri(uri, None).await)
   }
 
   async fn save_to_preset(&self, slots: &NluSlots) -> Routed {
@@ -346,20 +327,15 @@ impl VoiceHandler {
   }
 
   async fn set_favorite(&self, uri: String, kind: ItemKind, saved: bool) -> Routed {
-    self
-      .handle
-      .bluetooth
-      .gateway_man
-      .broadcast_command(BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
-        item: ItemRef {
-          uri,
-          kind,
-          persistent_id: None,
-        },
-        liked: saved,
-      }))
-      .await;
-    Ok((VoiceDispatchTarget::Playback, None))
+    let favorite = BridgeToGatewayLibraryMsgCommand::FavoritesSet(gateway::FavoritesSet {
+      item: ItemRef {
+        uri,
+        kind,
+        persistent_id: None,
+      },
+      liked: saved,
+    });
+    played(self.handle.transport.forward("favorites_set", favorite).await)
   }
 
   async fn open_webapp(&self, slots: &NluSlots) -> Routed {
@@ -454,14 +430,12 @@ impl VoiceHandler {
       .map_err(|err| (VoiceDispatchErrorCode::Internal, format!("{err}")))?;
     Ok((VoiceDispatchTarget::Phone, None))
   }
+}
 
-  async fn send_player(&self, msg: BridgeToGatewayPlayerMsgCommand) {
-    self.handle.bluetooth.gateway_man.broadcast_command(msg).await;
-  }
-
-  async fn send_audio(&self, msg: BridgeToGatewayAudioMsgCommand) {
-    self.handle.bluetooth.gateway_man.broadcast_command(msg).await;
-  }
+fn played(outcome: TransportResult) -> Routed {
+  outcome
+    .map(|()| (VoiceDispatchTarget::Playback, None))
+    .map_err(|err| (VoiceDispatchErrorCode::PlaybackFailed, err.to_string()))
 }
 
 fn play_uri(slots: &NluSlots) -> Result<gateway::PlayUri, (VoiceDispatchErrorCode, String)> {

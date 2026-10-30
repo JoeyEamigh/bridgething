@@ -17,6 +17,7 @@ use crate::{
     HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
     MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend,
     SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
+    log::{api_from_wire, wire_from_api},
   },
   provider::ResumeTarget,
   session::Session,
@@ -387,6 +388,17 @@ impl CompanionSession {
 
   pub async fn set_device_log_streaming(&self, enabled: bool) {
     self.session.set_device_log_streaming(enabled).await;
+  }
+
+  pub fn device_log_verbosity(&self) -> Option<LogLevel> {
+    self.session.device_log_verbosity().map(api_from_wire)
+  }
+
+  pub async fn set_device_log_verbosity(&self, verbosity: Option<LogLevel>) {
+    self
+      .session
+      .set_device_log_verbosity(verbosity.map(wire_from_api))
+      .await;
   }
 
   pub async fn device_set_nickname(&self, device_id: String, nickname: String) -> Result<(), CompanionError> {

@@ -17,7 +17,10 @@ use libbridgething::{
 };
 
 use super::{HandlerResult, MsgHandle};
-use crate::{bluetooth::iap2::SPOTIFY_BUNDLE_ID, transport::hid_bit};
+use crate::{
+  bluetooth::iap2::{Iap2TransportHandle, SPOTIFY_BUNDLE_ID},
+  transport::hid_bit,
+};
 
 const WAKE_CLAIM_DEADLINE: Duration = Duration::from_secs(10);
 
@@ -120,7 +123,7 @@ impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
       }
       Some(SPOTIFY_BUNDLE_ID) if allow_play_tap => {
         tracing::info!("spotify wake: spotify owns now-playing but is paused; tapping play");
-        transport.send_hid(HidCommand::Pulse(hid_bit::PLAY_PAUSE)).await;
+        tap_play(transport).await;
       }
       Some(SPOTIFY_BUNDLE_ID) => {
         tracing::info!("spotify wake: launch-only wake while paused; a tap could resume a remotely parked session");
@@ -155,7 +158,7 @@ impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
         match claimed {
           Ok(Some(false)) if allow_play_tap => {
             tracing::info!("spotify wake: spotify claimed now-playing; tapping play");
-            transport.send_hid(HidCommand::Pulse(hid_bit::PLAY_PAUSE)).await;
+            tap_play(transport).await;
           }
           Ok(Some(false)) => {
             tracing::info!("spotify wake: spotify claimed now-playing; launch-only wake skips the play tap");
@@ -169,5 +172,11 @@ impl GatewayToBridgePlayerMsgCommandDispatch for PlayerHandler {
       }
     }
     Ok(())
+  }
+}
+
+async fn tap_play(transport: &Iap2TransportHandle) {
+  if let Err(err) = transport.send_hid(HidCommand::Pulse(hid_bit::PLAY_PAUSE)).await {
+    tracing::warn!("spotify wake: {err}; the play tap reached nothing");
   }
 }

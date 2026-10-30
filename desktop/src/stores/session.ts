@@ -34,6 +34,7 @@ export const webappActive = resource<api.ActiveWebapp | null>(null, () => bound(
 export const webappSlots = resource<api.WebappSlots>({ launcher: null, overlay: null }, () => bound().webappSlots());
 export const autoResume = resource(true, () => bound().deviceAutoResume());
 export const logStreaming = resource(false, () => bound().deviceLogStreaming());
+export const logVerbosity = resource<api.LogLevel | null>(null, () => bound().deviceLogVerbosity());
 export const resumeTarget = resource<api.ResumeTarget>('anySpeaker', () => bound().deviceResumeTarget());
 
 export const hostInfo: ReadonlySignal<api.SessionHostInfo | null> = computed(
@@ -110,7 +111,7 @@ const ROUTED: Record<Topic, Refreshable[]> = {
   'ota-runs': [snapshot],
   'ota-available': [snapshot],
   'ota-poll': [snapshot],
-  logs: [logStreaming, { refresh: logs.refreshAll }],
+  logs: [logStreaming, logVerbosity, { refresh: logs.refreshAll }],
   extensions: [extensions],
   'self-update': [selfUpdate],
 };
@@ -138,6 +139,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     autoResume.refresh(),
     resumeTarget.refresh(),
     logStreaming.refresh(),
+    logVerbosity.refresh(),
     debugLogging.refresh(),
   ]);
 

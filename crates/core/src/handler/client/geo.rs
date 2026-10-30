@@ -12,7 +12,10 @@ use libbridgething::{
 use uuid::Uuid;
 
 use super::{HandlerResult, MsgHandle};
-use crate::state::{GEO_PERMISSION, WatchAggregate, WatchChange};
+use crate::{
+  bluetooth::GatewayMan,
+  state::{GEO_PERMISSION, GeoHandover, GeoLease, State},
+};
 
 pub struct GeoHandler {
   handle: MsgHandle,
@@ -39,12 +42,11 @@ impl ClientToBridgeGeoMsgDispatch for GeoHandler {
       return self.respond_error::<GeoWatch>(GeoError::Unavailable).await;
     }
     let token = Uuid::now_v7();
-    let change = self
+    self
       .handle
       .state
       .geo_watchers
       .register(token, self.handle.from, accuracy, min_interval_ms);
-    self.dispatch_aggregate_change(change).await;
     self
       .handle
       .respond_to::<GeoWatch>(GeoWatchReply {
@@ -60,12 +62,9 @@ impl ClientToBridgeGeoMsgDispatch for GeoHandler {
       tracing::trace!(%token, "geo.unwatch with malformed token; dropping");
       return Ok(());
     };
-    let change = self.handle.state.geo_watchers.unregister(uuid);
-    if !change.existed {
+    if !self.handle.state.geo_watchers.unregister(uuid) {
       tracing::trace!(%token, "geo.unwatch with unknown token; dropping");
-      return Ok(());
     }
-    self.dispatch_aggregate_change(change).await;
     Ok(())
   }
 
@@ -119,10 +118,6 @@ impl GeoHandler {
     snapshot.gateway.is_some() && snapshot.available.geo
   }
 
-  async fn dispatch_aggregate_change(&self, change: WatchChange) {
-    dispatch_change(&self.handle, change).await
-  }
-
   async fn respond_error<R>(&self, error: GeoError) -> HandlerResult
   where
     R: WireRequest<Inbound = BridgeToClientMsgData, DomainError = GeoErrorReply>,
@@ -153,38 +148,43 @@ impl GeoHandler {
   }
 }
 
-pub async fn cleanup_owner_watchers(handle: &MsgHandle) {
-  let change = handle.state.geo_watchers.drain_for_owner(handle.from);
-  if !change.existed {
-    return;
-  }
-  dispatch_change(handle, change).await;
+pub fn cleanup_owner_watchers(handle: &MsgHandle) {
+  handle.state.geo_watchers.drain_for_owner(handle.from);
 }
 
-async fn dispatch_change(handle: &MsgHandle, change: WatchChange) {
-  if change.prev == change.next {
-    return;
-  }
-  match change.next {
-    Some(WatchAggregate {
-      accuracy,
-      min_interval_ms,
-    }) => {
-      handle
-        .bluetooth
-        .gateway_man
-        .broadcast_command(BridgeToGatewayGeoMsgCommand::Watch(gateway::GeoWatch {
-          accuracy,
-          min_interval_ms,
-        }))
-        .await
+pub async fn hold_watch(state: State, gateway_man: GatewayMan) {
+  let mut primary = state.capabilities.primary_subscription_rx();
+  let mut watchers = state.geo_watchers.subscribe();
+  let mut held = None;
+  loop {
+    let want = state.geo_watchers.lease_for(state.capabilities.primary_addr());
+    if let Some(GeoHandover { unwatch, watch }) = GeoHandover::between(held, want) {
+      if let Some(gateway) = unwatch {
+        tracing::debug!(%gateway, "geo watch: stopping the companion that held it");
+        gateway_man
+          .send_command(gateway, BridgeToGatewayGeoMsgCommand::Unwatch)
+          .await;
+      }
+      if let Some(GeoLease { gateway, watch }) = watch {
+        tracing::debug!(%gateway, ?watch, "geo watch: running on the primary companion");
+        gateway_man
+          .send_command(
+            gateway,
+            BridgeToGatewayGeoMsgCommand::Watch(gateway::GeoWatch {
+              accuracy: watch.accuracy,
+              min_interval_ms: watch.min_interval_ms,
+            }),
+          )
+          .await;
+      }
+      held = want;
     }
-    None => {
-      handle
-        .bluetooth
-        .gateway_man
-        .broadcast_command(BridgeToGatewayGeoMsgCommand::Unwatch)
-        .await
+    let woke = tokio::select! {
+      changed = primary.changed() => changed,
+      changed = watchers.changed() => changed,
+    };
+    if woke.is_err() {
+      break;
     }
   }
 }

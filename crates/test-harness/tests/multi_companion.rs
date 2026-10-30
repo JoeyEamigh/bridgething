@@ -2,14 +2,19 @@ use std::time::Duration;
 
 use bridgething_gateway::Gateway;
 use bridgething_test_harness::Harness;
+use futures::StreamExt;
 use libbridgething::{
-  CompanionAuthorityScope, GatewayCapabilities, GatewayInfo, MediaItem, MusicProvider, PlaybackTarget,
-  PlaybackTargetKind, PlayerState,
+  CompanionAuthorityScope, GatewayCapabilities, GatewayInfo, GeoAccuracy, MediaItem, MusicProvider, NluResolvedIntent,
+  NluSlots, Notification, NotificationAction, NotificationApp, NotificationCategory, NotificationFlags, PlaybackTarget,
+  PlaybackTargetKind, PlayerState, SurfaceAvailability, VoiceDispatchErrorCode,
+  client::{BridgeToClientVoiceMsgEvent, VoiceActivity, VoicePhase},
   gateway::{
-    AuthorityClaim, BridgeToGatewayMsgData, BridgeToGatewayPlayerMsg, PlaybackTargets, PlayerSnapshotAck,
-    PlayerSnapshotRequest,
+    AuthorityClaim, BridgeToGatewayAudioMsg, BridgeToGatewayGeoMsg, BridgeToGatewayMsgData,
+    BridgeToGatewayNotificationsMsg, BridgeToGatewayPlayerMsg, BridgeToGatewayVoiceMsg, PlaybackTargets,
+    PlayerSnapshotAck, PlayerSnapshotRequest, VoiceDispatch,
   },
 };
+use uuid::Uuid;
 
 const CONVERGE: Duration = Duration::from_secs(5);
 const SETTLE: Duration = Duration::from_millis(600);
@@ -553,5 +558,541 @@ async fn transport_verbs_reach_only_the_companion_holding_playback() {
   assert!(
     next_player_command(&mut desktop_inbound, SETTLE).await.is_none(),
     "a companion without playback authority was told to pause"
+  );
+}
+
+fn voice(stream_id: Uuid, intent: &str, slots: NluSlots) -> VoiceDispatch {
+  VoiceDispatch {
+    stream_id,
+    resolved: Box::new(NluResolvedIntent {
+      intent: intent.into(),
+      slots,
+      transcript: intent.to_ascii_lowercase(),
+      alternates: None,
+    }),
+    stage: None,
+    asr_confidence: Some(0.9),
+  }
+}
+
+fn catalog_play(stream_id: Uuid, uri: &str) -> VoiceDispatch {
+  voice(
+    stream_id,
+    "PLAY",
+    NluSlots {
+      target: Some("mitski".into()),
+      uri: Some(uri.into()),
+      ..NluSlots::default()
+    },
+  )
+}
+
+async fn collect<T>(
+  inbound: &mut tokio::sync::broadcast::Receiver<libbridgething::gateway::BridgeToGatewayMsg>,
+  within: Duration,
+  pick: impl Fn(BridgeToGatewayMsgData) -> Option<T>,
+) -> Vec<T> {
+  let mut hits = Vec::new();
+  let _ = tokio::time::timeout(within, async {
+    loop {
+      match inbound.recv().await {
+        Ok(msg) => hits.extend(pick(msg.data)),
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+      }
+    }
+  })
+  .await;
+  hits
+}
+
+fn play_of(data: BridgeToGatewayMsgData) -> Option<String> {
+  match data {
+    BridgeToGatewayMsgData::Player(BridgeToGatewayPlayerMsg::Play(play)) => Some(play.uri),
+    _ => None,
+  }
+}
+
+fn volume_of(data: BridgeToGatewayMsgData) -> Option<f32> {
+  match data {
+    BridgeToGatewayMsgData::Audio(BridgeToGatewayAudioMsg::SetVolume(set)) => Some(set.level),
+    _ => None,
+  }
+}
+
+fn invoke_of(data: BridgeToGatewayMsgData) -> Option<String> {
+  match data {
+    BridgeToGatewayMsgData::Notifications(BridgeToGatewayNotificationsMsg::InvokePositive(invoke)) => Some(invoke.id),
+    _ => None,
+  }
+}
+
+fn voice_outcome(data: BridgeToGatewayMsgData) -> Option<BridgeToGatewayVoiceMsg> {
+  match data {
+    BridgeToGatewayMsgData::Voice(
+      voice @ (BridgeToGatewayVoiceMsg::Dispatched(_) | BridgeToGatewayVoiceMsg::DispatchFailed(_)),
+    ) => Some(voice),
+    _ => None,
+  }
+}
+
+fn stream_open_of(data: BridgeToGatewayMsgData) -> Option<Uuid> {
+  match data {
+    BridgeToGatewayMsgData::Voice(BridgeToGatewayVoiceMsg::StreamOpen(open)) => Some(open.stream_id),
+    _ => None,
+  }
+}
+
+fn listening(caps: GatewayCapabilities) -> GatewayCapabilities {
+  GatewayCapabilities {
+    available: SurfaceAvailability {
+      voice: true,
+      ..caps.available
+    },
+    ..caps
+  }
+}
+
+async fn next_failed_activity(
+  activity: &mut (impl futures::Stream<Item = BridgeToClientVoiceMsgEvent> + Unpin),
+  within: Duration,
+) -> Option<VoiceActivity> {
+  tokio::time::timeout(within, async {
+    while let Some(event) = activity.next().await {
+      if let BridgeToClientVoiceMsgEvent::Activity(a) = event
+        && a.phase == VoicePhase::Failed
+      {
+        return Some(a);
+      }
+    }
+    None
+  })
+  .await
+  .ok()
+  .flatten()
+}
+
+async fn claim(gateway: &Gateway, scope: CompanionAuthorityScope) {
+  gateway
+    .authority()
+    .claim(AuthorityClaim {
+      scope,
+      app_bundle: Some("com.spotify.client".into()),
+    })
+    .await
+    .expect("claim");
+}
+
+async fn two_spotify_companions(harness: &Harness, phone_claims: bool) -> (Gateway, Gateway) {
+  let phone = harness.connect_android().await.expect("phone connect");
+  phone
+    .capabilities()
+    .announce(caps_claiming("harness-phone", MusicProvider::Spotify, &["spotify"]))
+    .await
+    .expect("phone announce");
+  if phone_claims {
+    claim_now_playing(&phone).await;
+    claim(&phone, CompanionAuthorityScope::Volume).await;
+    phone.player().snapshot(phone_snapshot()).await.expect("phone snapshot");
+    await_primary_ready(harness).await;
+  }
+
+  let desktop = harness.connect_android().await.expect("desktop connect");
+  desktop
+    .capabilities()
+    .announce(listening(caps_claiming(
+      "harness-desktop",
+      MusicProvider::Spotify,
+      &["spotify", "https"],
+    )))
+    .await
+    .expect("desktop announce");
+  let announced = harness
+    .wait_for(
+      |s| s.capabilities.snapshot().uri_schemes.iter().any(|s| s == "https"),
+      CONVERGE,
+    )
+    .await;
+  assert!(
+    announced,
+    "the desktop's announce never reached the capability snapshot"
+  );
+  (phone, desktop)
+}
+
+#[tokio::test]
+async fn a_voice_catalog_play_reaches_only_the_companion_holding_playback() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let mut outcome = desktop.events();
+  let turn = harness.resolving_voice_turn(&desktop).await.expect("voice turn");
+
+  desktop
+    .voice()
+    .dispatch(catalog_play(turn, "spotify:track:abc"))
+    .await
+    .expect("dispatch");
+
+  let phone_plays = collect(&mut phone_inbound, SETTLE, play_of).await;
+  let desktop_plays = collect(&mut desktop_inbound, SETTLE, play_of).await;
+  assert_eq!(
+    (phone_plays, desktop_plays),
+    (vec!["spotify:track:abc".to_string()], vec![]),
+    "a voice play reaches the one companion holding playback, never every companion that can play the scheme"
+  );
+  assert!(
+    matches!(
+      collect(&mut outcome, SETTLE, voice_outcome).await.first(),
+      Some(BridgeToGatewayVoiceMsg::Dispatched(_))
+    ),
+    "the voice turn that did land was not reported as dispatched"
+  );
+}
+
+#[tokio::test]
+async fn one_turn_answered_by_two_companions_acts_once_and_refuses_the_second() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, false).await;
+  phone
+    .capabilities()
+    .announce(listening(caps_claiming(
+      "harness-phone",
+      MusicProvider::Spotify,
+      &["spotify"],
+    )))
+    .await
+    .expect("phone announce");
+  let phone_elected = harness
+    .wait_for(
+      |s| {
+        s.capabilities
+          .snapshot()
+          .gateway
+          .is_some_and(|g| g.name == "harness-phone")
+      },
+      CONVERGE,
+    )
+    .await;
+  assert!(phone_elected, "the phone's voice announce never settled");
+
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let mut phone_outcome = phone.events();
+  let mut desktop_outcome = desktop.events();
+  let turn = harness.resolving_voice_turn(&phone).await.expect("voice turn");
+
+  let (phone_voice, desktop_voice) = (phone.voice(), desktop.voice());
+  let (from_phone, from_desktop) = tokio::join!(
+    phone_voice.dispatch(catalog_play(turn, "spotify:track:abc")),
+    desktop_voice.dispatch(catalog_play(turn, "spotify:track:abc")),
+  );
+  from_phone.expect("phone dispatch");
+  from_desktop.expect("desktop dispatch");
+
+  let plays = collect(&mut phone_inbound, SETTLE, play_of).await.len()
+    + collect(&mut desktop_inbound, SETTLE, play_of).await.len();
+  assert_eq!(plays, 1, "one spoken turn must reach the player exactly once");
+
+  let outcomes: Vec<BridgeToGatewayVoiceMsg> = collect(&mut phone_outcome, SETTLE, voice_outcome)
+    .await
+    .into_iter()
+    .chain(collect(&mut desktop_outcome, SETTLE, voice_outcome).await)
+    .collect();
+  let landed = outcomes
+    .iter()
+    .filter(|o| matches!(o, BridgeToGatewayVoiceMsg::Dispatched(d) if d.stream_id == turn))
+    .count();
+  let refused = outcomes
+    .iter()
+    .filter(|o| {
+      matches!(o, BridgeToGatewayVoiceMsg::DispatchFailed(f)
+        if f.stream_id == turn && f.code == VoiceDispatchErrorCode::StaleTurn)
+    })
+    .count();
+  assert_eq!(
+    (landed, refused),
+    (1, 1),
+    "the first answer lands and the second is told the turn is no longer waiting: {outcomes:?}"
+  );
+}
+
+#[tokio::test]
+async fn a_turn_streams_only_to_the_companion_that_listens() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+
+  let turn = harness.resolving_voice_turn(&desktop).await.expect("voice turn");
+
+  assert_eq!(
+    collect(&mut desktop_inbound, SETTLE, stream_open_of).await,
+    vec![turn],
+    "the companion that announced voice never got the turn"
+  );
+  assert!(
+    collect(&mut phone_inbound, SETTLE, stream_open_of).await.is_empty(),
+    "the primary has no voice pipeline, so it must not be handed the audio"
+  );
+}
+
+#[tokio::test]
+async fn the_primary_listens_when_more_than_one_companion_can() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  phone
+    .capabilities()
+    .announce(listening(caps_claiming(
+      "harness-phone",
+      MusicProvider::Spotify,
+      &["spotify"],
+    )))
+    .await
+    .expect("phone announce");
+  let phone_addr = harness.state().capabilities.primary_addr();
+  let settled = harness
+    .wait_for(|s| s.capabilities.voice_listener() == phone_addr, CONVERGE)
+    .await;
+  assert!(settled, "the voice pick never moved to the primary");
+  let mut desktop_inbound = desktop.events();
+
+  let turn = harness.resolving_voice_turn(&phone).await.expect("voice turn");
+
+  assert!(
+    !collect(&mut desktop_inbound, SETTLE, stream_open_of)
+      .await
+      .contains(&turn),
+    "only the elected primary transcribes when two companions could"
+  );
+}
+
+#[tokio::test]
+async fn a_turn_with_no_companion_to_listen_fails_at_once() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = connect_primary(&harness).await;
+  let mut phone_inbound = phone.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+  let mut activity = Box::pin(client.voice().events());
+
+  client.voice().push_to_talk().await.expect("push to talk");
+
+  let failed = next_failed_activity(&mut activity, CONVERGE)
+    .await
+    .expect("a turn nobody can transcribe never reported a failure");
+  assert_eq!(failed.error.map(|e| e.code), Some(VoiceDispatchErrorCode::NoCompanion));
+  assert!(
+    collect(&mut phone_inbound, SETTLE, stream_open_of).await.is_empty(),
+    "a companion without a voice pipeline was streamed audio it cannot use"
+  );
+}
+
+#[tokio::test]
+async fn a_listener_dropping_mid_capture_fails_the_turn_without_waiting_out_the_cap() {
+  let harness = Harness::start().await.expect("harness start");
+  let (_phone, desktop) = two_spotify_companions(&harness, true).await;
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+  let mut activity = Box::pin(client.voice().events());
+
+  client.voice().push_to_talk().await.expect("push to talk");
+  let turn = collect(&mut desktop_inbound, SETTLE, stream_open_of).await;
+  assert_eq!(turn.len(), 1, "the listener never got the turn");
+  drop(desktop);
+
+  let failed = next_failed_activity(&mut activity, CONVERGE)
+    .await
+    .expect("the turn hung after its listener left");
+  assert_eq!(failed.stream_id, turn.first().copied());
+  assert_eq!(failed.error.map(|e| e.code), Some(VoiceDispatchErrorCode::NoCompanion));
+  assert!(!harness.state().mic.snapshot().await.capturing);
+}
+
+#[tokio::test]
+async fn a_listener_dropping_while_resolving_fails_the_turn_without_waiting_out_the_deadline() {
+  let harness = Harness::start().await.expect("harness start");
+  let (_phone, desktop) = two_spotify_companions(&harness, true).await;
+  let client = harness.connect_command_client().await.expect("client connect");
+  let mut activity = Box::pin(client.voice().events());
+
+  let turn = harness.resolving_voice_turn(&desktop).await.expect("voice turn");
+  drop(desktop);
+
+  let failed = next_failed_activity(&mut activity, CONVERGE)
+    .await
+    .expect("the turn waited on a listener that had already left");
+  assert_eq!(failed.stream_id, Some(turn));
+  assert_eq!(failed.error.map(|e| e.code), Some(VoiceDispatchErrorCode::NoCompanion));
+  assert_eq!(harness.state().mic.snapshot().await.phase, VoicePhase::Idle);
+}
+
+#[tokio::test]
+async fn a_voice_volume_change_reaches_only_the_companion_holding_volume() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let turn = harness.resolving_voice_turn(&desktop).await.expect("voice turn");
+
+  desktop
+    .voice()
+    .dispatch(voice(
+      turn,
+      "SET_VOLUME",
+      NluSlots {
+        level: Some(40),
+        ..NluSlots::default()
+      },
+    ))
+    .await
+    .expect("dispatch");
+
+  let phone_volumes = collect(&mut phone_inbound, SETTLE, volume_of).await;
+  let desktop_volumes = collect(&mut desktop_inbound, SETTLE, volume_of).await;
+  assert_eq!(
+    (phone_volumes, desktop_volumes),
+    (vec![0.4], vec![]),
+    "a voice volume change reaches the companion holding the volume authority and nobody else"
+  );
+}
+
+#[tokio::test]
+async fn a_client_set_volume_reaches_only_the_companion_holding_volume() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+
+  client
+    .audio()
+    .set_volume(libbridgething::client::SetVolume { level: 0.25 })
+    .await
+    .expect("set volume");
+
+  let phone_volumes = collect(&mut phone_inbound, SETTLE, volume_of).await;
+  let desktop_volumes = collect(&mut desktop_inbound, SETTLE, volume_of).await;
+  assert_eq!(
+    (phone_volumes, desktop_volumes),
+    (vec![0.25], vec![]),
+    "a webapp volume change reaches the companion holding the volume authority and nobody else"
+  );
+}
+
+#[tokio::test]
+async fn a_notification_action_goes_back_to_the_companion_that_posted_it() {
+  let harness = Harness::start().await.expect("harness start");
+  let (phone, desktop) = two_spotify_companions(&harness, true).await;
+  desktop
+    .notifications()
+    .posted(Notification {
+      id: "desktop-mail-1".into(),
+      app: NotificationApp {
+        bundle_id: "com.apple.mail".into(),
+        display_name: Some("Mail".into()),
+        icon_asset_id: None,
+      },
+      category: NotificationCategory::Email,
+      title: Some("Lunch?".into()),
+      subtitle: None,
+      message: None,
+      timestamp_unix_s: None,
+      flags: NotificationFlags::default(),
+      positive_action: Some(NotificationAction { label: "Reply".into() }),
+      negative_action: None,
+    })
+    .await
+    .expect("post");
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+  tokio::time::sleep(SETTLE).await;
+
+  client
+    .notifications()
+    .invoke_positive(libbridgething::client::NotificationInvoke {
+      id: "desktop-mail-1".into(),
+    })
+    .await
+    .expect("invoke");
+
+  let phone_invokes = collect(&mut phone_inbound, SETTLE, invoke_of).await;
+  let desktop_invokes = collect(&mut desktop_inbound, SETTLE, invoke_of).await;
+  assert_eq!(
+    (phone_invokes, desktop_invokes),
+    (vec![], vec!["desktop-mail-1".to_string()]),
+    "a notification action belongs to the companion that posted the notification"
+  );
+}
+
+fn geo_of(data: BridgeToGatewayMsgData) -> Option<BridgeToGatewayGeoMsg> {
+  match data {
+    BridgeToGatewayMsgData::Geo(geo @ (BridgeToGatewayGeoMsg::Watch(_) | BridgeToGatewayGeoMsg::Unwatch)) => Some(geo),
+    _ => None,
+  }
+}
+
+async fn announce_geo(gateway: &Gateway, name: &str) {
+  let mut announce = caps_claiming(name, MusicProvider::Spotify, &["spotify"]);
+  announce.available.geo = true;
+  gateway.capabilities().announce(announce).await.expect("announce");
+}
+
+#[tokio::test]
+async fn a_geo_watch_runs_on_one_companion_and_follows_the_primary() {
+  let harness = Harness::start().await.expect("harness start");
+  let phone = harness.connect_android().await.expect("phone connect");
+  announce_geo(&phone, "harness-phone").await;
+  claim_now_playing(&phone).await;
+  phone.player().snapshot(phone_snapshot()).await.expect("phone snapshot");
+  await_primary_ready(&harness).await;
+  let desktop = harness.connect_android().await.expect("desktop connect");
+  announce_geo(&desktop, "harness-desktop").await;
+  harness
+    .activate_webapp_declaring(&["geo"])
+    .await
+    .expect("activate a geo webapp");
+  tokio::time::sleep(SETTLE).await;
+
+  let mut phone_inbound = phone.events();
+  let mut desktop_inbound = desktop.events();
+  let client = harness.connect_command_client().await.expect("client connect");
+  client
+    .geo()
+    .watch(libbridgething::client::GeoWatch {
+      accuracy: GeoAccuracy::Fine,
+      min_interval_ms: 1000,
+    })
+    .await
+    .expect("geo watch");
+
+  let phone_geo = collect(&mut phone_inbound, SETTLE, geo_of).await;
+  let desktop_geo = collect(&mut desktop_inbound, SETTLE, geo_of).await;
+  assert!(
+    matches!(phone_geo.as_slice(), [BridgeToGatewayGeoMsg::Watch(_)]) && desktop_geo.is_empty(),
+    "one location source runs at a time, on the primary; phone got {phone_geo:?}, desktop got {desktop_geo:?}"
+  );
+
+  drop(phone);
+  let promoted = tokio::time::timeout(CONVERGE, async {
+    loop {
+      match desktop_inbound.recv().await {
+        Ok(msg) => {
+          if let Some(geo) = geo_of(msg.data) {
+            return Some(geo);
+          }
+        }
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+      }
+    }
+  })
+  .await
+  .ok()
+  .flatten();
+  assert!(
+    matches!(promoted, Some(BridgeToGatewayGeoMsg::Watch(_))),
+    "the companion left holding the primary never took the running watch over: {promoted:?}"
   );
 }

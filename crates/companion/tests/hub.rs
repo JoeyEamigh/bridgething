@@ -308,7 +308,7 @@ impl Provider for HubProvider {
 }
 
 fn hub(gateway: Gateway) -> Arc<Hub> {
-  let hub = Hub::new(Arc::new(gateway), host(), flags(), false);
+  let hub = Hub::new(Arc::new(gateway), host(), flags(), false, false);
   hub.set_identity_wait(Duration::ZERO);
   hub.start();
   hub
@@ -316,7 +316,7 @@ fn hub(gateway: Gateway) -> Arc<Hub> {
 
 // a host that can move its own output volume, which a phone cannot
 fn hub_owning_volume(gateway: Gateway) -> Arc<Hub> {
-  let hub = Hub::new(Arc::new(gateway), host(), flags(), true);
+  let hub = Hub::new(Arc::new(gateway), host(), flags(), true, false);
   hub.set_identity_wait(Duration::ZERO);
   hub.start();
   hub
@@ -330,6 +330,7 @@ fn hub_on(gateway: Gateway, os_name: &str) -> Arc<Hub> {
       ..host()
     },
     flags(),
+    false,
     false,
   );
   hub.set_identity_wait(Duration::ZERO);

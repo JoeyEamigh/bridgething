@@ -261,10 +261,6 @@ impl ClientManager {
     self.send(Uuid::now_v7(), to, cmd.into(), MsgMeta::Command, None).await
   }
 
-  pub async fn broadcast_command<C: WireCommand<BridgeToClientMsgData>>(&self, cmd: C) -> Result<(), Vec<WSError>> {
-    self.broadcast(cmd.into(), MsgMeta::Command).await
-  }
-
   pub async fn request<R>(&self, to: SocketAddr, req: R) -> Result<R::Response, RequestError<R::DomainError>>
   where
     R: WireRequest<Outbound = BridgeToClientMsgData, Inbound = ClientToBridgeMsgData>,

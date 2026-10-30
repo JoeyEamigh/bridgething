@@ -358,6 +358,7 @@ async fn boot(backend: Arc<FakeAm>) -> Rig {
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let art = art_store::Art::new(None);

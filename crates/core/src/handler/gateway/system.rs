@@ -5,8 +5,8 @@ use libbridgething::{
     BridgeToGatewayMsg, BridgeToGatewaySystemMsg, CompanionLaunchGet, CompanionLaunchReply, CompanionLaunchSet,
     DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply, DeviceSetNickname,
     GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch, LauncherGestureGet,
-    LauncherGestureReply, LauncherGestureSet, LogsSubscribe, LogsSubscribeReply, LogsTail, LogsTailReply,
-    LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
+    LauncherGestureReply, LauncherGestureSet, LogsSetVerbosity, LogsSubscribe, LogsSubscribeReply, LogsTail,
+    LogsTailReply, LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
   },
   wire::MsgMeta,
 };
@@ -77,6 +77,19 @@ impl GatewayToBridgeSystemMsgCommandDispatch for SystemHandler {
     };
     if !self.handle.state.log_tap.unsubscribe(uuid) {
       tracing::trace!(%token, "({:?}) gateway logsUnsubscribe unknown token; dropping", &self.handle.address);
+    }
+    Ok(())
+  }
+
+  async fn logs_set_verbosity(&self, params: LogsSetVerbosity) -> HandlerResult {
+    let LogsSetVerbosity { token, verbosity } = params;
+    let Ok(uuid) = Uuid::parse_str(&token) else {
+      tracing::trace!(%token, "({:?}) gateway logsSetVerbosity malformed token; dropping", &self.handle.address);
+      return Ok(());
+    };
+    let owner = LogOwner::Gateway(self.handle.address);
+    if !self.handle.state.log_tap.set_verbosity(owner, uuid, verbosity) {
+      tracing::debug!(%token, "({:?}) gateway logsSetVerbosity names no subscription it owns", &self.handle.address);
     }
     Ok(())
   }
@@ -199,6 +212,7 @@ impl GatewayToBridgeSystemMsgRequestDispatch for SystemHandler {
       params.source,
       params.levels,
       params.filter,
+      params.verbosity,
     );
     self
       .handle

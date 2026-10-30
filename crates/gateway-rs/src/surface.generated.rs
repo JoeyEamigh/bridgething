@@ -306,6 +306,12 @@ impl<'a> SystemSurface<'a> {
       .command(GatewayToBridgeSystemMsgCommand::LogsUnsubscribe(payload))
       .await
   }
+  pub async fn logs_set_verbosity(&self, payload: LogsSetVerbosity) -> Result<(), SdkError> {
+    self
+      .0
+      .command(GatewayToBridgeSystemMsgCommand::LogsSetVerbosity(payload))
+      .await
+  }
   pub async fn ota_begin(&self, request: OtaBegin) -> Result<OtaBeginAck, RequestFailure<OtaBeginRejected>> {
     self.0.request(request).await
   }

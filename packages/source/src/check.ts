@@ -1,8 +1,8 @@
+import { CATEGORIES } from '@bridgething/catalog';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CATEGORIES } from '@bridgething/catalog';
 import { generate, validate } from './catalog.ts';
 import {
   bundle,
@@ -76,7 +76,9 @@ export async function check(): Promise<void> {
   for (const app of apps)
     if (!app.manifest.description.trim()) fail(`apps/${app.slug}/public/manifest.json has an empty "description"`);
 
-  for (const app of apps.filter(app => !app.meta.categories.length && app.manifest.role !== 'launcher' && !app.manifest.overlay))
+  for (const app of apps.filter(
+    app => !app.meta.categories.length && app.manifest.role !== 'launcher' && !app.manifest.overlay,
+  ))
     console.warn(
       `warning: apps/${app.slug}/catalog.json has no "categories", so the store leaves it off every category shelf.\n` +
         `         add one or two of ${CATEGORIES.join(', ')}`,

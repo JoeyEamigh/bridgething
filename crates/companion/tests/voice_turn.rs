@@ -777,6 +777,27 @@ async fn a_fast_path_turn_resolves_and_dispatches_on_the_wire() {
 }
 
 #[tokio::test]
+async fn every_dispatch_names_the_turn_it_answers() {
+  let mut rig = Rig::build(Some(FakeRecognizer::saying("pause")), None, true);
+  let (first, second) = (Uuid::now_v7(), Uuid::now_v7());
+  for stream_id in [first, second] {
+    rig
+      .turn(
+        stream_id,
+        &numbered(&voicekit::packets()),
+        VoiceCloseReason::EndOfSpeech,
+      )
+      .await;
+  }
+
+  assert_eq!(
+    [rig.next_dispatch().await.stream_id, rig.next_dispatch().await.stream_id],
+    [first, second],
+    "the daemon can only settle a turn once if each answer says which turn it is"
+  );
+}
+
+#[tokio::test]
 async fn a_fast_path_miss_resolves_through_the_injected_model() {
   let mut rig = Rig::with_catalog(
     Some(FakeRecognizer::saying(CONTENT_UTTERANCE)),

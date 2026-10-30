@@ -89,6 +89,7 @@ struct Link {
 #[derive(Default)]
 struct LogStream {
   enabled: bool,
+  verbosity: Option<libbridgething::LogLevel>,
   taps: HashMap<String, LogTap>,
 }
 
@@ -295,6 +296,7 @@ impl Session {
       config.host.clone(),
       flags,
       backends.volume.is_some(),
+      backends.speech.is_some(),
     );
     hub.persist_devices(std::path::Path::new(&config.state_dir).join(DEVICE_RECORDS_FILE));
     hub.set_priority_sync(recalled.provider_priority.clone());
@@ -949,13 +951,14 @@ impl Session {
 
   async fn sync_log_stream(&self, device_id: &str, gateway: &Gateway) {
     let claim = Uuid::now_v7();
-    {
+    let asked = {
       let mut held = self.log_stream.lock().unwrap();
       if !held.enabled || held.taps.contains_key(device_id) {
         return;
       }
       held.taps.insert(device_id.to_owned(), LogTap::Opening(claim));
-    }
+      held.verbosity
+    };
     self.observer.hold_logs();
     let subscribed = gateway
       .system()
@@ -963,6 +966,7 @@ impl Session {
         source: libbridgething::LogSource::Daemon,
         levels: Vec::new(),
         filter: None,
+        verbosity: asked,
       })
       .await;
     let token = subscribed.ok().map(|reply| reply.token);
@@ -972,22 +976,25 @@ impl Session {
       match &token {
         Some(token) if claimed => {
           held.taps.insert(device_id.to_owned(), LogTap::Open(token.clone()));
-          true
+          Some(held.verbosity)
         }
         _ => {
           if claimed {
             held.taps.remove(device_id);
           }
-          false
+          None
         }
       }
     };
-    if !kept {
+    let Some(wanted) = kept else {
       self.observer.backfill_logs(Vec::new());
       if let Some(token) = token {
         release_log_tap(gateway, token).await;
       }
       return;
+    };
+    if let Some(token) = token.filter(|_| wanted != asked) {
+      retune_log_tap(gateway, token, wanted).await;
     }
     let tailed = tokio::time::timeout(
       LOG_BACKFILL_DEADLINE,
@@ -1003,6 +1010,34 @@ impl Session {
       Ok(Ok(reply)) => reply.entries,
       _ => Vec::new(),
     });
+  }
+
+  pub fn device_log_verbosity(&self) -> Option<libbridgething::LogLevel> {
+    self.log_stream.lock().unwrap().verbosity
+  }
+
+  pub async fn set_device_log_verbosity(&self, verbosity: Option<libbridgething::LogLevel>) {
+    let open: Vec<(String, String)> = {
+      let mut held = self.log_stream.lock().unwrap();
+      if held.verbosity == verbosity {
+        return;
+      }
+      held.verbosity = verbosity;
+      held
+        .taps
+        .iter()
+        .filter_map(|(device_id, tap)| match tap {
+          LogTap::Open(token) => Some((device_id.clone(), token.clone())),
+          LogTap::Opening(_) => None,
+        })
+        .collect()
+    };
+    for (device_id, token) in open {
+      let Some(gateway) = self.gateway_for(&device_id) else {
+        continue;
+      };
+      retune_log_tap(&gateway, token, verbosity).await;
+    }
   }
 
   pub async fn set_device_log_streaming(&self, enabled: bool) {
@@ -1352,6 +1387,16 @@ impl AckSink for LinkAcks {
     tokio::spawn(async move {
       let _ = link.event(GatewayToBridgeTransferMsgEvent::Ack(ack)).await;
     });
+  }
+}
+
+async fn retune_log_tap(gateway: &Gateway, token: String, verbosity: Option<libbridgething::LogLevel>) {
+  if let Err(err) = gateway
+    .system()
+    .logs_set_verbosity(libbridgething::gateway::LogsSetVerbosity { token, verbosity })
+    .await
+  {
+    tracing::warn!(?verbosity, "the device log stream could not be retuned: {err}");
   }
 }
 

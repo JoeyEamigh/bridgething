@@ -77,6 +77,7 @@ async fn boot(owned: Vec<String>) -> Rig {
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let backend = FakeMediaBackend::new();

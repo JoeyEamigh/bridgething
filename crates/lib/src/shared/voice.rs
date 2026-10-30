@@ -203,6 +203,8 @@ pub enum VoiceDispatchErrorCode {
   Unsupported,
   PlaybackFailed,
   BadSlots,
+  StaleTurn,
+  NoCompanion,
   Internal,
 }
 

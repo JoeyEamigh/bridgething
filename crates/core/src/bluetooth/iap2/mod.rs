@@ -200,16 +200,20 @@ pub struct Iap2TransportHandle {
 }
 
 impl Iap2TransportHandle {
-  pub async fn send_hid(&self, cmd: HidCommand) {
-    if self.tx.send(Iap2TransportCommand::Hid(cmd)).await.is_err() {
-      tracing::error!(?cmd, "iap2 link down; the transport press reached nothing");
-    }
+  pub async fn send_hid(&self, cmd: HidCommand) -> Result<(), Iap2LinkDown> {
+    self
+      .tx
+      .send(Iap2TransportCommand::Hid(cmd))
+      .await
+      .map_err(|_| Iap2LinkDown)
   }
 
-  pub async fn send_now_playing(&self, cmd: NowPlayingCommand) {
-    if self.tx.send(Iap2TransportCommand::NowPlaying(cmd)).await.is_err() {
-      tracing::error!(?cmd, "iap2 link down; the now-playing command reached nothing");
-    }
+  pub async fn send_now_playing(&self, cmd: NowPlayingCommand) -> Result<(), Iap2LinkDown> {
+    self
+      .tx
+      .send(Iap2TransportCommand::NowPlaying(cmd))
+      .await
+      .map_err(|_| Iap2LinkDown)
   }
 
   pub async fn wake_spotify(&self) {

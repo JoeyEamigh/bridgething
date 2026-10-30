@@ -24,6 +24,26 @@ pub enum LogLevel {
   Error,
 }
 
+pub(crate) fn api_from_wire(level: libbridgething::LogLevel) -> LogLevel {
+  match level {
+    libbridgething::LogLevel::Trace => LogLevel::Trace,
+    libbridgething::LogLevel::Debug => LogLevel::Debug,
+    libbridgething::LogLevel::Info => LogLevel::Info,
+    libbridgething::LogLevel::Warn => LogLevel::Warn,
+    libbridgething::LogLevel::Error => LogLevel::Error,
+  }
+}
+
+pub(crate) fn wire_from_api(level: LogLevel) -> libbridgething::LogLevel {
+  match level {
+    LogLevel::Trace => libbridgething::LogLevel::Trace,
+    LogLevel::Debug => libbridgething::LogLevel::Debug,
+    LogLevel::Info => libbridgething::LogLevel::Info,
+    LogLevel::Warn => libbridgething::LogLevel::Warn,
+    LogLevel::Error => libbridgething::LogLevel::Error,
+  }
+}
+
 pub(crate) fn ring_level(level: LogLevel) -> bridgething_delivery::seam::LogLevel {
   match level {
     LogLevel::Trace => bridgething_delivery::seam::LogLevel::Trace,

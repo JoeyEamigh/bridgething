@@ -6,7 +6,10 @@ use std::{
 };
 
 use libbridgething::{GeoAccuracy, Position};
+use tokio::sync::watch;
 use uuid::Uuid;
+
+use crate::bluetooth::Address;
 
 #[derive(Debug, Clone, Default)]
 pub struct GeoLastFix {
@@ -49,16 +52,31 @@ pub struct WatchAggregate {
   pub min_interval_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct WatchChange {
-  pub existed: bool,
-  pub prev: Option<WatchAggregate>,
-  pub next: Option<WatchAggregate>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GeoLease {
+  pub gateway: Address,
+  pub watch: WatchAggregate,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GeoHandover {
+  pub unwatch: Option<Address>,
+  pub watch: Option<GeoLease>,
+}
+
+#[derive(Debug, Clone)]
 pub struct GeoWatchers {
   inner: Arc<RwLock<HashMap<Uuid, Watcher>>>,
+  changed: Arc<watch::Sender<()>>,
+}
+
+impl Default for GeoWatchers {
+  fn default() -> Self {
+    Self {
+      inner: Arc::default(),
+      changed: Arc::new(watch::channel(()).0),
+    }
+  }
 }
 
 impl GeoWatchers {
@@ -66,10 +84,12 @@ impl GeoWatchers {
     Self::default()
   }
 
-  pub fn register(&self, token: Uuid, owner: SocketAddr, accuracy: GeoAccuracy, min_interval_ms: u32) -> WatchChange {
-    let mut guard = self.inner.write().expect("geo watchers poisoned");
-    let prev = aggregate_of(&guard);
-    guard.insert(
+  pub fn subscribe(&self) -> watch::Receiver<()> {
+    self.changed.subscribe()
+  }
+
+  pub fn register(&self, token: Uuid, owner: SocketAddr, accuracy: GeoAccuracy, min_interval_ms: u32) {
+    self.inner.write().expect("geo watchers poisoned").insert(
       token,
       Watcher {
         owner,
@@ -77,35 +97,32 @@ impl GeoWatchers {
         min_interval_ms,
       },
     );
-    let next = aggregate_of(&guard);
-    WatchChange {
-      existed: true,
-      prev,
-      next,
-    }
+    self.changed.send_replace(());
   }
 
-  pub fn unregister(&self, token: Uuid) -> WatchChange {
-    let mut guard = self.inner.write().expect("geo watchers poisoned");
-    let prev = aggregate_of(&guard);
-    let existed = guard.remove(&token).is_some();
-    let next = aggregate_of(&guard);
-    WatchChange { existed, prev, next }
+  pub fn unregister(&self, token: Uuid) -> bool {
+    let existed = self
+      .inner
+      .write()
+      .expect("geo watchers poisoned")
+      .remove(&token)
+      .is_some();
+    if existed {
+      self.changed.send_replace(());
+    }
+    existed
   }
 
-  pub fn drain_for_owner(&self, owner: SocketAddr) -> WatchChange {
-    let mut guard = self.inner.write().expect("geo watchers poisoned");
-    let prev = aggregate_of(&guard);
-    let drained: Vec<Uuid> = guard
-      .iter()
-      .filter_map(|(id, w)| (w.owner == owner).then_some(*id))
-      .collect();
-    let existed = !drained.is_empty();
-    for id in drained {
-      guard.remove(&id);
+  pub fn drain_for_owner(&self, owner: SocketAddr) {
+    let drained = {
+      let mut guard = self.inner.write().expect("geo watchers poisoned");
+      let before = guard.len();
+      guard.retain(|_, w| w.owner != owner);
+      guard.len() != before
+    };
+    if drained {
+      self.changed.send_replace(());
     }
-    let next = aggregate_of(&guard);
-    WatchChange { existed, prev, next }
   }
 
   pub fn owners(&self) -> Vec<SocketAddr> {
@@ -114,6 +131,27 @@ impl GeoWatchers {
     owners.sort();
     owners.dedup();
     owners
+  }
+
+  pub fn aggregate(&self) -> Option<WatchAggregate> {
+    aggregate_of(&self.inner.read().expect("geo watchers poisoned"))
+  }
+
+  pub fn lease_for(&self, gateway: Option<Address>) -> Option<GeoLease> {
+    gateway
+      .zip(self.aggregate())
+      .map(|(gateway, watch)| GeoLease { gateway, watch })
+  }
+}
+
+impl GeoHandover {
+  pub fn between(held: Option<GeoLease>, want: Option<GeoLease>) -> Option<Self> {
+    (held != want).then(|| Self {
+      unwatch: held
+        .map(|lease| lease.gateway)
+        .filter(|old| want.map(|lease| lease.gateway) != Some(*old)),
+      watch: want,
+    })
   }
 }
 
@@ -144,67 +182,56 @@ mod tests {
     s.parse().unwrap()
   }
 
+  fn gw(last: u8) -> Address {
+    Address([0xAA, 0, 0, 0, 0, last])
+  }
+
+  fn aggregate(accuracy: GeoAccuracy, min_interval_ms: u32) -> Option<WatchAggregate> {
+    Some(WatchAggregate {
+      accuracy,
+      min_interval_ms,
+    })
+  }
+
   #[test]
-  fn first_register_emits_aggregate() {
+  fn first_register_sets_the_aggregate() {
     let w = GeoWatchers::new();
-    let change = w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 1000);
-    assert_eq!(change.prev, None);
-    assert_eq!(
-      change.next,
-      Some(WatchAggregate {
-        accuracy: GeoAccuracy::Coarse,
-        min_interval_ms: 1000,
-      })
-    );
+    assert_eq!(w.aggregate(), None);
+    w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 1000);
+    assert_eq!(w.aggregate(), aggregate(GeoAccuracy::Coarse, 1000));
   }
 
   #[test]
   fn fine_upgrades_aggregate() {
     let w = GeoWatchers::new();
     w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 5000);
-    let change = w.register(Uuid::now_v7(), addr("127.0.0.1:2"), GeoAccuracy::Fine, 10000);
-    assert_eq!(
-      change.prev,
-      Some(WatchAggregate {
-        accuracy: GeoAccuracy::Coarse,
-        min_interval_ms: 5000,
-      })
-    );
-    assert_eq!(
-      change.next,
-      Some(WatchAggregate {
-        accuracy: GeoAccuracy::Fine,
-        min_interval_ms: 5000,
-      })
-    );
+    w.register(Uuid::now_v7(), addr("127.0.0.1:2"), GeoAccuracy::Fine, 10000);
+    assert_eq!(w.aggregate(), aggregate(GeoAccuracy::Fine, 5000));
   }
 
   #[test]
   fn smaller_interval_wins() {
     let w = GeoWatchers::new();
     w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 5000);
-    let change = w.register(Uuid::now_v7(), addr("127.0.0.1:2"), GeoAccuracy::Coarse, 1000);
-    assert_eq!(change.next.unwrap().min_interval_ms, 1000);
+    w.register(Uuid::now_v7(), addr("127.0.0.1:2"), GeoAccuracy::Coarse, 1000);
+    assert_eq!(w.aggregate().unwrap().min_interval_ms, 1000);
   }
 
   #[test]
-  fn unregister_last_returns_none_next() {
+  fn unregister_last_clears_the_aggregate() {
     let w = GeoWatchers::new();
     let token = Uuid::now_v7();
     w.register(token, addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
-    let change = w.unregister(token);
-    assert!(change.existed);
-    assert!(change.prev.is_some());
-    assert_eq!(change.next, None);
+    assert!(w.unregister(token));
+    assert_eq!(w.aggregate(), None);
   }
 
   #[test]
   fn unregister_unknown_is_noop() {
     let w = GeoWatchers::new();
     w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
-    let change = w.unregister(Uuid::now_v7());
-    assert!(!change.existed);
-    assert_eq!(change.prev, change.next);
+    assert!(!w.unregister(Uuid::now_v7()));
+    assert_eq!(w.aggregate(), aggregate(GeoAccuracy::Fine, 1000));
   }
 
   #[test]
@@ -216,16 +243,106 @@ mod tests {
     w.register(Uuid::now_v7(), alice, GeoAccuracy::Fine, 5000);
     w.register(Uuid::now_v7(), bob, GeoAccuracy::Coarse, 3000);
 
-    let change = w.drain_for_owner(alice);
-    assert!(change.existed);
+    w.drain_for_owner(alice);
+    assert_eq!(w.aggregate(), aggregate(GeoAccuracy::Coarse, 3000));
+    assert_eq!(w.owners(), vec![bob]);
+  }
+
+  #[test]
+  fn a_change_to_the_watchers_wakes_the_holder() {
+    let w = GeoWatchers::new();
+    let mut changed = w.subscribe();
+    let token = Uuid::now_v7();
+    w.register(token, addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
+    assert!(changed.has_changed().unwrap());
+    changed.borrow_and_update();
+
+    assert!(!w.unregister(Uuid::now_v7()));
+    assert!(!changed.has_changed().unwrap(), "an unknown token changed nothing");
+    assert!(w.unregister(token));
+    assert!(changed.has_changed().unwrap());
+  }
+
+  #[test]
+  fn the_watch_runs_on_exactly_one_companion() {
+    let w = GeoWatchers::new();
+    assert_eq!(w.lease_for(Some(gw(1))), None, "no watchers, nothing to start");
+
+    w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 1000);
+    let lease = w.lease_for(Some(gw(1)));
     assert_eq!(
-      change.next,
-      Some(WatchAggregate {
-        accuracy: GeoAccuracy::Coarse,
-        min_interval_ms: 3000,
+      GeoHandover::between(None, lease),
+      Some(GeoHandover {
+        unwatch: None,
+        watch: lease,
       })
     );
-    assert_eq!(w.owners(), vec![bob]);
+    assert_eq!(
+      GeoHandover::between(lease, lease),
+      None,
+      "an unchanged lease is not re-sent"
+    );
+  }
+
+  #[test]
+  fn a_new_primary_takes_the_watch_over() {
+    let w = GeoWatchers::new();
+    w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
+
+    let moved = GeoHandover::between(w.lease_for(Some(gw(1))), w.lease_for(Some(gw(2)))).expect("the primary moved");
+    assert_eq!(moved.unwatch, Some(gw(1)));
+    assert_eq!(moved.watch.map(|lease| lease.gateway), Some(gw(2)));
+  }
+
+  #[test]
+  fn a_retuned_watch_stays_on_its_companion() {
+    let w = GeoWatchers::new();
+    w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Coarse, 5000);
+    let held = w.lease_for(Some(gw(1)));
+    w.register(Uuid::now_v7(), addr("127.0.0.1:2"), GeoAccuracy::Fine, 1000);
+
+    let retuned = GeoHandover::between(held, w.lease_for(Some(gw(1)))).expect("the aggregate changed");
+    assert_eq!(retuned.unwatch, None);
+    assert_eq!(
+      retuned.watch.map(|lease| lease.watch),
+      aggregate(GeoAccuracy::Fine, 1000)
+    );
+  }
+
+  #[test]
+  fn the_last_watcher_leaving_stops_the_holder() {
+    let w = GeoWatchers::new();
+    let token = Uuid::now_v7();
+    w.register(token, addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
+    let held = w.lease_for(Some(gw(1)));
+    w.unregister(token);
+
+    assert_eq!(
+      GeoHandover::between(held, w.lease_for(Some(gw(1)))),
+      Some(GeoHandover {
+        unwatch: Some(gw(1)),
+        watch: None,
+      })
+    );
+  }
+
+  #[test]
+  fn losing_every_companion_drops_the_lease() {
+    let w = GeoWatchers::new();
+    w.register(Uuid::now_v7(), addr("127.0.0.1:1"), GeoAccuracy::Fine, 1000);
+    let held = w.lease_for(Some(gw(1)));
+
+    assert_eq!(
+      GeoHandover::between(held, w.lease_for(None)),
+      Some(GeoHandover {
+        unwatch: Some(gw(1)),
+        watch: None,
+      })
+    );
+    assert!(
+      GeoHandover::between(None, w.lease_for(Some(gw(2)))).is_some_and(|arrived| arrived.watch.is_some()),
+      "a companion arriving later never picked the watch up"
+    );
   }
 
   fn fix() -> Position {

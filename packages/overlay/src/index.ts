@@ -5,6 +5,7 @@ import type {
   PhoneCall,
   PhoneCallStatus,
   VoiceActivity,
+  VoiceDispatchErrorCode,
   VolumeChanged,
 } from '@bridgething/client';
 import { BridgethingClient } from '@bridgething/client';
@@ -35,12 +36,14 @@ const VOLUME_TTL_MS = 1_500;
 const CONNECTION_SHOW_DELAY_MS = 3_000;
 const VOICE_OUTCOME_TTL_MS = 2_500;
 
-const VOICE_ERROR_LABEL: Record<string, string> = {
+const VOICE_ERROR_LABEL: Record<VoiceDispatchErrorCode, string> = {
   webappNotFound: 'no such app',
   notDispatchable: "can't do that here",
   unsupported: 'not supported yet',
   playbackFailed: 'playback failed',
   badSlots: "didn't catch that",
+  staleTurn: 'already answered',
+  noCompanion: 'no companion to listen',
   internal: 'something went wrong',
 };
 

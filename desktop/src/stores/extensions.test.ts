@@ -54,6 +54,7 @@ class Host {
       deviceAutoResume: answer(true),
       deviceResumeTarget: answer('anySpeaker'),
       deviceLogStreaming: answer(false),
+      deviceLogVerbosity: answer(null),
       debugLogging: answer(false),
     } as unknown as DesktopSession;
   }

@@ -189,6 +189,7 @@ async fn boot_with(stub: SubsonicStub, password: &str) -> Rig {
       voice_model: false,
     },
     false,
+    false,
   );
   hub.start();
   let backend = FakeStreamBackend::new();

@@ -187,6 +187,8 @@ export class TauriSession implements CompanionSession {
   deviceLogs = (limit: number) => invoke<api.DeviceLogLine[]>('device_logs', { limit });
   deviceLogStreaming = () => invoke<boolean>('device_log_streaming');
   setDeviceLogStreaming = (enabled: boolean) => invoke<void>('set_device_log_streaming', { enabled });
+  deviceLogVerbosity = () => invoke<api.LogLevel | null>('device_log_verbosity');
+  setDeviceLogVerbosity = (verbosity: api.LogLevel | null) => invoke<void>('set_device_log_verbosity', { verbosity });
   debugLogging = () => invoke<boolean>('debug_logging');
   setDebugLogging = (enabled: boolean) => invoke<void>('set_debug_logging', { enabled });
   exportLogs = (path: string, body: string) => invoke<void>('export_logs', { path, body });

@@ -8,12 +8,15 @@ import { useDesktop } from '../desktop.ts';
 import { clock } from '../lib/format.ts';
 import { Icon } from '../lib/icons.tsx';
 import { pickLogFile } from '../lib/picker.ts';
-import { deviceLogsFor, logLimit, logStreaming } from '../stores/session.ts';
+import { deviceLogsFor, logLimit, logStreaming, logVerbosity } from '../stores/session.ts';
 
 const LEVELS = ['all', 'debug', 'info', 'warn', 'error'] as const;
 type LevelFilter = (typeof LEVELS)[number];
 
 const SEVERITY: Record<LogLevel, number> = { trace: 0, debug: 1, info: 2, warn: 3, error: 4 };
+
+const VERBOSITIES = ['info', 'debug', 'trace'] as const;
+type Verbosity = (typeof VERBOSITIES)[number];
 
 const LIMITS = [
   { value: '500', label: '500' },
@@ -41,6 +44,7 @@ export function LogsScreen(): VNode {
   const limit = logLimit.value;
   const lines = deviceLogsFor(limit);
   const streaming = logStreaming.data.value;
+  const verbosity = VERBOSITIES.find(option => option === logVerbosity.data.value) ?? 'info';
   const held = lines.data.value;
   const visible = useMemo(() => filter(held, level, query), [held, level, query]);
   const note = failure ?? lines.error.value;
@@ -54,6 +58,10 @@ export function LogsScreen(): VNode {
 
   const toggle = (next: boolean) => {
     void session.setDeviceLogStreaming(next);
+  };
+
+  const raise = (next: Verbosity) => {
+    void session.setDeviceLogVerbosity(next === 'info' ? null : next);
   };
 
   const copy = async () => {
@@ -127,6 +135,14 @@ export function LogsScreen(): VNode {
           device
           <Switch checked={streaming} label="stream device logs" onChange={toggle} />
         </label>
+        <Segmented
+          options={VERBOSITIES}
+          value={verbosity}
+          label="device log verbosity"
+          size="sm"
+          disabled={!streaming}
+          onChange={raise}
+        />
       </div>
 
       <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">

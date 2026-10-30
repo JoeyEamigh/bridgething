@@ -707,25 +707,17 @@ impl GatewayMan {
       .await;
   }
 
-  pub async fn broadcast_command<C: WireCommand<BridgeToGatewayMsgData>>(&self, cmd: C) {
-    self.command_with_priority(None, cmd, Priority::Normal).await;
-  }
-
-  pub async fn broadcast_command_bulk<C: WireCommand<BridgeToGatewayMsgData>>(&self, cmd: C) {
-    self.command_with_priority(None, cmd, Priority::Bulk).await;
-  }
-
-  pub async fn command_bulk<C: WireCommand<BridgeToGatewayMsgData>>(&self, address: Option<Address>, cmd: C) {
+  pub async fn command_bulk<C: WireCommand<BridgeToGatewayMsgData>>(&self, address: Address, cmd: C) {
     self.command_with_priority(address, cmd, Priority::Bulk).await;
   }
 
   pub async fn send_command<C: WireCommand<BridgeToGatewayMsgData>>(&self, address: Address, cmd: C) {
-    self.command_with_priority(Some(address), cmd, Priority::Normal).await;
+    self.command_with_priority(address, cmd, Priority::Normal).await;
   }
 
   async fn command_with_priority<C: WireCommand<BridgeToGatewayMsgData>>(
     &self,
-    address: Option<Address>,
+    address: Address,
     cmd: C,
     priority: Priority,
   ) {
@@ -734,11 +726,9 @@ impl GatewayMan {
       meta: MsgMeta::Command,
       data: cmd.into(),
     };
-    let outbound = match address {
-      Some(addr) => OutboundGatewayMessage::to(addr, msg),
-      None => OutboundGatewayMessage::all(msg),
-    };
-    self.send_all(outbound.with_priority(priority)).await;
+    self
+      .send_all(OutboundGatewayMessage::to(address, msg).with_priority(priority))
+      .await;
   }
 
   pub async fn request<R: WireRequest<Outbound = BridgeToGatewayMsgData, Inbound = GatewayToBridgeMsgData>>(

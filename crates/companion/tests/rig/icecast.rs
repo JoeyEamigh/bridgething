@@ -15,6 +15,8 @@ use tokio::{
 };
 
 const METADATA_UNIT: usize = 16;
+const MOUNT: &str = "/live";
+const LOGO: &str = "/logo.jpg";
 const TRICKLE: Duration = Duration::from_millis(10);
 const FETCH_DEADLINE: Duration = Duration::from_secs(10);
 
@@ -45,7 +47,7 @@ impl Icecast {
     let station = Arc::new(station);
     let counting = Arc::clone(&closed);
     let recording = Arc::clone(&requests);
-    let logo_url = format!("http://127.0.0.1:{port}/logo.jpg");
+    let logo_url = format!("http://127.0.0.1:{port}{LOGO}");
     thread::spawn(move || {
       for accepted in listener.incoming() {
         let Ok(socket) = accepted else { continue };
@@ -57,7 +59,7 @@ impl Icecast {
       }
     });
     Icecast {
-      url: format!("http://127.0.0.1:{port}/live"),
+      url: format!("http://127.0.0.1:{port}{MOUNT}"),
       audio,
       closed,
       requests,
@@ -119,10 +121,15 @@ fn answer(
   requests: &Mutex<Vec<String>>,
 ) {
   let Some(request) = read_head(&mut socket) else { return };
+  let path = request.split_whitespace().nth(1).unwrap_or_default();
+  let wants_logo = path == LOGO;
+  if path != MOUNT && !wants_logo {
+    let _ = socket.write_all(b"HTTP/1.0 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+    return;
+  }
   let wants_metadata = request
     .lines()
     .any(|line| line.to_ascii_lowercase().replace(' ', "") == "icy-metadata:1");
-  let wants_logo = request.starts_with("GET /logo.jpg ");
   requests.lock().unwrap().push(request);
   if wants_logo {
     let (status, body) = match station.logo {

@@ -4273,6 +4273,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func deviceLogSnapshot(limit: UInt32)  -> [DeviceLogLine]
     
+    func deviceLogVerbosity()  -> LogLevel?
+    
     func deviceResumeTarget(deviceId: String)  -> ResumeTarget
     
     func deviceSetNickname(deviceId: String, nickname: String) async throws 
@@ -4324,6 +4326,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     func setDeviceAutoResume(deviceId: String, enabled: Bool) async 
     
     func setDeviceLogStreaming(enabled: Bool) async 
+    
+    func setDeviceLogVerbosity(verbosity: LogLevel?) async 
     
     func setDeviceResumeTarget(deviceId: String, target: ResumeTarget) async 
     
@@ -4694,6 +4698,15 @@ open func deviceLogSnapshot(limit: UInt32) -> [DeviceLogLine]  {
     uniffi_bridgething_companion_fn_method_companionsession_device_log_snapshot(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(limit),uniffiCallStatus
+    )
+})
+}
+    
+open func deviceLogVerbosity() -> LogLevel?  {
+    return try!  FfiConverterOptionTypeLogLevel.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_device_log_verbosity(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -5080,6 +5093,23 @@ open func setDeviceLogStreaming(enabled: Bool)async   {
             rustFutureFunc: {
                 uniffi_bridgething_companion_fn_method_companionsession_set_device_log_streaming(
                         self.uniffiCloneHandle(),FfiConverterBool.lower(enabled)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: nil
+            
+        )
+}
+    
+open func setDeviceLogVerbosity(verbosity: LogLevel?)async   {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_set_device_log_verbosity(
+                        self.uniffiCloneHandle(),FfiConverterOptionTypeLogLevel.lower(verbosity)
                 )
             },
             pollFunc: ffi_bridgething_companion_rust_future_poll_void,
@@ -29872,6 +29902,30 @@ fileprivate struct FfiConverterOptionTypeWebappResourceOrigin: FfiConverterRustB
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLogLevel: FfiConverterRustBuffer {
+    typealias SwiftType = LogLevel?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLogLevel.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLogLevel.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeMediaRepeatMode: FfiConverterRustBuffer {
     typealias SwiftType = MediaRepeatMode?
 
@@ -31541,6 +31595,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_device_log_snapshot() != 3371) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_device_log_verbosity() != 21476) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_device_resume_target() != 35275) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -31617,6 +31674,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_streaming() != 49632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_log_verbosity() != 36350) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {

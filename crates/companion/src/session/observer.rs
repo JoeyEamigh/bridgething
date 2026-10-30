@@ -19,7 +19,7 @@ use crate::{
     ExtensionInfo, LogOrigin, NowPlaying, NowPlayingPlayback, NowPlayingTrack, RepeatMode, SessionEvent,
     SessionEventSink, SessionPeer, VoiceTurn, VoiceTurnPhase, VoiceTurnTrigger, WebappInfo, WebappRole, WebappSource,
   },
-  backend::{LogLevel, log::ring_level},
+  backend::log::{api_from_wire, ring_level},
   dispatch::{system::DeviceLogSink, webapp::WebappObserver},
   voice::dispatcher::{VoiceTurnObserver, VoiceTurnPhase as DispatchTurnPhase, VoiceTurnUpdate},
 };
@@ -231,7 +231,7 @@ impl SessionObserver {
   }
 
   fn ingest(&self, entry: LogEntry, stamped: Option<u64>) {
-    let level = level(entry.level);
+    let level = api_from_wire(entry.level);
     let ring_level = ring_level(level);
     let record = match stamped {
       Some(at) => self
@@ -389,16 +389,6 @@ fn trigger(reason: VoiceCaptureReason) -> VoiceTurnTrigger {
     VoiceCaptureReason::PushToTalk => VoiceTurnTrigger::PushToTalk,
     VoiceCaptureReason::Assistant => VoiceTurnTrigger::Assistant,
     VoiceCaptureReason::WakeWord => VoiceTurnTrigger::WakeWord,
-  }
-}
-
-fn level(level: libbridgething::LogLevel) -> LogLevel {
-  match level {
-    libbridgething::LogLevel::Trace => LogLevel::Trace,
-    libbridgething::LogLevel::Debug => LogLevel::Debug,
-    libbridgething::LogLevel::Info => LogLevel::Info,
-    libbridgething::LogLevel::Warn => LogLevel::Warn,
-    libbridgething::LogLevel::Error => LogLevel::Error,
   }
 }
 

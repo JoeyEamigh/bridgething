@@ -1067,6 +1067,7 @@ export type SurfaceAvailability = {
   lyrics: boolean;
   playbackTargets: boolean;
   forward: boolean;
+  voice: boolean;
 };
 
 /**
@@ -1130,6 +1131,8 @@ export type VoiceDispatchErrorCode =
   | 'unsupported'
   | 'playbackFailed'
   | 'badSlots'
+  | 'staleTurn'
+  | 'noCompanion'
   | 'internal';
 
 /**
