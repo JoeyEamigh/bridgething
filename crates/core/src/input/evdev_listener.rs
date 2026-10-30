@@ -8,10 +8,13 @@ use libbridgething::LauncherGesture;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
-use super::press_window::{Key, PressWindow};
+use super::{
+  press_window::{Key, PressWindow},
+  wake::Source,
+};
 use crate::{chrome::ChromeCommand, handler::gateway::webapp::navigate_url_for_active, state::State};
 
-const RETRY_BACKOFF: Duration = Duration::from_secs(5);
+pub(super) const RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const LONG_PRESS_THRESHOLD: Duration = Duration::from_millis(800);
 const DOUBLE_PRESS_WINDOW: Duration = Duration::from_millis(400);
 const FIVE_PRESS_WINDOW: Duration = Duration::from_millis(1500);
@@ -29,7 +32,7 @@ pub async fn listen_for_hub_gesture(state: State, cancel: CancellationToken) {
     if cancel.is_cancelled() {
       return;
     }
-    match find_gpio_keys_device().await {
+    match find_device(Source::Buttons.device_name()).await {
       Some(path) => {
         tracing::info!("hub gesture: listening on {}", path.display());
         if let Err(e) = run_loop(&path, &state, &cancel).await {
@@ -47,7 +50,7 @@ pub async fn listen_for_hub_gesture(state: State, cancel: CancellationToken) {
   }
 }
 
-async fn find_gpio_keys_device() -> Option<PathBuf> {
+pub(super) async fn find_device(wanted: &str) -> Option<PathBuf> {
   let mut rd = tokio::fs::read_dir("/dev/input").await.ok()?;
   while let Ok(Some(entry)) = rd.next_entry().await {
     let path = entry.path();
@@ -62,7 +65,7 @@ async fn find_gpio_keys_device() -> Option<PathBuf> {
       Ok(Some(n)) => n,
       _ => continue,
     };
-    if dev_name.contains("gpio-keys") {
+    if dev_name.contains(wanted) {
       return Some(path);
     }
   }
@@ -129,9 +132,6 @@ async fn run_loop(path: &Path, state: &State, cancel: &CancellationToken) -> Res
         }
 
         let key = KeyCode::new(ev.code());
-        if ev.value() == 1 {
-          state.presence.touch();
-        }
 
         if let Some(window) = presses.as_mut() {
           let pressed = if key == KeyCode::KEY_M { Key::Launcher } else { Key::Other };
