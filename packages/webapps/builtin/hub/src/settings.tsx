@@ -8,12 +8,26 @@ import {
   type Device,
   type Diagnostics,
   type LauncherGesture,
+  type PresenceSettings,
   type TimeInfo,
 } from '@bridgething/client';
 import { useEffect, useState } from 'react';
 import { clockText } from './clock.ts';
 import { GESTURES } from './gesture.ts';
 import { factoryReset } from './power.ts';
+import {
+  DIM_LEVEL_MAX_PCT,
+  DIM_LEVEL_MIN_PCT,
+  DIM_LEVEL_STEP_PCT,
+  dimLevelPct,
+  moveTimer,
+  setDimLevel,
+  setFollowHost,
+  stepIndex,
+  TIMER_STEPS,
+  timerLabel,
+  type Timer,
+} from './presence-settings.ts';
 import { wireErrorText } from './wire-error.ts';
 
 type Section = 'bluetooth' | 'display' | 'controls' | 'system' | 'power';
@@ -303,6 +317,8 @@ function DisplayPanel({ client }: { client: BridgethingClient }) {
         </Card>
       )}
 
+      <ScreenSleepCards client={client} />
+
       <Card title="ambient light" hint="from the light sensor">
         <Bar value={ambient ?? 0} max={100} label={ambient === null ? '...' : `${ambient}`} />
       </Card>
@@ -317,6 +333,174 @@ function DisplayPanel({ client }: { client: BridgethingClient }) {
         </Card>
       )}
     </div>
+  );
+}
+
+function ScreenSleepCards({ client }: { client: BridgethingClient }) {
+  const [settings, setSettings] = useState<PresenceSettings | null>(null);
+
+  const reload = () => {
+    client.presence
+      .settingsGet()
+      .then(r => {
+        if (r.ok) setSettings(r.response.settings);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    client.presence
+      .settingsGet()
+      .then(r => {
+        if (cancelled || !r.ok) return;
+        setSettings(r.response.settings);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [client]);
+
+  useEffect(() => {
+    return client.presence.onSettingsChanged(r => setSettings(r.settings));
+  }, [client]);
+
+  const save = async (next: PresenceSettings) => {
+    setSettings(next);
+    try {
+      const r = await client.presence.settingsSet({ settings: next });
+      if (r.ok) setSettings(r.response.settings);
+      else reload();
+    } catch {
+      reload();
+    }
+  };
+
+  if (!settings) return null;
+
+  return (
+    <>
+      <Card title="screen sleep">
+        <CheckRow
+          checked={settings.followHost}
+          onChange={on => save(setFollowHost(settings, on))}
+          label="sleep and wake with the computer"
+          hint="goes dark when your computer's display sleeps and lights when it wakes. when it is off or not connected, the timers below apply"
+        />
+      </Card>
+
+      <TimerCard
+        title="dim after"
+        timer="dim"
+        settings={settings}
+        onCommit={index => save(moveTimer(settings, 'dim', index))}
+      />
+      <TimerCard
+        title="sleep after"
+        timer="sleep"
+        settings={settings}
+        onCommit={index => save(moveTimer(settings, 'sleep', index))}
+      />
+
+      <DimLevelCard settings={settings} onCommit={pct => save(setDimLevel(settings, pct))} />
+    </>
+  );
+}
+
+function TimerCard({
+  title,
+  timer,
+  settings,
+  onCommit,
+}: {
+  title: string;
+  timer: Timer;
+  settings: PresenceSettings;
+  onCommit: (index: number) => void;
+}) {
+  const seconds = timer === 'dim' ? settings.dimAfterS : settings.sleepAfterS;
+  const stored = stepIndex(seconds);
+  const [index, setIndex] = useState(stored);
+  useEffect(() => setIndex(stored), [stored]);
+
+  return (
+    <Card title={title} hint={timerLabel(TIMER_STEPS[index] ?? null)}>
+      <input
+        type="range"
+        min={0}
+        max={TIMER_STEPS.length - 1}
+        step={1}
+        value={index}
+        onChange={e => setIndex(Number(e.target.value))}
+        onPointerUp={() => index !== stored && onCommit(index)}
+        onTouchEnd={() => index !== stored && onCommit(index)}
+        onKeyUp={() => index !== stored && onCommit(index)}
+        className="h-2 w-full accent-accent"
+      />
+    </Card>
+  );
+}
+
+function DimLevelCard({ settings, onCommit }: { settings: PresenceSettings; onCommit: (pct: number) => void }) {
+  const stored = dimLevelPct(settings);
+  const [pct, setPct] = useState(stored);
+  useEffect(() => setPct(stored), [stored]);
+
+  return (
+    <Card title="dim level" hint={`${pct}%`}>
+      <input
+        type="range"
+        min={DIM_LEVEL_MIN_PCT}
+        max={DIM_LEVEL_MAX_PCT}
+        step={DIM_LEVEL_STEP_PCT}
+        value={pct}
+        onChange={e => setPct(Number(e.target.value))}
+        onPointerUp={() => pct !== stored && onCommit(pct)}
+        onTouchEnd={() => pct !== stored && onCommit(pct)}
+        onKeyUp={() => pct !== stored && onCommit(pct)}
+        className="h-2 w-full accent-accent"
+      />
+      <p className="m-0 pt-2 text-hint text-soft">
+        with manual brightness this is the most a dimmed screen shows. with auto brightness it is a share of what the
+        light sensor wants
+      </p>
+    </Card>
+  );
+}
+
+function CheckRow({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-start gap-3 border px-4 py-3 text-left transition ${
+        checked ? 'border-accent bg-accent-soft' : 'border-rule active:bg-neutral-soft'
+      }`}>
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border font-mono text-row leading-none ${
+          checked ? 'border-accent text-accent' : 'border-rule text-transparent'
+        }`}>
+        x
+      </span>
+      <span className="flex flex-col">
+        <span className={`block font-mono text-row ${checked ? 'text-accent' : 'text-off-white'}`}>{label}</span>
+        <span className="block pt-1 text-body text-soft">{hint}</span>
+      </span>
+    </button>
   );
 }
 

@@ -822,12 +822,17 @@
     {
       "name": "presence",
       "title": "Presence",
-      "description": "Whether the screen should be lit, as decided from the host display state. A webapp or native\nrenderer that draws every frame should stop drawing while `display` is `off`. `get` returns the\nstate on demand and `onChanged` reports every later change.",
+      "description": "Whether the screen should be lit, as decided from the host display state. A webapp or native\nrenderer that draws every frame should stop drawing while `display` is `off`. `get` returns the\nstate on demand and `onChanged` reports every later change. `settingsGet` and `settingsSet` read\nand change when the screen dims and sleeps, and `onSettingsChanged` reports every change.",
       "events": [
         {
           "method": "onChanged",
           "payload": "PresenceSnapshot",
           "payload_ref": "PresenceSnapshot"
+        },
+        {
+          "method": "onSettingsChanged",
+          "payload": "PresenceSettingsReply",
+          "payload_ref": "PresenceSettingsReply"
         }
       ],
       "requests": [
@@ -836,6 +841,21 @@
           "description": "Returns the current screen presence state.",
           "response": "PresenceSnapshot",
           "response_event": "onSnapshot"
+        },
+        {
+          "method": "settingsGet",
+          "description": "Returns when the screen dims and sleeps.",
+          "response": "PresenceSettingsReply",
+          "response_event": "onSettingsReply"
+        },
+        {
+          "method": "settingsSet",
+          "description": "Replaces when the screen dims and sleeps. A request the device cannot honor, such as dimming\nat or after sleeping, is refused with the reason and changes nothing.",
+          "payload": "PresenceSettingsSet",
+          "payload_ref": "PresenceSettingsSet",
+          "response": "PresenceSettingsReply",
+          "error": "PresenceSettingsErrorReply",
+          "response_event": "onSettingsReply"
         }
       ],
       "commands": [],
@@ -2163,11 +2183,11 @@
         },
         {
           "name": "Dim",
-          "description": "Capped to a low level. The host is idle but its display is still on."
+          "description": "Lowered to `PresenceSettings.dimLevel`. The host display is dimmed, or an idle timer ran out."
         },
         {
           "name": "Off",
-          "description": "Backlight off. The host display is asleep, or the host went away."
+          "description": "Backlight off. The host display is asleep, or an idle timer ran out."
         }
       ]
     },
@@ -5386,6 +5406,82 @@
         }
       ]
     },
+    "PresenceSettings": {
+      "kind": "struct",
+      "description": "What the user wants the screen to do. The default leaves the screen to the brightness mode, as it\nwas before presence existed.\n\n`followHost` sleeps and wakes the screen with the host display while a host is connected. The idle\ntimers dim and sleep it when it is not following, and also when it is following but no host is\nconnected, so a host that is off or unplugged falls back to the timers. An idle timer counts\nactivity on the device (buttons, dial, touch) and, when a host reports one, on the host.",
+      "fields": [
+        {
+          "name": "followHost",
+          "type": "boolean",
+          "description": "Sleep and wake with the host display. A host that dims its display dims this one. With no host\nconnected the idle timers apply instead."
+        },
+        {
+          "name": "dimAfterS",
+          "type": "number",
+          "optional": true,
+          "description": "Idle seconds before the screen dims, 5 to 86400. Null never dims it."
+        },
+        {
+          "name": "sleepAfterS",
+          "type": "number",
+          "optional": true,
+          "description": "Idle seconds before the screen sleeps, 5 to 86400, and later than `dimAfterS`. Null never\nsleeps it."
+        },
+        {
+          "name": "dimLevel",
+          "type": "number",
+          "description": "How far a dimmed screen drops, `0.05` to `1.0`. With manual brightness it is the highest level\na dimmed screen shows, and a screen already dimmer stays put. With ambient brightness it\nscales whatever the light sensor asks for."
+        }
+      ]
+    },
+    "PresenceSettingsError": {
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "DimNotBeforeSleep",
+          "description": "`dimAfterS` has to be earlier than `sleepAfterS`."
+        },
+        {
+          "name": "TimerOutOfRange",
+          "description": "A timer outside 5 to 86400 seconds."
+        },
+        {
+          "name": "DimLevelOutOfRange",
+          "description": "`dimLevel` outside `0.05` to `1.0`."
+        }
+      ]
+    },
+    "PresenceSettingsErrorReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "error",
+          "type": "PresenceSettingsError",
+          "type_ref": "PresenceSettingsError"
+        }
+      ]
+    },
+    "PresenceSettingsReply": {
+      "kind": "struct",
+      "fields": [
+        {
+          "name": "settings",
+          "type": "PresenceSettings",
+          "type_ref": "PresenceSettings"
+        }
+      ]
+    },
+    "PresenceSettingsSet": {
+      "kind": "struct",
+      "description": "Replaces when the screen dims and sleeps. A request the device cannot honor, such as dimming\nat or after sleeping, is refused with the reason and changes nothing.",
+      "fields": [
+        {
+          "name": "settings",
+          "type": "PresenceSettings",
+          "type_ref": "PresenceSettings"
+        }
+      ]
+    },
     "PresenceSnapshot": {
       "kind": "struct",
       "fields": [
@@ -5409,12 +5505,12 @@
           "description": "The host reported this state."
         },
         {
-          "name": "Failsafe",
-          "description": "The host promised reports and stopped sending them."
+          "name": "LocalWake",
+          "description": "A button, dial or touch woke the screen."
         },
         {
-          "name": "LocalWake",
-          "description": "A button or knob press woke the screen."
+          "name": "Timer",
+          "description": "The idle timers dimmed or slept the screen."
         }
       ]
     },

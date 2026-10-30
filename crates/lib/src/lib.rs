@@ -26,12 +26,13 @@ pub use shared::{
   OtaProgress, OverlayProfile, Peer, PeerCompanionStatus, PeerIap2Status, PhoneCall, PhoneCallDirection,
   PhoneCallService, PhoneCallStatus, PhoneError, PhoneState, PlayContext, Playback, PlaybackContext, PlaybackOptions,
   PlaybackQueue, PlaybackRestrictions, PlaybackState, PlaybackTarget, PlaybackTargetKind, PlaybackUpdate, PlayerError,
-  PlayerOptions, PlayerState, Playlist, PodcastEpisode, Position, PresenceInfo, PresenceSource, Priority, QueueItem,
-  QueuePosition, RECENTS_NODE_ID, RangePart, RangeSpec, RecommendationsResult, RedirectPolicy, RegistrationStatus,
-  RepeatMode, SearchResult, Show, ShuffleMode, Station, StreamBegin, StreamChunk, StreamEnd, StreamError, StringField,
-  SurfaceAvailability, THUMBNAIL_SIZE, TimeInfo, Track, TtlRetention, TunnelAck, TunnelClosed, TunnelData, TunnelError,
-  VoiceCaptureReason, VoiceDescriptor, VoiceDispatchErrorCode, VoiceDispatchTarget, WEBAPP_PROVENANCE_MAX_LEN,
-  WebappError, WebappInfo, WebappManifest, WebappRole, WebappSource, WsError, WsFrame, to_slug,
+  PlayerOptions, PlayerState, Playlist, PodcastEpisode, Position, PresenceInfo, PresenceSettings,
+  PresenceSettingsError, PresenceSource, Priority, QueueItem, QueuePosition, RECENTS_NODE_ID, RangePart, RangeSpec,
+  RecommendationsResult, RedirectPolicy, RegistrationStatus, RepeatMode, SearchResult, Show, ShuffleMode, Station,
+  StreamBegin, StreamChunk, StreamEnd, StreamError, StringField, SurfaceAvailability, THUMBNAIL_SIZE, TimeInfo, Track,
+  TtlRetention, TunnelAck, TunnelClosed, TunnelData, TunnelError, VoiceCaptureReason, VoiceDescriptor,
+  VoiceDispatchErrorCode, VoiceDispatchTarget, WEBAPP_PROVENANCE_MAX_LEN, WebappError, WebappInfo, WebappManifest,
+  WebappRole, WebappSource, WsError, WsFrame, to_slug,
 };
 
 pub const BRIDGETHING_DEVICE_CLASS: u32 = 0x7c0000;

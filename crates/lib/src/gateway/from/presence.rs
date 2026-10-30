@@ -11,8 +11,8 @@ use crate::HostPresence;
 #[ts(export, export_to = "gateway.ts")]
 #[bridge_enum(into = crate::gateway::GatewayToBridgeMsgData)]
 pub enum GatewayToBridgePresenceMsg {
-  /// Report the host display state. Send one on every change, and again every `heartbeatS` seconds
-  /// while the host is up.
+  /// Report the host display state and idle time. Send one on every change, and again every
+  /// `heartbeatS` seconds while the host is up.
   #[bridge_event]
   Update(HostPresence),
 }

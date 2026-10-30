@@ -132,6 +132,9 @@ import type {
   PlayerQueueReply,
   PlayerStateReply,
   PlayerTargetsReply,
+  PresenceSettingsErrorReply,
+  PresenceSettingsReply,
+  PresenceSettingsSet,
   PresenceSnapshot,
   QueueUri,
   SeekTo,
@@ -293,6 +296,9 @@ export type PlayerInboundHandlers = {
 export type PresenceInboundHandlers = {
   changed: (msg: PresenceSnapshot) => void;
   snapshot: (msg: PresenceSnapshot) => void;
+  settingsChanged: (msg: PresenceSettingsReply) => void;
+  settingsReply: (msg: PresenceSettingsReply) => void;
+  settingsErrorReply: (msg: PresenceSettingsErrorReply) => void;
 };
 
 export type SystemInboundHandlers = {
@@ -2885,6 +2891,42 @@ export class PresenceSurface {
     });
   }
 
+  /** Subscribe to `Presence::SettingsChanged` from the daemon. */
+  onSettingsChanged(handler: (msg: PresenceSettingsReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'presence') return;
+      const inner = data.data;
+      if (inner.event !== 'settingsChanged') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `Presence::SettingsReply` from the daemon. */
+  onSettingsReply(handler: (msg: PresenceSettingsReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'presence') return;
+      const inner = data.data;
+      if (inner.event !== 'settingsReply') return;
+      handler(inner.data);
+    });
+  }
+
+  /** Subscribe to `Presence::SettingsErrorReply` from the daemon. */
+  onSettingsErrorReply(handler: (msg: PresenceSettingsErrorReply) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'presence') return;
+      const inner = data.data;
+      if (inner.event !== 'settingsErrorReply') return;
+      handler(inner.data);
+    });
+  }
+
   /** Exhaustive subscribe over all inbound `Presence` variants. */
   subscribe(handlers: PresenceInboundHandlers): () => void {
     return this._subscribe(handlers, false);
@@ -2910,6 +2952,18 @@ export class PresenceSurface {
           handlers.snapshot?.(inner.data);
           return;
         }
+        case 'settingsChanged': {
+          handlers.settingsChanged?.(inner.data);
+          return;
+        }
+        case 'settingsReply': {
+          handlers.settingsReply?.(inner.data);
+          return;
+        }
+        case 'settingsErrorReply': {
+          handlers.settingsErrorReply?.(inner.data);
+          return;
+        }
         default: {
           if (!partial) this._client.logger.warn('Presence: no handler for inner', inner);
           return;
@@ -2926,6 +2980,36 @@ export class PresenceSurface {
     if (d.type === 'presence') {
       const inner = d.data;
       if (inner.event === 'snapshot') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async settingsGet(options?: { timeoutMs?: number }): Promise<TypedRequestResult<PresenceSettingsReply, never>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'presence', data: { event: 'settingsGet' } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'presence') {
+      const inner = d.data;
+      if (inner.event === 'settingsReply') return { ok: true, response: inner.data };
+    }
+    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
+    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
+  }
+
+  /** Typed request to the daemon: webapp sends, daemon responds. */
+  async settingsSet(
+    req: PresenceSettingsSet,
+    options?: { timeoutMs?: number },
+  ): Promise<TypedRequestResult<PresenceSettingsReply, PresenceSettingsErrorReply>> {
+    const wireData: ClientToBridgeMsg['data'] = { type: 'presence', data: { event: 'settingsSet', data: req } };
+    const response = await this._client.request(wireData, options?.timeoutMs);
+    const d = response.data;
+    if (d.type === 'presence') {
+      const inner = d.data;
+      if (inner.event === 'settingsReply') return { ok: true, response: inner.data };
+      if (inner.event === 'settingsErrorReply') return { ok: false, kind: 'domain', error: inner.data };
     }
     if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
     return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
@@ -4846,6 +4930,18 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           case 'snapshot': {
             innerHandlers.snapshot?.(inner.data);
+            return;
+          }
+          case 'settingsChanged': {
+            innerHandlers.settingsChanged?.(inner.data);
+            return;
+          }
+          case 'settingsReply': {
+            innerHandlers.settingsReply?.(inner.data);
+            return;
+          }
+          case 'settingsErrorReply': {
+            innerHandlers.settingsErrorReply?.(inner.data);
             return;
           }
           default: {
