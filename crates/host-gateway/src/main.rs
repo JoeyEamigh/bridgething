@@ -65,7 +65,8 @@ enum Command {
   SwitchWebapp {
     id: Uuid,
   },
-  /// Report a host display state (active, dim, off). `--hold` keeps heartbeating for that many seconds.
+  /// Report a host display state (active, dim, off). The device acts on it only when it is set to follow the
+  /// host display. `--hold` keeps heartbeating for that many seconds.
   Presence {
     state: String,
     #[arg(long, default_value_t = 0)]

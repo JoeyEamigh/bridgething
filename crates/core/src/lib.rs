@@ -69,6 +69,7 @@ use transfer::ChunkedTransfer;
 use transport::TransportController;
 
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
+const PRESENCE_SETTINGS_FILE: &str = "presence.json";
 
 pub struct Daemon {
   pub state: State,
@@ -273,7 +274,15 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     .await
     .expect("failed to initialize ALS manager")
     .spawn();
-  let (presence, presence_handle) = PresenceManager::init(bus.clone(), als.clone());
+  let (presence, presence_handle) = PresenceManager::init(
+    bus.clone(),
+    als.clone(),
+    config
+      .state_dir
+      .clone()
+      .unwrap_or_else(paths::state_dir)
+      .join(PRESENCE_SETTINGS_FILE),
+  );
   let (mic, mic_handle) = MicManager::init(
     bus.clone(),
     bluetooth.clone(),

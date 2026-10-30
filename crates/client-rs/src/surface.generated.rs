@@ -667,6 +667,15 @@ impl<'a> PresenceSurface<'a> {
   pub async fn get(&self) -> Result<PresenceSnapshot, RequestFailure<::core::convert::Infallible>> {
     self.0.request(PresenceGet).await
   }
+  pub async fn settings_get(&self) -> Result<PresenceSettingsReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(PresenceSettingsGet).await
+  }
+  pub async fn settings_set(
+    &self,
+    request: PresenceSettingsSet,
+  ) -> Result<PresenceSettingsReply, RequestFailure<PresenceSettingsErrorReply>> {
+    self.0.request(request).await
+  }
   /// Stream of `Presence` events.
   pub fn events(&self) -> impl Stream<Item = BridgeToClientPresenceMsgEvent> + 'static {
     BroadcastStream::new(self.0.events()).filter_map(|msg| {
