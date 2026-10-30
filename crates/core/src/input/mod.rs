@@ -2,6 +2,10 @@
 mod evdev_listener;
 #[cfg(any(feature = "input", test))]
 mod press_window;
+#[cfg(any(feature = "input", test))]
+mod wake;
+#[cfg(feature = "input")]
+mod wake_listener;
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -23,7 +27,10 @@ impl InputManager {
 
 #[cfg(feature = "input")]
 async fn run(state: State, cancel: CancellationToken) {
-  evdev_listener::listen_for_hub_gesture(state, cancel).await;
+  tokio::join!(
+    evdev_listener::listen_for_hub_gesture(state.clone(), cancel.clone()),
+    wake_listener::listen_for_wake(state, cancel),
+  );
 }
 
 #[cfg(not(feature = "input"))]
