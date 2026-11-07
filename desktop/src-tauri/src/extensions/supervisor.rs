@@ -595,6 +595,8 @@ impl Supervisor {
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())
       .kill_on_drop(true);
+    #[cfg(windows)]
+    spawn.creation_flags(::windows::Win32::System::Threading::CREATE_NO_WINDOW.0);
 
     let mut process = match spawn.spawn() {
       Ok(process) => process,

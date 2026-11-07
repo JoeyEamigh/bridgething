@@ -5,8 +5,9 @@ use voice_resolver::{
 use super::{
   Core, Kind, STARRED_ID, STARRED_TITLE,
   client::{Album, AlbumList, Artist, Playlist, SearchCounts, Song, SubsonicError},
-  page, parse_uri, station_id, uri,
+  parse_uri, station_id, uri,
 };
+use crate::provider::library::page;
 
 const RECENT_LIMIT: u32 = 40;
 const FRESH_ALBUMS: u32 = 20;

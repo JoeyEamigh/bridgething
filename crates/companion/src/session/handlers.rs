@@ -44,6 +44,7 @@ pub struct Peer {
   pub(crate) ota: Arc<OtaLink>,
   pub(crate) observer: Arc<SessionObserver>,
   pub(crate) hub: Arc<Hub>,
+  pub(crate) broadcast: Arc<super::Broadcast>,
 }
 
 impl Peer {
@@ -432,6 +433,12 @@ impl ForwardHandler for Peer {
 
 impl EnvelopeHandler for Peer {
   async fn version(&self, payload: BridgeThingMeta) -> Result<(), WireError> {
+    let changed = self
+      .broadcast
+      .identify(&self.device_id, &payload.libbridgething_version);
+    if changed && super::downlevel::waits_on_version(self.hub.compose_capabilities().music_provider) {
+      self.hub.announce().await;
+    }
     self.hub.identify(&self.device_id, &payload.serial_number);
     self.ota.device_meta(payload.clone());
     self.observer.device_meta(&self.device_id, payload);

@@ -7,7 +7,7 @@ use std::{
 
 use bridgething_companion::{
   api::{MediaPickKind, ota::OtaLane},
-  provider::{ResumeTarget, spotify, subsonic},
+  provider::{ResumeTarget, plex, spotify, subsonic},
 };
 use bridgething_desktop::{
   commands::{self, InstallOutcome, OtaOutcome},
@@ -640,14 +640,14 @@ async fn the_shell_holds_a_live_session_and_every_command_is_a_pull() {
   let providers = commands::providers(app.state()).await.expect("providers");
   let mut offered: Vec<&str> = providers.iter().map(|provider| provider.id.as_str()).collect();
   offered.sort_unstable();
-  let mut expected = vec![subsonic::PROVIDER_NAME];
+  let mut expected = vec![subsonic::PROVIDER_NAME, plex::PROVIDER_NAME];
   if shell::auth_psk().is_some() {
     expected.push(spotify::PROVIDER_NAME);
   }
   expected.sort_unstable();
   assert_eq!(
     offered, expected,
-    "every desktop owns a stream backend, so subsonic is always on offer; spotify needs the baked-in psk"
+    "every desktop owns a stream backend, so subsonic and plex are always on offer; spotify needs the baked-in psk"
   );
   assert!(commands::now_playing(app.state()).await.is_ok());
   assert!(commands::voice_model(app.state()).await.is_ok());

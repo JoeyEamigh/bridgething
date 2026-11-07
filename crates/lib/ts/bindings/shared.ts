@@ -430,7 +430,7 @@ export type MediaItemUpdate = {
  */
 export type MediaType = 'music' | 'podcast' | 'audioBook';
 
-export type MusicProvider = 'none' | 'spotify' | 'appleMusic' | 'subsonic';
+export type MusicProvider = 'spotify' | 'appleMusic' | 'subsonic' | 'plex' | 'none';
 
 export type NetError =
   | { type: 'requestFailed'; data: { reason: string } }

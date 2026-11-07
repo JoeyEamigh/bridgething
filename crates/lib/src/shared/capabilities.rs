@@ -59,11 +59,13 @@ pub struct SurfaceAvailability {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
 pub enum MusicProvider {
-  #[default]
-  None,
   Spotify,
   AppleMusic,
   Subsonic,
+  Plex,
+  #[default]
+  #[serde(other)]
+  None,
 }
 
 #[serde_with::skip_serializing_none]
@@ -110,4 +112,21 @@ pub struct Capabilities {
   pub network: NetworkInfo,
   pub audio: AudioCapabilities,
   pub music_provider: MusicProvider,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::MusicProvider;
+
+  #[test]
+  fn a_provider_this_build_does_not_know_reads_as_none() {
+    let read: MusicProvider = serde_json::from_str("\"jellyfin\"").expect("an unknown provider still decodes");
+    assert_eq!(read, MusicProvider::None);
+    let known: MusicProvider = serde_json::from_str("\"plex\"").expect("plex decodes");
+    assert_eq!(known, MusicProvider::Plex);
+    assert_eq!(serde_json::to_string(&MusicProvider::None).unwrap(), "\"none\"");
+    let packed = rmp_serde::to_vec_named("jellyfin").unwrap();
+    let read: MusicProvider = rmp_serde::from_slice(&packed).expect("msgpack decodes an unknown provider too");
+    assert_eq!(read, MusicProvider::None);
+  }
 }

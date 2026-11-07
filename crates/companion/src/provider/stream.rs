@@ -34,7 +34,7 @@ impl StreamProvider {
   pub fn new(backend: Arc<dyn StreamBackend>, http: Arc<dyn IoHttpTransport>, art: Arc<ArtCache>) -> Arc<Self> {
     Arc::new(Self {
       art_origin: HttpExecutor::new(http.clone()),
-      playback: StreamPlayback::new(backend, http, art.clone(), SOURCE_ID, Arc::new(IMAGE_CODEC)),
+      playback: StreamPlayback::new(backend, http, art.clone(), SOURCE_ID, Arc::new(IMAGE_CODEC), None),
       art,
     })
   }

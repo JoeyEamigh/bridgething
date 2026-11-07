@@ -1,19 +1,21 @@
 import type { BridgethingAuthState } from '@bridgething/session-react-native';
 import { useEffect, useRef } from 'react';
-import { Linking, Text, View } from 'react-native';
-import InAppBrowser from 'react-native-inappbrowser-reborn';
+import { Text, View } from 'react-native';
 
 import { Button } from './Button';
 import { Spinner } from './Spinner';
+import { closeSignIn, openSignIn } from '../lib/auth-browser';
 import { TEXT, TYPE } from '../lib/theme';
 
 const CODE_TRACKING = TYPE.title * 0.2;
 
 export function PendingAuth({
+  providerId,
   state,
   onCancel,
   onRetry,
 }: {
+  providerId: string;
   state: BridgethingAuthState;
   onCancel?: () => void;
   onRetry?: () => void;
@@ -33,8 +35,14 @@ export function PendingAuth({
       state.kind === 'pending' ? (state.userCode ?? pendingUrl) : pendingUrl;
     if (openedFor.current === key) return;
     openedFor.current = key;
-    void openAuthUrl(pendingUrl);
-  }, [pendingUrl, state]);
+    void openSignIn(providerId, pendingUrl);
+  }, [providerId, pendingUrl, state]);
+
+  useEffect(() => {
+    if (state.kind !== 'pending') closeSignIn(providerId);
+  }, [providerId, state.kind]);
+
+  useEffect(() => () => closeSignIn(providerId), [providerId]);
 
   if (state.kind === 'pending') {
     return (
@@ -74,7 +82,7 @@ export function PendingAuth({
               variant="secondary"
               size="sm"
               full={false}
-              onPress={() => void openAuthUrl(pendingUrl)}
+              onPress={() => void openSignIn(providerId, pendingUrl)}
             >
               open authorization
             </Button>
@@ -124,31 +132,4 @@ export function PendingAuth({
     );
   }
   return null;
-}
-
-const SPOTIFY_SCHEME = 'spotify://';
-
-async function openAuthUrl(url: string) {
-  try {
-    if (await Linking.canOpenURL(SPOTIFY_SCHEME)) {
-      await Linking.openURL(url);
-      return;
-    }
-  } catch {
-    // fall through to the in-app browser path
-  }
-
-  try {
-    if (await InAppBrowser.isAvailable()) {
-      await InAppBrowser.open(url, {
-        animated: true,
-        modalEnabled: true,
-        enableDefaultShare: false,
-      });
-      return;
-    }
-    await Linking.openURL(url);
-  } catch {
-    // the code + url are shown in the card as a manual fallback.
-  }
 }

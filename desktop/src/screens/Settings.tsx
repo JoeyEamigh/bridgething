@@ -267,7 +267,12 @@ function AuthCard({ provider }: { provider: ProviderInfo }): VNode | null {
           <p class="m-0 mt-3 font-mono text-title tracking-[0.2em] text-off-white select-all">{state.userCode}</p>
         ) : null}
         {url ? <p class="m-0 mt-2 break-all text-hint text-accent select-all">{url}</p> : null}
-        <div class="mt-3">
+        <div class="mt-3 flex gap-2">
+          {url ? (
+            <Button size="sm" variant="secondary" onClick={() => void openUrl(url)}>
+              open in browser
+            </Button>
+          ) : null}
           <Button
             size="sm"
             variant="ghost"

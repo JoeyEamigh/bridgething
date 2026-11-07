@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use bridgething_io::{HttpExecutor, HttpTransport as IoHttpTransport};
 use libbridgething::{
-  Album as WireAlbum, Artist as WireArtist, BrowseEntry, BrowseFolder, BrowseResult, FavoritesPage, ItemKind, ItemRef,
-  LibraryItem, LyricLine, Lyrics, MusicProvider, PlaybackContext, Playlist as WirePlaylist, RecommendationsResult,
-  SearchResult, Track as WireTrack,
+  Album as WireAlbum, Artist as WireArtist, BrowseEntry, BrowseResult, FavoritesPage, ItemKind, ItemRef, LibraryItem,
+  LyricLine, Lyrics, MusicProvider, PlaybackContext, Playlist as WirePlaylist, RecommendationsResult, SearchResult,
+  Track as WireTrack,
   gateway::{
     ContextResolveReply, FavoritesSet, LibraryBrowseRequest, LibraryFavoritesContainsRequest,
     LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibrarySearchRequest, PlayUri, QueueUri, TrackIdentity,
@@ -22,8 +22,12 @@ use crate::{
   provider::{
     AssetBytes, AuthObserver, PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderLink,
     art::{ArtCache, ArtResolver, ImageAssetCodec},
+    library::{
+      ALBUMS_NODE_ID, ARTISTS_NODE_ID, NEWEST_NODE_ID, PLAYLISTS_NODE_ID, RANDOM_NODE_ID, RECENTS_NODE_ID, listing,
+      page, staple_root,
+    },
     none_if_empty,
-    playback::{Presentation, QueueEntry, StreamPlayback},
+    playback::{PlayReport, PlayReporter, Presentation, QueueEntry, StreamPlayback},
   },
   voice::{catalog::CatalogResolver, dispatcher::VoiceCatalogResolver},
 };
@@ -41,14 +45,7 @@ const IMAGE_CODEC: ImageAssetCodec = ImageAssetCodec {
 };
 const DEFAULT_HERO_EDGE: u32 = 248;
 const DEFAULT_THUMB_EDGE: u32 = 96;
-const DEFAULT_ROOT_PREVIEW: u32 = 8;
 const ARTIST_PLAY_ALBUM_CAP: usize = 20;
-const PLAYLISTS_NODE_ID: &str = "playlists";
-const ALBUMS_NODE_ID: &str = "albums";
-const ARTISTS_NODE_ID: &str = "artists";
-const RECENTS_NODE_ID: &str = libbridgething::RECENTS_NODE_ID;
-const NEWEST_NODE_ID: &str = "recently-added";
-const RANDOM_NODE_ID: &str = "random";
 const STARRED_ID: &str = "songs";
 const STARRED_TITLE: &str = "Starred Songs";
 const STATION_SONGS: u32 = 50;
@@ -146,10 +143,27 @@ impl ArtResolver for Art {
   }
 }
 
-fn page<T: Clone>(items: &[T], limit: u32, offset: u32) -> (Vec<T>, bool) {
-  let start = (offset as usize).min(items.len());
-  let end = (start + limit as usize).min(items.len());
-  (items[start..end].to_vec(), end < items.len())
+struct Scrobbler {
+  client: Arc<SubsonicClient>,
+}
+
+impl PlayReporter for Scrobbler {
+  fn report(&self, report: PlayReport) {
+    let (uri, submission) = match report {
+      PlayReport::Started { uri } => (uri, false),
+      PlayReport::Played { uri } => (uri, true),
+      PlayReport::Progress { .. } => return,
+    };
+    let Some((Kind::Track, id)) = parse_uri(&uri) else {
+      return;
+    };
+    let (client, id) = (self.client.clone(), id.to_owned());
+    tokio::spawn(async move {
+      if let Err(error) = client.scrobble(&id, submission).await {
+        tracing::debug!(%error, id, submission, "the subsonic scrobble did not land");
+      }
+    });
+  }
 }
 
 struct Core {
@@ -369,56 +383,6 @@ impl Core {
     )
   }
 
-  async fn root_browse(&self, sections: Option<u32>, preview: Option<u32>) -> Result<BrowseResult, ProviderError> {
-    let preview_count = preview.unwrap_or(DEFAULT_ROOT_PREVIEW);
-    let staples: [(&str, &str); 6] = [
-      (PLAYLISTS_NODE_ID, "Playlists"),
-      (ALBUMS_NODE_ID, "Albums"),
-      (ARTISTS_NODE_ID, "Artists"),
-      (RECENTS_NODE_ID, "Recently played"),
-      (NEWEST_NODE_ID, "Recently added"),
-      (RANDOM_NODE_ID, "Random songs"),
-    ];
-    let mut folders = Vec::new();
-    for (node_id, title) in staples {
-      let (children, total) = if preview_count == 0 {
-        (Vec::new(), None)
-      } else {
-        match self.node(node_id, preview_count, 0).await {
-          Ok(page) => (page.entries, page.total),
-          Err(error) => {
-            tracing::debug!(%error, node_id, "a root preview did not load");
-            (Vec::new(), None)
-          }
-        }
-      };
-      folders.push(BrowseFolder {
-        node_id: node_id.into(),
-        title: title.into(),
-        subtitle: None,
-        artwork_id: None,
-        total,
-        preview_children: (!children.is_empty()).then_some(children),
-      });
-    }
-    if let Some(cap) = sections {
-      folders.truncate(cap as usize);
-    }
-    Ok(BrowseResult {
-      total: Some(folders.len() as u32),
-      entries: folders.into_iter().map(BrowseEntry::Folder).collect(),
-      has_more: false,
-    })
-  }
-
-  fn listing(&self, items: Vec<LibraryItem>, total: Option<u32>, has_more: bool) -> BrowseResult {
-    BrowseResult {
-      entries: items.into_iter().map(BrowseEntry::Item).collect(),
-      total,
-      has_more,
-    }
-  }
-
   async fn node(&self, node_id: &str, limit: u32, offset: u32) -> Result<BrowseResult, ProviderError> {
     let client = &self.client;
     match node_id {
@@ -426,13 +390,13 @@ impl Core {
         let all = client.playlists().await.map_err(failed)?;
         let (items, has_more) = page(&all, limit, offset);
         let items = items.iter().map(|playlist| self.playlist_item(playlist)).collect();
-        Ok(self.listing(items, Some(all.len() as u32), has_more))
+        Ok(listing(items, Some(all.len() as u32), has_more))
       }
       ARTISTS_NODE_ID => {
         let all = client.artists().await.map_err(failed)?;
         let (items, has_more) = page(&all, limit, offset);
         let items = items.iter().map(|artist| self.artist_item(artist)).collect();
-        Ok(self.listing(items, Some(all.len() as u32), has_more))
+        Ok(listing(items, Some(all.len() as u32), has_more))
       }
       ALBUMS_NODE_ID | RECENTS_NODE_ID | NEWEST_NODE_ID => {
         let list = match node_id {
@@ -443,12 +407,12 @@ impl Core {
         let albums = client.album_list(list, limit, offset).await.map_err(failed)?;
         let has_more = albums.len() as u32 >= limit && limit > 0;
         let items = albums.iter().map(|album| self.album_item(album)).collect();
-        Ok(self.listing(items, None, has_more))
+        Ok(listing(items, None, has_more))
       }
       RANDOM_NODE_ID => {
         let songs = client.random_songs(limit.max(1)).await.map_err(failed)?;
         let items = songs.iter().map(|song| self.track_item(song)).collect();
-        Ok(self.listing(items, None, false))
+        Ok(listing(items, None, false))
       }
       other => {
         let Some((kind, id)) = parse_uri(other) else {
@@ -487,7 +451,7 @@ impl Core {
           Kind::Track => return Err(ProviderError::Failed("a track has no children".into())),
         };
         let has_more = offset as usize + items.len() < total;
-        Ok(self.listing(items, Some(total as u32), has_more))
+        Ok(listing(items, Some(total as u32), has_more))
       }
     }
   }
@@ -541,7 +505,14 @@ impl SubsonicProvider {
     let resolver = Arc::new(Art { client: client.clone() });
     Arc::new(Self {
       core: Arc::new(Core {
-        playback: StreamPlayback::new(backend, http.clone(), art.clone(), PROVIDER_NAME, resolver.clone()),
+        playback: StreamPlayback::new(
+          backend,
+          http.clone(),
+          art.clone(),
+          PROVIDER_NAME,
+          resolver.clone(),
+          Some(Arc::new(Scrobbler { client: client.clone() })),
+        ),
         client,
         art,
         art_origin: HttpExecutor::new(http),
@@ -761,7 +732,12 @@ impl Provider for SubsonicProvider {
   async fn browse(&self, request: LibraryBrowseRequest) -> Result<BrowseResult, ProviderError> {
     self.core.require()?;
     match request.node_id.as_deref() {
-      None | Some("") | Some("root") => self.core.root_browse(request.sections, request.preview).await,
+      None | Some("") | Some("root") => Ok(
+        staple_root(request.sections, request.preview, |node_id, count| {
+          self.core.node(node_id, count, 0)
+        })
+        .await,
+      ),
       Some(node_id) => self.core.node(node_id, request.limit, request.offset).await,
     }
   }
@@ -978,13 +954,5 @@ mod tests {
     assert_eq!(IMAGE_CODEC.parse(&id), Some((source, 248)));
     assert_eq!(cover_source(Some("")), None);
     assert_eq!(cover_source(None), None);
-  }
-
-  #[test]
-  fn paging_reports_whether_more_follows() {
-    let items = [1, 2, 3, 4, 5];
-    assert_eq!(page(&items, 2, 0), (vec![1, 2], true));
-    assert_eq!(page(&items, 2, 4), (vec![5], false));
-    assert_eq!(page(&items, 2, 9), (vec![], false));
   }
 }

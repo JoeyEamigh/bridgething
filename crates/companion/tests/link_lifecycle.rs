@@ -1,3 +1,5 @@
+#[path = "support/art_store.rs"]
+mod art_store;
 #[path = "rig/backends.rs"]
 mod backends;
 #[path = "rig/device_meta.rs"]
@@ -23,17 +25,19 @@ use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo, LogOrigin, SessionEvent},
   backend::{
-    ExtensionConfigEntry, ExtensionHost, ExtensionHostInbox, ExtensionMessage, LinkDevice, WsInbox, WsTransport,
+    ExtensionConfigEntry, ExtensionHost, ExtensionHostInbox, ExtensionMessage, ForeignHttp, LinkDevice, StreamBackend,
+    StreamPresentation, StreamSink, StreamSource, WsInbox, WsTransport,
     net::{WsConnect, WsFrame},
   },
+  provider::plex::{PlexConfig, PlexProvider},
   session::Session,
 };
 use device_meta::meta;
 use libbridgething::{
-  LogEntry, LogLevel,
+  BridgeThingMeta, LogEntry, LogLevel, MusicProvider,
   gateway::{
-    BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewaySystemMsg, GatewayToBridgeMsg, GatewayToBridgeMsgData,
-    GatewayToBridgeSystemMsg, GatewayToBridgeWebappMsg, LogsSubscribeReply,
+    BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewaySystemMsg, GatewayToBridgeCapabilitiesMsg,
+    GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgeSystemMsg, GatewayToBridgeWebappMsg, LogsSubscribeReply,
   },
   protocol::{BridgeEndec, DecodedFrame, PrioritizedFrame},
   wire::{MsgMeta, ResponseMeta, WireError},
@@ -241,11 +245,19 @@ async fn direct_link_holding(
   serial: &str,
   holds: fn(&GatewayToBridgeMsgData) -> bool,
 ) -> DirectDaemon {
+  direct_link_as(session, meta(serial), holds).await
+}
+
+async fn direct_link_as(
+  session: &Arc<Session>,
+  version: BridgeThingMeta,
+  holds: fn(&GatewayToBridgeMsgData) -> bool,
+) -> DirectDaemon {
   let (companion_io, mut daemon_io) = tokio::io::duplex(64 * 1024);
   let announce = framed(BridgeToGatewayMsg {
     id: Uuid::now_v7(),
     meta: MsgMeta::Event,
-    data: BridgeToGatewayMsgData::Version(Box::new(meta(serial))),
+    data: BridgeToGatewayMsgData::Version(Box::new(version)),
   });
   daemon_io
     .write_all(&announce)
@@ -657,4 +669,71 @@ async fn a_network_link_whose_daemon_is_not_up_yet_comes_up_once_it_is() {
     planner_holds(&session, "late", Duration::from_secs(10)).await,
     "a daemon that starts after the app asked for it is linked as soon as it answers"
   );
+}
+
+struct Silent;
+
+impl StreamBackend for Silent {
+  fn app_bundle(&self) -> String {
+    "com.bridgething.test".into()
+  }
+  fn play(&self, _source: StreamSource, _sink: Arc<StreamSink>) {}
+  fn present(&self, _presentation: StreamPresentation) {}
+  fn pause(&self) {}
+  fn resume(&self) {}
+  fn seek_to(&self, _position_ms: u32) {}
+  fn stop(&self) {}
+}
+
+fn providers_announced(daemon: &DirectDaemon) -> Vec<MusicProvider> {
+  daemon
+    .heard
+    .lock()
+    .unwrap()
+    .iter()
+    .filter_map(|msg| match &msg.data {
+      GatewayToBridgeMsgData::Capabilities(GatewayToBridgeCapabilitiesMsg::Announce(caps)) => Some(caps.music_provider),
+      _ => None,
+    })
+    .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_daemon_older_than_the_library_provider_is_told_none_and_a_current_one_is_told_the_provider() {
+  for (version, told) in [("v0.16.0", MusicProvider::None), ("v0.16.1", MusicProvider::Plex)] {
+    let (session, _heard, _spool) = session(None, Arc::new(Offline));
+    let art = art_store::Art::new(None);
+    let plex = PlexProvider::new(
+      PlexConfig {
+        tv_base: "http://plex.invalid".into(),
+        client_id: "downlevel".into(),
+      },
+      Arc::new(MemorySecrets::default()),
+      Arc::new(Silent),
+      Arc::new(ForeignHttp::new(Arc::new(Offline))),
+      art.cache(),
+    );
+    session.add_provider(plex).await.expect("plex attaches");
+    let daemon = direct_link_as(
+      &session,
+      BridgeThingMeta {
+        libbridgething_version: version.into(),
+        ..meta("downlevel")
+      },
+      holds_nothing,
+    )
+    .await;
+    assert!(
+      eventually(|| providers_announced(&daemon).last() == Some(&told)).await,
+      "a {version} daemon ends up told {told:?}: {:?}",
+      providers_announced(&daemon)
+    );
+    if told == MusicProvider::None {
+      assert!(
+        !providers_announced(&daemon).contains(&MusicProvider::Plex),
+        "an older daemon cannot decode plex, so it must never see it"
+      );
+    }
+    session.direct_disconnected(DEVICE).await;
+  }
 }

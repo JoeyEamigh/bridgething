@@ -65,6 +65,7 @@ export function ProviderTiles() {
       {accounts.awaitingAuth.map(p => (
         <View className="mt-4" key={p.id}>
           <PendingAuth
+            providerId={p.id}
             state={p.authState}
             onCancel={
               p.authState.kind === 'pending'

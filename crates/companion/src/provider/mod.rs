@@ -1,7 +1,9 @@
 pub mod apple_music;
 pub mod art;
 pub mod catalog;
+pub mod library;
 pub mod playback;
+pub mod plex;
 pub mod spotify;
 pub mod stream;
 pub mod subsonic;

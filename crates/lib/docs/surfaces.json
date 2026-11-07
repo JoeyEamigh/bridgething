@@ -1,5 +1,5 @@
 {
-  "version": "0.16.0",
+  "version": "0.16.1",
   "surfaces": [
     {
       "name": "asset",
@@ -3498,9 +3498,6 @@
       "kind": "enum",
       "variants": [
         {
-          "name": "None"
-        },
-        {
           "name": "Spotify"
         },
         {
@@ -3508,6 +3505,12 @@
         },
         {
           "name": "Subsonic"
+        },
+        {
+          "name": "Plex"
+        },
+        {
+          "name": "None"
         }
       ]
     },

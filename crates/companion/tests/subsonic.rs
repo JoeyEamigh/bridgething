@@ -8,6 +8,8 @@ mod log_sink;
 mod poll;
 #[path = "rig/secrets.rs"]
 mod secrets;
+#[path = "rig/stage.rs"]
+mod stage;
 #[path = "rig/stream.rs"]
 mod stream_fake;
 #[path = "rig/subsonic.rs"]
@@ -15,16 +17,11 @@ mod subsonic_stub;
 #[path = "dispatch/support.rs"]
 mod support;
 
-use std::sync::{Arc, Mutex};
+use std::{ops::Deref, sync::Arc};
 
-use backends::{Heard, Offline, RigHost};
 use bridgething_companion::{
-  api::{AuthKind, CapabilityFlags, CompanionBackends, CompanionConfig, HostInfo, ProviderCredentials, SignInMethod},
-  backend::{
-    ForeignHttp, ImageScaler, ImageTarget, NativeHttp, ScaledImage, SecretStore, StreamMetadata, StreamStatus,
-  },
-  hub::Hub,
-  media::MediaSniff,
+  api::{AuthKind, ProviderCredentials, SignInMethod},
+  backend::{ForeignHttp, NativeHttp, SecretStore, StreamMetadata, StreamStatus, StreamTiming},
   provider::{
     PlayerTransport, Provider, ProviderAuthState, ProviderError, ProviderRegistry,
     subsonic::{KEY_PASSWORD, KEY_SERVER_URL, KEY_USERNAME, SubsonicConfig, SubsonicProvider},
@@ -33,20 +30,19 @@ use bridgething_companion::{
 };
 use libbridgething::{
   BrowseEntry, ItemKind, ItemRef, LibraryItem, NluPopularityFilter, NluResolvedIntent, NluSlots, NluTargetType,
-  PlayContext, PlaybackState, PlayerState, QueuePosition,
+  PlayContext, PlaybackState, QueuePosition,
   gateway::{
-    GatewayToBridgeMsg, GatewayToBridgeMsgData, GatewayToBridgePlayerMsg, LibraryBrowseRequest,
-    LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibrarySearchRequest, PlayUri, QueueSnapshot,
+    LibraryBrowseRequest, LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibrarySearchRequest, PlayUri,
     QueueUri, TrackIdentity,
   },
 };
-use log_sink::Quiet;
 use poll::eventually;
 use secrets::MemorySecrets;
+use stage::{Stage, boot_session, snapshot_of, stream_session};
 use stream_fake::{APP_BUNDLE, FakeStreamBackend, StreamCall};
 use subsonic_stub::{PASSWORD, SubsonicStub, USERNAME, voice_library};
-use support::Peer;
 
+const SESSION_APP: &str = "subsonic-session-test";
 const ALBUM_ONE: &str = "subsonic:album:al1";
 const ALBUM_TWO: &str = "subsonic:album:al2";
 const TRACK_ONE: &str = "subsonic:track:s1";
@@ -54,36 +50,6 @@ const TRACK_TWO: &str = "subsonic:track:s2";
 const TRACK_THREE: &str = "subsonic:track:s3";
 const TRACK_FOUR: &str = "subsonic:track:s4";
 const TRACK_FIVE: &str = "subsonic:track:s5";
-
-struct TagScaler;
-
-impl ImageScaler for TagScaler {
-  fn scale(&self, bytes: Vec<u8>, _sniff: MediaSniff, target: ImageTarget) -> Option<ScaledImage> {
-    let ImageTarget::Thumbnail { max_edge, .. } = target else {
-      return None;
-    };
-    Some(ScaledImage {
-      bytes: format!("{}@{max_edge}", String::from_utf8_lossy(&bytes)).into_bytes(),
-      mime: "image/jpeg".into(),
-      width: max_edge,
-      height: max_edge,
-    })
-  }
-}
-
-fn snapshot_of(msg: &GatewayToBridgeMsg) -> Option<PlayerState> {
-  match &msg.data {
-    GatewayToBridgeMsgData::Player(GatewayToBridgePlayerMsg::Snapshot(state)) => Some(state.as_ref().clone()),
-    _ => None,
-  }
-}
-
-fn queue_of(msg: &GatewayToBridgeMsg) -> Option<QueueSnapshot> {
-  match &msg.data {
-    GatewayToBridgeMsgData::Player(GatewayToBridgePlayerMsg::QueueChanged(queue)) => Some(queue.clone()),
-    _ => None,
-  }
-}
 
 fn track_ref(uri: &str) -> ItemRef {
   ItemRef {
@@ -94,13 +60,17 @@ fn track_ref(uri: &str) -> ItemRef {
 }
 
 struct Rig {
-  hub: Arc<Hub>,
-  peer: Peer,
+  stage: Stage,
   provider: Arc<SubsonicProvider>,
-  backend: Arc<FakeStreamBackend>,
   stub: SubsonicStub,
-  auth: Arc<Mutex<Vec<ProviderAuthState>>>,
-  _art: art_store::Art,
+}
+
+impl Deref for Rig {
+  type Target = Stage;
+
+  fn deref(&self) -> &Stage {
+    &self.stage
+  }
 }
 
 impl Rig {
@@ -116,110 +86,22 @@ impl Rig {
     )
     .await
   }
-
-  async fn snapshot_for(&self, uri: &str) -> PlayerState {
-    let wanted = uri.to_owned();
-    self
-      .peer
-      .wait(&format!("a snapshot for {uri}"), |msg| {
-        snapshot_of(msg).filter(|state| {
-          state.playback.state == PlaybackState::Playing
-            && state.track.as_ref().and_then(|track| track.uri.as_deref()) == Some(wanted.as_str())
-        })
-      })
-      .await
-  }
-
-  async fn queue_with(&self, order: &[&str]) -> QueueSnapshot {
-    let wanted: Vec<String> = order.iter().map(|uri| (*uri).to_owned()).collect();
-    self
-      .peer
-      .wait(&format!("a queue of {order:?}"), |msg| {
-        queue_of(msg).filter(|queue| queue.order == wanted)
-      })
-      .await
-  }
-
-  async fn played_urls(&self) -> Vec<String> {
-    self
-      .backend
-      .transport_calls()
-      .into_iter()
-      .filter_map(|call| match call {
-        StreamCall::Play(url) => Some(url),
-        _ => None,
-      })
-      .collect()
-  }
-
-  async fn authenticated(&self) {
-    assert!(
-      eventually(|| {
-        self
-          .auth
-          .lock()
-          .unwrap()
-          .iter()
-          .any(|state| matches!(state, ProviderAuthState::Authenticated))
-      })
-      .await,
-      "the sign-in never authenticated: {:?}",
-      self.auth.lock().unwrap()
-    );
-  }
 }
 
 async fn boot_with(stub: SubsonicStub, password: &str) -> Rig {
-  let (gateway, peer) = Peer::link();
-  let hub = Hub::new(
-    Arc::new(gateway),
-    HostInfo {
-      app_name: "subsonic-test".into(),
-      app_version: "0.0.1".into(),
-      os_name: "test".into(),
-      os_version: String::new(),
-      host_identifier: String::new(),
-    },
-    CapabilityFlags {
-      geo: false,
-      notifications: false,
-      net_fetch: true,
-      net_ws: true,
-      audio_tts: false,
-      voice_model: false,
-    },
-    false,
-    false,
-  );
-  hub.start();
-  let backend = FakeStreamBackend::new();
-  let art = art_store::Art::new(Some(Arc::new(TagScaler)));
+  let stage = Stage::new("subsonic-test");
   let provider = SubsonicProvider::new(
     SubsonicConfig {
       server_url: stub.url.clone(),
       username: USERNAME.into(),
       password: password.into(),
     },
-    backend.clone(),
+    stage.backend.clone(),
     Arc::new(ForeignHttp::new(Arc::new(NativeHttp::default()))),
-    art.cache(),
+    stage.art(),
   );
-  let auth = Arc::new(Mutex::new(Vec::new()));
-  let seen = auth.clone();
-  provider.set_auth_observer(Some(Arc::new(move |state| seen.lock().unwrap().push(state))));
-  hub
-    .attach(provider.clone())
-    .await
-    .expect("the subsonic provider attached");
-  Rig {
-    hub,
-    peer,
-    provider,
-    backend,
-    stub,
-    auth,
-    _art: art,
-  }
+  stage.attach(provider.clone()).await;
+  Rig { stage, provider, stub }
 }
 
 async fn boot() -> Rig {
@@ -231,7 +113,7 @@ async fn boot() -> Rig {
 #[tokio::test]
 async fn signing_in_pings_the_server_with_a_salted_token() {
   let rig = boot().await;
-  let states = rig.auth.lock().unwrap().clone();
+  let states = rig.auth_states();
   assert!(
     matches!(states.first(), Some(ProviderAuthState::Pending { user_code: None, .. })),
     "the sign-in opens pending with nothing for the user to do: {states:?}"
@@ -248,22 +130,15 @@ async fn signing_in_pings_the_server_with_a_salted_token() {
 #[tokio::test]
 async fn a_wrong_password_fails_the_sign_in_with_a_reason() {
   let rig = boot_with(SubsonicStub::serve(), "not-the-password").await;
-  assert!(
-    eventually(|| {
-      rig
-        .auth
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|state| matches!(state, ProviderAuthState::Failed { .. }))
-    })
-    .await
+  let failed = rig
+    .settled(|state| matches!(state, ProviderAuthState::Failed { .. }))
+    .await;
+  assert_eq!(
+    failed,
+    ProviderAuthState::Failed {
+      reason: "the server rejected the username or password".into()
+    }
   );
-  let states = rig.auth.lock().unwrap().clone();
-  let Some(ProviderAuthState::Failed { reason }) = states.last() else {
-    panic!("expected a failure, got {states:?}");
-  };
-  assert_eq!(reason, "the server rejected the username or password");
 }
 
 #[tokio::test]
@@ -406,7 +281,7 @@ async fn playing_an_album_streams_the_first_track_and_publishes_the_catalog_meta
   let rig = boot().await;
   rig.play(ALBUM_ONE, None).await.expect("the album plays");
 
-  let played = rig.played_urls().await;
+  let played = rig.played_urls();
   assert_eq!(played.len(), 1, "one stream url reached the phone: {played:?}");
   assert!(played[0].starts_with(&format!("{}/rest/stream?", rig.stub.url)));
   assert!(played[0].contains("&id=s1") && played[0].contains("u=demo&t="));
@@ -501,7 +376,7 @@ async fn skip_verbs_walk_the_queue() {
   );
 
   rig.provider.skip_prev().await.expect("skip prev");
-  let played = rig.played_urls().await;
+  let played = rig.played_urls();
   assert_eq!(played.len(), 4);
   assert!(played[3].contains("&id=s2"));
 
@@ -511,7 +386,7 @@ async fn skip_verbs_walk_the_queue() {
     .skip_prev()
     .await
     .expect("skip prev at the head replays it");
-  let played = rig.played_urls().await;
+  let played = rig.played_urls();
   assert_eq!(played.len(), 6);
   assert!(played[4].contains("&id=s1") && played[5].contains("&id=s1"));
 
@@ -812,62 +687,101 @@ async fn the_probe_refuses_the_audio_body_and_the_phone_plays_the_origin() {
   );
 }
 
-fn boot_session(secrets: Arc<MemorySecrets>, stream: Option<Arc<FakeStreamBackend>>) -> (Arc<Session>, Arc<Heard>) {
-  let spool = std::env::temp_dir().join(format!("subsonic-session-{}", uuid::Uuid::now_v7().simple()));
-  std::fs::create_dir_all(&spool).expect("a scratch dir");
-  let heard = Arc::new(Heard::default());
-  let backends = CompanionBackends {
-    link: None,
-    host: Arc::new(RigHost),
-    http: Arc::new(NativeHttp::default()),
-    ws: Arc::new(Offline),
-    secrets,
-    log: Arc::new(Quiet),
-    audio: None,
-    volume: None,
-    geo: None,
-    notifications: None,
-    phone: None,
-    media_sessions: None,
-    stream: stream.map(|backend| backend as Arc<dyn bridgething_companion::backend::StreamBackend>),
-    speech: None,
-    nlu: None,
-    apple_music: None,
-    image: None,
-    transcoder: None,
-    model_validator: None,
-    transfer_policy: None,
-    connectivity: None,
-    device_waker: None,
-    extensions: None,
-  };
-  let session = Session::new(
-    CompanionConfig {
-      host: HostInfo {
-        app_name: "subsonic-session-test".into(),
-        app_version: "0.0.0".into(),
-        os_name: "linux".into(),
-        os_version: String::new(),
-        host_identifier: String::new(),
-      },
-      capabilities: CapabilityFlags {
-        geo: false,
-        notifications: false,
-        net_fetch: false,
-        net_ws: false,
-        audio_tts: false,
-        voice_model: false,
-      },
-      state_dir: spool.to_string_lossy().into_owned(),
-      cache_dir: spool.to_string_lossy().into_owned(),
-      model_platform: None,
-      spotify: None,
-    },
-    backends,
-    heard.clone(),
-    Arc::new(Offline),
+fn scrobbles_of(rig: &Rig, id: &str) -> Vec<bool> {
+  rig
+    .stub
+    .scrobbles()
+    .into_iter()
+    .filter(|(song, _)| song == id)
+    .map(|(_, submission)| submission)
+    .collect()
+}
+
+fn at(position_ms: u32) -> StreamTiming {
+  StreamTiming {
+    position_ms,
+    duration_ms: Some(212_000),
+    seekable: true,
+  }
+}
+
+async fn quiet() {
+  tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+}
+
+#[tokio::test]
+async fn a_track_scrobbles_now_playing_once_and_counts_as_played_past_half_way() {
+  let rig = boot().await;
+  rig.play(TRACK_ONE, None).await.expect("the track plays");
+  rig.snapshot_for(TRACK_ONE).await;
+  let sink = rig.backend.last_sink().expect("the sink");
+  assert!(
+    rig.stub.scrobbles().is_empty(),
+    "nothing scrobbles before the phone plays"
   );
-  (session, heard)
+
+  sink.on_status(StreamStatus::Playing);
+  assert!(eventually(|| scrobbles_of(&rig, "s1") == [false]).await);
+  sink.on_status(StreamStatus::Paused);
+  sink.on_status(StreamStatus::Playing);
+  sink.on_timing(at(60_000));
+  quiet().await;
+  assert_eq!(scrobbles_of(&rig, "s1"), [false], "a resume is not a second start");
+
+  sink.on_timing(at(106_000));
+  assert!(
+    eventually(|| scrobbles_of(&rig, "s1") == [false, true]).await,
+    "half of the track counts it: {:?}",
+    rig.stub.scrobbles()
+  );
+  sink.on_timing(at(180_000));
+  sink.on_status(StreamStatus::Ended);
+  quiet().await;
+  assert_eq!(scrobbles_of(&rig, "s1"), [false, true], "a play counts once");
+}
+
+#[tokio::test]
+async fn a_skip_before_half_way_is_not_a_play() {
+  let rig = boot().await;
+  rig.play(ALBUM_ONE, None).await.expect("the album plays");
+  rig.snapshot_for(TRACK_ONE).await;
+  let sink = rig.backend.last_sink().expect("the sink");
+  sink.on_status(StreamStatus::Playing);
+  sink.on_timing(at(20_000));
+  assert!(eventually(|| scrobbles_of(&rig, "s1") == [false]).await);
+
+  rig.provider.skip_next().await.expect("skip next");
+  rig.snapshot_for(TRACK_TWO).await;
+  rig
+    .backend
+    .last_sink()
+    .expect("the second sink")
+    .on_status(StreamStatus::Playing);
+  assert!(eventually(|| scrobbles_of(&rig, "s2") == [false]).await);
+  quiet().await;
+  assert_eq!(scrobbles_of(&rig, "s1"), [false]);
+}
+
+#[tokio::test]
+async fn a_track_the_phone_finishes_counts_as_played() {
+  let rig = boot().await;
+  rig.play(ALBUM_TWO, None).await.expect("the album plays");
+  rig.snapshot_for(TRACK_FOUR).await;
+  let sink = rig.backend.last_sink().expect("the sink");
+  sink.on_status(StreamStatus::Playing);
+  assert!(eventually(|| scrobbles_of(&rig, "s4") == [false]).await);
+  sink.on_status(StreamStatus::Ended);
+  assert!(
+    eventually(|| scrobbles_of(&rig, "s4") == [false, true]).await,
+    "the end of the track counts it: {:?}",
+    rig.stub.scrobbles()
+  );
+  rig.snapshot_for(TRACK_FIVE).await;
+  quiet().await;
+  assert!(
+    scrobbles_of(&rig, "s5").is_empty(),
+    "the next track waits for the phone to play it"
+  );
 }
 
 fn auth_kind(session: &Session) -> Option<AuthKind> {
@@ -880,10 +794,10 @@ fn auth_kind(session: &Session) -> Option<AuthKind> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_catalog_offers_subsonic_only_when_the_host_can_play() {
-  let (session, _) = boot_session(Arc::new(MemorySecrets::default()), None);
+  let session = boot_session(SESSION_APP, Arc::new(MemorySecrets::default()), None);
   assert!(session.provider_infos().iter().all(|info| info.id != "subsonic"));
 
-  let (session, _) = session_with_stream();
+  let (session, _) = stream_session(SESSION_APP);
   let info = session
     .provider_infos()
     .into_iter()
@@ -894,16 +808,10 @@ async fn the_catalog_offers_subsonic_only_when_the_host_can_play() {
   assert!(info.available && !info.connected);
 }
 
-fn session_with_stream() -> (Arc<Session>, Arc<MemorySecrets>) {
-  let secrets = Arc::new(MemorySecrets::default());
-  let (session, _) = boot_session(secrets.clone(), Some(FakeStreamBackend::new()));
-  (session, secrets)
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn a_server_login_is_normalized_stored_and_restores_on_the_next_start() {
   let stub = SubsonicStub::serve();
-  let (session, secrets) = session_with_stream();
+  let (session, secrets) = stream_session(SESSION_APP);
   session
     .complete_provider_auth(
       "subsonic",
@@ -927,7 +835,7 @@ async fn a_server_login_is_normalized_stored_and_restores_on_the_next_start() {
   );
   session.stop().await;
 
-  let (restored, _) = boot_session(secrets.clone(), Some(FakeStreamBackend::new()));
+  let restored = boot_session(SESSION_APP, secrets.clone(), Some(FakeStreamBackend::new()));
   restored.start();
   assert!(
     eventually(|| auth_kind(&restored) == Some(AuthKind::Authenticated)).await,
@@ -941,7 +849,7 @@ async fn a_server_login_is_normalized_stored_and_restores_on_the_next_start() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn junk_logins_and_oauth_tokens_are_refused_before_anything_connects() {
-  let (session, secrets) = session_with_stream();
+  let (session, secrets) = stream_session(SESSION_APP);
   assert!(
     session
       .complete_provider_auth(
@@ -987,7 +895,7 @@ async fn junk_logins_and_oauth_tokens_are_refused_before_anything_connects() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_rejected_login_surfaces_as_a_failed_sign_in() {
   let stub = SubsonicStub::serve();
-  let (session, _) = session_with_stream();
+  let (session, _) = stream_session(SESSION_APP);
   session
     .complete_provider_auth(
       "subsonic",
@@ -1046,17 +954,9 @@ async fn voice_pick(rig: &Rig, slots: NluSlots) -> (Option<String>, Option<Strin
 #[tokio::test]
 async fn voice_waits_for_the_sign_in() {
   let rig = boot_with(SubsonicStub::serve_with(voice_library(), PASSWORD), "wrong").await;
-  assert!(
-    eventually(|| {
-      rig
-        .auth
-        .lock()
-        .unwrap()
-        .iter()
-        .any(|state| matches!(state, ProviderAuthState::Failed { .. }))
-    })
-    .await
-  );
+  rig
+    .settled(|state| matches!(state, ProviderAuthState::Failed { .. }))
+    .await;
   assert!(rig.provider.voice_resolver().is_none());
 }
 

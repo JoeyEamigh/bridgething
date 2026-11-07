@@ -1,5 +1,6 @@
 mod icy;
 mod relay;
+mod report;
 
 use std::{
   sync::{
@@ -20,9 +21,11 @@ use tokio::{
   task::JoinHandle,
 };
 
+pub use self::report::{PlayReport, PlayReporter, ReportedState};
 use self::{
   icy::IcyMetadata,
   relay::{Feed, OriginBody, Relay, Verdict},
+  report::Ledger,
 };
 use crate::{
   backend::{
@@ -91,6 +94,7 @@ struct Current {
   icy_artwork_url: Option<String>,
   timing: StreamTiming,
   timed_at: Instant,
+  ledger: Ledger,
 }
 
 impl Current {
@@ -105,6 +109,7 @@ impl Current {
       icy_artwork_url: None,
       timing: StreamTiming::default(),
       timed_at: Instant::now(),
+      ledger: Ledger::default(),
     }
   }
 }
@@ -122,6 +127,24 @@ impl Playing {
   fn upcoming(&self) -> &[QueueEntry] {
     &self.program.entries[self.program.index + 1..]
   }
+
+  fn duration_ms(&self) -> Option<u32> {
+    self
+      .current
+      .timing
+      .duration_ms
+      .or(self.entry().presentation.duration_ms)
+  }
+
+  fn position_ms(&self) -> u32 {
+    let current = &self.current;
+    let elapsed = match current.status {
+      StreamStatus::Playing => current.timed_at.elapsed().as_millis().min(u128::from(u32::MAX)) as u32,
+      _ => 0,
+    };
+    let position = current.timing.position_ms.saturating_add(elapsed);
+    self.duration_ms().map_or(position, |duration| position.min(duration))
+  }
 }
 
 #[derive(Default)]
@@ -137,6 +160,7 @@ struct Core {
   http: HttpExecutor,
   art: Arc<ArtCache>,
   resolver: Arc<dyn ArtResolver>,
+  reporter: Option<Arc<dyn PlayReporter>>,
   app_bundle: Mutex<Option<String>>,
   epoch: AtomicU64,
   state: Mutex<Option<Playing>>,
@@ -357,6 +381,48 @@ impl Core {
     self.submit();
   }
 
+  fn ledger(&self, record: impl FnOnce(&mut Playing) -> Vec<PlayReport>) {
+    let Some(reporter) = self.reporter.as_ref() else { return };
+    let reports = {
+      let mut state = self.state.lock().unwrap();
+      match state.as_mut() {
+        Some(playing) if !playing.current.live => record(playing),
+        _ => return,
+      }
+    };
+    for report in reports {
+      reporter.report(report);
+    }
+  }
+
+  fn observe(&self) {
+    self.ledger(|playing| {
+      let state = match playing.current.status {
+        StreamStatus::Playing => ReportedState::Playing,
+        StreamStatus::Paused => ReportedState::Paused,
+        _ => return Vec::new(),
+      };
+      let uri = playing.entry().presentation.uri.clone();
+      let (position, duration) = (playing.position_ms(), playing.duration_ms());
+      playing
+        .current
+        .ledger
+        .observe(&uri, state, position, duration, Instant::now())
+    });
+  }
+
+  fn conclude(&self, finished: bool) {
+    self.ledger(|playing| {
+      let uri = playing.entry().presentation.uri.clone();
+      let duration = playing.duration_ms();
+      let position = match (finished, duration) {
+        (true, Some(duration)) => duration,
+        _ => playing.position_ms(),
+      };
+      playing.current.ledger.stop(&uri, position, duration, finished)
+    });
+  }
+
   fn on_icy(&self, epoch: u64, metadata: IcyMetadata) {
     if self.epoch.load(Ordering::SeqCst) != epoch {
       return;
@@ -383,6 +449,7 @@ impl Core {
       }
       StreamEvent::Status(StreamStatus::Failed { reason }) => {
         tracing::warn!(%reason, "the stream failed");
+        self.conclude(false);
         self.clear();
         self.drop_relay();
         if let Some(outbound) = self.outbound() {
@@ -394,7 +461,10 @@ impl Core {
         }
         return false;
       }
-      StreamEvent::Status(status) => self.update(|playing| playing.current.status = status),
+      StreamEvent::Status(status) => {
+        self.update(|playing| playing.current.status = status);
+        self.observe();
+      }
       StreamEvent::Metadata(mut metadata) => {
         let artwork_key = metadata.artwork.take().map(|bytes| self.art.adopt(bytes));
         self.update(|playing| {
@@ -402,15 +472,19 @@ impl Core {
           playing.current.artwork_key = artwork_key;
         });
       }
-      StreamEvent::Timing(timing) => self.update(|playing| {
-        playing.current.timing = timing;
-        playing.current.timed_at = Instant::now();
-      }),
+      StreamEvent::Timing(timing) => {
+        self.update(|playing| {
+          playing.current.timing = timing;
+          playing.current.timed_at = Instant::now();
+        });
+        self.observe();
+      }
     }
     true
   }
 
   fn on_ended(self: &Arc<Self>) {
+    self.conclude(true);
     self.drop_relay();
     self.stop_presenting();
     let next = {
@@ -444,6 +518,7 @@ impl Core {
       task.abort();
     }
     if self.state.lock().unwrap().is_some() {
+      self.conclude(false);
       tell(&self.backend, |backend| backend.stop()).await;
       self.clear();
     }
@@ -577,6 +652,7 @@ impl StreamPlayback {
     art: Arc<ArtCache>,
     source: &'static str,
     resolver: Arc<dyn ArtResolver>,
+    reporter: Option<Arc<dyn PlayReporter>>,
   ) -> Self {
     Self {
       core: Arc::new(Core {
@@ -585,6 +661,7 @@ impl StreamPlayback {
         http: HttpExecutor::new(http),
         art,
         resolver,
+        reporter,
         app_bundle: Mutex::new(None),
         epoch: AtomicU64::new(0),
         state: Mutex::new(None),

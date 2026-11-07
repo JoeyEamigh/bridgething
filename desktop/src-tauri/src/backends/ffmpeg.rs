@@ -18,8 +18,6 @@ use bridgething_companion::{
 
 const BINARY: &str = "bridgething-ffmpeg";
 const REASON_LINES: usize = 3;
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 static SCRATCH: AtomicU64 = AtomicU64::new(0);
 static BUNDLED: OnceLock<Option<Sidecar>> = OnceLock::new();
@@ -163,7 +161,10 @@ impl Sidecar {
       .stdout(Stdio::piped())
       .stderr(Stdio::piped());
     #[cfg(windows)]
-    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+    std::os::windows::process::CommandExt::creation_flags(
+      &mut command,
+      ::windows::Win32::System::Threading::CREATE_NO_WINDOW.0,
+    );
     #[cfg(target_os = "linux")]
     dies_with_us(&mut command);
     let mut held: Vec<_> = self.scopes().map(|scope| scope.lock().unwrap()).collect();

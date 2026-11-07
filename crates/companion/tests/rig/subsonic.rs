@@ -320,6 +320,21 @@ impl SubsonicStub {
       .collect()
   }
 
+  pub fn scrobbles(&self) -> Vec<(String, bool)> {
+    self
+      .requests()
+      .iter()
+      .filter_map(|line| {
+        let parsed = url::Url::parse(&format!("http://stub{line}")).ok()?;
+        if parsed.path() != "/rest/scrobble" {
+          return None;
+        }
+        let query: HashMap<String, String> = parsed.query_pairs().into_owned().collect();
+        Some((query.get("id")?.clone(), query.get("submission")? == "true"))
+      })
+      .collect()
+  }
+
   pub fn starred(&self) -> Vec<String> {
     self.state.lock().unwrap().starred.iter().cloned().collect()
   }
@@ -466,7 +481,7 @@ fn route(endpoint: &str, query: &HashMap<String, String>, library: &Library, sta
     .and_then(|offset| offset.parse::<usize>().ok())
     .unwrap_or(0);
   match endpoint {
-    "ping" => ok(json!({})),
+    "ping" | "scrobble" => ok(json!({})),
     "getArtists" => ok(json!({ "artists": { "index": [{
       "name": "A-Z",
       "artist": library.artists.iter().map(|artist| artist_json(artist, starred)).collect::<Vec<_>>(),

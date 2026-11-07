@@ -11,6 +11,7 @@ use crate::{
     Provider,
     apple_music::{self, AppleMusicProvider},
     art::ArtCache,
+    plex::{self, PlexConfig, PlexProvider},
     spotify::{self, SpotifyConfig, SpotifyProvider},
     subsonic::{self, SubsonicConfig, SubsonicProvider, normalize_server_url},
   },
@@ -277,6 +278,78 @@ impl CatalogEntry for SubsonicEntry {
       }
       ProviderCredentials::OauthTokens { .. } => Err("subsonic signs in with a server login, not oauth tokens".into()),
     }
+  }
+
+  fn mark_connected(&self) {}
+}
+
+pub struct PlexEntry {
+  stream: Arc<dyn StreamBackend>,
+  http: Arc<dyn HttpTransport>,
+  secrets: Arc<dyn SecretStore>,
+  art: Arc<ArtCache>,
+}
+
+impl PlexEntry {
+  pub fn new(
+    stream: Arc<dyn StreamBackend>,
+    http: Arc<dyn HttpTransport>,
+    secrets: Arc<dyn SecretStore>,
+    art: Arc<ArtCache>,
+  ) -> Arc<Self> {
+    Arc::new(Self {
+      stream,
+      http,
+      secrets,
+      art,
+    })
+  }
+
+  fn client_id(&self) -> String {
+    if let Some(id) = self.secrets.get(plex::KEY_CLIENT_ID.into()) {
+      return id;
+    }
+    let id = uuid::Uuid::now_v7().simple().to_string();
+    self.secrets.set(plex::KEY_CLIENT_ID.into(), id.clone());
+    id
+  }
+}
+
+impl CatalogEntry for PlexEntry {
+  fn id(&self) -> &str {
+    plex::PROVIDER_NAME
+  }
+
+  fn display_name(&self) -> &str {
+    "Plex"
+  }
+
+  fn build(&self) -> Arc<dyn Provider> {
+    PlexProvider::new(
+      PlexConfig {
+        tv_base: plex::PLEX_TV.into(),
+        client_id: self.client_id(),
+      },
+      self.secrets.clone(),
+      self.stream.clone(),
+      Arc::new(ForeignHttp::new(self.http.clone())) as Arc<dyn IoHttpTransport>,
+      self.art.clone(),
+    )
+  }
+
+  fn has_credentials(&self) -> bool {
+    self
+      .secrets
+      .get(plex::KEY_TOKEN.into())
+      .is_some_and(|token| !token.is_empty())
+  }
+
+  fn clear_credentials(&self) {
+    self.secrets.remove(plex::KEY_TOKEN.into());
+  }
+
+  fn adopt_credentials(&self, _credentials: ProviderCredentials) -> Result<(), String> {
+    Err("plex signs in through plex.tv, not with credentials".into())
   }
 
   fn mark_connected(&self) {}

@@ -1,5 +1,6 @@
 mod blobs;
 mod catalog;
+mod downlevel;
 pub mod handlers;
 mod imports;
 pub mod link;
@@ -63,7 +64,7 @@ use crate::{
   media::MediaNormalizer,
   provider::{
     Provider, ProviderAuthState, ProviderError, ProviderRegistry, ResumeTarget,
-    catalog::{AppleMusicEntry, ProviderCatalog, SpotifyEntry, SubsonicEntry},
+    catalog::{AppleMusicEntry, PlexEntry, ProviderCatalog, SpotifyEntry, SubsonicEntry},
     stream::StreamProvider,
     system_media::SystemMediaProvider,
   },
@@ -116,17 +117,31 @@ const LOG_BACKFILL_LINES: u32 = 1000;
 const LOG_BACKFILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
 
 #[derive(Default)]
-struct Broadcast {
+pub(crate) struct Broadcast {
   links: Mutex<HashMap<String, Gateway>>,
+  versions: Mutex<HashMap<String, downlevel::Version>>,
 }
 
 impl Broadcast {
   fn adopt(&self, device_id: &str, gateway: Gateway) {
     self.links.lock().unwrap().insert(device_id.to_owned(), gateway);
+    self.versions.lock().unwrap().remove(device_id);
   }
 
   fn release(&self, device_id: &str) {
     self.links.lock().unwrap().remove(device_id);
+    self.versions.lock().unwrap().remove(device_id);
+  }
+
+  pub(crate) fn identify(&self, device_id: &str, libbridgething_version: &str) -> bool {
+    let Some(version) = downlevel::version(libbridgething_version) else {
+      return false;
+    };
+    self.versions.lock().unwrap().insert(device_id.to_owned(), version) != Some(version)
+  }
+
+  fn version_of(&self, device_id: &str) -> Option<downlevel::Version> {
+    self.versions.lock().unwrap().get(device_id).copied()
   }
 }
 
@@ -150,12 +165,14 @@ impl OutboundLink for Broadcast {
     };
     let mut delivered = false;
     for (device_id, gateway) in links {
-      match gateway.send_data(meta.clone(), data.clone(), priority).await {
+      let shaped = downlevel::for_peer(&data, self.version_of(&device_id)).into_owned();
+      match gateway.send_data(meta.clone(), shaped, priority).await {
         Ok(()) => delivered = true,
         Err(failure) => tracing::warn!(%device_id, ?failure, "a peer missed a fanned-out frame"),
       }
     }
-    match last.send_data(meta, data, priority).await {
+    let shaped = downlevel::for_peer(&data, self.version_of(&last_id)).into_owned();
+    match last.send_data(meta, shaped, priority).await {
       Ok(()) => Ok(()),
       Err(failure) => {
         tracing::warn!(device_id = %last_id, ?failure, "a peer missed a fanned-out frame");
@@ -282,6 +299,14 @@ impl Session {
         }))
         .chain(backends.stream.clone().map(|stream| {
           SubsonicEntry::new(
+            stream,
+            backends.http.clone(),
+            backends.secrets.clone(),
+            cache.art().clone(),
+          ) as Arc<dyn crate::provider::catalog::CatalogEntry>
+        }))
+        .chain(backends.stream.clone().map(|stream| {
+          PlexEntry::new(
             stream,
             backends.http.clone(),
             backends.secrets.clone(),
@@ -1209,6 +1234,7 @@ impl Session {
       ota: OtaLink::new(self.ota.clone(), device_id),
       observer: observer.clone(),
       hub: self.hub.clone(),
+      broadcast: self.broadcast.clone(),
     })
   }
 

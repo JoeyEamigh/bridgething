@@ -509,6 +509,14 @@ impl SubsonicClient {
       .map(|_| ())
   }
 
+  pub async fn scrobble(&self, id: &str, submission: bool) -> Result<(), SubsonicError> {
+    let submission = if submission { "true" } else { "false" };
+    self
+      .call::<serde_json::Value>("scrobble", &[("id", id), ("submission", submission)], "scrobble")
+      .await
+      .map(|_| ())
+  }
+
   pub async fn lyrics(&self, artist: &str, title: &str) -> Result<Option<String>, SubsonicError> {
     let payload: Option<LyricsPayload> = self
       .call("getLyrics", &[("artist", artist), ("title", title)], "lyrics")
