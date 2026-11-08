@@ -61,8 +61,6 @@ pub enum ClientToBridgeMsgData {
   #[from]
   Player(ClientToBridgePlayerMsg),
   #[from]
-  Presence(ClientToBridgePresenceMsg),
-  #[from]
   Store(ClientToBridgeStoreMsg),
   #[from]
   System(ClientToBridgeSystemMsg),
@@ -128,8 +126,6 @@ pub enum BridgeToClientMsgData {
   Phone(BridgeToClientPhoneMsg),
   #[from]
   Player(BridgeToClientPlayerMsg),
-  #[from]
-  Presence(BridgeToClientPresenceMsg),
   #[from]
   Store(BridgeToClientStoreMsg),
   #[from]

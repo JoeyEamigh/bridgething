@@ -5,6 +5,8 @@ pub mod ffmpeg;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod geo;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
+mod host_state;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod jpeg;
 #[cfg(target_os = "linux")]
 mod linux;
@@ -30,9 +32,9 @@ use std::{
 use bridgething_companion::{
   api::{CompanionSession, ModelPlatform, VoiceModelPaths},
   backend::{
-    AudioBackend, ConnectivityInbox, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, ImageScaler,
-    LogLevel, LogSink, MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner,
-    NotificationBackend, PresenceBackend, SecretStore, SpeechRecognizer, StreamBackend, VolumeBackend,
+    AudioBackend, ConnectivityInbox, ConnectivityMonitor, GeoProvider, HostClock, HostEnvironment, HostStateBackend,
+    ImageScaler, LogLevel, LogSink, MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner,
+    NotificationBackend, SecretStore, SpeechRecognizer, StreamBackend, VolumeBackend,
   },
   store::{JsonFile, stored},
 };
@@ -47,7 +49,7 @@ pub struct Platform {
   pub stream: Option<Arc<dyn StreamBackend>>,
   pub audio: Option<Arc<dyn AudioBackend>>,
   pub volume: Option<Arc<dyn VolumeBackend>>,
-  pub presence: Option<Arc<dyn PresenceBackend>>,
+  pub host_state: Option<Arc<dyn HostStateBackend>>,
   pub connectivity: Option<Arc<dyn ConnectivityMonitor>>,
   pub image: Option<Arc<dyn ImageScaler>>,
   pub transcoder: Option<Arc<dyn MediaTranscoder>>,

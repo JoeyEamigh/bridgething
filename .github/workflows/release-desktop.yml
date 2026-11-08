@@ -27,7 +27,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: resolve the version and check whether it is already released
         id: plan
@@ -89,7 +89,7 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: echo "ORT_CACHE_DIR=${{ runner.temp }}/ort-cache" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         if: ${{ !startsWith(matrix.runner, 'macos') }}
         with:
           path: ${{ runner.temp }}/ort-cache
@@ -123,7 +123,7 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf clang xdg-utils
           { echo "CC=clang"; echo "CXX=clang++"; } >> "$GITHUB_ENV"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: matrix.sidecar && !contains(fromJSON(needs.sidecar.outputs.published), matrix.sidecar)
         with:
           name: ffmpeg-sidecar-${{ matrix.sidecar }}
@@ -225,7 +225,7 @@ jobs:
           fi
           rm -rf "$work"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.updater_target }}
           path: |
@@ -255,9 +255,9 @@ jobs:
       PUBLIC_BASE: https://ota.bridgething.com
       PURGE_URLS: /tmp/purge-urls.txt
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: desktop-*
           path: /tmp/desktop

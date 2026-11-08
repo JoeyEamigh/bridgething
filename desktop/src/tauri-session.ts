@@ -99,6 +99,9 @@ export class TauriSession implements CompanionSession {
   deviceAutoResume = () => invoke<boolean>('device_auto_resume');
   setDeviceAutoResume = (enabled: boolean) => invoke<void>('set_device_auto_resume', { enabled });
   setLauncherGesture = (gesture: api.LauncherGesture) => invoke<void>('set_launcher_gesture', { gesture });
+  setDisplaySettings = (settings: api.DisplaySettings) => invoke<void>('set_display_settings', { settings });
+  followHost = () => invoke<boolean>('follow_host');
+  setFollowHost = (enabled: boolean) => invoke<void>('set_follow_host', { enabled });
   deviceResumeTarget = () => invoke<api.ResumeTarget>('device_resume_target');
   setDeviceResumeTarget = (target: api.ResumeTarget) => invoke<void>('set_device_resume_target', { target });
 

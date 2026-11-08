@@ -88,6 +88,7 @@ android_build() {
     ( cd "${ROOT}/mobile/android" && JAVA_HOME="$GRADLE_JAVA" ./gradlew :app:assembleDebug \
         --console=plain -q --no-daemon \
         -PbridgethingBundleJs=true \
+        -PBRIDGETHING_DEV_DIRECTORY="http://10.0.2.2:${FIXTURE_PORT}" \
         -PreactNativeArchitectures="$ABI" \
         -PcargoNdkAbis="$ABI" \
         -Porg.gradle.java.installations.paths="$GRADLE_INSTALLS" \
@@ -166,6 +167,7 @@ ios_build() {
         -destination "id=${sim_udid}" \
         -derivedDataPath "$DERIVED" \
         CODE_SIGNING_ALLOWED=NO \
+        BRIDGETHING_DEV_DIRECTORY="http://127.0.0.1:${FIXTURE_PORT}" \
         -quiet
 }
 

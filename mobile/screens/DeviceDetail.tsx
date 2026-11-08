@@ -1,13 +1,28 @@
 import {
+  type BridgethingBrightnessMode,
+  type BridgethingDisplaySettings,
   type BridgethingLauncherGesture,
   type BridgethingResumeTarget,
 } from '@bridgething/session-react-native';
+import {
+  BRIGHTNESS_MODE_OPTIONS,
+  DIM_AFTER_OPTIONS,
+  DIM_LEVEL_STEP_PCT,
+  dimAfterPreset,
+  dimAfterSeconds,
+  dimLevelLabel,
+  levelLabel,
+  levelPct,
+  pctLevel,
+  type DimAfter,
+} from '@bridgething/ui/display-settings';
 import { describeError } from '@bridgething/ui/errors';
 import { LAUNCHER_GESTURE_OPTIONS } from '@bridgething/ui/launcher-gesture';
 import { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { ConfirmSheet } from '../components/ConfirmSheet';
+import type { IconName } from '../components/Icon';
 import { LinkRecovery } from '../components/LinkRecovery';
 import { ListGroup } from '../components/ListGroup';
 import { ListRow } from '../components/ListRow';
@@ -19,6 +34,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { ScrollScreen } from '../components/ScrollScreen';
 import { SectionHeader } from '../components/SectionHeader';
 import { Segmented } from '../components/Segmented';
+import { Slider } from '../components/Slider';
 import { Switch } from '../components/ui/switch';
 import { linkSummary } from '../lib/devices';
 import {
@@ -27,6 +43,7 @@ import {
   knownDevices,
   setCompanionLaunch,
   setDeviceName,
+  setDisplaySettings,
   setLauncherGesture,
   useSession,
 } from '../lib/session';
@@ -127,6 +144,13 @@ export function DeviceDetailScreen({ route, navigation }: Props) {
           </Note>
         ) : null}
       </View>
+
+      {meta ? (
+        <View className="mb-8">
+          <SectionHeader title="display" />
+          <DisplaySection deviceId={deviceId} stored={meta.display} />
+        </View>
+      ) : null}
 
       <View className="mb-8">
         <SectionHeader title="firmware" />
@@ -355,6 +379,141 @@ function CompanionLaunchRow({
       />
       <RowNote notice={failure} />
     </View>
+  );
+}
+
+function DisplaySection({
+  deviceId,
+  stored,
+}: {
+  deviceId: string;
+  stored: BridgethingDisplaySettings;
+}) {
+  const [pending, setPending] = useState<BridgethingDisplaySettings | null>(
+    null,
+  );
+  const [failure, setFailure] = useState<RowNotice | null>(null);
+
+  const shown = pending ?? stored;
+
+  const save = (next: BridgethingDisplaySettings) => {
+    setPending(next);
+    setFailure(null);
+    const settled = () =>
+      setPending(current => (current === next ? null : current));
+    void setDisplaySettings(deviceId, next)
+      .then(settled)
+      .catch((err: unknown) => {
+        settled();
+        setFailure({ text: describeError(err) });
+      });
+  };
+
+  return (
+    <View>
+      <ListGroup>
+        <ListRow
+          icon="Sun"
+          title="brightness"
+          below={
+            <Segmented<BridgethingBrightnessMode>
+              size="sm"
+              options={BRIGHTNESS_MODE_OPTIONS}
+              value={shown.mode}
+              onChange={mode => save({ ...shown, mode })}
+            />
+          }
+        />
+        {shown.mode === 'manual' ? (
+          <SliderRow
+            icon="SunDim"
+            title="level"
+            value={levelPct(shown.level)}
+            step={1}
+            label={levelLabel}
+            onCommit={pct => save({ ...shown, level: pctLevel(pct) })}
+          />
+        ) : null}
+      </ListGroup>
+      <ListGroup className="mt-2">
+        <ListRow
+          icon="Clock"
+          title="dim after"
+          below={
+            <Segmented<DimAfter>
+              size="sm"
+              options={DIM_AFTER_OPTIONS}
+              value={dimAfterPreset(shown.dim.afterS)}
+              onChange={preset =>
+                save({
+                  ...shown,
+                  dim: {
+                    ...shown.dim,
+                    afterS: dimAfterSeconds(preset) ?? undefined,
+                  },
+                })
+              }
+            />
+          }
+        />
+      </ListGroup>
+      <ListGroup className="mt-2">
+        <SliderRow
+          icon="Moon"
+          title="dim level"
+          value={levelPct(shown.dim.level)}
+          step={DIM_LEVEL_STEP_PCT}
+          label={dimLevelLabel}
+          onCommit={pct =>
+            save({ ...shown, dim: { ...shown.dim, level: pctLevel(pct) } })
+          }
+        />
+      </ListGroup>
+      <RowNote notice={failure} />
+    </View>
+  );
+}
+
+function SliderRow({
+  icon,
+  title,
+  value,
+  step,
+  label,
+  disabled = false,
+  onCommit,
+}: {
+  icon: IconName;
+  title: string;
+  value: number;
+  step: number;
+  label: (value: number) => string;
+  disabled?: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => setDraft(value), [value]);
+
+  return (
+    <ListRow
+      icon={icon}
+      title={title}
+      value={label(draft)}
+      disabled={disabled}
+      below={
+        <Slider
+          label={title}
+          value={value}
+          min={0}
+          max={100}
+          step={step}
+          disabled={disabled}
+          onInput={setDraft}
+          onChange={onCommit}
+        />
+      }
+    />
   );
 }
 

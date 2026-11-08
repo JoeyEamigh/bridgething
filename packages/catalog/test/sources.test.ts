@@ -206,6 +206,19 @@ describe('fetchSources', () => {
     expect(snapshot.catalogs.map(c => c.url)).toEqual([OFFICIAL_CATALOG_URL]);
     expect(snapshot.failures.map(f => f.url)).toEqual([SOURCE_DIRECTORY_URL]);
   });
+
+  test('a directory origin moves the source directory with it', async () => {
+    const snapshot = await withFetch(
+      serve({
+        [OFFICIAL_CATALOG_URL]: catalog('official'),
+        'http://127.0.0.1:8899/api/sources.json': catalog('fixture'),
+      }),
+      () => fetchSources([OFFICIAL_CATALOG_URL], { origin: 'http://127.0.0.1:8899' }),
+    );
+
+    expect(snapshot.directory?.repo.name).toBe('fixture');
+    expect(snapshot.failures).toEqual([]);
+  });
 });
 
 function flush(): Promise<void> {

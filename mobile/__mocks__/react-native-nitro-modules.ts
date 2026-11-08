@@ -83,6 +83,7 @@ const natives = new Map<string, FakeNative>();
 
 const syncMethods = new Set([
   'abandonPick',
+  'devConfig',
   'otaRunProgress',
   'setLogStreamingEnabled',
   'setLocalLogStreamingEnabled',
@@ -101,6 +102,7 @@ function makeNative(name: string): FakeNative {
   let catalogSources = ['https://apps.bridgething.com/catalog.json'];
   if (name === 'BridgethingSession') {
     returns.set('snapshot', () => Promise.resolve({ ...world }));
+    returns.set('devConfig', () => ({ gateway: '', directory: '' }));
     returns.set('catalogSources', () => Promise.resolve([...catalogSources]));
     returns.set('setCatalogSources', (urls: unknown) => {
       catalogSources = [...new Set(urls as string[])];

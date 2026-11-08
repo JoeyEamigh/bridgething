@@ -5,11 +5,14 @@ import com.margelo.nitro.bridgething.session.BridgethingAncsAuthStatus
 import com.margelo.nitro.bridgething.session.BridgethingAncsAuthStatusEntry
 import com.margelo.nitro.bridgething.session.BridgethingAuthKind
 import com.margelo.nitro.bridgething.session.BridgethingAuthState
+import com.margelo.nitro.bridgething.session.BridgethingBrightnessMode
 import com.margelo.nitro.bridgething.session.BridgethingCapabilityFlags
 import com.margelo.nitro.bridgething.session.BridgethingCompanionDebug
 import com.margelo.nitro.bridgething.session.BridgethingDeviceAutoResume
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMetaEntry
+import com.margelo.nitro.bridgething.session.BridgethingDimSettings
+import com.margelo.nitro.bridgething.session.BridgethingDisplaySettings
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingHostInfo
 import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
@@ -62,10 +65,13 @@ import uniffi.bridgething_companion.ActiveWebapp
 import uniffi.bridgething_companion.AncsAuthStatus
 import uniffi.bridgething_companion.AuthKind
 import uniffi.bridgething_companion.AuthState
+import uniffi.bridgething_companion.BrightnessMode
 import uniffi.bridgething_companion.CapabilityFlags
 import uniffi.bridgething_companion.CompanionDebug
 import uniffi.bridgething_companion.CompanionException
 import uniffi.bridgething_companion.DeviceMeta
+import uniffi.bridgething_companion.DimSettings
+import uniffi.bridgething_companion.DisplaySettings
 import uniffi.bridgething_companion.DeviceWebappsEntry
 import uniffi.bridgething_companion.LauncherGesture
 import uniffi.bridgething_companion.LogLevel
@@ -226,6 +232,31 @@ internal fun toRnDeviceMeta(meta: DeviceMeta): BridgethingDeviceMeta = Bridgethi
     nickname = meta.nickname,
     launcherGesture = toRnLauncherGesture(meta.launcherGesture),
     companionLaunch = meta.companionLaunch,
+    display = toRnDisplaySettings(meta.display),
+)
+
+internal fun toRnDisplaySettings(settings: DisplaySettings): BridgethingDisplaySettings = BridgethingDisplaySettings(
+    mode = when (settings.mode) {
+        BrightnessMode.AUTO -> BridgethingBrightnessMode.AUTO
+        BrightnessMode.MANUAL -> BridgethingBrightnessMode.MANUAL
+    },
+    level = settings.level.toDouble(),
+    dim = BridgethingDimSettings(
+        afterS = settings.dim.afterS?.toDouble(),
+        level = settings.dim.level.toDouble(),
+    ),
+)
+
+internal fun toDisplaySettings(settings: BridgethingDisplaySettings): DisplaySettings = DisplaySettings(
+    mode = when (settings.mode) {
+        BridgethingBrightnessMode.AUTO -> BrightnessMode.AUTO
+        BridgethingBrightnessMode.MANUAL -> BrightnessMode.MANUAL
+    },
+    level = settings.level.toFloat(),
+    dim = DimSettings(
+        afterS = settings.dim.afterS?.toUInt(),
+        level = settings.dim.level.toFloat(),
+    ),
 )
 
 internal fun toRnLauncherGesture(gesture: LauncherGesture): BridgethingLauncherGesture = when (gesture) {

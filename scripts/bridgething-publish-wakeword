@@ -85,7 +85,7 @@ else
   warn "dry run: nothing uploaded"
 fi
 
-SIDECAR=$(mktemp -t bridgething-wakeword-sidecar)
+SIDECAR=$(mktemp)
 trap 'rm -f "$SIDECAR"' EXIT
 cat >"$SIDECAR" <<EOF
 {

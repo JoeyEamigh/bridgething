@@ -1,20 +1,21 @@
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, time::Duration};
 
 use libbridgething::{
   gateway::{
     BridgeToGatewayMsg, BridgeToGatewaySystemMsg, CompanionLaunchGet, CompanionLaunchReply, CompanionLaunchSet,
-    DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply, DeviceSetNickname,
-    GatewayToBridgeSystemMsgCommandDispatch, GatewayToBridgeSystemMsgRequestDispatch, LauncherGestureGet,
-    LauncherGestureReply, LauncherGestureSet, LogsSetVerbosity, LogsSubscribe, LogsSubscribeReply, LogsTail,
-    LogsTailReply, LogsUnsubscribe, OtaAbandon, OtaActivate, OtaBegin,
+    DeviceGetNickname, DeviceNicknameRejected, DeviceNicknameReply, DeviceSetNickname, DisplaySettingsGet,
+    DisplaySettingsRejected, DisplaySettingsSet, GatewayToBridgeSystemMsgCommandDispatch,
+    GatewayToBridgeSystemMsgRequestDispatch, HostState, HostStateAck, LauncherGestureGet, LauncherGestureReply,
+    LauncherGestureSet, LogsSetVerbosity, LogsSubscribe, LogsSubscribeReply, LogsTail, LogsTailReply, LogsUnsubscribe,
+    OtaAbandon, OtaActivate, OtaBegin,
   },
-  wire::MsgMeta,
+  wire::{MsgMeta, WireError},
 };
 use uuid::Uuid;
 
 use super::handle::MsgHandle;
 use crate::{
-  bluetooth::OutboundGatewayMessage,
+  bluetooth::{Address, OutboundGatewayMessage},
   handler::HandlerResult,
   ota::OtaOrchestrator,
   state::log_tap::{LogOwner, LogSink},
@@ -28,9 +29,18 @@ pub struct SystemHandler {
   ota: OtaOrchestrator,
 }
 
+const LINK_SETTLE: Duration = Duration::from_secs(2);
+
 impl SystemHandler {
   pub fn new(handle: MsgHandle, ota: OtaOrchestrator) -> Self {
     Self { handle, ota }
+  }
+
+  async fn linked(&self, gateway: Address) -> bool {
+    let mut peers = self.handle.state.peers.watch_snapshot();
+    tokio::time::timeout(LINK_SETTLE, peers.wait_for(|snapshot| snapshot.companion_linked(&gateway)))
+      .await
+      .is_ok_and(|seen| seen.is_ok())
   }
 }
 
@@ -172,6 +182,66 @@ impl GatewayToBridgeSystemMsgRequestDispatch for SystemHandler {
       .handle
       .respond_to::<CompanionLaunchGet>(CompanionLaunchReply { enabled })
       .await;
+    Ok(())
+  }
+
+  async fn display_settings_get(&self) -> HandlerResult {
+    let settings = self.handle.state.display.settings();
+    self.handle.respond_to::<DisplaySettingsGet>(settings).await;
+    Ok(())
+  }
+
+  async fn display_settings_set(&self, params: DisplaySettingsSet) -> HandlerResult {
+    let display = &self.handle.state.display;
+    match display.set_settings(params.settings).await {
+      Ok(Ok(())) => self.handle.respond_to::<DisplaySettingsSet>(display.settings()).await,
+      Ok(Err(error)) => {
+        self
+          .handle
+          .respond_err::<DisplaySettingsSet>(DisplaySettingsRejected { error })
+          .await
+      }
+      Err(err) => {
+        tracing::warn!("({:?}) displaySettingsSet failed: {err}", &self.handle.address);
+        self
+          .handle
+          .respond(WireError::HandlerFailed {
+            reason: err.to_string(),
+          })
+          .await
+      }
+    }
+    Ok(())
+  }
+
+  async fn host_state(&self, params: HostState) -> HandlerResult {
+    let applied = match self.handle.address {
+      Some(gateway) if self.linked(gateway).await => {
+        self.handle.state.display.link_up(gateway).await;
+        self.handle.state.display.host_state(gateway, params).await
+      }
+      _ => Ok(false),
+    };
+    match applied {
+      Ok(true) => self.handle.respond_to::<HostState>(HostStateAck {}).await,
+      Ok(false) => {
+        self
+          .handle
+          .respond(WireError::HandlerFailed {
+            reason: "the report came from a gateway with no link".into(),
+          })
+          .await
+      }
+      Err(err) => {
+        tracing::warn!("({:?}) hostState failed: {err}", &self.handle.address);
+        self
+          .handle
+          .respond(WireError::HandlerFailed {
+            reason: err.to_string(),
+          })
+          .await
+      }
+    }
     Ok(())
   }
 

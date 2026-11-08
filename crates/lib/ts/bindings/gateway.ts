@@ -11,6 +11,7 @@ import type {
   CompanionAuthorityScope,
   ConfigEntry,
   DismissReason,
+  DisplaySettings,
   DocEntry,
   DtmfTone,
   EndCallAction,
@@ -19,7 +20,7 @@ import type {
   GatewayCapabilities,
   GeoAccuracy,
   GeoError,
-  HostPresence,
+  HardwareError,
   HttpHeader,
   InitiateCallType,
   ItemKind,
@@ -208,10 +209,15 @@ export type BridgeToGatewaySystemMsg =
   | { event: 'launcherGestureChanged'; data: LauncherGestureReply }
   | { event: 'companionLaunchReply'; data: CompanionLaunchReply }
   | { event: 'companionLaunchChanged'; data: CompanionLaunchReply }
+  | { event: 'displaySettingsReply'; data: DisplaySettings }
+  | { event: 'displaySettingsRejected'; data: DisplaySettingsRejected }
+  | { event: 'displaySettingsChanged'; data: DisplaySettings }
   | { event: 'logsTailReply'; data: LogsTailReply }
   | { event: 'logsSubscribeReply'; data: LogsSubscribeReply }
   | { event: 'logEntry'; data: LogEntry }
-  | { event: 'keepalive'; data: KeepalivePing };
+  | { event: 'keepalive'; data: KeepalivePing }
+  | { event: 'hostWatch'; data: HostWatch }
+  | { event: 'hostStateAck'; data: HostStateAck };
 
 export type BridgeToGatewayTransferMsg =
   | { event: 'ack'; data: TransferAck }
@@ -278,6 +284,13 @@ export type DeviceNicknameRejected = { reason: string };
 export type DeviceNicknameReply = { nickname: string | null };
 
 export type DeviceSetNickname = { nickname: string };
+
+export type DisplaySettingsRejected = { error: HardwareError };
+
+/**
+ * Replaces every display setting at once. A rejected set changes nothing.
+ */
+export type DisplaySettingsSet = { settings: DisplaySettings };
 
 export type Earcon = { name: string };
 
@@ -363,7 +376,6 @@ export type GatewayToBridgeMsgData =
   | { type: 'notifications'; data: GatewayToBridgeNotificationsMsg }
   | { type: 'phone'; data: GatewayToBridgePhoneMsg }
   | { type: 'player'; data: GatewayToBridgePlayerMsg }
-  | { type: 'presence'; data: GatewayToBridgePresenceMsg }
   | { type: 'system'; data: GatewayToBridgeSystemMsg }
   | { type: 'time'; data: GatewayToBridgeTimeMsg }
   | { type: 'transfer'; data: GatewayToBridgeTransferMsg }
@@ -409,8 +421,6 @@ export type GatewayToBridgePlayerMsg =
   | { event: 'snapshotAck'; data: PlayerSnapshotAck }
   | { event: 'errorReply'; data: PlayerErrorReply };
 
-export type GatewayToBridgePresenceMsg = { event: 'update'; data: HostPresence };
-
 export type GatewayToBridgeSystemMsg =
   | { event: 'otaBegin'; data: OtaBegin }
   | { event: 'otaAbandon'; data: OtaAbandon }
@@ -424,11 +434,14 @@ export type GatewayToBridgeSystemMsg =
   | { event: 'launcherGestureSet'; data: LauncherGestureSet }
   | { event: 'companionLaunchGet' }
   | { event: 'companionLaunchSet'; data: CompanionLaunchSet }
+  | { event: 'displaySettingsGet' }
+  | { event: 'displaySettingsSet'; data: DisplaySettingsSet }
   | { event: 'logsTail'; data: LogsTail }
   | { event: 'logsSubscribe'; data: LogsSubscribe }
   | { event: 'logsUnsubscribe'; data: LogsUnsubscribe }
   | { event: 'logsSetVerbosity'; data: LogsSetVerbosity }
-  | { event: 'keepaliveAck'; data: KeepaliveAck };
+  | { event: 'keepaliveAck'; data: KeepaliveAck }
+  | { event: 'hostState'; data: HostState };
 
 export type GatewayToBridgeTimeMsg = { event: 'snapshot'; data: TimeInfo };
 
@@ -476,6 +489,34 @@ export type GeoGetOnce = { accuracy: GeoAccuracy };
 export type GeoGetOnceReply = { position: Position };
 
 export type GeoWatch = { accuracy: GeoAccuracy; minIntervalMs: number };
+
+/**
+ * Sent in reply to each `hostWatch`, when the computer starts or stops asking for dimming, and on every change of a
+ * field it reports. The device acks each report once its dim rules have taken it in.
+ */
+export type HostState = {
+  /**
+   * Present only while the computer wants the device to dim with it. True when it is locked, its display is off or
+   * dimmed, or it is going to sleep.
+   */
+  away: boolean | null;
+  /**
+   * The computer has had no input for `idleAfterS` seconds.
+   */
+  idle: boolean;
+};
+
+export type HostStateAck = Record<symbol, never>;
+
+/**
+ * Sent when the gateway connects while a dim timer is set, and on every change of the timer.
+ */
+export type HostWatch = {
+  /**
+   * Report `idle` once the computer has had no input for this many seconds. Null stops idle reports.
+   */
+  idleAfterS: number | null;
+};
 
 export type KeepaliveAck = { seq: number };
 

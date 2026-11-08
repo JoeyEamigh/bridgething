@@ -44,6 +44,7 @@ export function meta(
     serialNumber: SERIAL,
     launcherGesture: 'fivePress',
     companionLaunch: true,
+    display: { mode: 'auto', level: 1, dim: { level: 0.2 } },
     ...over,
   };
 }

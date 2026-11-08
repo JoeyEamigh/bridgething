@@ -21,6 +21,7 @@ export const catalogSources = resource<string[]>([], () => bound().catalogSource
 export const knownDevices = resource<KnownDevice[]>([], () => bound().knownDevices());
 export const selectedDevice = resource<string | null>(null, () => bound().selectedDevice());
 export const debugLogging = resource(false, () => bound().debugLogging());
+export const followHost = resource(false, () => bound().followHost());
 export const extensions = resource<ExtensionEntry[]>([], () => bound().extensions());
 export const selfUpdate = resource<SelfUpdateState>({ kind: 'idle' }, () => bound().selfUpdate());
 export const postponedUpdate = signal<string | null>(null);
@@ -141,6 +142,7 @@ export async function seed(session: DesktopSession): Promise<void> {
     logStreaming.refresh(),
     logVerbosity.refresh(),
     debugLogging.refresh(),
+    followHost.refresh(),
   ]);
 
   session.subscribe(event => {

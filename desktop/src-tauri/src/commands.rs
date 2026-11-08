@@ -3,9 +3,9 @@ use std::{path::PathBuf, sync::Arc};
 use bridgething_companion::{
   api::{
     ActiveWebapp, BlobProgressSink, CapabilityFlags, CompanionError, ConfigEntry, DeviceLogLine, DeviceMetaEntry,
-    DocEntry, LauncherGesture, MediaCover, MediaPickKind, NowPlaying, OtaPollConfig, PickedMedia, ProviderCredentials,
-    ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappBlob, WebappInfo,
-    WebappInstallRequest, WebappSlot, WebappSlots,
+    DisplaySettings, DocEntry, LauncherGesture, MediaCover, MediaPickKind, NowPlaying, OtaPollConfig, PickedMedia,
+    ProviderCredentials, ProviderInfo, SessionHostInfo, SessionPeer, SessionSnapshot, VoiceModelState, WebappBlob,
+    WebappInfo, WebappInstallRequest, WebappSlot, WebappSlots,
     ota::{OtaAvailable, OtaDiscoverManifest, OtaLane, OtaPollStatus, OtaRun, OtaRunProgress},
   },
   backend::LogLevel,
@@ -476,6 +476,22 @@ pub async fn set_device_nickname(shell: State<'_, Arc<Shell>>, nickname: String)
 #[tauri::command]
 pub async fn set_launcher_gesture(shell: State<'_, Arc<Shell>>, gesture: LauncherGesture) -> Answer<()> {
   Ok(shell.session().set_launcher_gesture(peer(&shell)?, gesture).await?)
+}
+
+#[tauri::command]
+pub async fn follow_host(shell: State<'_, Arc<Shell>>) -> Answer<bool> {
+  Ok(shell.session().follow_host())
+}
+
+#[tauri::command]
+pub async fn set_follow_host(shell: State<'_, Arc<Shell>>, enabled: bool) -> Answer<()> {
+  shell.session().set_follow_host(enabled);
+  Ok(())
+}
+
+#[tauri::command]
+pub async fn set_display_settings(shell: State<'_, Arc<Shell>>, settings: DisplaySettings) -> Answer<()> {
+  Ok(shell.session().set_display_settings(peer(&shell)?, settings).await?)
 }
 
 #[tauri::command]

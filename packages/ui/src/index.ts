@@ -49,6 +49,7 @@ export { ScreenHeader } from './components/ScreenHeader.tsx';
 export { SectionEmpty, SectionHeader } from './components/Section.tsx';
 export { Segmented, type Segment, type SegmentedOption } from './components/Segmented.tsx';
 export { SettingsFrame } from './components/SettingsFrame.tsx';
+export { Slider } from './components/Slider.tsx';
 export { Spinner } from './components/Spinner.tsx';
 export { StatusStrip } from './components/StatusStrip.tsx';
 export { Switch } from './components/Switch.tsx';

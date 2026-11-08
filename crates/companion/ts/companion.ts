@@ -18,6 +18,8 @@ export type AuthState = {
   message: string | null;
 };
 
+export type BrightnessMode = 'auto' | 'manual';
+
 export type CapabilityFlags = {
   geo: boolean;
   notifications: boolean;
@@ -78,6 +80,7 @@ export type DeviceMeta = {
   bluetoothName?: string;
   launcherGesture: LauncherGesture;
   companionLaunch: boolean;
+  display: DisplaySettings;
 };
 
 export type DeviceMetaEntry = { deviceId: string; meta: DeviceMeta };
@@ -90,6 +93,10 @@ export type DeviceWebappsEntry = {
   active: ActiveWebapp | null;
   listed: boolean;
 };
+
+export type DimSettings = { afterS: number | null; level: number };
+
+export type DisplaySettings = { mode: BrightnessMode; level: number; dim: DimSettings };
 
 export type DocEntry = { key: string; value: string };
 

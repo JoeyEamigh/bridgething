@@ -164,6 +164,12 @@ impl Harness {
     Ok(Gateway::from_io(self.connect_android_io().await?))
   }
 
+  pub async fn connect_android_subscribed(&self) -> Result<(Gateway, broadcast::Receiver<BridgeToGatewayMsg>)> {
+    Ok(Gateway::spawn_subscribed(
+      bridgething_gateway::transport::FramedConnector::new(self.connect_android_io().await?),
+    ))
+  }
+
   pub async fn connect_android_io(&self) -> Result<tokio::io::DuplexStream> {
     let (daemon_half, phone_half) = tokio::io::duplex(DUPLEX_BUF);
     let n = self.next_peer.fetch_add(1, Ordering::Relaxed);

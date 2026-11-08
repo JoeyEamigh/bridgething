@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, watch};
 use crate::{
   bluetooth::Address,
   capabilities::CapabilitiesRegistry,
+  display::DisplayManager,
   net::{WSError, WireEventBus},
   player::Player,
   state::{
@@ -119,6 +120,7 @@ impl PeerTracker {
     tunnel_routes: TunnelRoutes,
     notification_origins: NotificationOrigins,
     log_tap: LogTap,
+    display: DisplayManager,
   ) -> Self {
     let (cmd_tx, cmd_rx) = mpsc::channel(PEER_CMD_CAPACITY);
     let (snapshot_tx, snapshot_rx) = watch::channel(PeerSnapshot::default());
@@ -137,6 +139,7 @@ impl PeerTracker {
       tunnel_routes,
       notification_origins,
       log_tap,
+      display,
     ));
     Self { cmd_tx, snapshot_rx }
   }
@@ -261,6 +264,7 @@ struct PeerActor {
   tunnel_routes: TunnelRoutes,
   notification_origins: NotificationOrigins,
   log_tap: LogTap,
+  display: DisplayManager,
   snapshot_tx: watch::Sender<PeerSnapshot>,
   cmd_tx: mpsc::Sender<PeerCommand>,
   disconnect_gen: u64,
@@ -285,6 +289,7 @@ async fn run_actor(
   tunnel_routes: TunnelRoutes,
   notification_origins: NotificationOrigins,
   log_tap: LogTap,
+  display: DisplayManager,
 ) {
   let mut actor = PeerActor {
     peers: HashMap::new(),
@@ -300,6 +305,7 @@ async fn run_actor(
     tunnel_routes,
     notification_origins,
     log_tap,
+    display,
     snapshot_tx,
     cmd_tx,
     disconnect_gen: 0,
@@ -653,7 +659,12 @@ impl PeerActor {
       }
     }
 
+    if let Some(addr) = diff.gateway_link_up {
+      self.display.link_up(addr).await;
+    }
+
     if let Some(addr) = diff.gateway_link_lost {
+      self.display.link_lost(addr).await;
       if let Err(err) = self.capabilities.forget_extensions(addr).await {
         tracing::warn!(?err, "failed to clear the running extension set on gateway link loss");
       }
@@ -773,6 +784,7 @@ struct Diff {
   useful_link_transitioned_down: bool,
   useful_device: Option<Device>,
   companion_lost: Option<Address>,
+  gateway_link_up: Option<Address>,
   gateway_link_lost: Option<Address>,
   removed: bool,
 }
@@ -815,11 +827,8 @@ impl Diff {
       current.as_ref().map(|p| &p.companion),
       Some(PeerCompanionStatus::Pending | PeerCompanionStatus::Connected(_))
     );
-    let gateway_link_lost = if was_gateway_linked && !is_gateway_linked {
-      Some(mac)
-    } else {
-      None
-    };
+    let gateway_link_up = (!was_gateway_linked && is_gateway_linked).then_some(mac);
+    let gateway_link_lost = (was_gateway_linked && !is_gateway_linked).then_some(mac);
 
     let snapshot = peers
       .iter()
@@ -839,6 +848,7 @@ impl Diff {
         None
       },
       companion_lost,
+      gateway_link_up,
       gateway_link_lost,
       removed: prior.is_some() && current.is_none(),
     }

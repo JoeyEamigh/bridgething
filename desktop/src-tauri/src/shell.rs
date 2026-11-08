@@ -148,7 +148,6 @@ impl Shell {
 
     let platform = Platform::detect(&config.paths.config_dir);
     let geo = platform.geo.clone();
-    let presence = platform.presence.clone();
     let models = platform.models.clone();
     let model_platform = platform.model_platform;
     let online = Online::default();
@@ -164,6 +163,7 @@ impl Shell {
       log: Arc::new(TracingLog),
       audio: platform.audio,
       volume: platform.volume,
+      host_state: platform.host_state,
       geo: platform.geo,
       notifications: platform.notifications,
       phone: None,
@@ -216,9 +216,6 @@ impl Shell {
       ),
     );
     models.bind(&session);
-    if let Some(presence) = presence {
-      session.set_presence_backend(presence);
-    }
 
     Ok(Arc::new(Self {
       session,

@@ -361,6 +361,7 @@ pub fn meta_with_variant(
     bluetooth_name: None,
     launcher_gesture: libbridgething::LauncherGesture::default(),
     companion_launch: true,
+    display: libbridgething::DisplaySettings::default(),
     app_version: app_version.into(),
     daemon_sha256: daemon_sha256.map(str::to_owned),
     wakeword_model_version: None,

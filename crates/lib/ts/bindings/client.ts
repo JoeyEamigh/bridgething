@@ -13,6 +13,7 @@ import type {
   CurrentlyActiveApplication,
   Device,
   Diagnostics,
+  DimSettings,
   DismissReason,
   DocEntry,
   DtmfTone,
@@ -53,9 +54,6 @@ import type {
   PlayerError,
   PlayerState,
   Position,
-  PresenceInfo,
-  PresenceSettings,
-  PresenceSettingsError,
   QueueItem,
   QueuePosition,
   RecommendationsResult,
@@ -214,12 +212,13 @@ export type BridgeToClientGeoMsg =
   | { event: 'errorReply'; data: GeoErrorReply };
 
 /**
- * The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive
- * the backlight, and `stateGet` reads the current state.
+ * The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive the backlight,
+ * `stateGet` reads the current state, and `dimChanged` reports dim settings a companion app changed.
  */
 export type BridgeToClientHardwareMsg =
   | { event: 'ambientLightUpdate'; data: AmbientLightUpdate }
   | { event: 'brightnessChanged'; data: BrightnessState }
+  | { event: 'dimChanged'; data: DimSettings }
   | { event: 'stateReply'; data: HardwareStateReply };
 
 /**
@@ -267,7 +266,6 @@ export type BridgeToClientMsgData =
   | { type: 'peer'; data: BridgeToClientPeerMsg }
   | { type: 'phone'; data: BridgeToClientPhoneMsg }
   | { type: 'player'; data: BridgeToClientPlayerMsg }
-  | { type: 'presence'; data: BridgeToClientPresenceMsg }
   | { type: 'store'; data: BridgeToClientStoreMsg }
   | { type: 'system'; data: BridgeToClientSystemMsg }
   | { type: 'time'; data: BridgeToClientTimeMsg }
@@ -338,19 +336,6 @@ export type BridgeToClientPlayerMsg =
   | { event: 'errorEvent'; data: PlayerErrorReply }
   | { event: 'targetsReply'; data: PlayerTargetsReply }
   | { event: 'errorReply'; data: PlayerErrorReply };
-
-/**
- * Whether the screen should be lit, as decided from the host display state. A webapp or native
- * renderer that draws every frame should stop drawing while `display` is `off`. `get` returns the
- * state on demand and `onChanged` reports every later change. `settingsGet` and `settingsSet` read
- * and change when the screen dims and sleeps, and `onSettingsChanged` reports every change.
- */
-export type BridgeToClientPresenceMsg =
-  | { event: 'changed'; data: PresenceSnapshot }
-  | { event: 'snapshot'; data: PresenceSnapshot }
-  | { event: 'settingsChanged'; data: PresenceSettingsReply }
-  | { event: 'settingsReply'; data: PresenceSettingsReply }
-  | { event: 'settingsErrorReply'; data: PresenceSettingsErrorReply };
 
 /**
  * Key-value storage for a webapp. Each webapp gets its own keyspace.
@@ -526,7 +511,6 @@ export type ClientToBridgeMsgData =
   | { type: 'notifications'; data: ClientToBridgeNotificationsMsg }
   | { type: 'phone'; data: ClientToBridgePhoneMsg }
   | { type: 'player'; data: ClientToBridgePlayerMsg }
-  | { type: 'presence'; data: ClientToBridgePresenceMsg }
   | { type: 'store'; data: ClientToBridgeStoreMsg }
   | { type: 'system'; data: ClientToBridgeSystemMsg }
   | { type: 'time'; data: ClientToBridgeTimeMsg }
@@ -590,11 +574,6 @@ export type ClientToBridgePlayerMsg =
   | { event: 'stateGet' }
   | { event: 'queueGet' }
   | { event: 'targetsGet' };
-
-export type ClientToBridgePresenceMsg =
-  | { event: 'get' }
-  | { event: 'settingsGet' }
-  | { event: 'settingsSet'; data: PresenceSettingsSet };
 
 export type ClientToBridgeStoreMsg =
   | { event: 'get'; data: KVGet }
@@ -1098,18 +1077,6 @@ export type PlayerStateReply = {
 };
 
 export type PlayerTargetsReply = { targets: Array<PlaybackTarget> };
-
-export type PresenceSettingsErrorReply = { error: PresenceSettingsError };
-
-export type PresenceSettingsReply = { settings: PresenceSettings };
-
-/**
- * Replaces when the screen dims and sleeps. A request the device cannot honor, such as dimming
- * at or after sleeping, is refused with the reason and changes nothing.
- */
-export type PresenceSettingsSet = { settings: PresenceSettings };
-
-export type PresenceSnapshot = { presence: PresenceInfo };
 
 export type QueueUri = { uri: string; position: QueuePosition };
 

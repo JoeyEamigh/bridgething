@@ -22,6 +22,8 @@ pub(super) struct HostSettings {
   pub ota_poll_config: Option<OtaPollConfig>,
   #[serde(default = "official_catalog")]
   pub catalog_sources: Vec<String>,
+  #[serde(default)]
+  pub follow_host: bool,
 }
 
 impl Default for HostSettings {
@@ -31,6 +33,7 @@ impl Default for HostSettings {
       provider_priority: Vec::new(),
       ota_poll_config: polling(),
       catalog_sources: official_catalog(),
+      follow_host: false,
     }
   }
 }

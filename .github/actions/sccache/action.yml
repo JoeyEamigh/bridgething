@@ -25,7 +25,7 @@ runs:
           echo "SCCACHE_CACHE_SIZE=${{ inputs.size }}"
         } >>"$GITHUB_ENV"
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/sccache
         key: sccache-${{ inputs.key }}-${{ github.sha }}

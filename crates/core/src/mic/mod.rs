@@ -19,6 +19,7 @@ use uuid::Uuid;
 use crate::{
   bluetooth::{Address, BluetoothMan},
   capabilities::CapabilitiesRegistry,
+  deadline::past_deadline,
   net::WireEventBus,
   peer::PeerSnapshot,
 };
@@ -829,13 +830,6 @@ async fn peers_changed(peers: &mut watch::Receiver<PeerSnapshot>) {
 async fn past_cap(stream: Option<&Stream>) {
   match stream {
     Some(open) => tokio::time::sleep_until(open.deadline).await,
-    None => std::future::pending().await,
-  }
-}
-
-async fn past_deadline(at: Option<tokio::time::Instant>) {
-  match at {
-    Some(at) => tokio::time::sleep_until(at).await,
     None => std::future::pending().await,
   }
 }

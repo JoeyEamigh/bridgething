@@ -13,6 +13,7 @@ function meta(): BridgeThingMeta {
     bluetoothName: 'Car Thing (SN: B001)',
     launcherGesture: 'fivePress',
     companionLaunch: false,
+    display: { mode: 'auto', level: 1, dim: { afterS: null, level: 0.2 } },
     appVersion: '0.8.1',
     daemonSha256: null,
     wakewordModelVersion: null,
@@ -100,6 +101,7 @@ describe('toDeviceMeta', () => {
       bluetoothName: 'Car Thing (SN: B001)',
       launcherGesture: 'fivePress',
       companionLaunch: false,
+      display: { mode: 'auto', level: 1, dim: { afterS: null, level: 0.2 } },
     });
   });
 });

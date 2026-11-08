@@ -29,6 +29,7 @@
         "scripts/**",
         "test/**",
         "dev/**",
+        "e2e/**",
         "eslint.config.*",
         "tsconfig*.json",
         "package.json",

@@ -7,11 +7,15 @@ use bridgething_delivery::{
   session::{DeliverySession, SessionDeps, gateway_info},
 };
 use bridgething_gateway::{
-  connect_ws,
+  Gateway, connect_ws,
   transport::{FramedConnector, WsConnector},
 };
 use bridgething_io::{HttpExecutor, ReqwestConfig, ReqwestTransport};
-use tokio::io::{AsyncRead, AsyncWrite};
+use libbridgething::gateway::BridgeToGatewayMsg;
+use tokio::{
+  io::{AsyncRead, AsyncWrite},
+  sync::broadcast,
+};
 
 use crate::chaos::{ChaosConfig, ChaosConnector};
 
@@ -21,6 +25,18 @@ pub async fn connect(url: &str, chaos: ChaosConfig) -> Result<DeliverySession> {
   tracing::info!(%url, "connecting to daemon network gateway");
   let ws = connect_ws(url).await.with_context(|| format!("ws connect: {url}"))?;
   Ok(DeliverySession::spawn(ChaosConnector::new(WsConnector::new(ws), chaos), deps()).await?)
+}
+
+pub async fn connect_gateway(
+  url: &str,
+  chaos: ChaosConfig,
+) -> Result<(Gateway, broadcast::Receiver<BridgeToGatewayMsg>)> {
+  tracing::info!(%url, "connecting to daemon network gateway");
+  let ws = connect_ws(url).await.with_context(|| format!("ws connect: {url}"))?;
+  Ok(Gateway::spawn_subscribed(ChaosConnector::new(
+    WsConnector::new(ws),
+    chaos,
+  )))
 }
 
 pub async fn from_io<S>(io: S, chaos: ChaosConfig) -> Result<DeliverySession>

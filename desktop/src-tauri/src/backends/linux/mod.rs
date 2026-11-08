@@ -1,5 +1,7 @@
 mod connectivity;
 mod geo;
+mod host_state;
+mod idle;
 mod media;
 mod notifications;
 mod speech;
@@ -28,7 +30,7 @@ pub fn platform(_config_dir: &Path) -> Platform {
     stream: Some(Arc::new(stream::PulseStream::default())),
     audio: Some(Arc::new(speech::SpeechDispatcher::new())),
     volume: Some(Arc::new(volume::PulseVolume::default())),
-    presence: None,
+    host_state: Some(Arc::new(host_state::LinuxHostState::default())),
     connectivity: Some(Arc::new(connectivity::NetworkManagerConnectivity::default())),
     image: Some(Arc::new(PortableScaler::new(sidecar.clone()))),
     transcoder: sidecar.map(|sidecar| Arc::new(FfmpegTranscoder::new(sidecar)) as Arc<dyn MediaTranscoder>),

@@ -2,10 +2,10 @@ mod connectivity;
 mod contain;
 mod fnv;
 mod geo;
+mod host_state;
 mod image;
 mod media;
 pub mod nlu;
-mod presence;
 mod speech;
 mod stream;
 mod transcode;
@@ -26,7 +26,7 @@ pub fn platform(config_dir: &Path) -> Platform {
     stream: Some(Arc::new(stream::AvPlayerStream::new())),
     audio: Some(Arc::new(speech::AvAudio::new())),
     volume: Some(Arc::new(volume::CoreAudioVolume::default())),
-    presence: Some(Arc::new(presence::MacPresence::default())),
+    host_state: Some(Arc::new(host_state::host_state())),
     connectivity: Some(Arc::new(connectivity::NwPathConnectivity::default())),
     image: Some(Arc::new(image::ImageIoScaler)),
     transcoder: Some(Arc::new(transcode::AvMediaTranscoder)),

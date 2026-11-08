@@ -370,6 +370,8 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
         else Variant_NullType_BridgethingOtaProgress.First(NullType.NULL)
     }
 
+    override fun devConfig(): BridgethingDevConfig = require().devConfig()
+
     override fun installWebappFromUrl(
         deviceId: String,
         url: String,
@@ -402,6 +404,11 @@ public class HybridBridgethingSession : HybridBridgethingSessionSpec() {
     override fun setCompanionLaunch(deviceId: String, enabled: Boolean): Promise<Unit> =
         Promise.async {
             require().setCompanionLaunch(deviceId, enabled)
+        }
+
+    override fun setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings): Promise<Unit> =
+        Promise.async {
+            require().setDisplaySettings(deviceId, settings)
         }
 
     override fun presentPairPicker(): Promise<Variant_NullType_BridgethingBtDevice> = Promise.async {

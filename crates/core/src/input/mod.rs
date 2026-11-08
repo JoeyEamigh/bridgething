@@ -1,11 +1,11 @@
+#[cfg(any(feature = "input", test))]
+mod device;
 #[cfg(feature = "input")]
-mod evdev_listener;
+mod hub_gesture;
 #[cfg(any(feature = "input", test))]
 mod press_window;
-#[cfg(any(feature = "input", test))]
-mod wake;
 #[cfg(feature = "input")]
-mod wake_listener;
+mod reader;
 
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -27,14 +27,16 @@ impl InputManager {
 
 #[cfg(feature = "input")]
 async fn run(state: State, cancel: CancellationToken) {
-  tokio::join!(
-    evdev_listener::listen_for_hub_gesture(state.clone(), cancel.clone()),
-    wake_listener::listen_for_wake(state, cancel),
-  );
+  futures::future::join_all(
+    device::InputDevice::ALL
+      .into_iter()
+      .map(|device| reader::listen(device, state.clone(), cancel.clone())),
+  )
+  .await;
 }
 
 #[cfg(not(feature = "input"))]
 async fn run(_state: State, cancel: CancellationToken) {
-  tracing::debug!("input feature disabled; gesture listener idle");
+  tracing::debug!("input feature disabled; input readers idle");
   cancel.cancelled().await;
 }

@@ -2,15 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use bridgething_companion::dispatch::{
   OtaInbound,
-  system::{DeviceLogSink, SystemDispatcher},
+  system::{DeviceLogSink, HostWatchSink, SystemDispatcher},
 };
 use bridgething_delivery::ota::service::MetaChange;
 use bridgething_gateway::{HandlerError, Reply, SystemHandler};
 use libbridgething::{
   BridgeThingMeta, LogEntry, LogLevel, OtaError, OtaFinished, OtaProgress, RangeSpec, WebappInfo,
   gateway::{
-    DeviceNicknameReply, KeepalivePing, OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply,
-    TransferAck, TransferBody,
+    DeviceNicknameReply, HostWatch, KeepalivePing, OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected,
+    OtaAssetRangeReply, TransferAck, TransferBody,
   },
 };
 use uuid::Uuid;
@@ -21,6 +21,15 @@ struct RecordedLogs(Mutex<Vec<LogEntry>>);
 impl DeviceLogSink for RecordedLogs {
   fn on_entry(&self, entry: LogEntry) {
     self.0.lock().unwrap().push(entry);
+  }
+}
+
+#[derive(Default)]
+struct RecordedHost(Mutex<Vec<HostWatch>>);
+
+impl HostWatchSink for RecordedHost {
+  fn watch(&self, watch: HostWatch) {
+    self.0.lock().unwrap().push(watch);
   }
 }
 
@@ -92,7 +101,7 @@ impl OtaInbound for RecordedOta {
 fn dispatcher() -> (SystemDispatcher, Arc<RecordedOta>, Arc<RecordedLogs>) {
   let ota = Arc::new(RecordedOta::default());
   let logs = Arc::new(RecordedLogs::default());
-  (SystemDispatcher::new(ota.clone(), logs.clone()), ota, logs)
+  (SystemDispatcher::new(ota.clone(), logs.clone(), None), ota, logs)
 }
 
 #[tokio::test]
@@ -172,6 +181,29 @@ async fn a_companion_launch_change_reaches_the_update_service() {
 }
 
 #[tokio::test]
+async fn a_display_settings_change_reaches_the_update_service() {
+  let (dispatch, ota, _logs) = dispatcher();
+  let settings = libbridgething::DisplaySettings {
+    mode: libbridgething::BrightnessMode::Manual,
+    level: 0.4,
+    dim: libbridgething::DimSettings {
+      after_s: Some(60),
+      level: 0.0,
+    },
+  };
+
+  dispatch
+    .display_settings_changed(settings)
+    .await
+    .expect("an event never refuses");
+
+  assert_eq!(
+    ota.meta_changes.lock().unwrap().clone(),
+    vec![MetaChange::Display(settings)]
+  );
+}
+
+#[tokio::test]
 async fn a_range_request_is_served_by_the_update_service_and_answered_on_its_transfer() {
   let (dispatch, ota, _logs) = dispatcher();
 
@@ -208,4 +240,31 @@ async fn an_abandoned_range_reaches_the_update_service() {
     .expect("an event never refuses");
 
   assert_eq!(ota.abandoned.lock().unwrap().clone(), vec![request_id]);
+}
+
+#[tokio::test]
+async fn a_host_watch_reaches_the_host_reporter() {
+  let host = Arc::new(RecordedHost::default());
+  let dispatch = SystemDispatcher::new(
+    Arc::new(RecordedOta::default()),
+    Arc::new(RecordedLogs::default()),
+    Some(host.clone()),
+  );
+  let watch = HostWatch {
+    idle_after_s: Some(120),
+  };
+
+  dispatch.host_watch(watch).await.expect("a command never refuses");
+
+  assert_eq!(host.0.lock().unwrap().clone(), vec![watch]);
+}
+
+#[tokio::test]
+async fn a_host_with_nothing_to_report_accepts_a_watch_silently() {
+  let (dispatch, _ota, _logs) = dispatcher();
+
+  dispatch
+    .host_watch(HostWatch { idle_after_s: None })
+    .await
+    .expect("a phone has no host state and says nothing, which is not an error");
 }

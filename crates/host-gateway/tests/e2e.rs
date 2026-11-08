@@ -7,12 +7,12 @@ use std::{
 use bridgething_delivery::session::DeliverySession;
 use bridgething_host_gateway::{
   chaos::ChaosConfig,
-  install,
+  host_state, install,
   ota::{self, PushRequest, PushShape},
   session, webapp,
 };
 use bridgething_test_harness::Harness;
-use libbridgething::OtaKind;
+use libbridgething::{OtaKind, gateway::HostState};
 use uuid::Uuid;
 
 const ARTIFACT_BYTES: usize = 512 * 1024;
@@ -173,4 +173,43 @@ async fn a_link_that_dies_mid_push_fails_the_push_rather_than_parking_it() {
     outcome.is_err(),
     "a push over a link that died is not a completed update"
   );
+}
+
+#[tokio::test]
+async fn a_following_host_dims_the_device_at_link_up_and_its_departure_leaves_it_dimmed() {
+  let harness = Harness::start().await.expect("harness start");
+
+  let (gateway, inbound) = harness
+    .connect_android_subscribed()
+    .await
+    .expect("a link to the daemon");
+  let away = HostState {
+    away: Some(true),
+    idle: false,
+  };
+  let serving = tokio::spawn(async move { host_state::serve(&gateway, inbound, away).await });
+  assert!(
+    harness
+      .wait_for(|state| state.display.snapshot().brightness.dimmed, DEADLINE)
+      .await,
+    "a following host reports without being asked"
+  );
+
+  serving.abort();
+  let _ = serving.await;
+  assert!(
+    harness
+      .wait_for(
+        |state| state
+          .peers
+          .snapshot()
+          .peers
+          .values()
+          .all(|peer| peer.companion == libbridgething::PeerCompanionStatus::None),
+        DEADLINE
+      )
+      .await,
+    "the link went with the tool"
+  );
+  assert!(harness.state().display.snapshot().brightness.dimmed);
 }

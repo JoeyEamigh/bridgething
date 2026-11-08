@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-companion"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-delivery"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-gateway"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "async-trait",
  "bridgething-io",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-io"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "thiserror 2.0.21",
  "tokio",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-macros"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "bridgething-sdk-runtime"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "bytes",
  "futures",
@@ -1438,7 +1438,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libbridgething"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "bridgething-macros",
  "bytes",
@@ -1632,7 +1632,7 @@ dependencies = [
 
 [[package]]
 name = "nlu"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2376,7 +2376,7 @@ dependencies = [
 
 [[package]]
 name = "spotify"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -3038,7 +3038,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "voice-resolver"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -3188,6 +3188,30 @@ dependencies = [
 [[package]]
 name = "wincheck-winrt"
 version = "0.0.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
+name = "windows"
+version = "0.62.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
+dependencies = [
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-numerics",
+]
+
+[[package]]
+name = "windows-collections"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23b2d95af1a8a14a3c7367e1ed4fc9c20e0a26e79551b1454d72583c97cc6610"
+dependencies = [
+ "windows-core",
+]
 
 [[package]]
 name = "windows-core"
@@ -3200,6 +3224,17 @@ dependencies = [
  "windows-link",
  "windows-result",
  "windows-strings",
+]
+
+[[package]]
+name = "windows-future"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1d6f90251fe18a279739e78025bd6ddc52a7e22f921070ccdc67dde84c605cb"
+dependencies = [
+ "windows-core",
+ "windows-link",
+ "windows-threading",
 ]
 
 [[package]]
@@ -3229,6 +3264,16 @@ name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
+
+[[package]]
+name = "windows-numerics"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e2e40844ac143cdb44aead537bbf727de9b044e107a0f1220392177d15b0f26"
+dependencies = [
+ "windows-core",
+ "windows-link",
+]
 
 [[package]]
 name = "windows-result"
@@ -3280,6 +3325,15 @@ dependencies = [
  "windows_x86_64_gnu",
  "windows_x86_64_gnullvm",
  "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows-threading"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

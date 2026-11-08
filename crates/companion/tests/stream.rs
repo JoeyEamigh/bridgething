@@ -544,6 +544,7 @@ async fn session_start_attaches_the_stream_provider_with_the_host_bundle() {
     log: Arc::new(Quiet),
     audio: None,
     volume: None,
+    host_state: None,
     geo: None,
     notifications: None,
     phone: None,

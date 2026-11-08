@@ -268,6 +268,9 @@ impl SystemHandler for Unsupported {
   async fn companion_launch_changed(&self, _payload: CompanionLaunchReply) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn display_settings_changed(&self, _payload: DisplaySettings) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,
@@ -280,6 +283,9 @@ impl SystemHandler for Unsupported {
     _request: KeepalivePing,
   ) -> Result<Reply<KeepaliveAck>, HandlerError<::core::convert::Infallible>> {
     Err(WireError::Unsupported.into())
+  }
+  async fn host_watch(&self, _payload: HostWatch) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
   }
   async fn ota_progress(&self, _payload: OtaProgress) -> Result<(), WireError> {
     Err(WireError::Unsupported)

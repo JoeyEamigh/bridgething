@@ -309,6 +309,19 @@ export type BridgethingBtDevice = {
 
 export type BridgethingLauncherGesture = 'longPress' | 'fivePress' | 'doublePress';
 
+export type BridgethingBrightnessMode = 'auto' | 'manual';
+
+export type BridgethingDimSettings = {
+  afterS?: number;
+  level: number;
+};
+
+export type BridgethingDisplaySettings = {
+  mode: BridgethingBrightnessMode;
+  level: number;
+  dim: BridgethingDimSettings;
+};
+
 export type BridgethingDeviceMeta = {
   daemonVersion: string;
   libbridgethingVersion: string;
@@ -321,6 +334,7 @@ export type BridgethingDeviceMeta = {
   nickname?: string;
   launcherGesture: BridgethingLauncherGesture;
   companionLaunch: boolean;
+  display: BridgethingDisplaySettings;
 };
 
 export type BridgethingHostInfo = {
@@ -397,6 +411,11 @@ export type BridgethingVoiceDebug = {
   transferAllowed: boolean;
   nluBundleDir?: string;
   asrWeights?: string;
+};
+
+export type BridgethingDevConfig = {
+  gateway: string;
+  directory: string;
 };
 
 export type BridgethingCompanionDebug = {
@@ -492,6 +511,7 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   fetchOtaManifest(rootUrl: string): Promise<BridgethingOtaManifest>;
   applyOtaUpdate(deviceId: string, channel: string, version: string, rootUrl: string): Promise<void>;
   otaRunProgress(deviceId: string, lane: BridgethingOtaLane, nowMs: number): BridgethingOtaProgress | null;
+  devConfig(): BridgethingDevConfig;
 
   installWebappFromUrl(
     deviceId: string,
@@ -511,6 +531,8 @@ export interface BridgethingSession extends HybridObject<{ ios: 'swift'; android
   setLauncherGesture(deviceId: string, gesture: BridgethingLauncherGesture): Promise<void>;
 
   setCompanionLaunch(deviceId: string, enabled: boolean): Promise<void>;
+
+  setDisplaySettings(deviceId: string, settings: BridgethingDisplaySettings): Promise<void>;
 
   presentPairPicker(): Promise<BridgethingBtDevice | null>;
 

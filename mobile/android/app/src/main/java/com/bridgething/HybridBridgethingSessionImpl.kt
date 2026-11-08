@@ -18,8 +18,10 @@ import com.margelo.nitro.bridgething.session.BridgethingBtDevice
 import com.margelo.nitro.bridgething.session.BridgethingCapabilityFlags
 import com.margelo.nitro.bridgething.session.BridgethingCompanionDebug
 import com.margelo.nitro.bridgething.session.BridgethingConfigEntry
+import com.margelo.nitro.bridgething.session.BridgethingDevConfig
 import com.margelo.nitro.bridgething.session.BridgethingDeviceLogLine
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
+import com.margelo.nitro.bridgething.session.BridgethingDisplaySettings
 import com.margelo.nitro.bridgething.session.BridgethingDeviceWebappsEntry
 import com.margelo.nitro.bridgething.session.BridgethingDocEntry
 import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
@@ -97,6 +99,7 @@ public class HybridBridgethingSessionImpl(
         private const val PROVIDER_PRIORITY_KEY = "providerPriority"
         private val INHERITED_KEYS = listOf("caps.", "ota.", AUTO_RESUME_PREFIX, RESUME_TARGET_PREFIX, PROVIDER_PRIORITY_KEY)
         private const val DEV_LANE_DEVICE_ID = "dev-gateway"
+        private val DEV_CONFIG = BridgethingDevConfig(BuildConfig.BRIDGETHING_DEV_GATEWAY, BuildConfig.BRIDGETHING_DEV_DIRECTORY)
 
         internal suspend fun inheritHostSettings(context: Context, session: CompanionSession) {
             val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -647,6 +650,8 @@ public class HybridBridgethingSessionImpl(
             ?.let(::toRnOtaProgress)
     }
 
+    override fun devConfig(): BridgethingDevConfig = DEV_CONFIG
+
     override suspend fun dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) {
         requireSession().dismissOtaRun(deviceId, fromRnOtaLane(lane))
     }
@@ -665,6 +670,10 @@ public class HybridBridgethingSessionImpl(
 
     override suspend fun setCompanionLaunch(deviceId: String, enabled: Boolean) {
         requireSession().setCompanionLaunch(deviceId, enabled)
+    }
+
+    override suspend fun setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings) {
+        requireSession().setDisplaySettings(deviceId, toDisplaySettings(settings))
     }
 
     override suspend fun exportLogs(archiveId: String?): String = withContext(Dispatchers.IO) {
@@ -864,7 +873,7 @@ public class HybridBridgethingSessionImpl(
     }
 
     private fun connectDevGateway(session: CompanionSession) {
-        val url = BuildConfig.BRIDGETHING_DEV_GATEWAY
+        val url = DEV_CONFIG.gateway
         if (url.isEmpty()) return
         scope.launch {
             runCatching { session.connectNetwork(url, LinkDevice(id = DEV_LANE_DEVICE_ID, name = "dev gateway")) }

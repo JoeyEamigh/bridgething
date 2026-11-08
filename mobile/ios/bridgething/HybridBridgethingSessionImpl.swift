@@ -27,6 +27,12 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     private static let holderLock = NSLock()
     private static let devLaneDeviceId = "dev-gateway"
+    private static var dev: BridgethingDevConfig {
+        BridgethingDevConfig(
+            gateway: Bundle.main.object(forInfoDictionaryKey: "BRIDGETHING_DEV_GATEWAY") as? String ?? "",
+            directory: Bundle.main.object(forInfoDictionaryKey: "BRIDGETHING_DEV_DIRECTORY") as? String ?? ""
+        )
+    }
     private static var heldCompanion: BridgethingCompanion?
     private static var eventSink: (@Sendable (SessionEvent) -> Void)?
 
@@ -166,9 +172,8 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
     }
 
     private func connectDevGateway(_ session: CompanionSession) {
-        guard let url = Bundle.main.object(forInfoDictionaryKey: "BRIDGETHING_DEV_GATEWAY") as? String, !url.isEmpty else {
-            return
-        }
+        let url = Self.dev.gateway
+        guard !url.isEmpty else { return }
         Task {
             do {
                 try await session.connectNetwork(url: url, device: LinkDevice(id: Self.devLaneDeviceId, name: "dev gateway"))
@@ -700,6 +705,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
             .map(toRNOtaProgress)
     }
 
+    public func devConfig() -> BridgethingDevConfig {
+        Self.dev
+    }
+
     public func dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) async throws {
         try await requireSession().dismissOtaRun(deviceId: deviceId, lane: fromRNOtaLane(lane))
     }
@@ -720,6 +729,10 @@ public final class HybridBridgethingSessionImpl: BridgethingSessionBackend, @unc
 
     public func setCompanionLaunch(deviceId: String, enabled: Bool) async throws {
         try await requireSession().setCompanionLaunch(deviceId: deviceId, enabled: enabled)
+    }
+
+    public func setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings) async throws {
+        try await requireSession().setDisplaySettings(deviceId: deviceId, settings: toDisplaySettings(settings))
     }
 
     public func presentPairPicker() async throws -> BridgethingBtDevice? {
@@ -1167,7 +1180,30 @@ private func toRNDeviceMeta(_ meta: DeviceMeta) -> BridgethingDeviceMeta {
         serialNumber: meta.serialNumber,
         nickname: meta.nickname,
         launcherGesture: toRNLauncherGesture(meta.launcherGesture),
-        companionLaunch: meta.companionLaunch
+        companionLaunch: meta.companionLaunch,
+        display: toRNDisplaySettings(meta.display)
+    )
+}
+
+private func toRNDisplaySettings(_ settings: DisplaySettings) -> BridgethingDisplaySettings {
+    BridgethingDisplaySettings(
+        mode: settings.mode == .manual ? .manual : .auto,
+        level: Double(settings.level),
+        dim: BridgethingDimSettings(
+            afterS: settings.dim.afterS.map(Double.init),
+            level: Double(settings.dim.level)
+        )
+    )
+}
+
+private func toDisplaySettings(_ settings: BridgethingDisplaySettings) -> DisplaySettings {
+    DisplaySettings(
+        mode: settings.mode == .manual ? .manual : .auto,
+        level: Float(settings.level),
+        dim: DimSettings(
+            afterS: settings.dim.afterS.map { UInt32(clamping: Int64($0)) },
+            level: Float(settings.dim.level)
+        )
     )
 }
 

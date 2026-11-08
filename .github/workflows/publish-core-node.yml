@@ -29,7 +29,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: resolve the version and what is already on the registry
         id: plan
@@ -84,7 +84,7 @@ jobs:
 
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -98,10 +98,11 @@ jobs:
         with:
           key: core-node-${{ matrix.target }}
 
-      - uses: goto-bus-stop/setup-zig@v2
+      - uses: mlugg/setup-zig@v2
         if: matrix.zigbuild
         with:
           version: 0.13.0
+          use-cache: false
 
       - uses: taiki-e/install-action@v2
         if: matrix.zigbuild
@@ -115,7 +116,7 @@ jobs:
         working-directory: crates/delivery/napi
         run: bun napi build --platform --release --strip --esm --target ${{ matrix.target }} ${{ matrix.zigbuild && '--cross-compile' || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: core-node-${{ matrix.target }}
           path: crates/delivery/napi/*.node
@@ -128,13 +129,13 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -161,7 +162,7 @@ jobs:
         working-directory: crates/delivery/napi
         run: bun napi create-npm-dirs
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: crates/delivery/napi/artifacts
 

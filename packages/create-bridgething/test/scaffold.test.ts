@@ -22,6 +22,7 @@ const pins = JSON.parse(readFileSync(join(packageDir, 'template-versions.json'),
 
 const SLUG = 'my-app';
 const REPO = 'tester/my-app';
+const BUILD_TIMEOUT = 120_000;
 
 type Manifest = {
   id: string;
@@ -417,48 +418,56 @@ function buildExtension(app: Source): SpawnSyncReturns<string> {
 }
 
 describe('the scaffolded extension bundler', () => {
-  test('bundles the untouched entry against the real @bridgething/extension through the generated plugin script', () => {
-    const app = scaffold('--extension');
-    app.lendModules();
+  test(
+    'bundles the untouched entry against the real @bridgething/extension through the generated plugin script',
+    () => {
+      const app = scaffold('--extension');
+      app.lendModules();
 
-    const result = buildExtension(app);
-    expect(result.stderr).not.toContain('Could not resolve');
-    expect(result.status).toBe(0);
+      const result = buildExtension(app);
+      expect(result.stderr).not.toContain('Could not resolve');
+      expect(result.status).toBe(0);
 
-    const bundle = app.read('dist', 'extension', 'desktop.mjs');
-    expect(bundle).not.toContain('@bridgething/extension');
-    expect(bundle).toContain('function defineExtension');
-    expect(bundle).toContain('my-app extension up');
-  });
+      const bundle = app.read('dist', 'extension', 'desktop.mjs');
+      expect(bundle).not.toContain('@bridgething/extension');
+      expect(bundle).toContain('function defineExtension');
+      expect(bundle).toContain('my-app extension up');
+    },
+    BUILD_TIMEOUT,
+  );
 
-  test('keeps npm:, jsr: and node: specifiers and still inlines relative modules', () => {
-    const app = scaffold('--extension');
-    app.lendModules();
-    app.write("export const greeting = 'bundled from a relative module';\n", 'extension', 'helper.ts');
-    app.write(
-      [
-        "import chalk from 'npm:chalk@5';",
-        "import { assertEquals } from 'jsr:@std/assert@1';",
-        "import { readFileSync } from 'node:fs';",
-        "import { greeting } from './helper.ts';",
-        '',
-        'export default { chalk, assertEquals, readFileSync, greeting };',
-        '',
-      ].join('\n'),
-      'extension',
-      'main.ts',
-    );
+  test(
+    'keeps npm:, jsr: and node: specifiers and still inlines relative modules',
+    () => {
+      const app = scaffold('--extension');
+      app.lendModules();
+      app.write("export const greeting = 'bundled from a relative module';\n", 'extension', 'helper.ts');
+      app.write(
+        [
+          "import chalk from 'npm:chalk@5';",
+          "import { assertEquals } from 'jsr:@std/assert@1';",
+          "import { readFileSync } from 'node:fs';",
+          "import { greeting } from './helper.ts';",
+          '',
+          'export default { chalk, assertEquals, readFileSync, greeting };',
+          '',
+        ].join('\n'),
+        'extension',
+        'main.ts',
+      );
 
-    const result = buildExtension(app);
-    expect(result.stderr).not.toContain('Could not resolve');
-    expect(result.status).toBe(0);
+      const result = buildExtension(app);
+      expect(result.stderr).not.toContain('Could not resolve');
+      expect(result.status).toBe(0);
 
-    const bundle = app.read('dist', 'extension', 'desktop.mjs');
-    expect(bundle).toContain('"npm:chalk@5"');
-    expect(bundle).toContain('"jsr:@std/assert@1"');
-    expect(bundle).toContain('"node:fs"');
-    expect(bundle).toContain('bundled from a relative module');
-  });
+      const bundle = app.read('dist', 'extension', 'desktop.mjs');
+      expect(bundle).toContain('"npm:chalk@5"');
+      expect(bundle).toContain('"jsr:@std/assert@1"');
+      expect(bundle).toContain('"node:fs"');
+      expect(bundle).toContain('bundled from a relative module');
+    },
+    BUILD_TIMEOUT,
+  );
 });
 
 describe('the scaffolded dev server', () => {
@@ -506,18 +515,26 @@ describe.each([
     app.lendModules();
   });
 
-  test('typechecks', () => {
-    const result = run(app, join(app.dir, 'node_modules', '.bin', 'tsc'), '--noEmit');
-    expect(result.stdout + result.stderr).toBe('');
-    expect(result.status).toBe(0);
-  });
+  test(
+    'typechecks',
+    () => {
+      const result = run(app, join(app.dir, 'node_modules', '.bin', 'tsc'), '--noEmit');
+      expect(result.stdout + result.stderr).toBe('');
+      expect(result.status).toBe(0);
+    },
+    BUILD_TIMEOUT,
+  );
 
-  test('builds', () => {
-    const result = run(app, 'bun', 'run', 'build');
-    expect(result.status).toBe(0);
-    expect(app.has('dist', 'index.html')).toBe(true);
-    expect(app.has('dist', 'settings.html')).toBe(true);
-  });
+  test(
+    'builds',
+    () => {
+      const result = run(app, 'bun', 'run', 'build');
+      expect(result.status).toBe(0);
+      expect(app.has('dist', 'index.html')).toBe(true);
+      expect(app.has('dist', 'settings.html')).toBe(true);
+    },
+    BUILD_TIMEOUT,
+  );
 });
 
 describe('the scaffolded settings page', () => {
@@ -530,7 +547,7 @@ describe('the scaffolded settings page', () => {
     const result = run(app, 'bun', 'run', 'build');
     if (result.status !== 0) throw new Error(`build failed: ${result.stdout}\n${result.stderr}`);
     html = app.read('dist', 'settings.html');
-  });
+  }, BUILD_TIMEOUT);
 
   function host(events: string[], docs: Map<string, string>, refuse = false): SettingsHost {
     const unused = () => Promise.reject(new Error('unused'));

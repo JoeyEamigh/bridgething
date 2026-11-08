@@ -66,6 +66,7 @@ export type BridgeThingMeta = {
    * Whether the device opens the companion app when an iPhone reconnects without it running.
    */
   companionLaunch: boolean;
+  display: DisplaySettings;
   appVersion: string;
   daemonSha256: string | null;
   /**
@@ -103,6 +104,7 @@ export type BrightnessState = {
    * 0.0 to 1.0. Follows `level` in `manual` mode and the light sensor in `auto`.
    */
   effectiveLevel: number;
+  dimmed: boolean;
 };
 
 /**
@@ -221,14 +223,35 @@ export type Diagnostics = {
 };
 
 /**
+ * When the screen dims. A connected computer can also ask for a dim with `hostState.away`.
+ */
+export type DimSettings = {
+  /**
+   * Seconds without input on the device or a connected computer, 15 to 86400. Null never dims.
+   */
+  afterS: number | null;
+  /**
+   * `0.0` (dark) to `1.0`. Caps a manual level and scales an auto level.
+   */
+  level: number;
+};
+
+/**
  * `acted` covers both the positive and the negative action.
  */
 export type DismissReason = 'userDismissed' | 'acted' | 'remoteDismissed';
 
 /**
- * How lit the device screen should be. The host maps its own display and idle state onto this.
+ * The display settings a user chooses. Nothing the light sensor moves.
  */
-export type DisplayState = 'active' | 'dim' | 'off';
+export type DisplaySettings = {
+  mode: BrightnessMode;
+  /**
+   * `0.0` to `1.0`. The backlight in `manual` mode.
+   */
+  level: number;
+  dim: DimSettings;
+};
 
 /**
  * Both the webapp and the companion app write it, and the last write wins. Values are strings.
@@ -294,36 +317,15 @@ export type GeoAccuracy = 'coarse' | 'fine';
 
 export type GeoError = 'permissionDenied' | 'notDeclared' | 'unavailable' | 'unknownToken';
 
-export type HardwareError = 'levelOutOfRange' | 'modeMismatch';
+export type HardwareError = 'levelOutOfRange' | 'modeMismatch' | 'dimTimerOutOfRange';
 
 export type HardwareState = {
   brightness: BrightnessState;
+  dim: DimSettings;
   /**
    * 0 to 100.
    */
   ambientLevel: number;
-};
-
-/**
- * What a connected host says about its own display, so the device screen can follow it.
- *
- * The device acts on `display` only when `PresenceSettings.followHost` is on, and ignores it
- * otherwise. A host counts as connected while its reports keep coming: with `heartbeatS` set, after
- * three missed reports the device treats the host as gone and the idle timers take over, and a
- * report without `heartbeatS` never expires. `idleS` counts as activity for the idle timers whether
- * or not the device follows the host.
- */
-export type HostPresence = {
-  display: DisplayState;
-  /**
-   * Seconds since the host user last touched an input device.
-   */
-  idleS: number | null;
-  /**
-   * Seconds until the host reports again. The device treats the host as gone after three missed
-   * reports. Omit it for a one-off report that does not expire.
-   */
-  heartbeatS: number | null;
 };
 
 export type HttpHeader = { name: string; value: string };
@@ -946,47 +948,6 @@ export type Position = {
    */
   tsUnixS: number;
 };
-
-export type PresenceInfo = { display: DisplayState; source: PresenceSource };
-
-/**
- * What the user wants the screen to do. The default leaves the screen to the brightness mode, as it
- * was before presence existed.
- *
- * `followHost` sleeps and wakes the screen with the host display while a host is connected. The idle
- * timers dim and sleep it when it is not following, and also when it is following but no host is
- * connected, so a host that is off or unplugged falls back to the timers. An idle timer counts
- * activity on the device (buttons, dial, touch) and, when a host reports one, on the host.
- */
-export type PresenceSettings = {
-  /**
-   * Sleep and wake with the host display. A host that dims its display dims this one. With no host
-   * connected the idle timers apply instead.
-   */
-  followHost: boolean;
-  /**
-   * Idle seconds before the screen dims, 5 to 86400. Null never dims it.
-   */
-  dimAfterS: number | null;
-  /**
-   * Idle seconds before the screen sleeps, 5 to 86400, and later than `dimAfterS`. Null never
-   * sleeps it.
-   */
-  sleepAfterS: number | null;
-  /**
-   * How far a dimmed screen drops, `0.05` to `1.0`. With manual brightness it is the highest level
-   * a dimmed screen shows, and a screen already dimmer stays put. With ambient brightness it
-   * scales whatever the light sensor asks for.
-   */
-  dimLevel: number;
-};
-
-export type PresenceSettingsError = 'dimNotBeforeSleep' | 'timerOutOfRange' | 'dimLevelOutOfRange';
-
-/**
- * Why the device screen is in its current state.
- */
-export type PresenceSource = 'none' | 'host' | 'localWake' | 'timer';
 
 export type Priority = 'normal' | 'bulk' | 'background';
 

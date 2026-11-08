@@ -162,6 +162,7 @@ fn bridge_meta() -> BridgeThingMeta {
     bluetooth_name: Some("Car Thing (SN: 0001)".into()),
     launcher_gesture: LauncherGesture::FivePress,
     companion_launch: false,
+    display: display_settings(),
     app_version: "0.1.0".into(),
     daemon_sha256: Some("2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae".into()),
     wakeword_model_version: Some("1.0.0".into()),
@@ -182,6 +183,17 @@ fn bridge_meta() -> BridgeThingMeta {
     image_machine: "superbird".into(),
     discord: "https://discord.example".into(),
     credits: "the car thing scene".into(),
+  }
+}
+
+fn display_settings() -> DisplaySettings {
+  DisplaySettings {
+    mode: BrightnessMode::Manual,
+    level: 0.75,
+    dim: DimSettings {
+      after_s: Some(300),
+      level: 0.0,
+    },
   }
 }
 
@@ -646,31 +658,107 @@ fn build_fixtures() -> Vec<(GoldenFixture, Vec<u8>)> {
     },
   ));
 
-  out.push(gateway_fixture(
-    "gateway_to_bridge/presence-update-heartbeat",
-    "host reports its display is dimmed and promises another report within ten seconds",
-    GatewayToBridgeMsg {
+  out.push(bridge_fixture(
+    "bridge_to_gateway/system-host-watch",
+    "device asks a computer to report when it has been idle for five minutes",
+    BridgeToGatewayMsg {
       id: id(),
-      meta: GatewayMsgMeta::Event,
-      data: GatewayToBridgeMsgData::Presence(GatewayToBridgePresenceMsg::Update(HostPresence {
-        display: DisplayState::Dim,
-        idle_s: Some(312),
-        heartbeat_s: Some(10),
+      meta: GatewayMsgMeta::Command,
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::HostWatch(HostWatch {
+        idle_after_s: Some(300),
       })),
     },
   ));
 
   out.push(gateway_fixture(
-    "gateway_to_bridge/presence-update-release",
-    "host hands the screen back to the device with a report that never expires",
+    "gateway_to_bridge/system-host-state-request",
+    "a computer that wants the device to dim with it reports it is locked and idle",
     GatewayToBridgeMsg {
       id: id(),
-      meta: GatewayMsgMeta::Event,
-      data: GatewayToBridgeMsgData::Presence(GatewayToBridgePresenceMsg::Update(HostPresence {
-        display: DisplayState::Active,
-        idle_s: None,
-        heartbeat_s: None,
+      meta: GatewayMsgMeta::Request,
+      data: GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::HostState(HostState {
+        away: Some(true),
+        idle: true,
       })),
+    },
+  ));
+
+  out.push(gateway_fixture(
+    "gateway_to_bridge/system-host-state-not-following-request",
+    "a computer that does not want the device to dim with it reports only that it is in use",
+    GatewayToBridgeMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Request,
+      data: GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::HostState(HostState {
+        away: None,
+        idle: false,
+      })),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/system-host-state-ack-response",
+    "device confirms it has taken in a host state report",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Response(ResponseMeta { request_id: req_id() }),
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::HostStateAck(HostStateAck {})),
+    },
+  ));
+
+  out.push(gateway_fixture(
+    "gateway_to_bridge/system-display-settings-get-request",
+    "gateway asks for the brightness and dim settings",
+    GatewayToBridgeMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Request,
+      data: GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::DisplaySettingsGet),
+    },
+  ));
+
+  out.push(gateway_fixture(
+    "gateway_to_bridge/system-display-settings-set-request",
+    "gateway sets manual brightness and a five minute dim to dark",
+    GatewayToBridgeMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Request,
+      data: GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::DisplaySettingsSet(DisplaySettingsSet {
+        settings: display_settings(),
+      })),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/system-display-settings-reply",
+    "device answers a display settings get or set with the settings it now holds",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Response(ResponseMeta { request_id: req_id() }),
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsReply(display_settings())),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/system-display-settings-rejected",
+    "device refuses a dim timer outside 15 to 86400 seconds and keeps its settings",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Response(ResponseMeta { request_id: req_id() }),
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsRejected(
+        DisplaySettingsRejected {
+          error: HardwareError::DimTimerOutOfRange,
+        },
+      )),
+    },
+  ));
+
+  out.push(bridge_fixture(
+    "bridge_to_gateway/system-display-settings-changed",
+    "device tells every linked gateway its display settings changed, from any source",
+    BridgeToGatewayMsg {
+      id: id(),
+      meta: GatewayMsgMeta::Event,
+      data: BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsChanged(display_settings())),
     },
   ));
 

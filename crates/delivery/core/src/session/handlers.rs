@@ -300,6 +300,9 @@ impl SystemHandler for DeliveryHandlers {
   ) -> Result<Reply<KeepaliveAck>, HandlerError<::core::convert::Infallible>> {
     Ok(KeepaliveAck { seq: request.seq }.into())
   }
+  async fn host_watch(&self, _: HostWatch) -> Result<(), WireError> {
+    Ok(())
+  }
   async fn ota_progress(&self, payload: OtaProgress) -> Result<(), WireError> {
     self.ota.progress(&self.device_id, payload);
     Ok(())
@@ -332,6 +335,10 @@ impl SystemHandler for DeliveryHandlers {
     self
       .ota
       .meta_changed(&self.device_id, MetaChange::CompanionLaunch(payload.enabled));
+    Ok(())
+  }
+  async fn display_settings_changed(&self, payload: DisplaySettings) -> Result<(), WireError> {
+    self.ota.meta_changed(&self.device_id, MetaChange::Display(payload));
     Ok(())
   }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {

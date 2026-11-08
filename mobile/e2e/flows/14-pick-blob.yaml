@@ -19,7 +19,8 @@ tags:
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn:
-    point: "16%,53%"
+    text: "Photo(, [^,]+){2,3}"
+    index: 0
 - extendedWaitUntil:
     visible: "stored image/gif c6567e21feddbbaff1ac9cec192b52e0b275a7bc1a15505262d365961a90b3b7 with progress"
     timeout: 60000

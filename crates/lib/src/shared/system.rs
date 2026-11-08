@@ -2,11 +2,13 @@ use bridgething_macros::WireEvent;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::DisplaySettings;
+
 pub const LIBBRIDGETHING_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Identity and build information for the device.
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireEvent)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, WireEvent)]
 #[wire(BridgeToGateway)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "shared.ts")]
@@ -23,6 +25,8 @@ pub struct BridgeThingMeta {
   /// Whether the device opens the companion app when an iPhone reconnects without it running.
   #[serde(default = "companion_launch_default")]
   pub companion_launch: bool,
+  #[serde(default)]
+  pub display: DisplaySettings,
   pub app_version: String,
   pub daemon_sha256: Option<String>,
   /// Null when no wake word model is loaded, or the loaded model carries no version.
@@ -199,6 +203,11 @@ mod tests {
     )
     .expect("an older daemon's meta still decodes");
     assert!(meta.companion_launch, "older daemons always open the companion app");
+    assert_eq!(
+      meta.display,
+      DisplaySettings::default(),
+      "older daemons report no display settings"
+    );
   }
 
   fn meta_reporting(gesture: serde_json::Value) -> serde_json::Value {

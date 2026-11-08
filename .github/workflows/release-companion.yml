@@ -69,7 +69,7 @@ jobs:
       publishing: ${{ steps.plan.outputs.publishing }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: resolve the companion version and what is already published
         id: plan
@@ -126,7 +126,7 @@ jobs:
       PRUNE_HOST_BUILD: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: reclaim runner disk
         run: |
@@ -151,12 +151,14 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       - name: install rclone (R2 client)
         if: needs.decide.outputs.publishing == 'true'
@@ -262,7 +264,7 @@ jobs:
       COMPANION_VERSION: ${{ needs.decide.outputs.version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -359,7 +361,7 @@ jobs:
           echo "highest on app store connect: $highest"
 
       - name: restore the xcode compilation cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex
           key: xcode-compile-cache-${{ runner.os }}-${{ github.sha }}

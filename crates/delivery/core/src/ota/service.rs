@@ -235,11 +235,12 @@ pub enum OtaSignal {
   BlobFailed(Box<WebappBlobFailed>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MetaChange {
   Nickname(Option<String>),
   LauncherGesture(libbridgething::LauncherGesture),
   CompanionLaunch(bool),
+  Display(libbridgething::DisplaySettings),
 }
 
 impl MetaChange {
@@ -248,6 +249,7 @@ impl MetaChange {
       MetaChange::Nickname(nickname) => meta.nickname = nickname,
       MetaChange::LauncherGesture(gesture) => meta.launcher_gesture = gesture,
       MetaChange::CompanionLaunch(enabled) => meta.companion_launch = enabled,
+      MetaChange::Display(settings) => meta.display = settings,
     }
   }
 }

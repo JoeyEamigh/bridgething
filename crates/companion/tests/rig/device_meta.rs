@@ -7,6 +7,7 @@ pub fn meta(serial: &str) -> libbridgething::BridgeThingMeta {
     bluetooth_name: None,
     launcher_gesture: libbridgething::LauncherGesture::default(),
     companion_launch: true,
+    display: libbridgething::DisplaySettings::default(),
     app_version: "0.0.0".into(),
     daemon_sha256: None,
     wakeword_model_version: None,

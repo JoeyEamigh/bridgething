@@ -5,6 +5,7 @@ pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
     Box::new(M0002CreateState),
     Box::new(M0003CreateWebappProvenance),
     Box::new(M0004DeviceIdentity),
+    Box::new(M0005CreateDisplaySettings),
   ]
 }
 
@@ -153,6 +154,49 @@ impl MigrationTrait for M0004DeviceIdentity {
       )
       .await
   }
+}
+
+struct M0005CreateDisplaySettings;
+
+impl MigrationName for M0005CreateDisplaySettings {
+  fn name(&self) -> &str {
+    "m0005_create_display_settings"
+  }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for M0005CreateDisplaySettings {
+  async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .create_table(
+        Table::create()
+          .table(DisplaySettings::Table)
+          .if_not_exists()
+          .col(ColumnDef::new(DisplaySettings::Id).integer().not_null().primary_key())
+          .col(ColumnDef::new(DisplaySettings::BrightnessMode).text().not_null())
+          .col(ColumnDef::new(DisplaySettings::BrightnessLevel).float().not_null())
+          .col(ColumnDef::new(DisplaySettings::DimAfterS).integer().null())
+          .col(ColumnDef::new(DisplaySettings::DimLevel).float().not_null())
+          .to_owned(),
+      )
+      .await
+  }
+
+  async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .drop_table(Table::drop().table(DisplaySettings::Table).to_owned())
+      .await
+  }
+}
+
+#[derive(DeriveIden)]
+enum DisplaySettings {
+  Table,
+  Id,
+  BrightnessMode,
+  BrightnessLevel,
+  DimAfterS,
+  DimLevel,
 }
 
 #[derive(DeriveIden)]

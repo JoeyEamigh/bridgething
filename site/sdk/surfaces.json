@@ -1,5 +1,5 @@
 {
-  "version": "0.16.1",
+  "version": "0.17.0",
   "surfaces": [
     {
       "name": "asset",
@@ -335,7 +335,7 @@
     {
       "name": "hardware",
       "title": "Hardware",
-      "description": "The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive\nthe backlight, and `stateGet` reads the current state.",
+      "description": "The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive the backlight,\n`stateGet` reads the current state, and `dimChanged` reports dim settings a companion app changed.",
       "events": [
         {
           "method": "onAmbientLightUpdate",
@@ -346,6 +346,11 @@
           "method": "onBrightnessChanged",
           "payload": "BrightnessState",
           "payload_ref": "BrightnessState"
+        },
+        {
+          "method": "onDimChanged",
+          "payload": "DimSettings",
+          "payload_ref": "DimSettings"
         }
       ],
       "requests": [
@@ -1498,6 +1503,11 @@
           "description": "Whether the device opens the companion app when an iPhone reconnects without it running."
         },
         {
+          "name": "display",
+          "type": "DisplaySettings",
+          "type_ref": "DisplaySettings"
+        },
+        {
           "name": "appVersion",
           "type": "string"
         },
@@ -1612,6 +1622,10 @@
           "name": "effectiveLevel",
           "type": "number",
           "description": "0.0 to 1.0. Follows `level` in `manual` mode and the light sensor in `auto`."
+        },
+        {
+          "name": "dimmed",
+          "type": "boolean"
         }
       ]
     },
@@ -2095,6 +2109,23 @@
         }
       ]
     },
+    "DimSettings": {
+      "kind": "struct",
+      "description": "When the screen dims. A connected computer can also ask for a dim with `hostState.away`.",
+      "fields": [
+        {
+          "name": "afterS",
+          "type": "number",
+          "optional": true,
+          "description": "Seconds without input on the device or a connected computer, 15 to 86400. Null never dims."
+        },
+        {
+          "name": "level",
+          "type": "number",
+          "description": "`0.0` (dark) to `1.0`. Caps a manual level and scales an auto level."
+        }
+      ]
+    },
     "DismissReason": {
       "kind": "enum",
       "description": "`acted` covers both the positive and the negative action.",
@@ -2128,6 +2159,27 @@
           "name": "mode",
           "type": "BrightnessMode",
           "type_ref": "BrightnessMode"
+        }
+      ]
+    },
+    "DisplaySettings": {
+      "kind": "struct",
+      "description": "The display settings a user chooses. Nothing the light sensor moves.",
+      "fields": [
+        {
+          "name": "mode",
+          "type": "BrightnessMode",
+          "type_ref": "BrightnessMode"
+        },
+        {
+          "name": "level",
+          "type": "number",
+          "description": "`0.0` to `1.0`. The backlight in `manual` mode."
+        },
+        {
+          "name": "dim",
+          "type": "DimSettings",
+          "type_ref": "DimSettings"
         }
       ]
     },
@@ -2596,6 +2648,11 @@
           "name": "brightness",
           "type": "BrightnessState",
           "type_ref": "BrightnessState"
+        },
+        {
+          "name": "dim",
+          "type": "DimSettings",
+          "type_ref": "DimSettings"
         },
         {
           "name": "ambientLevel",

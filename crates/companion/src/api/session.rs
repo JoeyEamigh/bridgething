@@ -231,6 +231,75 @@ impl From<LauncherGesture> for libbridgething::LauncherGesture {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
+pub enum BrightnessMode {
+  Auto,
+  Manual,
+}
+
+impl From<libbridgething::BrightnessMode> for BrightnessMode {
+  fn from(mode: libbridgething::BrightnessMode) -> Self {
+    match mode {
+      libbridgething::BrightnessMode::Auto => BrightnessMode::Auto,
+      libbridgething::BrightnessMode::Manual => BrightnessMode::Manual,
+    }
+  }
+}
+
+impl From<BrightnessMode> for libbridgething::BrightnessMode {
+  fn from(mode: BrightnessMode) -> Self {
+    match mode {
+      BrightnessMode::Auto => libbridgething::BrightnessMode::Auto,
+      BrightnessMode::Manual => libbridgething::BrightnessMode::Manual,
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct DimSettings {
+  pub after_s: Option<u32>,
+  pub level: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
+pub struct DisplaySettings {
+  pub mode: BrightnessMode,
+  pub level: f32,
+  pub dim: DimSettings,
+}
+
+impl From<libbridgething::DisplaySettings> for DisplaySettings {
+  fn from(settings: libbridgething::DisplaySettings) -> Self {
+    DisplaySettings {
+      mode: settings.mode.into(),
+      level: settings.level,
+      dim: DimSettings {
+        after_s: settings.dim.after_s,
+        level: settings.dim.level,
+      },
+    }
+  }
+}
+
+impl From<DisplaySettings> for libbridgething::DisplaySettings {
+  fn from(settings: DisplaySettings) -> Self {
+    libbridgething::DisplaySettings {
+      mode: settings.mode.into(),
+      level: settings.level,
+      dim: libbridgething::DimSettings {
+        after_s: settings.dim.after_s,
+        level: settings.dim.level,
+      },
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "companion.ts")]
 pub enum WebappSource {
   Builtin,
   Installed,
@@ -409,7 +478,7 @@ pub struct WebappResourceOrigin {
   pub mime: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
 pub struct DeviceMeta {
@@ -426,9 +495,10 @@ pub struct DeviceMeta {
   pub bluetooth_name: Option<String>,
   pub launcher_gesture: LauncherGesture,
   pub companion_launch: bool,
+  pub display: DisplaySettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "companion.ts")]
 pub struct DeviceMetaEntry {

@@ -80,10 +80,6 @@ impl Gateway {
   pub fn chrome(&self) -> ChromeSurface<'_> {
     ChromeSurface(self)
   }
-  /// The `Presence` surface.
-  pub fn presence(&self) -> PresenceSurface<'_> {
-    PresenceSurface(self)
-  }
   /// The `Time` surface.
   pub fn time(&self) -> TimeSurface<'_> {
     TimeSurface(self)
@@ -338,6 +334,15 @@ impl<'a> SystemSurface<'a> {
   ) -> Result<CompanionLaunchReply, RequestFailure<::core::convert::Infallible>> {
     self.0.request(CompanionLaunchGet).await
   }
+  pub async fn display_settings_get(&self) -> Result<DisplaySettings, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(DisplaySettingsGet).await
+  }
+  pub async fn display_settings_set(
+    &self,
+    request: DisplaySettingsSet,
+  ) -> Result<DisplaySettings, RequestFailure<DisplaySettingsRejected>> {
+    self.0.request(request).await
+  }
   pub async fn logs_tail(
     &self,
     request: LogsTail,
@@ -348,6 +353,12 @@ impl<'a> SystemSurface<'a> {
     &self,
     request: LogsSubscribe,
   ) -> Result<LogsSubscribeReply, RequestFailure<::core::convert::Infallible>> {
+    self.0.request(request).await
+  }
+  pub async fn host_state(
+    &self,
+    request: HostState,
+  ) -> Result<HostStateAck, RequestFailure<::core::convert::Infallible>> {
     self.0.request(request).await
   }
   /// Stream of `System` events.
@@ -586,15 +597,6 @@ impl<'a> ChromeSurface<'a> {
   }
 }
 
-/// Methods scoped to the `Presence` wire surface.
-pub struct PresenceSurface<'a>(&'a Gateway);
-
-impl<'a> PresenceSurface<'a> {
-  pub async fn update(&self, payload: HostPresence) -> Result<(), SdkError> {
-    self.0.event(GatewayToBridgePresenceMsgEvent::Update(payload)).await
-  }
-}
-
 /// Methods scoped to the `Time` wire surface.
 pub struct TimeSurface<'a>(&'a Gateway);
 
@@ -755,7 +757,9 @@ pub trait SystemHandler {
     &self,
     payload: CompanionLaunchReply,
   ) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn display_settings_changed(&self, payload: DisplaySettings) -> impl Future<Output = Result<(), WireError>> + Send;
   fn log_entry(&self, payload: LogEntry) -> impl Future<Output = Result<(), WireError>> + Send;
+  fn host_watch(&self, payload: HostWatch) -> impl Future<Output = Result<(), WireError>> + Send;
 }
 
 pub trait TransferHandler {
@@ -1637,6 +1641,33 @@ where
       }
       Ok(())
     }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsReply(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "displaySettingsReply",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsRejected(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "displaySettingsRejected",
+        "response with no pending request"
+      );
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::DisplaySettingsChanged(payload)) => {
+      if let Err(error) = <H as SystemHandler>::display_settings_changed(handlers, payload).await {
+        tracing::warn!(
+          surface = "system",
+          variant = "displaySettingsChanged",
+          ?error,
+          "inbound not handled"
+        );
+      }
+      Ok(())
+    }
     BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::LogsTailReply(_)) => {
       tracing::debug!(
         surface = "system",
@@ -1657,6 +1688,20 @@ where
       if let Err(error) = <H as SystemHandler>::log_entry(handlers, payload).await {
         tracing::warn!(surface = "system", variant = "logEntry", ?error, "inbound not handled");
       }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::HostWatch(payload)) => {
+      if let Err(error) = <H as SystemHandler>::host_watch(handlers, payload).await {
+        tracing::warn!(surface = "system", variant = "hostWatch", ?error, "inbound not handled");
+      }
+      Ok(())
+    }
+    BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::HostStateAck(_)) => {
+      tracing::debug!(
+        surface = "system",
+        variant = "hostStateAck",
+        "response with no pending request"
+      );
       Ok(())
     }
     BridgeToGatewayMsgData::Transfer(BridgeToGatewayTransferMsg::Ack(payload)) => {

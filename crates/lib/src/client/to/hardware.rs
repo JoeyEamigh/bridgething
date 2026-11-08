@@ -2,7 +2,7 @@ use bridgething_macros::BridgeEnum;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{BrightnessState, HardwareState};
+use crate::{BrightnessState, DimSettings, HardwareState};
 
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, TS)]
 #[serde(rename_all = "camelCase")]
@@ -24,13 +24,15 @@ pub struct HardwareStateReply {
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "client.ts")]
 #[bridge_enum(into = crate::client::BridgeToClientMsgData)]
-/// The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive
-/// the backlight, and `stateGet` reads the current state.
+/// The display backlight and the ambient light sensor. `displaySetMode` and `displaySetLevel` drive the backlight,
+/// `stateGet` reads the current state, and `dimChanged` reports dim settings a companion app changed.
 pub enum BridgeToClientHardwareMsg {
   #[bridge_event]
   AmbientLightUpdate(AmbientLightUpdate),
   #[bridge_event]
   BrightnessChanged(BrightnessState),
+  #[bridge_event]
+  DimChanged(DimSettings),
   #[bridge_response]
   StateReply(HardwareStateReply),
 }

@@ -23,7 +23,7 @@ if [ -f "$BUNDLE/tokenizer.json" ] && [ "$(digest "$BUNDLE/tokenizer.json")" = "
   exit 0
 fi
 
-WORK=$(mktemp -d -t bridgething-fetch-nlu-bundle)
+WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 log "fetching the $VERSION android bundle"

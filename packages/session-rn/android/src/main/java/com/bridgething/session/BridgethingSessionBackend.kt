@@ -8,8 +8,10 @@ import com.margelo.nitro.bridgething.session.BridgethingBtDevice
 import com.margelo.nitro.bridgething.session.BridgethingCapabilityFlags
 import com.margelo.nitro.bridgething.session.BridgethingCompanionDebug
 import com.margelo.nitro.bridgething.session.BridgethingConfigEntry
+import com.margelo.nitro.bridgething.session.BridgethingDevConfig
 import com.margelo.nitro.bridgething.session.BridgethingDeviceLogLine
 import com.margelo.nitro.bridgething.session.BridgethingDeviceMeta
+import com.margelo.nitro.bridgething.session.BridgethingDisplaySettings
 import com.margelo.nitro.bridgething.session.BridgethingLauncherGesture
 import com.margelo.nitro.bridgething.session.BridgethingLogArchive
 import com.margelo.nitro.bridgething.session.BridgethingDocEntry
@@ -118,6 +120,7 @@ public interface BridgethingSessionBackend {
     public suspend fun fetchOtaManifest(rootUrl: String): BridgethingOtaManifest
     public suspend fun applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String)
     public fun otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double): BridgethingOtaProgress?
+    public fun devConfig(): BridgethingDevConfig
 
     public suspend fun dismissOtaRun(deviceId: String, lane: BridgethingOtaLane)
 
@@ -139,6 +142,8 @@ public interface BridgethingSessionBackend {
     public suspend fun setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture)
 
     public suspend fun setCompanionLaunch(deviceId: String, enabled: Boolean)
+
+    public suspend fun setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings)
 
     public suspend fun presentPairPicker(): BridgethingBtDevice?
 

@@ -3,9 +3,9 @@ import { validate } from './validate.ts';
 
 export const OFFICIAL_CATALOG_URL = 'https://apps.bridgething.com/catalog.json';
 
-export const SOURCE_DIRECTORY_URL = 'https://bridgething.com/api/sources.json';
-
 export const DIRECTORY_ORIGIN = 'https://bridgething.com';
+
+export const SOURCE_DIRECTORY_URL = `${DIRECTORY_ORIGIN}/api/sources.json`;
 
 export type SourceStatus = 'quarantined' | 'listed' | 'attested' | 'rejected';
 
@@ -213,9 +213,10 @@ export function reportInstalled(report: InstalledReport, init?: { origin?: strin
     .catch(() => reported.delete(serial));
 }
 
-export async function fetchSources(urls: string[]): Promise<CatalogSnapshot> {
+export async function fetchSources(urls: string[], init?: { origin?: string }): Promise<CatalogSnapshot> {
+  const directoryUrl = `${init?.origin ?? DIRECTORY_ORIGIN}/api/sources.json`;
   const results = await Promise.all(
-    [...urls, SOURCE_DIRECTORY_URL].map(async (url): Promise<SourceCatalog | SourceFailure> => {
+    [...urls, directoryUrl].map(async (url): Promise<SourceCatalog | SourceFailure> => {
       try {
         return { url, catalog: await fetchCatalog(url) };
       } catch (reason) {
@@ -230,7 +231,7 @@ export async function fetchSources(urls: string[]): Promise<CatalogSnapshot> {
 
   for (const result of results) {
     if ('reason' in result) failures.push(result);
-    else if (result.url === SOURCE_DIRECTORY_URL) directory = result.catalog;
+    else if (result.url === directoryUrl) directory = result.catalog;
     else catalogs.push(result);
   }
 

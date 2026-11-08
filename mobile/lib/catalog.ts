@@ -100,6 +100,10 @@ async function inheritStoredSources(): Promise<void> {
 
 let inheriting: Promise<void> | null = null;
 
+function directory(): { origin?: string } {
+  return { origin: getSession().devConfig().directory || undefined };
+}
+
 async function heldSources(): Promise<string[]> {
   try {
     inheriting ??= inheritStoredSources().catch(() => {
@@ -154,7 +158,7 @@ async function runRefresh(sources: string[], generation: number) {
   const current = () => generation === refreshGeneration;
   useCatalogStore.setState({ refreshing: true });
 
-  const directory = fetchMergedApps().then(
+  const listed = fetchMergedApps(directory()).then(
     merged => {
       if (!current()) return;
       useCatalogStore.setState({
@@ -171,7 +175,7 @@ async function runRefresh(sources: string[], generation: number) {
     },
   );
 
-  const subscribed = fetchSources(sources)
+  const subscribed = fetchSources(sources, directory())
     .catch(err => ({
       catalogs: [],
       directory: null,
@@ -181,7 +185,7 @@ async function runRefresh(sources: string[], generation: number) {
       if (current()) useCatalogStore.setState(snapshot);
     });
 
-  await Promise.all([directory, subscribed]);
+  await Promise.all([listed, subscribed]);
   if (current()) useCatalogStore.setState({ refreshing: false });
 }
 
@@ -517,7 +521,7 @@ export function startInstallCensus(): void {
   const sweep = () => {
     for (const peer of connectedPeers(useSessionStore.getState().peers)) {
       const inventory = inventoryOf(peer.id);
-      if (inventory) reportInstalled(inventory);
+      if (inventory) reportInstalled(inventory, directory());
     }
   };
 

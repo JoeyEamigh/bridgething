@@ -217,6 +217,34 @@ describe('catalog sources', () => {
       r.catalog.useCatalogStore.getState().catalogs.map(c => c.url),
     ).toEqual([THIRD_PARTY]);
   });
+
+  test('a build that names a dev directory reads the store from it and nowhere else', async () => {
+    const r = rig();
+    const dev = 'http://127.0.0.1:8899';
+    const fetched = serve({
+      [OFFICIAL]: catalog('official'),
+      [`${dev}/api/sources.json`]: catalog('dev directory'),
+      [`${dev}/api/apps.json`]: {
+        updated_at: 'now',
+        catalogs: [],
+        failures: [],
+      },
+    });
+    r.native.__returns.set('devConfig', () => ({
+      gateway: '',
+      directory: dev,
+    }));
+    await r.catalog.refreshCatalog();
+
+    const urls = fetched.mock.calls.map(([url]) => url);
+    expect(urls).toContain(`${dev}/api/apps.json`);
+    expect(
+      urls.filter(url => url.startsWith('https://bridgething.com')),
+    ).toEqual([]);
+    expect(r.catalog.useCatalogStore.getState().directory?.repo.name).toBe(
+      'dev directory',
+    );
+  });
 });
 
 const APP_ID = '019e6701-13f8-71b5-ba04-85d326630e98';

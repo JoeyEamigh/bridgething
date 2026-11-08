@@ -175,6 +175,7 @@ pub fn boot_session(
     log: Arc::new(Quiet),
     audio: None,
     volume: None,
+    host_state: None,
     geo: None,
     notifications: None,
     phone: None,

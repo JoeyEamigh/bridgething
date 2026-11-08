@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::transfer::{TransferBody, TransferRef};
-use crate::{LauncherGesture, LogLevel, LogSource, OtaKind, RangePart};
+use crate::{DisplaySettings, LauncherGesture, LogLevel, LogSource, OtaKind, RangePart};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -153,6 +153,33 @@ pub struct CompanionLaunchSet {
   pub enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, WireRequest)]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = System,
+  request_variant = DisplaySettingsGet,
+  response = crate::DisplaySettings,
+  response_variant = DisplaySettingsReply,
+)]
+pub struct DisplaySettingsGet;
+
+/// Replaces every display setting at once. A rejected set changes nothing.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, TS, WireRequest)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = System,
+  request_variant = DisplaySettingsSet,
+  response = crate::DisplaySettings,
+  response_variant = DisplaySettingsReply,
+  error = crate::gateway::DisplaySettingsRejected,
+  error_variant = DisplaySettingsRejected,
+)]
+pub struct DisplaySettingsSet {
+  pub settings: DisplaySettings,
+}
+
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
 #[serde(rename_all = "camelCase")]
@@ -208,8 +235,29 @@ pub struct LogsUnsubscribe {
   pub token: String,
 }
 
+/// Sent in reply to each `hostWatch`, when the computer starts or stops asking for dimming, and on every change of a
+/// field it reports. The device acks each report once its dim rules have taken it in.
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS, WireRequest)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export, export_to = "gateway.ts")]
+#[wire_request(
+  direction = GatewayToBridge,
+  surface = System,
+  request_variant = HostState,
+  response = crate::gateway::HostStateAck,
+  response_variant = HostStateAck,
+)]
+pub struct HostState {
+  /// Present only while the computer wants the device to dim with it. True when it is locked, its display is off or
+  /// dimmed, or it is going to sleep.
+  pub away: Option<bool>,
+  /// The computer has had no input for `idleAfterS` seconds.
+  pub idle: bool,
+}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 #[bridge_enum(into = crate::gateway::GatewayToBridgeMsgData)]
@@ -239,6 +287,10 @@ pub enum GatewayToBridgeSystemMsg {
   #[bridge_command]
   CompanionLaunchSet(CompanionLaunchSet),
   #[bridge_request]
+  DisplaySettingsGet,
+  #[bridge_request]
+  DisplaySettingsSet(DisplaySettingsSet),
+  #[bridge_request]
   LogsTail(LogsTail),
   #[bridge_request]
   LogsSubscribe(LogsSubscribe),
@@ -248,4 +300,6 @@ pub enum GatewayToBridgeSystemMsg {
   LogsSetVerbosity(LogsSetVerbosity),
   #[bridge_response]
   KeepaliveAck(KeepaliveAck),
+  #[bridge_request]
+  HostState(HostState),
 }

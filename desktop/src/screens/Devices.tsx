@@ -20,7 +20,7 @@ import { useState } from 'preact/hooks';
 
 import { deviceName } from '@bridgething/client';
 import { ConnectFlow } from '../components/ConnectFlow.tsx';
-import { DeviceSettings } from '../components/DeviceSettings.tsx';
+import { DeviceSettings, DisplaySection } from '../components/DeviceSettings.tsx';
 import { OtaRunCard } from '../components/OtaRunCard.tsx';
 import { Disclosure, ErrorNote, Screen, Section } from '../components/Screen.tsx';
 import { useDesktop } from '../desktop.ts';
@@ -117,6 +117,13 @@ export function DevicesScreen(): VNode {
         <Section>
           <SectionHeader title="settings" />
           <DeviceSettings />
+        </Section>
+      ) : null}
+
+      {primary ? (
+        <Section>
+          <SectionHeader title="display" />
+          <DisplaySection />
         </Section>
       ) : null}
 

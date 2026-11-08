@@ -33,7 +33,7 @@ jobs:
       published: ${{ steps.plan.outputs.published }}
       build: ${{ steps.plan.outputs.build }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: split the targets into published and to-build
         id: plan
@@ -77,15 +77,15 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: desktop/src-tauri/binaries
           key: ffmpeg-sidecar-${{ matrix.target }}-${{ needs.plan.outputs.recipe }}
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
 
       - name: build the sidecar
         if: steps.cache.outputs.cache-hit != 'true'
@@ -123,7 +123,7 @@ jobs:
           CLOUDFLARE_CACHE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
         run: scripts/cf-purge
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ffmpeg-sidecar-${{ matrix.target }}
           path: |

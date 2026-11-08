@@ -14,9 +14,9 @@ use crate::{
   api::ota::{ArtifactDigest, OtaAvailable, OtaLane, OtaPollStatus, OtaQueue, OtaRun, OtaRunProgress},
   backend::{
     AppleMusicBackend, AudioBackend, ConnectivityMonitor, DeviceWaker, ExtensionHost, ForeignHttp, GeoProvider,
-    HostEnvironment, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel, LogSink,
-    MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend, PhoneBackend,
-    PresenceBackend, SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
+    HostEnvironment, HostStateBackend, HttpTransport, ImageScaler, LinkDevice, LinkTransport, LogInbox, LogLevel,
+    LogSink, MediaSessionBackend, MediaTranscoder, ModelArtifactValidator, NluModelRunner, NotificationBackend,
+    PhoneBackend, SecretStore, SpeechRecognizer, StreamBackend, TransferPolicy, VolumeBackend, WsTransport,
     log::{api_from_wire, wire_from_api},
   },
   provider::ResumeTarget,
@@ -49,6 +49,8 @@ pub struct CompanionBackends {
   pub audio: Option<Arc<dyn AudioBackend>>,
   #[uniffi(default = None)]
   pub volume: Option<Arc<dyn VolumeBackend>>,
+  #[uniffi(default = None)]
+  pub host_state: Option<Arc<dyn HostStateBackend>>,
   #[uniffi(default = None)]
   pub geo: Option<Arc<dyn GeoProvider>>,
   #[uniffi(default = None)]
@@ -240,13 +242,6 @@ pub struct CompanionSession {
   log_inbox: Arc<LogInbox>,
 }
 
-impl CompanionSession {
-  /// Desktop only. Mobile hosts have no display to follow, so this stays out of the FFI surface.
-  pub fn set_presence_backend(&self, presence: Arc<dyn PresenceBackend>) {
-    self.session.set_presence_backend(presence);
-  }
-}
-
 #[uniffi::export(async_runtime = "tokio")]
 impl CompanionSession {
   #[uniffi::constructor]
@@ -427,6 +422,18 @@ impl CompanionSession {
       })
       .await
       .map_err(|failure| CompanionError::Device(format!("{failure:?}")))
+  }
+
+  pub async fn set_display_settings(&self, device_id: String, settings: DisplaySettings) -> Result<(), CompanionError> {
+    let gateway = self.gateway_checked(&device_id)?;
+    gateway
+      .system()
+      .display_settings_set(libbridgething::gateway::DisplaySettingsSet {
+        settings: settings.into(),
+      })
+      .await
+      .map(|_| ())
+      .map_err(device_error)
   }
 
   pub async fn set_companion_launch(&self, device_id: String, enabled: bool) -> Result<(), CompanionError> {
@@ -823,6 +830,14 @@ impl CompanionSession {
 
   pub async fn list_webapp_blobs(&self, device_id: String, id: String) -> Result<Vec<WebappBlob>, CompanionError> {
     self.session.list_webapp_blobs(&device_id, webapp_id(&id)?).await
+  }
+
+  pub fn follow_host(&self) -> bool {
+    self.session.follow_host()
+  }
+
+  pub fn set_follow_host(&self, enabled: bool) {
+    self.session.set_follow_host(enabled);
   }
 
   pub async fn set_ota_poll_config(&self, config: Option<OtaPollConfig>) {

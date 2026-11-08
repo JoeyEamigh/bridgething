@@ -4,6 +4,8 @@ pub mod audio;
 pub mod connectivity;
 #[path = "../../../../../../../crates/companion/src/backend/geo.rs"]
 pub mod geo;
+#[path = "../../../../../../../crates/companion/src/backend/host_state.rs"]
+pub mod host_state;
 #[path = "../../../../../../../crates/companion/src/backend/image.rs"]
 pub mod image;
 #[path = "../../../../../../../crates/companion/src/backend/media.rs"]
@@ -16,6 +18,7 @@ pub mod transcode;
 pub use audio::{AudioBackend, EarconSink, SpeakEvent, SpeakSink, VolumeBackend, VolumeInbox, VolumeLevel};
 pub use connectivity::{ConnectivityInbox, ConnectivityMonitor};
 pub use geo::{GeoAccuracy, GeoError, GeoEvent, GeoInbox, GeoProvider, Position};
+pub use host_state::{HostEdge, HostStateBackend, HostStateInbox};
 pub use image::{ImageScaler, ImageTarget, ScaledImage, sniff_and_scale};
 pub use media::{
   MediaArt, MediaArtSink, MediaControl, MediaQueueEntry, MediaRepeatMode, MediaSessionBackend, MediaSessionInbox,

@@ -1,6 +1,7 @@
 import {
   type BridgethingAncsAuthStatus,
   type BridgethingDeviceMeta,
+  type BridgethingDisplaySettings,
   type BridgethingHostInfo,
   type BridgethingLauncherGesture,
   type BridgethingNowPlaying,
@@ -266,6 +267,13 @@ export async function setLauncherGesture(
   gesture: BridgethingLauncherGesture,
 ): Promise<void> {
   await getSession().setLauncherGesture(deviceId, gesture);
+}
+
+export async function setDisplaySettings(
+  deviceId: string,
+  settings: BridgethingDisplaySettings,
+): Promise<void> {
+  await getSession().setDisplaySettings(deviceId, settings);
 }
 
 export async function setCompanionLaunch(

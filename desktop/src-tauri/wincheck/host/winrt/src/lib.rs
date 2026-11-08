@@ -1,6 +1,10 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 #![allow(clippy::missing_safety_doc)]
 
+#[cfg(windows)]
+pub use real::*;
+
+#[cfg(not(windows))]
 pub mod core {
   use std::ffi::c_void;
 
@@ -64,6 +68,7 @@ pub mod core {
   pub struct Ref<'a, T>(pub &'a T);
 }
 
+#[cfg(not(windows))]
 macro_rules! runtime_class {
   ($name:ident) => {
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,6 +91,7 @@ macro_rules! runtime_class {
   };
 }
 
+#[cfg(not(windows))]
 pub mod Foundation {
   use crate::core::{Ref, Result, RuntimeType};
 
@@ -147,6 +153,7 @@ pub mod Foundation {
   }
 }
 
+#[cfg(not(windows))]
 pub mod Media {
   use crate::core::RuntimeType;
 
@@ -387,6 +394,7 @@ pub mod Media {
   }
 }
 
+#[cfg(not(windows))]
 pub mod Storage {
   pub mod Streams {
     use crate::{
@@ -435,6 +443,7 @@ pub mod Storage {
   }
 }
 
+#[cfg(not(windows))]
 pub mod Win32 {
   pub mod System {
     pub mod Com {

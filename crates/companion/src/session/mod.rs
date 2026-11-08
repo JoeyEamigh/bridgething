@@ -2,6 +2,7 @@ mod blobs;
 mod catalog;
 mod downlevel;
 pub mod handlers;
+mod host_state;
 mod imports;
 pub mod link;
 pub mod models;
@@ -51,8 +52,7 @@ use crate::{
   },
   backend::{
     AlwaysAllows, ConnectivityInbox, ForeignHttp, ForeignModelValidator, ForeignTransferPolicy, ForeignWs, HostClock,
-    HostDisplay, LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, PresenceBackend,
-    PresenceInbox, PresenceReport, VolumeInbox, VolumeLevel,
+    LinkDevice, LinkEvent, LinkInbox, LinkTransport, PrepareEvent, PrepareSink, VolumeInbox, VolumeLevel,
   },
   cache::PhoneCache,
   dayparting::Dayparting,
@@ -70,8 +70,8 @@ use crate::{
     system_media::SystemMediaProvider,
   },
   session::{
-    handlers::Peer, link::LinkConnector, models::VoiceModels, network::NetworkLink, observer::SessionObserver,
-    ota::OtaLink, settings::HostSettings,
+    handlers::Peer, host_state::HostReports, link::LinkConnector, models::VoiceModels, network::NetworkLink,
+    observer::SessionObserver, ota::OtaLink, settings::HostSettings,
   },
   store::JsonFile,
   voice::{
@@ -220,8 +220,7 @@ pub struct Session {
   inbox: Mutex<Option<JoinHandle<()>>>,
   connectivity_pump: Mutex<Option<JoinHandle<()>>>,
   volume_pump: Mutex<Option<JoinHandle<()>>>,
-  presence: Mutex<Option<Arc<dyn PresenceBackend>>>,
-  presence_pump: Mutex<Option<JoinHandle<()>>>,
+  host_state: Option<Arc<HostReports>>,
   arbitration: Mutex<Option<JoinHandle<()>>>,
   updates: Mutex<Option<JoinHandle<()>>>,
   handle_sweep: Mutex<Option<JoinHandle<()>>>,
@@ -318,6 +317,10 @@ impl Session {
         }))
         .collect(),
     );
+    let host_state = backends
+      .host_state
+      .clone()
+      .map(|backend| HostReports::new(backend, recalled.follow_host));
     let broadcast = Arc::new(Broadcast::default());
     let hub = Hub::new(
       broadcast.clone() as Arc<dyn OutboundLink>,
@@ -372,8 +375,7 @@ impl Session {
       inbox: Mutex::new(None),
       connectivity_pump: Mutex::new(None),
       volume_pump: Mutex::new(None),
-      presence: Mutex::new(None),
-      presence_pump: Mutex::new(None),
+      host_state,
       arbitration: Mutex::new(None),
       updates: Mutex::new(None),
       handle_sweep: Mutex::new(None),
@@ -728,15 +730,8 @@ impl Session {
       }
       tokio::task::spawn_blocking(move || volume.start(inbox));
     }
-    if let Some(presence) = self.presence_backend() {
-      let (inbox, reports) = PresenceInbox::channel();
-      let session = self.clone();
-      let backend = presence.clone();
-      let pump = tokio::spawn(async move { session.pump_presence(backend, reports).await });
-      if let Some(previous) = self.presence_pump.lock().unwrap().replace(pump) {
-        previous.abort();
-      }
-      tokio::task::spawn_blocking(move || presence.start(inbox));
+    if let Some(host_state) = &self.host_state {
+      host_state.start();
     }
     let Some(transport) = self.backends.link.clone() else {
       return;
@@ -802,35 +797,6 @@ impl Session {
     }
   }
 
-  /// Report the host display state the moment it changes, and again every `PRESENCE_HEARTBEAT` so
-  /// the device can tell a quiet host from a gone one.
-  async fn pump_presence(
-    self: Arc<Self>,
-    backend: Arc<dyn crate::backend::PresenceBackend>,
-    mut reports: mpsc::UnboundedReceiver<PresenceReport>,
-  ) {
-    let mut beat = tokio::time::interval(PRESENCE_HEARTBEAT);
-    beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    loop {
-      let report = tokio::select! {
-        received = reports.recv() => match received {
-          Some(report) => report,
-          None => return,
-        },
-        _ = beat.tick() => {
-          let backend = backend.clone();
-          match tokio::task::spawn_blocking(move || backend.snapshot()).await {
-            Ok(report) => report,
-            Err(_) => continue,
-          }
-        }
-      };
-      for (_, gateway) in self.live_gateways() {
-        let _ = gateway.presence().update(host_presence(report)).await;
-      }
-    }
-  }
-
   async fn pump_connectivity(self: Arc<Self>, mut edges: mpsc::UnboundedReceiver<bool>) {
     while let Some(online) = edges.recv().await {
       self.cache.set_online(online);
@@ -845,18 +811,12 @@ impl Session {
   }
 
   pub async fn stop(&self) {
-    if self.presence_backend().is_some() {
-      for (_, gateway) in self.live_gateways() {
-        let _ = gateway.presence().update(release_presence()).await;
-      }
-    }
     self.networks.lock().unwrap().clear();
     for held in [
       &self.models_watch,
       &self.inbox,
       &self.connectivity_pump,
       &self.volume_pump,
-      &self.presence_pump,
       &self.arbitration,
       &self.updates,
       &self.handle_sweep,
@@ -871,8 +831,8 @@ impl Session {
     if let Some(volume) = self.backends.volume.clone() {
       let _ = tokio::task::spawn_blocking(move || volume.stop()).await;
     }
-    if let Some(presence) = self.presence_backend() {
-      let _ = tokio::task::spawn_blocking(move || presence.stop()).await;
+    if let Some(host_state) = &self.host_state {
+      host_state.stop().await;
     }
     for device_id in self.device_ids() {
       self.teardown(&device_id).await;
@@ -974,8 +934,7 @@ impl Session {
     self.detach(&device.id).await;
 
     let (gateway, inbound) = Gateway::spawn_subscribed(connector);
-    let outbound: Arc<dyn OutboundLink> = Arc::new(gateway.clone());
-    let peer = self.assemble(&outbound, &device.id);
+    let peer = self.assemble(&gateway, &device.id);
     peer.net.start();
     self.ota.adopt(&device.id, gateway.clone()).await;
     self.broadcast.adopt(&device.id, gateway.clone());
@@ -1153,7 +1112,6 @@ impl Session {
     self.hub.peer_connected(&device.id).await;
     self.push_time(gateway).await;
     self.push_volume(gateway).await;
-    self.push_presence(gateway).await;
 
     if let Some(geo) = &peer.geo {
       geo.start().await;
@@ -1194,24 +1152,6 @@ impl Session {
       .await;
   }
 
-  pub fn set_presence_backend(&self, presence: Arc<dyn PresenceBackend>) {
-    *self.presence.lock().unwrap() = Some(presence);
-  }
-
-  fn presence_backend(&self) -> Option<Arc<dyn PresenceBackend>> {
-    self.presence.lock().unwrap().clone()
-  }
-
-  pub async fn push_presence(&self, gateway: &Gateway) {
-    let Some(presence) = self.presence_backend() else {
-      return;
-    };
-    let Ok(report) = tokio::task::spawn_blocking(move || presence.snapshot()).await else {
-      return;
-    };
-    let _ = gateway.presence().update(host_presence(report)).await;
-  }
-
   pub async fn push_time(&self, gateway: &Gateway) {
     let host = self.backends.host.clone();
     let Ok(clock) = tokio::task::spawn_blocking(move || host.clock()).await else {
@@ -1226,7 +1166,8 @@ impl Session {
     }
   }
 
-  fn assemble(self: &Arc<Self>, outbound: &Arc<dyn OutboundLink>, device_id: &str) -> Arc<Peer> {
+  fn assemble(self: &Arc<Self>, gateway: &Gateway, device_id: &str) -> Arc<Peer> {
+    let outbound: Arc<dyn OutboundLink> = Arc::new(gateway.clone());
     let registry = self.hub.clone() as Arc<dyn ProviderRegistry>;
     let foreign: Arc<dyn bridgething_io::HttpTransport> = Arc::new(ForeignHttp::new(self.backends.http.clone()));
     let http = HttpExecutor::new(foreign.clone());
@@ -1297,7 +1238,14 @@ impl Session {
         .clone()
         .map(|backend| PhoneDispatcher::new(backend, outbound.clone())),
       player: PlayerDispatcher::new(self.hub.clone(), outbound.clone()),
-      system: SystemDispatcher::new(OtaLink::new(self.ota.clone(), device_id), observer.clone()),
+      system: SystemDispatcher::new(
+        OtaLink::new(self.ota.clone(), device_id),
+        observer.clone(),
+        self
+          .host_state
+          .as_ref()
+          .map(|host_state| host_state.link(device_id, Arc::new(gateway.clone()))),
+      ),
       tunnel: TunnelDispatcher::new(outbound.clone(), self.clock.clone()),
       voice,
       webapp: WebappDispatcher::new(registry, observer.clone(), device_id),
@@ -1370,6 +1318,9 @@ impl Session {
 
   async fn release(&self, device_id: &str, link: Option<Link>) {
     self.log_stream.lock().unwrap().taps.remove(device_id);
+    if let Some(host_state) = &self.host_state {
+      host_state.forget(device_id);
+    }
     self.broadcast.release(device_id);
     self.hub.peer_disconnected(device_id);
     let Some(link) = link else { return };
@@ -1442,6 +1393,17 @@ impl Session {
     self.hub.set_device_resume_target(device_id, target);
   }
 
+  pub fn follow_host(&self) -> bool {
+    self.settings.read(|held| held.follow_host)
+  }
+
+  pub fn set_follow_host(&self, enabled: bool) {
+    self.settings.write(|held| held.follow_host = enabled);
+    if let Some(host_state) = &self.host_state {
+      host_state.follow(enabled);
+    }
+  }
+
   pub async fn set_ota_poll_config(&self, config: Option<OtaPollConfig>) {
     *self.poll_config.lock().unwrap() = config.clone();
     self.settings.write(|held| held.ota_poll_config = config.clone());
@@ -1503,30 +1465,6 @@ async fn release_log_tap(gateway: &Gateway, token: String) {
     .system()
     .logs_unsubscribe(libbridgething::gateway::LogsUnsubscribe { token })
     .await;
-}
-
-const PRESENCE_HEARTBEAT: std::time::Duration = std::time::Duration::from_secs(5);
-
-const RELEASE_HEARTBEAT_S: u16 = 1;
-
-fn release_presence() -> libbridgething::HostPresence {
-  libbridgething::HostPresence {
-    display: libbridgething::DisplayState::Active,
-    idle_s: None,
-    heartbeat_s: Some(RELEASE_HEARTBEAT_S),
-  }
-}
-
-fn host_presence(report: PresenceReport) -> libbridgething::HostPresence {
-  libbridgething::HostPresence {
-    display: match report.display {
-      HostDisplay::Active => libbridgething::DisplayState::Active,
-      HostDisplay::Dim => libbridgething::DisplayState::Dim,
-      HostDisplay::Off => libbridgething::DisplayState::Off,
-    },
-    idle_s: Some(report.idle_s),
-    heartbeat_s: Some(PRESENCE_HEARTBEAT.as_secs() as u16),
-  }
 }
 
 fn time_info(clock: HostClock) -> TimeInfo {

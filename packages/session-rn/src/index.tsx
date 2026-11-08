@@ -6,9 +6,11 @@ import type {
   BridgethingCapabilityFlags,
   BridgethingCompanionDebug,
   BridgethingConfigEntry,
+  BridgethingDevConfig,
   BridgethingDeviceLogLine,
   BridgethingDeviceMeta,
   BridgethingDeviceWebappsEntry,
+  BridgethingDisplaySettings,
   BridgethingDocEntry,
   BridgethingLauncherGesture,
   BridgethingLogArchive,
@@ -46,15 +48,19 @@ export type {
   BridgethingAncsSetupResult,
   BridgethingAuthKind,
   BridgethingAuthState,
+  BridgethingBrightnessMode,
   BridgethingBtBondState,
   BridgethingBtDevice,
   BridgethingCapabilityFlags,
   BridgethingCompanionDebug,
   BridgethingConfigEntry,
+  BridgethingDevConfig,
   BridgethingDeviceAutoResume,
   BridgethingDeviceLogLine,
   BridgethingDeviceMeta,
   BridgethingDeviceMetaEntry,
+  BridgethingDimSettings,
+  BridgethingDisplaySettings,
   BridgethingDocEntry,
   BridgethingHostInfo,
   BridgethingLauncherGesture,
@@ -393,6 +399,10 @@ export class BridgethingSession {
     return this.native.otaRunProgress(deviceId, lane, nowMs);
   }
 
+  devConfig(): BridgethingDevConfig {
+    return this.native.devConfig();
+  }
+
   async dismissOtaRun(deviceId: string, lane: BridgethingOtaLane): Promise<void> {
     await this.native.dismissOtaRun(deviceId, lane);
   }
@@ -433,6 +443,10 @@ export class BridgethingSession {
 
   async setCompanionLaunch(deviceId: string, enabled: boolean): Promise<void> {
     await this.native.setCompanionLaunch(deviceId, enabled);
+  }
+
+  async setDisplaySettings(deviceId: string, settings: BridgethingDisplaySettings): Promise<void> {
+    await this.native.setDisplaySettings(deviceId, settings);
   }
 
   async presentPairPicker(): Promise<BridgethingBtDevice | null> {

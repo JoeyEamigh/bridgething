@@ -7,7 +7,7 @@ runs:
     - uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy
-    - uses: extractions/setup-just@v3
+    - uses: extractions/setup-just@v4
     - uses: oven-sh/setup-bun@v2
       with:
         bun-version-file: .bun-version
@@ -21,10 +21,10 @@ runs:
 
     - uses: Swatinem/rust-cache@v2
       with:
-        save-if: ${{ github.ref == 'refs/heads/dev' }}
+        save-if: ${{ github.event.pull_request.base.ref == 'dev' }}
 
     - id: wakeword
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v6
       with:
         path: crates/wakeword/models
         key: >-
@@ -36,8 +36,14 @@ runs:
       shell: bash
       run: scripts/bridgething-fetch-wakeword-models
 
+    - if: steps.wakeword.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: crates/wakeword/models
+        key: ${{ steps.wakeword.outputs.cache-primary-key }}
+
     - id: nlu-bundle
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v6
       with:
         path: crates/nlu/tests/bundle/tokenizer.json
         key: nlu-bundle-${{ hashFiles('scripts/bridgething-fetch-nlu-bundle') }}
@@ -45,3 +51,9 @@ runs:
     - if: steps.nlu-bundle.outputs.cache-hit != 'true'
       shell: bash
       run: scripts/bridgething-fetch-nlu-bundle
+
+    - if: steps.nlu-bundle.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: crates/nlu/tests/bundle/tokenizer.json
+        key: ${{ steps.nlu-bundle.outputs.cache-primary-key }}

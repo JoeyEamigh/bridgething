@@ -4,6 +4,7 @@
 import type {
   BridgeThingMeta,
   BrightnessState,
+  DimSettings,
   LogEntry,
   Notification,
   NowPlayingUpdate,
@@ -132,10 +133,6 @@ import type {
   PlayerQueueReply,
   PlayerStateReply,
   PlayerTargetsReply,
-  PresenceSettingsErrorReply,
-  PresenceSettingsReply,
-  PresenceSettingsSet,
-  PresenceSnapshot,
   QueueUri,
   SeekTo,
   SetBluetoothAlias,
@@ -234,6 +231,7 @@ export type GeoInboundHandlers = {
 export type HardwareInboundHandlers = {
   ambientLightUpdate: (msg: AmbientLightUpdate) => void;
   brightnessChanged: (msg: BrightnessState) => void;
+  dimChanged: (msg: DimSettings) => void;
   stateReply: (msg: HardwareStateReply) => void;
 };
 
@@ -291,14 +289,6 @@ export type PlayerInboundHandlers = {
   errorEvent: (msg: PlayerErrorReply) => void;
   targetsReply: (msg: PlayerTargetsReply) => void;
   errorReply: (msg: PlayerErrorReply) => void;
-};
-
-export type PresenceInboundHandlers = {
-  changed: (msg: PresenceSnapshot) => void;
-  snapshot: (msg: PresenceSnapshot) => void;
-  settingsChanged: (msg: PresenceSettingsReply) => void;
-  settingsReply: (msg: PresenceSettingsReply) => void;
-  settingsErrorReply: (msg: PresenceSettingsErrorReply) => void;
 };
 
 export type SystemInboundHandlers = {
@@ -1436,6 +1426,18 @@ export class HardwareSurface {
     });
   }
 
+  /** Subscribe to `Hardware::DimChanged` from the daemon. */
+  onDimChanged(handler: (msg: DimSettings) => void): () => void {
+    return this._client.on(event => {
+      if (event.type !== 'message') return;
+      const data = event.message.data;
+      if (data.type !== 'hardware') return;
+      const inner = data.data;
+      if (inner.event !== 'dimChanged') return;
+      handler(inner.data);
+    });
+  }
+
   /** Subscribe to `Hardware::StateReply` from the daemon. */
   onStateReply(handler: (msg: HardwareStateReply) => void): () => void {
     return this._client.on(event => {
@@ -1471,6 +1473,10 @@ export class HardwareSurface {
         }
         case 'brightnessChanged': {
           handlers.brightnessChanged?.(inner.data);
+          return;
+        }
+        case 'dimChanged': {
+          handlers.dimChanged?.(inner.data);
           return;
         }
         case 'stateReply': {
@@ -2864,158 +2870,6 @@ export class PlayerSurface {
   }
 }
 
-export class PresenceSurface {
-  constructor(private readonly _client: BridgethingClient) {}
-
-  /** Subscribe to `Presence::Changed` from the daemon. */
-  onChanged(handler: (msg: PresenceSnapshot) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      if (inner.event !== 'changed') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Subscribe to `Presence::Snapshot` from the daemon. */
-  onSnapshot(handler: (msg: PresenceSnapshot) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      if (inner.event !== 'snapshot') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Subscribe to `Presence::SettingsChanged` from the daemon. */
-  onSettingsChanged(handler: (msg: PresenceSettingsReply) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      if (inner.event !== 'settingsChanged') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Subscribe to `Presence::SettingsReply` from the daemon. */
-  onSettingsReply(handler: (msg: PresenceSettingsReply) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      if (inner.event !== 'settingsReply') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Subscribe to `Presence::SettingsErrorReply` from the daemon. */
-  onSettingsErrorReply(handler: (msg: PresenceSettingsErrorReply) => void): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      if (inner.event !== 'settingsErrorReply') return;
-      handler(inner.data);
-    });
-  }
-
-  /** Exhaustive subscribe over all inbound `Presence` variants. */
-  subscribe(handlers: PresenceInboundHandlers): () => void {
-    return this._subscribe(handlers, false);
-  }
-
-  /** Same as `subscribe` but every handler is optional. */
-  subscribePartial(handlers: Partial<PresenceInboundHandlers>): () => void {
-    return this._subscribe(handlers, true);
-  }
-
-  private _subscribe(handlers: Partial<PresenceInboundHandlers>, partial: boolean): () => void {
-    return this._client.on(event => {
-      if (event.type !== 'message') return;
-      const data = event.message.data;
-      if (data.type !== 'presence') return;
-      const inner = data.data;
-      switch (inner.event) {
-        case 'changed': {
-          handlers.changed?.(inner.data);
-          return;
-        }
-        case 'snapshot': {
-          handlers.snapshot?.(inner.data);
-          return;
-        }
-        case 'settingsChanged': {
-          handlers.settingsChanged?.(inner.data);
-          return;
-        }
-        case 'settingsReply': {
-          handlers.settingsReply?.(inner.data);
-          return;
-        }
-        case 'settingsErrorReply': {
-          handlers.settingsErrorReply?.(inner.data);
-          return;
-        }
-        default: {
-          if (!partial) this._client.logger.warn('Presence: no handler for inner', inner);
-          return;
-        }
-      }
-    });
-  }
-
-  /** Typed request to the daemon: webapp sends, daemon responds. */
-  async get(options?: { timeoutMs?: number }): Promise<TypedRequestResult<PresenceSnapshot, never>> {
-    const wireData: ClientToBridgeMsg['data'] = { type: 'presence', data: { event: 'get' } };
-    const response = await this._client.request(wireData, options?.timeoutMs);
-    const d = response.data;
-    if (d.type === 'presence') {
-      const inner = d.data;
-      if (inner.event === 'snapshot') return { ok: true, response: inner.data };
-    }
-    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
-    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
-  }
-
-  /** Typed request to the daemon: webapp sends, daemon responds. */
-  async settingsGet(options?: { timeoutMs?: number }): Promise<TypedRequestResult<PresenceSettingsReply, never>> {
-    const wireData: ClientToBridgeMsg['data'] = { type: 'presence', data: { event: 'settingsGet' } };
-    const response = await this._client.request(wireData, options?.timeoutMs);
-    const d = response.data;
-    if (d.type === 'presence') {
-      const inner = d.data;
-      if (inner.event === 'settingsReply') return { ok: true, response: inner.data };
-    }
-    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
-    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
-  }
-
-  /** Typed request to the daemon: webapp sends, daemon responds. */
-  async settingsSet(
-    req: PresenceSettingsSet,
-    options?: { timeoutMs?: number },
-  ): Promise<TypedRequestResult<PresenceSettingsReply, PresenceSettingsErrorReply>> {
-    const wireData: ClientToBridgeMsg['data'] = { type: 'presence', data: { event: 'settingsSet', data: req } };
-    const response = await this._client.request(wireData, options?.timeoutMs);
-    const d = response.data;
-    if (d.type === 'presence') {
-      const inner = d.data;
-      if (inner.event === 'settingsReply') return { ok: true, response: inner.data };
-      if (inner.event === 'settingsErrorReply') return { ok: false, kind: 'domain', error: inner.data };
-    }
-    if (d.type === 'error') return { ok: false, kind: 'protocol', error: d.data };
-    return { ok: false, kind: 'protocol', error: { type: 'unsupported' } };
-  }
-}
-
 export class SystemSurface {
   constructor(private readonly _client: BridgethingClient) {}
 
@@ -4092,7 +3946,6 @@ export type ClientMessageHandlers = {
   peer: (msg: PeerSnapshotMap) => void;
   phone: PhoneInboundHandlers;
   player: PlayerInboundHandlers;
-  presence: PresenceInboundHandlers;
   system: SystemInboundHandlers;
   time: TimeInboundHandlers;
   voice: VoiceInboundHandlers;
@@ -4116,7 +3969,6 @@ export type PartialClientMessageHandlers = {
   peer?: (msg: PeerSnapshotMap) => void;
   phone?: Partial<PhoneInboundHandlers>;
   player?: Partial<PlayerInboundHandlers>;
-  presence?: Partial<PresenceInboundHandlers>;
   system?: Partial<SystemInboundHandlers>;
   time?: Partial<TimeInboundHandlers>;
   voice?: Partial<VoiceInboundHandlers>;
@@ -4155,8 +4007,6 @@ export interface ClientSurfaces {
   readonly phone: PhoneSurface;
   /** Methods scoped to the `Player` wire surface. */
   readonly player: PlayerSurface;
-  /** Methods scoped to the `Presence` wire surface. */
-  readonly presence: PresenceSurface;
   /** Methods scoped to the `System` wire surface. */
   readonly system: SystemSurface;
   /** Methods scoped to the `Time` wire surface. */
@@ -4192,7 +4042,6 @@ type ClientSurfaceCache = {
   peer?: PeerSurface;
   phone?: PhoneSurface;
   player?: PlayerSurface;
-  presence?: PresenceSurface;
   system?: SystemSurface;
   time?: TimeSurface;
   voice?: VoiceSurface;
@@ -4331,14 +4180,6 @@ export function applyDispatch(): void {
     get(this: BridgethingClient): PlayerSurface {
       const bucket = bucketFor(this);
       return (bucket.player ??= new PlayerSurface(this));
-    },
-  });
-  Object.defineProperty(BridgethingClient.prototype, 'presence', {
-    configurable: true,
-    enumerable: true,
-    get(this: BridgethingClient): PresenceSurface {
-      const bucket = bucketFor(this);
-      return (bucket.presence ??= new PresenceSurface(this));
     },
   });
   Object.defineProperty(BridgethingClient.prototype, 'system', {
@@ -4663,6 +4504,10 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
             innerHandlers.brightnessChanged?.(inner.data);
             return;
           }
+          case 'dimChanged': {
+            innerHandlers.dimChanged?.(inner.data);
+            return;
+          }
           case 'stateReply': {
             innerHandlers.stateReply?.(inner.data);
             return;
@@ -4912,40 +4757,6 @@ function outerSubscribe(c: BridgethingClient, handlers: PartialClientMessageHand
           }
           default: {
             if (!partial) c.logger.warn('Player: no handler for inner', inner);
-            return;
-          }
-        }
-      }
-      case 'presence': {
-        const innerHandlers = handlers.presence;
-        if (!innerHandlers) {
-          if (!partial) c.logger.warn('subscribe: no handler for presence');
-          return;
-        }
-        const inner = data.data;
-        switch (inner.event) {
-          case 'changed': {
-            innerHandlers.changed?.(inner.data);
-            return;
-          }
-          case 'snapshot': {
-            innerHandlers.snapshot?.(inner.data);
-            return;
-          }
-          case 'settingsChanged': {
-            innerHandlers.settingsChanged?.(inner.data);
-            return;
-          }
-          case 'settingsReply': {
-            innerHandlers.settingsReply?.(inner.data);
-            return;
-          }
-          case 'settingsErrorReply': {
-            innerHandlers.settingsErrorReply?.(inner.data);
-            return;
-          }
-          default: {
-            if (!partial) c.logger.warn('Presence: no handler for inner', inner);
             return;
           }
         }

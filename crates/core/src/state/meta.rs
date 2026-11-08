@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use libbridgething::{BridgeThingMeta, LauncherGesture};
+use libbridgething::{BridgeThingMeta, DisplaySettings, LauncherGesture};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
 use super::{KvStore, StateResult};
+use crate::display::DisplayManager;
 
 const BRIDGETHING_VERSION: &str = env!("CARGO_PKG_VERSION");
 const BRIDGETHING_APP_NAME: &str = env!("CARGO_PKG_NAME");
@@ -102,6 +103,7 @@ pub struct DeviceMeta {
 struct Inner {
   static_meta: SuperbirdMeta,
   kv: KvStore,
+  display: DisplayManager,
   nickname_tx: watch::Sender<Option<String>>,
   launcher_gesture_tx: watch::Sender<LauncherGesture>,
   companion_launch_tx: watch::Sender<bool>,
@@ -111,7 +113,7 @@ struct Inner {
 }
 
 impl DeviceMeta {
-  pub async fn init(static_meta: SuperbirdMeta, kv: KvStore) -> Self {
+  pub async fn init(static_meta: SuperbirdMeta, kv: KvStore, display: DisplayManager) -> Self {
     let initial = kv.device_get(NICKNAME_KV_KEY).await.unwrap_or_else(|err| {
       tracing::warn!(?err, "kv device_get nickname at startup failed; starting empty");
       None
@@ -140,6 +142,7 @@ impl DeviceMeta {
       inner: Arc::new(Inner {
         static_meta,
         kv,
+        display,
         nickname_tx,
         launcher_gesture_tx,
         companion_launch_tx,
@@ -247,39 +250,33 @@ impl DeviceMeta {
   }
 
   pub fn snapshot(&self) -> BridgeThingMeta {
-    build_meta(
-      &self.inner.static_meta,
-      self.nickname(),
-      self.bluetooth_name(),
-      self.launcher_gesture(),
-      self.companion_launch(),
-      self.daemon_sha256(),
-      self.wakeword_model_version(),
-    )
+    BridgeThingMeta {
+      nickname: self.nickname(),
+      bluetooth_name: self.bluetooth_name(),
+      launcher_gesture: self.launcher_gesture(),
+      companion_launch: self.companion_launch(),
+      display: self.inner.display.settings(),
+      daemon_sha256: self.daemon_sha256(),
+      wakeword_model_version: self.wakeword_model_version(),
+      ..build_meta(&self.inner.static_meta)
+    }
   }
 }
 
-fn build_meta(
-  meta: &SuperbirdMeta,
-  nickname: Option<String>,
-  bluetooth_name: Option<String>,
-  launcher_gesture: LauncherGesture,
-  companion_launch: bool,
-  daemon_sha256: Option<String>,
-  wakeword_model_version: Option<String>,
-) -> BridgeThingMeta {
+fn build_meta(meta: &SuperbirdMeta) -> BridgeThingMeta {
   let app_version = app_version();
   BridgeThingMeta {
     bridgething_version: format!("v{app_version}"),
     libbridgething_version: BridgeThingMeta::libbridgething_version(),
     app_name: BRIDGETHING_APP_NAME.to_string(),
-    nickname,
-    bluetooth_name,
-    launcher_gesture,
-    companion_launch,
+    nickname: None,
+    bluetooth_name: None,
+    launcher_gesture: LauncherGesture::default(),
+    companion_launch: true,
+    display: DisplaySettings::default(),
     app_version,
-    daemon_sha256,
-    wakeword_model_version,
+    daemon_sha256: None,
+    wakeword_model_version: None,
     os_name: meta.name.clone(),
     os_version: meta.version.clone(),
     os_description: meta.description.clone(),
@@ -302,23 +299,13 @@ fn build_meta(
 
 #[cfg(all(test, feature = "test-tap"))]
 mod tests {
-  use libbridgething::LauncherGesture;
-
   use super::{ENV_APP_VERSION, SuperbirdMeta, build_meta};
 
   #[test]
   fn a_test_daemon_told_its_version_announces_it() {
     unsafe { std::env::set_var(ENV_APP_VERSION, "99.0.0") };
 
-    let meta = build_meta(
-      &SuperbirdMeta::default(),
-      None,
-      None,
-      LauncherGesture::default(),
-      true,
-      None,
-      None,
-    );
+    let meta = build_meta(&SuperbirdMeta::default());
 
     assert_eq!(
       meta.app_version, "99.0.0",

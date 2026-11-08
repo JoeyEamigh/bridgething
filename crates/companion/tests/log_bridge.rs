@@ -35,6 +35,7 @@ async fn a_core_tracing_line_reaches_the_host_log_sink() {
     log: sink.clone(),
     audio: None,
     volume: None,
+    host_state: None,
     geo: None,
     notifications: None,
     phone: None,

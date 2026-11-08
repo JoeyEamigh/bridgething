@@ -196,6 +196,24 @@ function storeCatalog(host: string) {
   };
 }
 
+const directorySources = {
+  schema: 'catalog.v1',
+  updated_at: '2026-01-01T00:00:00Z',
+  repo: { name: 'e2e directory', description: 'the app directory the e2e lane reads', homepage: null, icon: null },
+  apps: [],
+  recommended_sources: [],
+};
+
+const directoryApps = {
+  updated_at: '2026-01-01T00:00:00Z',
+  catalogs: [],
+  failures: [],
+  installs: [],
+  trending: [],
+  featured: null,
+  category_backfill: {},
+};
+
 function bytes(body: Uint8Array): Response {
   return new Response(body, {
     headers: {
@@ -368,6 +386,10 @@ Bun.serve({
     console.log(`[e2e-fixtures] ${request.method} ${pathname}`);
 
     if (pathname === '/companion.json') return Response.json(companion);
+
+    if (pathname === '/api/sources.json') return Response.json(directorySources);
+    if (pathname === '/api/apps.json') return Response.json(directoryApps);
+    if (pathname === '/api/installed') return new Response(null, { status: 204 });
 
     if (pathname === '/store/catalog.json') {
       return Response.json(storeCatalog(new URL(request.url).host), {

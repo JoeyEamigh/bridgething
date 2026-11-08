@@ -10,7 +10,7 @@ use std::{
 use bridgething_companion::{
   api::{CapabilityFlags, CompanionBackends, CompanionConfig, CompanionSession, HostInfo, SessionEvent},
   backend::{
-    ExtensionHost, HttpTransport, ImageScaler, LinkDevice, LinkInbox, LinkTransport, MediaTranscoder, PresenceBackend,
+    ExtensionHost, HostStateBackend, HttpTransport, ImageScaler, LinkDevice, LinkInbox, LinkTransport, MediaTranscoder,
     VolumeBackend,
   },
   session::Session,
@@ -24,9 +24,10 @@ use libbridgething::{
     AssetRequest, BridgeToGatewayAssetMsg, BridgeToGatewayGeoMsg, BridgeToGatewayLibraryMsg, BridgeToGatewayLyricsMsg,
     BridgeToGatewayMsg, BridgeToGatewayMsgData, BridgeToGatewayNetMsg, BridgeToGatewayPhoneMsg,
     BridgeToGatewaySystemMsg, BridgeToGatewayTransferMsg, BridgeToGatewayTunnelMsg, GatewayToBridgeMsgData,
-    GatewayToBridgeTransferMsg, GeoGetOnce, KeepalivePing, LibraryBrowseRequest, LibraryFavoritesContainsRequest,
-    LibraryFavoritesListRequest, LibraryRecommendationsRequest, LibraryResolveContextRequest, LibrarySearchRequest,
-    LyricsRequest, NetFetchRequestMsg, NetWsOpen, OtaAssetRange, TrackIdentity, TunnelOpen,
+    GatewayToBridgeSystemMsg, GatewayToBridgeTransferMsg, GeoGetOnce, HostState, HostWatch, KeepalivePing,
+    LibraryBrowseRequest, LibraryFavoritesContainsRequest, LibraryFavoritesListRequest, LibraryRecommendationsRequest,
+    LibraryResolveContextRequest, LibrarySearchRequest, LyricsRequest, NetFetchRequestMsg, NetWsOpen, OtaAssetRange,
+    TrackIdentity, TunnelOpen,
   },
   protocol::{BridgeEndec, DecodedFrame, GatewayEndec},
   wire::MsgMeta,
@@ -120,6 +121,7 @@ struct TapState {
   ids: Vec<Uuid>,
   entries: Vec<WireEntry>,
   fragment_offsets: Vec<u32>,
+  host_states: Vec<HostState>,
   said: DeviceSaid,
 }
 
@@ -140,8 +142,12 @@ impl Tap {
     loop {
       match state.from_host.decode(&mut state.from_host_buf) {
         Ok(Some(DecodedFrame::Frame(frame))) => {
-          if let GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment)) = &frame.msg.data {
-            state.fragment_offsets.push(fragment.offset);
+          match &frame.msg.data {
+            GatewayToBridgeMsgData::Transfer(GatewayToBridgeTransferMsg::Fragment(fragment)) => {
+              state.fragment_offsets.push(fragment.offset)
+            }
+            GatewayToBridgeMsgData::System(GatewayToBridgeSystemMsg::HostState(host)) => state.host_states.push(*host),
+            _ => {}
           }
           let entry = note(
             &mut state.ids,
@@ -176,6 +182,9 @@ impl Tap {
             }
             BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::OtaProgress(tick)) => {
               state.said.phases.push(tick.phase)
+            }
+            BridgeToGatewayMsgData::System(BridgeToGatewaySystemMsg::HostWatch(watch)) => {
+              state.said.watches.push(*watch)
             }
             _ => {}
           }
@@ -296,6 +305,7 @@ impl LinkTransport for HarnessLink {
 pub struct DeviceSaid {
   pub acked: Vec<u32>,
   pub phases: Vec<OtaPhase>,
+  pub watches: Vec<HostWatch>,
 }
 
 #[derive(Default)]
@@ -304,7 +314,7 @@ pub struct Setup {
   pub extensions: Option<Arc<dyn ExtensionHost>>,
   pub http: Option<Arc<dyn HttpTransport>>,
   pub volume: Option<Arc<dyn VolumeBackend>>,
-  pub presence: Option<Arc<dyn PresenceBackend>>,
+  pub host_state: Option<Arc<dyn HostStateBackend>>,
   pub image: Option<Arc<dyn ImageScaler>>,
   pub transcoder: Option<Arc<dyn MediaTranscoder>>,
   pub cache_dir: Option<PathBuf>,
@@ -350,9 +360,10 @@ impl Rig {
     .await
   }
 
-  pub async fn with_presence(presence: Arc<dyn PresenceBackend>) -> Self {
+  pub async fn with_host_state(host_state: Arc<dyn HostStateBackend>) -> Self {
     Self::launch(Setup {
-      presence: Some(presence),
+      recording: true,
+      host_state: Some(host_state),
       ..Setup::default()
     })
     .await
@@ -383,6 +394,7 @@ impl Rig {
       log: Arc::new(Quiet),
       audio: None,
       volume: setup.volume,
+      host_state: setup.host_state,
       geo: None,
       notifications: None,
       phone: None,
@@ -429,9 +441,6 @@ impl Rig {
       backends,
       heard.clone(),
     );
-    if let Some(presence) = setup.presence {
-      companion.set_presence_backend(presence);
-    }
     let session = companion.session().clone();
     session.start();
 
@@ -472,6 +481,10 @@ impl Rig {
 
   pub fn transcript(&self) -> Vec<WireEntry> {
     self.tap.state.lock().unwrap().entries.clone()
+  }
+
+  pub fn host_states(&self) -> Vec<HostState> {
+    self.tap.state.lock().unwrap().host_states.clone()
   }
 
   pub fn fragment_offsets(&self) -> Vec<u32> {

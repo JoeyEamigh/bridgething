@@ -59,7 +59,7 @@ cmp -s "$BUNDLE_DIR/manifest.json" "$PINNED" || die "$BUNDLE_DIR/manifest.json d
 digest() { shasum -a 256 "$1" | awk '{print $1}'; }
 bytes()  { wc -c <"$1" | tr -d ' '; }
 
-WORK=$(mktemp -d -t bridgething-publish-nlu)
+WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 stage_zip() {

@@ -13,7 +13,6 @@ mod net;
 mod notifications;
 mod phone;
 mod player;
-mod presence;
 mod stock;
 mod store;
 mod system;
@@ -37,7 +36,6 @@ use net::*;
 use notifications::*;
 use phone::*;
 use player::*;
-use presence::*;
 use stock::*;
 use store::*;
 use system::*;
@@ -159,12 +157,6 @@ impl ClientHandler {
         dispatch(
           handle,
           move |h| async move { msg.dispatch(&SystemHandler::new(h)).await },
-        );
-      }
-      RecvMsgData::Presence(msg) => {
-        dispatch(
-          handle,
-          move |h| async move { msg.dispatch(&PresenceHandler::new(h)).await },
         );
       }
       RecvMsgData::Time(msg) => {

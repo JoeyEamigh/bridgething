@@ -16,6 +16,7 @@ function meta(libbridgethingVersion: string): api.DeviceMeta {
     nickname: null,
     launcherGesture: 'fivePress',
     companionLaunch: true,
+    display: { mode: 'auto', level: 1, dim: { afterS: null, level: 0.2 } },
   };
 }
 

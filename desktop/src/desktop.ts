@@ -63,6 +63,9 @@ export interface DesktopSession extends CompanionSession {
   setDeviceLogVerbosity(verbosity: api.LogLevel | null): Promise<void>;
 
   deviceResumeTarget(): Promise<api.ResumeTarget>;
+  setDisplaySettings(settings: api.DisplaySettings): Promise<void>;
+  followHost(): Promise<boolean>;
+  setFollowHost(enabled: boolean): Promise<void>;
 
   debugLogging(): Promise<boolean>;
   setDebugLogging(enabled: boolean): Promise<void>;

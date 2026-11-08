@@ -40,7 +40,7 @@ jobs:
       run: ${{ steps.plan.outputs.run }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: resolve the version, require its notes, and check what is missing
         id: plan
@@ -100,19 +100,19 @@ jobs:
       DAEMON_PATCH_COUNT: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: checkout the stock webapp source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: thinglabsoss/superbird-webapp
           ref: bridgething
           path: .external/superbird-webapp
 
       - name: checkout yocto-superbird for the stock webapp identity
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: JoeyEamigh/yocto-superbird
           path: .external/yocto-superbird
@@ -136,7 +136,7 @@ jobs:
           no_check_bucket = true
           EOF
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - uses: ./.github/actions/sccache
         with:
           key: daemon-aarch64
@@ -147,7 +147,7 @@ jobs:
 
       - name: cache the wakeword graphs
         id: wakeword
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: crates/wakeword/models
           key: >-

@@ -1059,6 +1059,7 @@ fn catalog_session(secrets: Arc<MemorySecrets>) -> Arc<Session> {
       log: Arc::new(log_sink::Quiet),
       audio: None,
       volume: None,
+      host_state: None,
       geo: None,
       notifications: None,
       phone: None,

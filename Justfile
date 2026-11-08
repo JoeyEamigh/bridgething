@@ -273,6 +273,7 @@ test-kotlin:
   gradle_jdk_env
   gradle() { JAVA_HOME="$GRADLE_JAVA" ./gradlew "$@" {{gradle_force}} --no-daemon --console=plain --stacktrace -Porg.gradle.java.installations.paths="$GRADLE_INSTALLS" -Porg.gradle.java.installations.auto-download=false </dev/null; }
   gradle test :packages:companion:kotlin:companion:compileDebugAndroidTestSources
+  bunx turbo run nitro:codegen --filter=@bridgething/session-react-native
   cd mobile/android && gradle :app:testDebugUnitTest
 
 # Swift package suite

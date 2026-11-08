@@ -4291,6 +4291,8 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     
     func fetchOtaManifest(rootUrl: String) async throws  -> OtaDiscoverManifest
     
+    func followHost()  -> Bool
+    
     func forgetDevice(deviceId: String) 
     
     func getWebappDoc(deviceId: String, id: String, key: String) async throws  -> String?
@@ -4330,6 +4332,10 @@ public protocol CompanionSessionProtocol: AnyObject, Sendable {
     func setDeviceLogVerbosity(verbosity: LogLevel?) async 
     
     func setDeviceResumeTarget(deviceId: String, target: ResumeTarget) async 
+    
+    func setDisplaySettings(deviceId: String, settings: DisplaySettings) async throws 
+    
+    func setFollowHost(enabled: Bool) 
     
     func setLauncherGesture(deviceId: String, gesture: LauncherGesture) async throws 
     
@@ -4837,6 +4843,15 @@ open func fetchOtaManifest(rootUrl: String)async throws  -> OtaDiscoverManifest 
         )
 }
     
+open func followHost() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_follow_host(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func forgetDevice(deviceId: String)  {try! rustCall() {
         uniffiCallStatus in
     uniffi_bridgething_companion_fn_method_companionsession_forget_device(
@@ -5136,6 +5151,31 @@ open func setDeviceResumeTarget(deviceId: String, target: ResumeTarget)async   {
             errorHandler: nil
             
         )
+}
+    
+open func setDisplaySettings(deviceId: String, settings: DisplaySettings)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_bridgething_companion_fn_method_companionsession_set_display_settings(
+                        self.uniffiCloneHandle(),FfiConverterString.lower(deviceId),FfiConverterTypeDisplaySettings_lower(settings)
+                )
+            },
+            pollFunc: ffi_bridgething_companion_rust_future_poll_void,
+            completeFunc: ffi_bridgething_companion_rust_future_complete_void,
+            freeFunc: ffi_bridgething_companion_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeCompanionError_lift
+        )
+}
+    
+open func setFollowHost(enabled: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_companionsession_set_follow_host(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(enabled),uniffiCallStatus
+    )
+}
 }
     
 open func setLauncherGesture(deviceId: String, gesture: LauncherGesture)async throws   {
@@ -7461,6 +7501,431 @@ public func FfiConverterTypeHostEnvironment_lift(_ handle: UInt64) throws -> Hos
 #endif
 public func FfiConverterTypeHostEnvironment_lower(_ value: HostEnvironment) -> UInt64 {
     return FfiConverterTypeHostEnvironment.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Desktop only. `start` reports away (locked, displays off or dimmed, or about to sleep) at once and on every change.
+ * `watch_idle` replaces the idle thresholds; report each one at once and on every crossing. A device's reply waits
+ * up to a quarter second for a new threshold's first report. Before the computer sleeps, call `on_sleeping` and hold
+ * sleep until it returns.
+ */
+public protocol HostStateBackend: AnyObject, Sendable {
+    
+    func start(inbox: HostStateInbox) 
+    
+    func stop() 
+    
+    func watchIdle(thresholdsS: [UInt32]) 
+    
+}
+/**
+ * Desktop only. `start` reports away (locked, displays off or dimmed, or about to sleep) at once and on every change.
+ * `watch_idle` replaces the idle thresholds; report each one at once and on every crossing. A device's reply waits
+ * up to a quarter second for a new threshold's first report. Before the computer sleeps, call `on_sleeping` and hold
+ * sleep until it returns.
+ */
+open class HostStateBackendImpl: HostStateBackend, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_hoststatebackend(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_hoststatebackend(handle, $0) }
+    }
+
+    
+
+    
+open func start(inbox: HostStateInbox)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststatebackend_start(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeHostStateInbox_lower(inbox),uniffiCallStatus
+    )
+}
+}
+    
+open func stop()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststatebackend_stop(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+open func watchIdle(thresholdsS: [UInt32])  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststatebackend_watch_idle(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceUInt32.lower(thresholdsS),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceHostStateBackend {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceHostStateBackend = UniffiVTableCallbackInterfaceHostStateBackend(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeHostStateBackend.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface HostStateBackend: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeHostStateBackend.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface HostStateBackend: handle missing in uniffiClone")
+            }
+        },
+        start: { (
+            uniffiHandle: UInt64,
+            inbox: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeHostStateBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.start(
+                     inbox: try FfiConverterTypeHostStateInbox_lift(inbox)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        stop: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeHostStateBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.stop(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        watchIdle: { (
+            uniffiHandle: UInt64,
+            thresholdsS: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeHostStateBackend.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.watchIdle(
+                     thresholdsS: try FfiConverterSequenceUInt32.lift(thresholdsS)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceHostStateBackend> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceHostStateBackend>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitHostStateBackend() {
+    uniffi_bridgething_companion_fn_init_callback_vtable_hoststatebackend(UniffiCallbackInterfaceHostStateBackend.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHostStateBackend: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<HostStateBackend>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = HostStateBackend
+
+    public static func lift(_ handle: UInt64) throws -> HostStateBackend {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return HostStateBackendImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: HostStateBackend) -> UInt64 {
+         if let rustImpl = value as? HostStateBackendImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HostStateBackend {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HostStateBackend, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHostStateBackend_lift(_ handle: UInt64) throws -> HostStateBackend {
+    return try FfiConverterTypeHostStateBackend.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHostStateBackend_lower(_ value: HostStateBackend) -> UInt64 {
+    return FfiConverterTypeHostStateBackend.lower(value)
+}
+
+
+
+
+
+
+public protocol HostStateInboxProtocol: AnyObject, Sendable {
+    
+    func onAway(away: Bool) 
+    
+    func onIdle(afterS: UInt32, idle: Bool) 
+    
+    /**
+     * Reports away because the computer is about to sleep, then blocks until every linked device has acked the report
+     * or given up waiting for its ack, or until `within_ms` passes.
+     */
+    func onSleeping(withinMs: UInt32) 
+    
+}
+open class HostStateInbox: HostStateInboxProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_bridgething_companion_fn_clone_hoststateinbox(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_bridgething_companion_fn_free_hoststateinbox(handle, $0) }
+    }
+
+    
+
+    
+open func onAway(away: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststateinbox_on_away(
+            self.uniffiCloneHandle(),
+        FfiConverterBool.lower(away),uniffiCallStatus
+    )
+}
+}
+    
+open func onIdle(afterS: UInt32, idle: Bool)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststateinbox_on_idle(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(afterS),
+        FfiConverterBool.lower(idle),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Reports away because the computer is about to sleep, then blocks until every linked device has acked the report
+     * or given up waiting for its ack, or until `within_ms` passes.
+     */
+open func onSleeping(withinMs: UInt32)  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_bridgething_companion_fn_method_hoststateinbox_on_sleeping(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(withinMs),uniffiCallStatus
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHostStateInbox: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = HostStateInbox
+
+    public static func lift(_ handle: UInt64) throws -> HostStateInbox {
+        return HostStateInbox(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: HostStateInbox) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HostStateInbox {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HostStateInbox, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHostStateInbox_lift(_ handle: UInt64) throws -> HostStateInbox {
+    return try FfiConverterTypeHostStateInbox.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHostStateInbox_lower(_ value: HostStateInbox) -> UInt64 {
+    return FfiConverterTypeHostStateInbox.lower(value)
 }
 
 
@@ -16305,6 +16770,7 @@ public struct CompanionBackends {
     public var log: LogSink
     public var audio: AudioBackend?
     public var volume: VolumeBackend?
+    public var hostState: HostStateBackend?
     public var geo: GeoProvider?
     public var notifications: NotificationBackend?
     public var phone: PhoneBackend?
@@ -16323,7 +16789,7 @@ public struct CompanionBackends {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, stream: StreamBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, transcoder: MediaTranscoder? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
+    public init(link: LinkTransport?, host: HostEnvironment, http: HttpTransport, ws: WsTransport, secrets: SecretStore, log: LogSink, audio: AudioBackend? = nil, volume: VolumeBackend? = nil, hostState: HostStateBackend? = nil, geo: GeoProvider? = nil, notifications: NotificationBackend? = nil, phone: PhoneBackend? = nil, mediaSessions: MediaSessionBackend? = nil, stream: StreamBackend? = nil, speech: SpeechRecognizer? = nil, nlu: NluModelRunner? = nil, appleMusic: AppleMusicBackend? = nil, image: ImageScaler? = nil, transcoder: MediaTranscoder? = nil, modelValidator: ModelArtifactValidator? = nil, transferPolicy: TransferPolicy? = nil, connectivity: ConnectivityMonitor? = nil, deviceWaker: DeviceWaker? = nil, extensions: ExtensionHost? = nil) {
         self.link = link
         self.host = host
         self.http = http
@@ -16332,6 +16798,7 @@ public struct CompanionBackends {
         self.log = log
         self.audio = audio
         self.volume = volume
+        self.hostState = hostState
         self.geo = geo
         self.notifications = notifications
         self.phone = phone
@@ -16373,6 +16840,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
                 log: FfiConverterTypeLogSink.read(from: &buf), 
                 audio: FfiConverterOptionTypeAudioBackend.read(from: &buf), 
                 volume: FfiConverterOptionTypeVolumeBackend.read(from: &buf), 
+                hostState: FfiConverterOptionTypeHostStateBackend.read(from: &buf), 
                 geo: FfiConverterOptionTypeGeoProvider.read(from: &buf), 
                 notifications: FfiConverterOptionTypeNotificationBackend.read(from: &buf), 
                 phone: FfiConverterOptionTypePhoneBackend.read(from: &buf), 
@@ -16400,6 +16868,7 @@ public struct FfiConverterTypeCompanionBackends: FfiConverterRustBuffer {
         FfiConverterTypeLogSink.write(value.log, into: &buf)
         FfiConverterOptionTypeAudioBackend.write(value.audio, into: &buf)
         FfiConverterOptionTypeVolumeBackend.write(value.volume, into: &buf)
+        FfiConverterOptionTypeHostStateBackend.write(value.hostState, into: &buf)
         FfiConverterOptionTypeGeoProvider.write(value.geo, into: &buf)
         FfiConverterOptionTypeNotificationBackend.write(value.notifications, into: &buf)
         FfiConverterOptionTypePhoneBackend.write(value.phone, into: &buf)
@@ -16793,10 +17262,11 @@ public struct DeviceMeta: Equatable, Hashable {
     public var bluetoothName: String?
     public var launcherGesture: LauncherGesture
     public var companionLaunch: Bool
+    public var display: DisplaySettings
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, serialNumber: String, nickname: String?, bluetoothName: String?, launcherGesture: LauncherGesture, companionLaunch: Bool) {
+    public init(daemonVersion: String, libbridgethingVersion: String, imageVersion: String, appName: String, osName: String, osVersion: String, channel: String, serialNumber: String, nickname: String?, bluetoothName: String?, launcherGesture: LauncherGesture, companionLaunch: Bool, display: DisplaySettings) {
         self.daemonVersion = daemonVersion
         self.libbridgethingVersion = libbridgethingVersion
         self.imageVersion = imageVersion
@@ -16809,6 +17279,7 @@ public struct DeviceMeta: Equatable, Hashable {
         self.bluetoothName = bluetoothName
         self.launcherGesture = launcherGesture
         self.companionLaunch = companionLaunch
+        self.display = display
     }
 
     
@@ -16838,7 +17309,8 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
                 nickname: FfiConverterOptionString.read(from: &buf), 
                 bluetoothName: FfiConverterOptionString.read(from: &buf), 
                 launcherGesture: FfiConverterTypeLauncherGesture.read(from: &buf), 
-                companionLaunch: FfiConverterBool.read(from: &buf)
+                companionLaunch: FfiConverterBool.read(from: &buf), 
+                display: FfiConverterTypeDisplaySettings.read(from: &buf)
         )
     }
 
@@ -16855,6 +17327,7 @@ public struct FfiConverterTypeDeviceMeta: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.bluetoothName, into: &buf)
         FfiConverterTypeLauncherGesture.write(value.launcherGesture, into: &buf)
         FfiConverterBool.write(value.companionLaunch, into: &buf)
+        FfiConverterTypeDisplaySettings.write(value.display, into: &buf)
     }
 }
 
@@ -17041,6 +17514,118 @@ public func FfiConverterTypeDeviceWebappsEntry_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeDeviceWebappsEntry_lower(_ value: DeviceWebappsEntry) -> RustBuffer {
     return FfiConverterTypeDeviceWebappsEntry.lower(value)
+}
+
+
+public struct DimSettings: Equatable, Hashable {
+    public var afterS: UInt32?
+    public var level: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(afterS: UInt32?, level: Float) {
+        self.afterS = afterS
+        self.level = level
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DimSettings: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDimSettings: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DimSettings {
+        return
+            try DimSettings(
+                afterS: FfiConverterOptionUInt32.read(from: &buf), 
+                level: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DimSettings, into buf: inout [UInt8]) {
+        FfiConverterOptionUInt32.write(value.afterS, into: &buf)
+        FfiConverterFloat.write(value.level, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDimSettings_lift(_ buf: RustBuffer) throws -> DimSettings {
+    return try FfiConverterTypeDimSettings.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDimSettings_lower(_ value: DimSettings) -> RustBuffer {
+    return FfiConverterTypeDimSettings.lower(value)
+}
+
+
+public struct DisplaySettings: Equatable, Hashable {
+    public var mode: BrightnessMode
+    public var level: Float
+    public var dim: DimSettings
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(mode: BrightnessMode, level: Float, dim: DimSettings) {
+        self.mode = mode
+        self.level = level
+        self.dim = dim
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DisplaySettings: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDisplaySettings: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DisplaySettings {
+        return
+            try DisplaySettings(
+                mode: FfiConverterTypeBrightnessMode.read(from: &buf), 
+                level: FfiConverterFloat.read(from: &buf), 
+                dim: FfiConverterTypeDimSettings.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DisplaySettings, into buf: inout [UInt8]) {
+        FfiConverterTypeBrightnessMode.write(value.mode, into: &buf)
+        FfiConverterFloat.write(value.level, into: &buf)
+        FfiConverterTypeDimSettings.write(value.dim, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDisplaySettings_lift(_ buf: RustBuffer) throws -> DisplaySettings {
+    return try FfiConverterTypeDisplaySettings.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDisplaySettings_lower(_ value: DisplaySettings) -> RustBuffer {
+    return FfiConverterTypeDisplaySettings.lower(value)
 }
 
 
@@ -22805,6 +23390,72 @@ public func FfiConverterTypeAuthKind_lift(_ buf: RustBuffer) throws -> AuthKind 
 #endif
 public func FfiConverterTypeAuthKind_lower(_ value: AuthKind) -> RustBuffer {
     return FfiConverterTypeAuthKind.lower(value)
+}
+
+
+
+
+public enum BrightnessMode: Equatable, Hashable {
+    
+    case auto
+    case manual
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension BrightnessMode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBrightnessMode: FfiConverterRustBuffer {
+    typealias SwiftType = BrightnessMode
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BrightnessMode {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .auto
+        
+        case 2: return .manual
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: BrightnessMode, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .auto:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .manual:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBrightnessMode_lift(_ buf: RustBuffer) throws -> BrightnessMode {
+    return try FfiConverterTypeBrightnessMode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBrightnessMode_lower(_ value: BrightnessMode) -> RustBuffer {
+    return FfiConverterTypeBrightnessMode.lower(value)
 }
 
 
@@ -29110,6 +29761,30 @@ fileprivate struct FfiConverterOptionTypeGeoProvider: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeHostStateBackend: FfiConverterRustBuffer {
+    typealias SwiftType = HostStateBackend?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeHostStateBackend.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeHostStateBackend.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeImageScaler: FfiConverterRustBuffer {
     typealias SwiftType = ImageScaler?
 
@@ -30184,6 +30859,31 @@ fileprivate struct FfiConverterOptionTypeRegistrationStatus: FfiConverterRustBuf
         case 1: return try FfiConverterTypeRegistrationStatus.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt32]
+
+    public static func write(_ value: [UInt32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt32.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt32] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt32]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt32.read(from: &buf))
+        }
+        return seq
     }
 }
 
@@ -31622,6 +32322,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_companionsession_fetch_ota_manifest() != 39692) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_follow_host() != 37361) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_companionsession_forget_device() != 17085) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -31680,6 +32383,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_device_resume_target() != 16467) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_display_settings() != 31662) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_companionsession_set_follow_host() != 1785) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_bridgething_companion_checksum_method_companionsession_set_launcher_gesture() != 33595) {
@@ -32039,6 +32748,24 @@ private let initializationResult: InitializationResult = {
     if (uniffi_bridgething_companion_checksum_method_hostenvironment_clock() != 57610) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_bridgething_companion_checksum_method_hoststatebackend_start() != 30905) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_hoststatebackend_stop() != 19308) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_hoststatebackend_watch_idle() != 52676) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_hoststateinbox_on_away() != 17941) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_hoststateinbox_on_idle() != 26595) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_bridgething_companion_checksum_method_hoststateinbox_on_sleeping() != 19202) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_bridgething_companion_checksum_method_imagescaler_scale() != 41747) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -32351,6 +33078,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitExtensionHost()
     uniffiCallbackInitGeoProvider()
     uniffiCallbackInitHostEnvironment()
+    uniffiCallbackInitHostStateBackend()
     uniffiCallbackInitHttpTransport()
     uniffiCallbackInitImageScaler()
     uniffiCallbackInitLinkTransport()

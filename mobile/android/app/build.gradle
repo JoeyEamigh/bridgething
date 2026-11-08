@@ -70,8 +70,8 @@ android {
             ?: "com.bridgething.gateway")
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 35
-        versionName "0.16.1"
+        versionCode 36
+        versionName "0.17.0"
 
         manifestPlaceholders = [appAuthRedirectScheme: 'bridgething']
 
@@ -97,6 +97,8 @@ android {
             signingConfig signingConfigs.debug
             buildConfigField "String", "BRIDGETHING_DEV_GATEWAY",
                 "\"${System.getenv("BRIDGETHING_DEV_GATEWAY") ?: project.findProperty("BRIDGETHING_DEV_GATEWAY") ?: "ws://10.0.2.2:8892/"}\""
+            buildConfigField "String", "BRIDGETHING_DEV_DIRECTORY",
+                "\"${System.getenv("BRIDGETHING_DEV_DIRECTORY") ?: project.findProperty("BRIDGETHING_DEV_DIRECTORY") ?: ""}\""
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -105,6 +107,7 @@ android {
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
             buildConfigField "String", "BRIDGETHING_DEV_GATEWAY", "\"\""
+            buildConfigField "String", "BRIDGETHING_DEV_DIRECTORY", "\"\""
         }
     }
 }

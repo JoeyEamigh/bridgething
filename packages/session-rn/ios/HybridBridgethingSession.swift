@@ -74,6 +74,7 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func fetchOtaManifest(rootUrl: String) async throws -> BridgethingOtaManifest
     func applyOtaUpdate(deviceId: String, channel: String, version: String, rootUrl: String) async throws
     func otaRunProgress(deviceId: String, lane: BridgethingOtaLane, nowMs: Double) -> BridgethingOtaProgress?
+    func devConfig() -> BridgethingDevConfig
     func dismissOtaRun(deviceId: String, lane: BridgethingOtaLane) async throws
 
     func installWebappFromUrl(
@@ -94,6 +95,8 @@ public protocol BridgethingSessionBackend: AnyObject, Sendable {
     func setLauncherGesture(deviceId: String, gesture: BridgethingLauncherGesture) async throws
 
     func setCompanionLaunch(deviceId: String, enabled: Bool) async throws
+
+    func setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings) async throws
 
     func presentPairPicker() async throws -> BridgethingBtDevice?
 
@@ -623,6 +626,10 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
         return progress.map { .second($0) } ?? .first(NullType.null)
     }
 
+    public func devConfig() throws -> BridgethingDevConfig {
+        try Self.backend().devConfig()
+    }
+
     // MARK: - Webapp install
 
     public func installWebappFromUrl(
@@ -672,6 +679,12 @@ public final class HybridBridgethingSession: HybridBridgethingSessionSpec, @unch
     public func setCompanionLaunch(deviceId: String, enabled: Bool) throws -> Promise<Void> {
         Promise.async {
             try await Self.backend().setCompanionLaunch(deviceId: deviceId, enabled: enabled)
+        }
+    }
+
+    public func setDisplaySettings(deviceId: String, settings: BridgethingDisplaySettings) throws -> Promise<Void> {
+        Promise.async {
+            try await Self.backend().setDisplaySettings(deviceId: deviceId, settings: settings)
         }
     }
 

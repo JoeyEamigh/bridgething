@@ -254,6 +254,9 @@ impl SystemHandler for Routed {
   async fn companion_launch_changed(&self, _payload: CompanionLaunchReply) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
+  async fn display_settings_changed(&self, _payload: libbridgething::DisplaySettings) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
   async fn ota_asset_range(
     &self,
     _id: Uuid,
@@ -283,6 +286,9 @@ impl SystemHandler for Routed {
     Err(WireError::Unsupported)
   }
   async fn log_entry(&self, _payload: LogEntry) -> Result<(), WireError> {
+    Err(WireError::Unsupported)
+  }
+  async fn host_watch(&self, _payload: HostWatch) -> Result<(), WireError> {
     Err(WireError::Unsupported)
   }
 }

@@ -337,8 +337,15 @@ impl SystemHandler for Peer {
     self.meta_changed(MetaChange::CompanionLaunch(payload.enabled));
     Ok(())
   }
+  async fn display_settings_changed(&self, payload: DisplaySettings) -> Result<(), WireError> {
+    self.meta_changed(MetaChange::Display(payload));
+    Ok(())
+  }
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {
     self.system.log_entry(payload).await
+  }
+  async fn host_watch(&self, payload: HostWatch) -> Result<(), WireError> {
+    self.system.host_watch(payload).await
   }
 }
 

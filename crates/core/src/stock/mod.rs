@@ -179,7 +179,6 @@ pub fn server_event_to_stock(
     | BridgeToClientMsgData::Net(_)
     | BridgeToClientMsgData::Notifications(_)
     | BridgeToClientMsgData::Peer(_)
-    | BridgeToClientMsgData::Presence(_)
     | BridgeToClientMsgData::Time(_)
     | BridgeToClientMsgData::Webapp(_) => StockSendMsg::Unsupported,
   }

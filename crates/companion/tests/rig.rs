@@ -29,16 +29,15 @@ use std::{
 use bridgething_companion::{
   api::{PeerLinkStatus, SessionEvent, WebappInstallRequest},
   backend::{
-    ExtensionHost, ExtensionMessage, HostDisplay, PresenceBackend, PresenceInbox, PresenceReport, VolumeBackend,
-    VolumeInbox, VolumeLevel,
+    ExtensionHost, ExtensionMessage, HostStateBackend, HostStateInbox, LinkDevice, VolumeBackend, VolumeInbox,
+    VolumeLevel,
   },
   provider::{Provider, ProviderError},
 };
 use bridgething_delivery::ota::{event::OtaPhaseSnapshot, stream::FileSource};
 use bridgething_gateway::route;
 use libbridgething::{
-  CompanionAuthorityScope, DisplayState, MediaItem, Playback, PlaybackState, PlayerState, PresenceSettings,
-  PresenceSource,
+  CompanionAuthorityScope, DimSettings, MediaItem, Playback, PlaybackState, PlayerState, gateway::HostState,
 };
 use serde::Serialize;
 
@@ -98,30 +97,51 @@ impl VolumeBackend for FakeVolume {
   fn mute_toggle(&self) {}
 }
 
-pub struct FakePresence {
-  inbox: Mutex<Option<Arc<PresenceInbox>>>,
-  report: Mutex<PresenceReport>,
+#[derive(Default)]
+pub struct FakeHostState {
+  inbox: Mutex<Option<Arc<HostStateInbox>>>,
+  away: Mutex<bool>,
+  idle_s: Mutex<u32>,
+  thresholds: Mutex<Vec<u32>>,
 }
 
-impl FakePresence {
-  pub fn showing(display: HostDisplay) -> Arc<Self> {
-    Arc::new(Self {
-      inbox: Mutex::new(None),
-      report: Mutex::new(PresenceReport { display, idle_s: 0 }),
-    })
-  }
-
-  pub fn changed_to(&self, display: HostDisplay) {
-    *self.report.lock().unwrap() = PresenceReport { display, idle_s: 0 };
-    let inbox = self.inbox.lock().unwrap().clone();
-    if let Some(inbox) = inbox {
-      inbox.on_changed(display, 0);
+impl FakeHostState {
+  pub fn away(&self, away: bool) {
+    *self.away.lock().unwrap() = away;
+    if let Some(inbox) = self.inbox.lock().unwrap().clone() {
+      inbox.on_away(away);
     }
   }
+
+  pub fn idle_for(&self, idle_s: u32) {
+    *self.idle_s.lock().unwrap() = idle_s;
+    let thresholds = self.thresholds.lock().unwrap().clone();
+    if let Some(inbox) = self.inbox.lock().unwrap().clone() {
+      for after_s in thresholds {
+        inbox.on_idle(after_s, idle_s >= after_s);
+      }
+    }
+  }
+
+  pub fn thresholds(&self) -> Vec<u32> {
+    self.thresholds.lock().unwrap().clone()
+  }
+
+  pub async fn sleep(&self, within_ms: u32) {
+    let inbox = self.inbox.lock().unwrap().clone().expect("the backend is running");
+    tokio::task::spawn_blocking(move || inbox.on_sleeping(within_ms))
+      .await
+      .expect("the sleeping call returns");
+  }
+
+  pub fn running(&self) -> bool {
+    self.inbox.lock().unwrap().is_some()
+  }
 }
 
-impl PresenceBackend for FakePresence {
-  fn start(&self, inbox: Arc<PresenceInbox>) {
+impl HostStateBackend for FakeHostState {
+  fn start(&self, inbox: Arc<HostStateInbox>) {
+    inbox.on_away(*self.away.lock().unwrap());
     *self.inbox.lock().unwrap() = Some(inbox);
   }
 
@@ -129,8 +149,10 @@ impl PresenceBackend for FakePresence {
     self.inbox.lock().unwrap().take();
   }
 
-  fn snapshot(&self) -> PresenceReport {
-    *self.report.lock().unwrap()
+  fn watch_idle(&self, thresholds_s: Vec<u32>) {
+    *self.thresholds.lock().unwrap() = thresholds_s;
+    let idle_s = *self.idle_s.lock().unwrap();
+    self.idle_for(idle_s);
   }
 }
 
@@ -1159,172 +1181,296 @@ async fn a_restarted_phone_with_no_network_still_shows_the_car_its_last_library(
   );
 }
 
-fn screen(rig: &Rig) -> (DisplayState, PresenceSource) {
-  let info = rig.harness.state().presence.snapshot().presence;
-  (info.display, info.source)
+const QUIET: Duration = Duration::from_millis(1500);
+
+fn host(away: Option<bool>, idle: bool) -> HostState {
+  HostState { away, idle }
 }
 
-async fn follow_the_host(rig: &Rig) {
-  rig
-    .harness
-    .state()
-    .presence
-    .set_settings(PresenceSettings {
-      follow_host: true,
-      ..PresenceSettings::default()
+async fn dim(harness: &bridgething_test_harness::Harness, settings: DimSettings) {
+  let display = &harness.state().display;
+  display
+    .set_settings(libbridgething::DisplaySettings {
+      dim: settings,
+      ..display.settings()
     })
     .await
-    .expect("a device can be told to follow the host");
+    .expect("the display actor is up")
+    .expect("the dim settings are valid");
+}
+
+fn timer(after_s: u32) -> DimSettings {
+  DimSettings {
+    after_s: Some(after_s),
+    ..DimSettings::default()
+  }
+}
+
+async fn hears(rig: &Rig, wanted: &[HostState]) -> Vec<HostState> {
+  let deadline = tokio::time::Instant::now() + SETTLE;
+  while rig.host_states().len() < wanted.len() && tokio::time::Instant::now() < deadline {
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+  tokio::time::sleep(QUIET).await;
+  rig.host_states()
+}
+
+async fn dimmed(rig: &Rig, dimmed: bool) -> bool {
+  rig
+    .harness
+    .wait_for(|state| state.display.snapshot().brightness.dimmed == dimmed, SETTLE)
+    .await
+}
+
+const AWAY: Option<bool> = Some(true);
+const BACK: Option<bool> = Some(false);
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_host_that_does_not_follow_and_a_device_without_a_timer_keep_the_link_quiet() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+
+  backend.away(true);
+  backend.away(false);
+  tokio::time::sleep(QUIET).await;
+
+  assert!(
+    rig.said().watches.is_empty(),
+    "a device without a timer asks for nothing"
+  );
+  assert!(
+    rig.host_states().is_empty(),
+    "the link carries nothing nobody asked for: {:?}",
+    rig.host_states()
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_device_that_is_not_told_to_follow_the_host_leaves_its_screen_alone() {
-  let presence = FakePresence::showing(HostDisplay::Off);
-  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+async fn turning_following_on_reports_away_at_once_without_a_watch() {
+  let backend = Arc::new(FakeHostState::default());
+  backend.away(true);
+  let rig = Rig::with_host_state(backend.clone()).await;
   rig.settle().await;
-  tokio::time::sleep(Duration::from_millis(500)).await;
+
+  rig.session.set_follow_host(true);
+
+  assert_eq!(hears(&rig, &[host(AWAY, false)]).await, [host(AWAY, false)]);
+  assert!(rig.said().watches.is_empty(), "following needs nothing from the device");
+  assert!(
+    dimmed(&rig, true).await,
+    "a locked computer dims the device it is following"
+  );
+  assert!(rig.session.follow_host());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_device_dims_and_wakes_with_a_following_host() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  rig.session.set_follow_host(true);
+  hears(&rig, &[host(BACK, false)]).await;
+  assert!(dimmed(&rig, false).await);
+
+  backend.away(true);
+  assert!(
+    dimmed(&rig, true).await,
+    "the computer went away and the device stayed bright"
+  );
+
+  backend.away(false);
+  assert!(
+    dimmed(&rig, false).await,
+    "the computer came back and the device stayed dim"
+  );
+  assert_eq!(
+    rig.host_states(),
+    [host(BACK, false), host(AWAY, false), host(BACK, false)]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn turning_following_off_gives_a_dimmed_device_its_screen_back() {
+  let backend = Arc::new(FakeHostState::default());
+  backend.away(true);
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  rig.session.set_follow_host(true);
+  assert!(dimmed(&rig, true).await);
+
+  rig.session.set_follow_host(false);
+
+  assert!(dimmed(&rig, false).await, "a computer that stops following says so");
+  assert_eq!(rig.host_states(), [host(AWAY, false), host(None, false)]);
+  backend.away(false);
+  backend.away(true);
+  assert_eq!(
+    hears(&rig, &[host(AWAY, false), host(None, false)]).await,
+    [host(AWAY, false), host(None, false)],
+    "away stays off the link once following is off"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_idle_reaches_a_device_with_a_timer_and_only_when_it_changes() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  dim(&rig.harness, timer(60)).await;
+  assert_eq!(hears(&rig, &[host(None, false)]).await, [host(None, false)]);
+  assert_eq!(backend.thresholds(), [60]);
+
+  backend.away(true);
+  backend.away(false);
+  backend.idle_for(30);
+  assert_eq!(
+    hears(&rig, &[host(None, false)]).await,
+    [host(None, false)],
+    "away from a host that does not follow and an idle that crossed nothing stay off the link"
+  );
+
+  backend.idle_for(61);
+  backend.idle_for(90);
+  assert_eq!(
+    hears(&rig, &[host(None, false), host(None, true)]).await,
+    [host(None, false), host(None, true)]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_quiet_host_keeps_the_link_quiet() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  rig.session.set_follow_host(true);
+  hears(&rig, &[host(BACK, false)]).await;
+  dim(&rig.harness, timer(15)).await;
+  hears(&rig, &[host(BACK, false), host(BACK, false)]).await;
+
+  for _ in 0..4 {
+    backend.away(false);
+    backend.idle_for(1);
+    tokio::time::sleep(Duration::from_secs(2)).await;
+  }
 
   assert_eq!(
-    screen(&rig),
-    (DisplayState::Active, PresenceSource::None),
-    "the host display is asleep and the device was not asked to care"
+    rig.host_states(),
+    [host(BACK, false), host(BACK, false)],
+    "the watch is answered once, then no heartbeat and no repeats"
   );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_host_with_a_display_tells_the_device_when_it_connects() {
-  let presence = FakePresence::showing(HostDisplay::Off);
-  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
+async fn each_device_is_answered_on_its_own_threshold_and_a_departed_one_is_forgotten() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
   rig.settle().await;
+  dim(&rig.harness, timer(300)).await;
+  hears(&rig, &[host(None, false)]).await;
 
-  follow_the_host(&rig).await;
-
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.source == PresenceSource::Host,
-        SETTLE
-      )
-      .await,
-    "the device never heard the host's display state"
-  );
-  assert_eq!(screen(&rig), (DisplayState::Off, PresenceSource::Host));
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn the_device_screen_follows_the_host_display() {
-  let presence = FakePresence::showing(HostDisplay::Active);
-  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
-  rig.settle().await;
-  follow_the_host(&rig).await;
-
-  presence.changed_to(HostDisplay::Off);
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Off,
-        SETTLE
-      )
-      .await,
-    "the host display went to sleep and the device screen stayed lit"
-  );
-
-  presence.changed_to(HostDisplay::Active);
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Active,
-        SETTLE
-      )
-      .await,
-    "the host display woke and the device screen stayed dark"
-  );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_host_that_shuts_down_hands_the_screen_back() {
-  let presence = FakePresence::showing(HostDisplay::Off);
-  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
-  rig.settle().await;
-  follow_the_host(&rig).await;
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Off,
-        SETTLE
-      )
-      .await,
-    "the host display was asleep and the device screen stayed lit"
-  );
-
-  rig.session.stop().await;
-
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Active,
-        SETTLE
-      )
-      .await,
-    "a host that quit left the device screen dark"
-  );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_host_that_quits_hands_the_screen_to_the_timers() {
-  let presence = FakePresence::showing(HostDisplay::Off);
-  let rig = Rig::with_presence(presence.clone() as Arc<dyn PresenceBackend>).await;
-  rig.settle().await;
-  rig
-    .harness
-    .state()
-    .presence
-    .set_settings(PresenceSettings {
-      follow_host: true,
-      sleep_after_s: Some(5),
-      ..PresenceSettings::default()
-    })
+  let other = bridgething_test_harness::Harness::start()
     .await
-    .expect("a device can follow the host and keep a sleep timer");
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Off,
-        SETTLE
-      )
-      .await,
-    "the host display was asleep and the device screen stayed lit"
+    .expect("a second headless daemon boots");
+  dim(&other, timer(30)).await;
+  let io = other.connect_android_io().await.expect("a link to the second daemon");
+  rig
+    .session
+    .connect_direct(
+      LinkDevice {
+        id: "other".into(),
+        name: "other".into(),
+      },
+      bridgething_gateway::transport::FramedConnector::new(io),
+    )
+    .await;
+  let deadline = tokio::time::Instant::now() + SETTLE;
+  while backend.thresholds() != [30, 300] {
+    assert!(
+      tokio::time::Instant::now() < deadline,
+      "the host never watched both thresholds: {:?}",
+      backend.thresholds()
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+
+  backend.idle_for(100);
+  assert_eq!(
+    hears(&rig, &[host(None, false)]).await,
+    [host(None, false)],
+    "the other device's 30s crossing is not this device's business"
   );
+
+  rig.session.direct_disconnected("other").await;
+  let deadline = tokio::time::Instant::now() + SETTLE;
+  while backend.thresholds() != [300] {
+    assert!(
+      tokio::time::Instant::now() < deadline,
+      "a device that left kept its threshold: {:?}",
+      backend.thresholds()
+    );
+    tokio::time::sleep(Duration::from_millis(20)).await;
+  }
+
+  backend.idle_for(400);
+  assert_eq!(
+    hears(&rig, &[host(None, false), host(None, true)]).await,
+    [host(None, false), host(None, true)]
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computer_going_to_sleep_returns_only_once_every_device_has_dimmed() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  let other = bridgething_test_harness::Harness::start()
+    .await
+    .expect("a second headless daemon boots");
+  let io = other.connect_android_io().await.expect("a link to the second daemon");
+  rig
+    .session
+    .connect_direct(
+      LinkDevice {
+        id: "other".into(),
+        name: "other".into(),
+      },
+      bridgething_gateway::transport::FramedConnector::new(io),
+    )
+    .await;
+  rig.session.set_follow_host(true);
+  hears(&rig, &[host(BACK, false)]).await;
+  assert!(dimmed(&rig, false).await);
+  assert!(
+    other
+      .wait_for(|state| !state.display.snapshot().brightness.dimmed, SETTLE)
+      .await
+  );
+
+  backend.sleep(10_000).await;
+
+  assert!(
+    rig.harness.state().display.snapshot().brightness.dimmed,
+    "sleep went ahead before the device took in the away report"
+  );
+  assert!(
+    other.state().display.snapshot().brightness.dimmed,
+    "sleep went ahead before the second device took in the away report"
+  );
+  assert_eq!(rig.host_states(), [host(BACK, false), host(AWAY, false)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stopped_session_stops_watching_the_host_and_sends_no_goodbye() {
+  let backend = Arc::new(FakeHostState::default());
+  let rig = Rig::with_host_state(backend.clone()).await;
+  rig.settle().await;
+  rig.session.set_follow_host(true);
+  hears(&rig, &[host(BACK, false)]).await;
+  assert!(backend.running());
 
   rig.session.stop().await;
 
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| state.presence.snapshot().presence.display == DisplayState::Active,
-        SETTLE
-      )
-      .await,
-    "a host that quit left the device screen dark"
-  );
-  assert!(
-    rig
-      .harness
-      .wait_for(
-        |state| {
-          let info = state.presence.snapshot().presence;
-          (info.display, info.source) == (DisplayState::Off, PresenceSource::Timer)
-        },
-        SETTLE
-      )
-      .await,
-    "with the host gone the device falls back to its own sleep timer"
-  );
+  assert!(!backend.running(), "the session stopped the backend it started");
+  assert_eq!(rig.host_states(), [host(BACK, false)]);
 }

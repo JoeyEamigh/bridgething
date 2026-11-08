@@ -1,7 +1,7 @@
 mod bluetooth;
 mod net;
 
-mod als;
+mod display;
 mod mic;
 mod systemd;
 
@@ -10,6 +10,7 @@ mod authority;
 mod capabilities;
 mod chrome;
 mod db;
+mod deadline;
 mod digest;
 
 mod handler;
@@ -32,7 +33,6 @@ mod overlay;
 
 use std::{future::Future, net::SocketAddr, path::PathBuf, pin::Pin, time::Duration};
 
-use als::{AlsConfig, AlsManager};
 use asset::AssetCache;
 use authority::AuthorityRegistry;
 pub use bluetooth::{Address, Iap2Event, Iap2InjectTx, Iap2OutboundTapTx, Iap2TransportCommand, LeCommand, LeTapTx};
@@ -40,6 +40,7 @@ use bluetooth::{BluetoothBringup, BluetoothDeps, BluetoothManager};
 use capabilities::CapabilitiesRegistry;
 #[cfg(feature = "test-tap")]
 pub use chrome::ChromeCommand;
+use display::{DisplayConfig, DisplayManager};
 #[cfg(feature = "test-tap")]
 pub use handler::client::{ClientMode, PossibleSendMsg};
 use handler::{ClientHandler, GatewayHandler};
@@ -56,7 +57,7 @@ use player::Player;
 // don't pub anything else from core so that dead code lints still work
 pub use state::{AppState, State};
 use state::{
-  AudioManager, DeviceStore, KvStore, MetaStore, PresenceManager, RouteTable, StateAssembly, TelephonyManager,
+  AudioManager, DeviceStore, DisplaySettingsStore, KvStore, MetaStore, RouteTable, StateAssembly, TelephonyManager,
   TimeManager, WebappBlobs, WebappRegistry,
 };
 pub use systemd::power::{ResetRig, ResetSupport, RigError};
@@ -69,7 +70,6 @@ use transfer::ChunkedTransfer;
 use transport::TransportController;
 
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(2);
-const PRESENCE_SETTINGS_FILE: &str = "presence.json";
 
 pub struct Daemon {
   pub state: State,
@@ -163,8 +163,6 @@ pub async fn init(config: DaemonConfig) -> Daemon {
 
   ota::retire_superseded_wakeword_model().await;
 
-  let meta = state::meta::DeviceMeta::init(static_meta, kv.clone()).await;
-
   let installed_webapps_root = config.webapps_dir.clone().unwrap_or_else(paths::webapps_dir);
   let builtin_webapps_root = config.ro_webapps_dir.clone().unwrap_or_else(paths::ro_webapps_dir);
   let seed_marker = installed_webapps_root
@@ -240,6 +238,15 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   );
 
   let telephony = TelephonyManager::new(bus.clone(), bluetooth.iap2.telephony.clone());
+  let (display, display_handle) = DisplayManager::init(
+    bus.clone(),
+    bluetooth.gateway_man.clone(),
+    DisplaySettingsStore::new(db.clone()),
+    DisplayConfig::default(),
+  )
+  .await
+  .spawn();
+  let meta = state::meta::DeviceMeta::init(static_meta, kv.clone(), display.clone()).await;
 
   let peers = PeerTracker::new(
     bus.clone(),
@@ -253,6 +260,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     tunnel_routes.clone(),
     notification_origins.clone(),
     log_tap.clone(),
+    display.clone(),
   );
 
   let chrome = chrome::Chrome::init(format!("http://127.0.0.1:{modern_port}/"))
@@ -270,19 +278,6 @@ pub async fn init(config: DaemonConfig) -> Daemon {
   };
   let time = TimeManager::new(bus.clone());
 
-  let (als, als_handle) = AlsManager::init(bus.clone(), AlsConfig::default())
-    .await
-    .expect("failed to initialize ALS manager")
-    .spawn();
-  let (presence, presence_handle) = PresenceManager::init(
-    bus.clone(),
-    als.clone(),
-    config
-      .state_dir
-      .clone()
-      .unwrap_or_else(paths::state_dir)
-      .join(PRESENCE_SETTINGS_FILE),
-  );
   let (mic, mic_handle) = MicManager::init(
     bus.clone(),
     bluetooth.clone(),
@@ -376,8 +371,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     telephony,
     time,
     audio,
-    als,
-    presence,
+    display,
     mic,
     devices,
     kv,
@@ -393,8 +387,7 @@ pub async fn init(config: DaemonConfig) -> Daemon {
     factory_reset,
     asset_cache_handle,
     transfer_handle,
-    als_handle,
-    presence_handle,
+    display_handle,
     mic_handle,
   });
 
@@ -669,6 +662,7 @@ fn spawn_ota_event_forwarder(
         BridgeToGatewaySystemMsgEvent::DeviceNicknameChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LauncherGestureChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::CompanionLaunchChanged(_) => None,
+        BridgeToGatewaySystemMsgEvent::DisplaySettingsChanged(_) => None,
         BridgeToGatewaySystemMsgEvent::LogEntry(_) => None,
       };
       match event {

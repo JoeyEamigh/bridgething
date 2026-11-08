@@ -337,6 +337,7 @@ mod tests {
         bluetooth_name: None,
         launcher_gesture: bridgething_companion::api::LauncherGesture::FivePress,
         companion_launch: true,
+        display: libbridgething::DisplaySettings::default().into(),
       },
     }
   }

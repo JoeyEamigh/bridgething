@@ -1,7 +1,7 @@
 mod connectivity;
 mod geo;
+mod host_state;
 mod media;
-mod presence;
 mod speech;
 mod stream;
 mod volume;
@@ -28,7 +28,7 @@ pub fn platform(_config_dir: &Path) -> Platform {
     stream: Some(Arc::new(stream::MediaPlayerStream::default())),
     audio: Some(Arc::new(speech::WinRtAudio::default())),
     volume: Some(Arc::new(volume::EndpointVolume::default())),
-    presence: Some(Arc::new(presence::WinPresence::default())),
+    host_state: Some(Arc::new(host_state::host_state())),
     connectivity: Some(Arc::new(connectivity::NetworkInformationConnectivity::default())),
     image: Some(Arc::new(PortableScaler::new(sidecar.clone()))),
     transcoder: sidecar.map(|sidecar| Arc::new(FfmpegTranscoder::new(sidecar)) as Arc<dyn MediaTranscoder>),

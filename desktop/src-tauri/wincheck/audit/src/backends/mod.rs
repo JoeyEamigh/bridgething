@@ -2,6 +2,8 @@
 pub mod ffmpeg;
 #[path = "../../../../src/backends/geo.rs"]
 pub mod geo;
+#[path = "../../../../src/backends/host_state.rs"]
+pub mod host_state;
 #[path = "../../../../src/backends/jpeg.rs"]
 pub mod jpeg;
 #[path = "../../../../src/backends/portable.rs"]

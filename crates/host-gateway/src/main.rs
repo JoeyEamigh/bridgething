@@ -5,12 +5,12 @@ use std::{
 
 use bridgething_host_gateway::{
   chaos::ChaosConfig,
-  init_logging, install,
+  host_state, init_logging, install,
   ota::{self, PushRequest, PushShape},
-  presence, run_open, webapp,
+  run_open, webapp,
 };
 use clap::{Parser, Subcommand};
-use libbridgething::OtaKind;
+use libbridgething::{OtaKind, gateway::HostState};
 use uuid::Uuid;
 
 #[derive(Parser, Debug)]
@@ -65,12 +65,17 @@ enum Command {
   SwitchWebapp {
     id: Uuid,
   },
-  /// Report a host display state (active, dim, off). The device acts on it only when it is set to follow the
-  /// host display. `--hold` keeps heartbeating for that many seconds.
-  Presence {
-    state: String,
-    #[arg(long, default_value_t = 0)]
-    hold: u64,
+  /// Report host state as a computer. `--away` or `--back` follow the device's dim and report at link-up; neither
+  /// leaves the dim alone. Each host watch is answered. The link stays up until Ctrl-C or `--hold` seconds.
+  HostState {
+    #[arg(long, conflicts_with = "back")]
+    away: bool,
+    #[arg(long)]
+    back: bool,
+    #[arg(long)]
+    idle: bool,
+    #[arg(long)]
+    hold: Option<u64>,
   },
   Install {
     bundle: PathBuf,
@@ -175,7 +180,18 @@ async fn main() -> anyhow::Result<()> {
       .await
     }
     Command::SwitchWebapp { id } => webapp::run_switch(&cli.url, chaos, id).await,
-    Command::Presence { state, hold } => presence::run_presence(&cli.url, chaos, &state, hold).await,
+    Command::HostState { away, back, idle, hold } => {
+      host_state::run_host_state(
+        &cli.url,
+        chaos,
+        HostState {
+          away: (away || back).then_some(away),
+          idle,
+        },
+        hold.map(std::time::Duration::from_secs),
+      )
+      .await
+    }
     Command::Install { bundle, provenance } => {
       install::run_install(&cli.url, chaos, &resolve(fixture, &bundle), provenance.as_deref()).await
     }

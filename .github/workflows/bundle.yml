@@ -94,12 +94,12 @@ jobs:
 
       - name: checkout bridgething (site + daemon notes)
         id: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: checkout yocto-superbird (image notes)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: JoeyEamigh/yocto-superbird
           path: yocto-superbird

@@ -430,7 +430,6 @@ Read a surface's class in `dispatch.generated.d.ts` for its exact methods.
 | Surface | What it does | Notable methods |
 | --- | --- | --- |
 | `player` | now-playing and transport | onSnapshot, stateGet, play, pause, resume, skipNext, skipPrev, seekTo, setShuffle, setRepeat, queueGet |
-| `presence` | whether the screen is lit, and when it dims and sleeps | get, onSnapshot, onChanged, settingsGet, settingsSet, onSettingsChanged |
 | `asset` | fetch blobs by opaque id | get, preload, onReady, onCleared |
 | `store` | per-webapp key and value | get, put, delete |
 | `config` | user settings from the manifest | get, list, onChanged |
@@ -441,7 +440,7 @@ Read a surface's class in `dispatch.generated.d.ts` for its exact methods.
 | `phone` | call control | stateGet, accept, end, initiate, mute, dtmf, onCallStarted, onCallUpdated, onCallEnded |
 | `geo` | location watches, sourced from the phone | watch, unwatch, getOnce, onPosition |
 | `net` | HTTP, WS, and SOCKS through the phone | fetch, wsOpen, wsSend, wsClose, streamOpen, streamCancel |
-| `hardware` | backlight and ambient light sensor | displaySetMode, displaySetLevel, stateGet, onAmbientLightUpdate, onBrightnessChanged |
+| `hardware` | backlight, dimming and ambient light sensor | displaySetMode, displaySetLevel, stateGet, onAmbientLightUpdate, onBrightnessChanged, onDimChanged |
 | `bluetooth` | adapter alias, bonds, discoverable | list, connect, forget, setAlias, enableDiscoverable |
 | `system` | version, logs, power, diagnostics, launcher gesture, companion launch | versionRequest, logsTail, logsSubscribe, reboot, powerOff, factoryReset, launcherGestureGet, launcherGestureSet, companionLaunchGet, companionLaunchSet, onVersion, onLogEntry, onOtaProgress, onLauncherGestureChanged, onCompanionLaunchChanged |
 | `time` | wall clock | get, onSnapshot, onChanged |

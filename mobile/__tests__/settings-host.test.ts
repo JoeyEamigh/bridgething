@@ -6,6 +6,8 @@ import { SETTINGS_PAGE_CRASHED } from '@bridgething/ui/settings-host';
 import { DEVICE, peer } from './fixtures';
 import { rig, type Rig } from './harness';
 
+jest.setTimeout(30_000);
+
 jest.mock('react-native-inappbrowser-reborn', () => ({
   __esModule: true,
   default: {

@@ -57,8 +57,6 @@ pub enum GatewayToBridgeMsgData {
   #[from]
   Player(GatewayToBridgePlayerMsg),
   #[from]
-  Presence(GatewayToBridgePresenceMsg),
-  #[from]
   System(GatewayToBridgeSystemMsg),
   #[from]
   Time(GatewayToBridgeTimeMsg),

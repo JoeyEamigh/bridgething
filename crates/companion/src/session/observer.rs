@@ -117,6 +117,7 @@ impl SessionObserver {
       bluetooth_name: meta.bluetooth_name,
       launcher_gesture: meta.launcher_gesture.into(),
       companion_launch: meta.companion_launch,
+      display: meta.display.into(),
     };
     {
       let mut held = self.held.lock().unwrap();

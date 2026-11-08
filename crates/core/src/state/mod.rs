@@ -6,11 +6,11 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 use crate::{
-  als::AlsManager,
   asset::{AssetCache, AssetError, wait::AssetWaitTracker},
   authority::AuthorityRegistry,
   capabilities::CapabilitiesRegistry,
   chrome,
+  display::DisplayManager,
   handler::{gateway::SpotifyWakeGate, iap2::Iap2PendingArt},
   mic::MicManager,
   net::{ClientMan, WireEventBus},
@@ -30,7 +30,6 @@ mod lyrics;
 pub mod meta;
 mod notification_origins;
 mod playback_targets;
-mod presence;
 mod root_browse;
 pub mod routes;
 pub mod storage;
@@ -47,10 +46,9 @@ pub use log_tap::{LogTap, LogTapLayer};
 pub use lyrics::LyricsCache;
 pub use notification_origins::NotificationOrigins;
 pub use playback_targets::{PlaybackTargetError, PlaybackTargetStore};
-pub use presence::PresenceManager;
 pub use root_browse::RootBrowseCache;
 pub use routes::RouteTable;
-pub use storage::{DeviceStore, KvStore, MetaStore, SlotsReleased};
+pub use storage::{DeviceStore, DisplaySettingsStore, KvStore, MetaStore, SlotsReleased};
 pub use telephony::TelephonyManager;
 pub use time::TimeManager;
 pub use tunnel_routes::{TunnelInbound, TunnelRoutes};
@@ -80,8 +78,7 @@ pub struct AppState {
   pub telephony: TelephonyManager,
   pub time: TimeManager,
   pub audio: AudioManager,
-  pub als: AlsManager,
-  pub presence: PresenceManager,
+  pub display: DisplayManager,
   pub mic: MicManager,
   pub devices: DeviceStore,
   pub kv: KvStore,
@@ -105,8 +102,7 @@ pub struct AppState {
   factory_reset: FactoryReset,
   _asset_cache_handle: JoinHandle<()>,
   _transfer_handle: JoinHandle<()>,
-  _als_handle: JoinHandle<()>,
-  _presence_handle: JoinHandle<()>,
+  _display_handle: JoinHandle<()>,
   _mic_handle: JoinHandle<()>,
 }
 
@@ -131,8 +127,7 @@ impl AppState {
       telephony,
       time,
       audio,
-      als,
-      presence,
+      display,
       mic,
       devices,
       kv,
@@ -149,8 +144,7 @@ impl AppState {
       factory_reset,
       asset_cache_handle,
       transfer_handle,
-      als_handle,
-      presence_handle,
+      display_handle,
       mic_handle,
     } = parts;
     Arc::new(Self {
@@ -171,8 +165,7 @@ impl AppState {
       telephony,
       time,
       audio,
-      als,
-      presence,
+      display,
       mic,
       devices,
       kv,
@@ -194,8 +187,7 @@ impl AppState {
       factory_reset,
       _asset_cache_handle: asset_cache_handle,
       _transfer_handle: transfer_handle,
-      _als_handle: als_handle,
-      _presence_handle: presence_handle,
+      _display_handle: display_handle,
       _mic_handle: mic_handle,
     })
   }
@@ -365,8 +357,7 @@ pub struct StateAssembly {
   pub telephony: TelephonyManager,
   pub time: TimeManager,
   pub audio: AudioManager,
-  pub als: AlsManager,
-  pub presence: PresenceManager,
+  pub display: DisplayManager,
   pub mic: MicManager,
   pub devices: DeviceStore,
   pub kv: KvStore,
@@ -383,8 +374,7 @@ pub struct StateAssembly {
   pub factory_reset: FactoryReset,
   pub asset_cache_handle: JoinHandle<()>,
   pub transfer_handle: JoinHandle<()>,
-  pub als_handle: JoinHandle<()>,
-  pub presence_handle: JoinHandle<()>,
+  pub display_handle: JoinHandle<()>,
   pub mic_handle: JoinHandle<()>,
 }
 

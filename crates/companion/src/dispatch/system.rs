@@ -3,10 +3,10 @@ use std::sync::Arc;
 use bridgething_delivery::ota::service::MetaChange;
 use bridgething_gateway::{HandlerError, Reply, SystemHandler};
 use libbridgething::{
-  LogEntry, OtaError, OtaFinished, OtaProgress,
+  DisplaySettings, LogEntry, OtaError, OtaFinished, OtaProgress,
   gateway::{
-    CompanionLaunchReply, DeviceNicknameReply, KeepaliveAck, KeepalivePing, LauncherGestureReply, OtaAssetRange,
-    OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply,
+    CompanionLaunchReply, DeviceNicknameReply, HostWatch, KeepaliveAck, KeepalivePing, LauncherGestureReply,
+    OtaAssetRange, OtaAssetRangeAbandon, OtaAssetRangeRejected, OtaAssetRangeReply,
   },
   wire::WireError,
 };
@@ -18,14 +18,19 @@ pub trait DeviceLogSink: Send + Sync {
   fn on_entry(&self, entry: LogEntry);
 }
 
+pub trait HostWatchSink: Send + Sync {
+  fn watch(&self, watch: HostWatch);
+}
+
 pub struct SystemDispatcher {
   ota: Arc<dyn OtaInbound>,
   logs: Arc<dyn DeviceLogSink>,
+  host: Option<Arc<dyn HostWatchSink>>,
 }
 
 impl SystemDispatcher {
-  pub fn new(ota: Arc<dyn OtaInbound>, logs: Arc<dyn DeviceLogSink>) -> Self {
-    Self { ota, logs }
+  pub fn new(ota: Arc<dyn OtaInbound>, logs: Arc<dyn DeviceLogSink>, host: Option<Arc<dyn HostWatchSink>>) -> Self {
+    Self { ota, logs, host }
   }
 }
 
@@ -80,8 +85,20 @@ impl SystemHandler for SystemDispatcher {
     Ok(())
   }
 
+  async fn display_settings_changed(&self, payload: DisplaySettings) -> Result<(), WireError> {
+    self.ota.meta_changed(MetaChange::Display(payload));
+    Ok(())
+  }
+
   async fn log_entry(&self, payload: LogEntry) -> Result<(), WireError> {
     self.logs.on_entry(payload);
+    Ok(())
+  }
+
+  async fn host_watch(&self, payload: HostWatch) -> Result<(), WireError> {
+    if let Some(host) = &self.host {
+      host.watch(payload);
+    }
     Ok(())
   }
 }

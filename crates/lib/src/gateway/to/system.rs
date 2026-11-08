@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::{LauncherGesture, LogEntry, OtaError, OtaFinished, OtaProgress, RangeSpec};
+use crate::{DisplaySettings, HardwareError, LauncherGesture, LogEntry, OtaError, OtaFinished, OtaProgress, RangeSpec};
 
 #[serde_with::skip_serializing_none]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
@@ -51,6 +51,13 @@ pub struct LauncherGestureReply {
 #[ts(export, export_to = "gateway.ts")]
 pub struct CompanionLaunchReply {
   pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct DisplaySettingsRejected {
+  pub error: HardwareError,
 }
 
 #[serde_with::skip_serializing_none]
@@ -112,8 +119,23 @@ pub struct KeepalivePing {
   pub seq: u32,
 }
 
+/// Sent when the gateway connects while a dim timer is set, and on every change of the timer.
 #[serde_with::skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS, BridgeEnum)]
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase", default)]
+#[ts(export, export_to = "gateway.ts")]
+pub struct HostWatch {
+  /// Report `idle` once the computer has had no input for this many seconds. Null stops idle reports.
+  pub idle_after_s: Option<u32>,
+}
+
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "gateway.ts")]
+pub struct HostStateAck {}
+
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS, BridgeEnum)]
 #[serde(tag = "event", content = "data", rename_all = "camelCase")]
 #[ts(export, export_to = "gateway.ts")]
 #[bridge_enum(into = crate::gateway::BridgeToGatewayMsgData)]
@@ -147,6 +169,12 @@ pub enum BridgeToGatewaySystemMsg {
   #[bridge_event]
   CompanionLaunchChanged(CompanionLaunchReply),
   #[bridge_response]
+  DisplaySettingsReply(DisplaySettings),
+  #[bridge_response]
+  DisplaySettingsRejected(DisplaySettingsRejected),
+  #[bridge_event]
+  DisplaySettingsChanged(DisplaySettings),
+  #[bridge_response]
   LogsTailReply(LogsTailReply),
   #[bridge_response]
   LogsSubscribeReply(LogsSubscribeReply),
@@ -154,4 +182,8 @@ pub enum BridgeToGatewaySystemMsg {
   LogEntry(LogEntry),
   #[bridge_request]
   Keepalive(KeepalivePing),
+  #[bridge_command]
+  HostWatch(HostWatch),
+  #[bridge_response]
+  HostStateAck(HostStateAck),
 }
