@@ -309,7 +309,7 @@
     },
     "packages/updater": {
       "name": "@bridgething/updater",
-      "version": "0.17.0",
+      "version": "0.17.1",
       "bin": {
         "bridgething-updater": "./dist/cli.js",
       },
