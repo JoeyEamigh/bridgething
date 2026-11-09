@@ -2,5 +2,5 @@
   "@bridgething/client": "^0.17.0",
   "@bridgething/extension": "^0.17.0",
   "@bridgething/source": "^0.15.2",
-  "libbridgething": "0.17.0"
+  "libbridgething": "0.17.1"
 }

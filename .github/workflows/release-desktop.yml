@@ -70,7 +70,7 @@ jobs:
           - runner: macos-26
             target: x86_64-apple-darwin
             updater_target: darwin-x86_64
-          - runner: ubuntu-latest
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             updater_target: linux-x86_64
             sidecar: x86_64-unknown-linux-gnu
