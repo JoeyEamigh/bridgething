@@ -1,0 +1,45 @@
+# Maintainer: Joey Eamigh <55670930+JoeyEamigh@users.noreply.github.com>
+
+pkgname=bridgething-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Desktop companion app for Spotify Car Things running bridgething'
+arch=('x86_64' 'aarch64')
+url='https://bridgething.com'
+license=('MIT' 'LGPL-2.1-or-later')
+depends=(
+  'cairo'
+  'dbus'
+  'gdk-pixbuf2'
+  'glib2'
+  'glibc'
+  'gtk3'
+  'hicolor-icon-theme'
+  'libayatana-appindicator'
+  'libgcc'
+  'libsoup3'
+  'libstdc++'
+  'webkit2gtk-4.1'
+)
+optdepends=(
+  'geoclue: host location for the car thing'
+  'networkmanager: online and offline edges'
+  'pipewire-pulse: host volume control and local playback'
+  'speech-dispatcher: spoken voice replies'
+)
+provides=('bridgething')
+conflicts=('bridgething')
+options=('!strip' '!debug')
+source=('LICENSE')
+source_x86_64=("https://ota.bridgething.com/desktop/stable/${pkgver}/linux-x86_64/@DEB_X86_64@")
+source_aarch64=("https://ota.bridgething.com/desktop/stable/${pkgver}/linux-aarch64/@DEB_AARCH64@")
+sha256sums=('@SHA256_LICENSE@')
+sha256sums_x86_64=('@SHA256_X86_64@')
+sha256sums_aarch64=('@SHA256_AARCH64@')
+
+package() {
+  bsdtar -xf data.tar.* -C "${pkgdir}"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  ln -s /usr/lib/bridgething/licenses/bridgething-ffmpeg-NOTICE.txt \
+    "${pkgdir}/usr/share/licenses/${pkgname}/bridgething-ffmpeg-NOTICE.txt"
+}

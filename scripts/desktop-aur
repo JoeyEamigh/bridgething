@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# renders the bridgething-bin aur package for one desktop release into <out-dir>
+set -euo pipefail
+
+version="${1:?usage: desktop-aur <version> <amd64.deb> <arm64.deb> <out-dir>}"
+x86_64="${2:?missing the amd64 deb}"
+aarch64="${3:?missing the arm64 deb}"
+out="${4:?missing the output directory}"
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+sum() { sha256sum "$1" | cut -d' ' -f1; }
+
+mkdir -p "$out"
+cp "$root/LICENSE" "$out/LICENSE"
+sed \
+  -e "s/@VERSION@/${version}/" \
+  -e "s/@SHA256_LICENSE@/$(sum "$root/LICENSE")/" \
+  -e "s/@SHA256_X86_64@/$(sum "$x86_64")/" \
+  -e "s/@SHA256_AARCH64@/$(sum "$aarch64")/" \
+  -e "s/@DEB_X86_64@/$(basename "$x86_64")/" \
+  -e "s/@DEB_AARCH64@/$(basename "$aarch64")/" \
+  "$root/desktop/aur/PKGBUILD.in" >"$out/PKGBUILD"

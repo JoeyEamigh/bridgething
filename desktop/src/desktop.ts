@@ -34,7 +34,8 @@ export type SelfUpdateState =
   | { kind: 'downloading'; version: string; received: number; total: number | null }
   | { kind: 'ready'; version: string; date: string | null; notes: string | null }
   | { kind: 'installing'; version: string }
-  | { kind: 'unavailable'; reason: string };
+  | { kind: 'unavailable'; reason: string }
+  | { kind: 'managed' };
 
 export interface DesktopSession extends CompanionSession {
   readonly host: 'desktop';

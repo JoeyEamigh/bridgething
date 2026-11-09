@@ -16,7 +16,9 @@ export function SelfUpdate(): VNode {
     <Section>
       <SectionHeader
         title="app update"
-        action={state.kind === 'downloading' || state.kind === 'installing' ? undefined : 'check'}
+        action={
+          state.kind === 'downloading' || state.kind === 'installing' || state.kind === 'managed' ? undefined : 'check'
+        }
         pending={state.kind === 'checking'}
         onAction={() => void session.checkSelfUpdate()}
       />
@@ -69,6 +71,14 @@ export function SelfUpdate(): VNode {
             iconTint="ok"
             title="up to date"
             subtitle={`checked ${since(state.checkedAt)}`}
+          />
+        </ListGroup>
+      ) : state.kind === 'managed' ? (
+        <ListGroup>
+          <ListRow
+            icon={<Icon name="info" />}
+            title="updated by your package manager"
+            subtitle="this install does not replace itself"
           />
         </ListGroup>
       ) : state.kind === 'unavailable' ? (

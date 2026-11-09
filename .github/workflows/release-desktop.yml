@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run: ${{ steps.plan.outputs.run }}
+      version: ${{ steps.plan.outputs.version }}
 
     steps:
       - uses: actions/checkout@v7
@@ -47,6 +48,7 @@ jobs:
           fi
 
           echo "run=${run}" >>"$GITHUB_OUTPUT"
+          echo "version=${version}" >>"$GITHUB_OUTPUT"
           echo "version ${version}, run=${run}"
 
   sidecar:
@@ -235,6 +237,7 @@ jobs:
             ${{ steps.bundle.outputs.dir }}/**/*.zip.sig
             ${{ steps.bundle.outputs.dir }}/**/*.AppImage
             ${{ steps.bundle.outputs.dir }}/**/*.AppImage.sig
+            ${{ steps.bundle.outputs.dir }}/**/*.deb
             ${{ steps.bundle.outputs.dir }}/**/*.dmg
             ${{ steps.bundle.outputs.dir }}/**/*.msi
             ${{ steps.bundle.outputs.dir }}/**/*.msi.sig
@@ -332,6 +335,12 @@ jobs:
               site/scripts/r2-put "$runnable" "$download_key" application/octet-stream "public, max-age=31536000, immutable"
             fi
 
+            deb=$(pick "$dir" '*.deb')
+            if [ -n "$deb" ]; then
+              site/scripts/r2-put "$deb" "desktop/${CHANNEL}/${version}/${updater_target}/$(basename "$deb")" \
+                application/vnd.debian.binary-package "public, max-age=31536000, immutable"
+            fi
+
             jq -nc \
               --arg target "$updater_target" \
               --arg url "${PUBLIC_BASE}/${download_key}" \
@@ -374,3 +383,72 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run deploy-site.yml --ref main -R "${GITHUB_REPOSITORY}"
+
+  aur:
+    needs: [decide, publish]
+    if: needs.decide.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      VERSION: ${{ needs.decide.outputs.version }}
+      AUR_HOST_KEY: aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-linux-*
+          path: /tmp/desktop
+
+      - name: render the package for this release
+        run: |
+          set -euo pipefail
+          deb() { find "/tmp/desktop/desktop-$1" -type f -name '*.deb' | LC_ALL=C sort | head -n1; }
+          x86_64=$(deb linux-x86_64)
+          aarch64=$(deb linux-aarch64)
+          [ -n "$x86_64" ] && [ -n "$aarch64" ] || { echo "::error::a linux deb is missing from the build artifacts"; exit 1; }
+          scripts/desktop-aur "$VERSION" "$x86_64" "$aarch64" /tmp/aur
+
+      - name: build and install the package from the published debs
+        run: |
+          set -euo pipefail
+          grep -q '^DisableSandbox' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+          pacman -Syu --noconfirm --needed git openssh
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/builder
+          chown -R builder /tmp/aur
+          cd /tmp/aur
+          sudo -u builder makepkg --syncdeps --noconfirm
+          sudo -u builder sh -c 'makepkg --printsrcinfo >.SRCINFO'
+          pacman -U --noconfirm ./*.pkg.tar.zst
+          if ldd /usr/bin/bridgething-desktop | grep 'not found'; then
+            echo "::error::the installed desktop binary links a library no dependency provides"
+            exit 1
+          fi
+          [ -e /usr/lib/libayatana-appindicator3.so.1 ] || { echo "::error::the tray library is missing"; exit 1; }
+          /usr/bin/bridgething-ffmpeg -hide_banner -version >/dev/null
+
+      - name: push the package to the aur
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "AUR_SSH_PRIVATE_KEY is unset; the package was built but not pushed"
+            exit 0
+          fi
+          ssh_dir=$(mktemp -d)
+          (umask 077 && printf '%s\n' "$AUR_SSH_PRIVATE_KEY" >"${ssh_dir}/key")
+          printf '%s\n' "$AUR_HOST_KEY" >"${ssh_dir}/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i ${ssh_dir}/key -o IdentitiesOnly=yes -o UserKnownHostsFile=${ssh_dir}/known_hosts -o StrictHostKeyChecking=yes"
+          git clone ssh://aur@aur.archlinux.org/bridgething-bin.git /tmp/aur-repo
+          cp /tmp/aur/PKGBUILD /tmp/aur/.SRCINFO /tmp/aur/LICENSE /tmp/aur-repo/
+          cd /tmp/aur-repo
+          git add PKGBUILD .SRCINFO LICENSE
+          if git diff --cached --quiet; then
+            echo "the aur already carries bridgething-bin ${VERSION}"
+            exit 0
+          fi
+          git -c user.name="Joey Eamigh" -c user.email="55670930+JoeyEamigh@users.noreply.github.com" \
+            commit -m "bridgething-bin ${VERSION}"
+          git push origin HEAD:master

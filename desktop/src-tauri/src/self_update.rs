@@ -49,6 +49,7 @@ pub enum SelfUpdateState {
   Unavailable {
     reason: String,
   },
+  Managed,
 }
 
 pub trait Release: Clone + Send + Sync + 'static {
@@ -59,6 +60,8 @@ pub trait Release: Clone + Send + Sync + 'static {
 
 pub trait Feed: Send + Sync + 'static {
   type Release: Release;
+
+  fn replaces_the_running_app(&self) -> bool;
 
   fn check(&self) -> impl Future<Output = Result<Option<Self::Release>, String>> + Send;
 
@@ -89,7 +92,10 @@ impl Release for Update {
   }
 }
 
-pub struct TauriFeed(Result<Updater, String>);
+pub struct TauriFeed {
+  updater: Result<Updater, String>,
+  replaceable: bool,
+}
 
 impl TauriFeed {
   pub fn new<R: Runtime>(app: &AppHandle<R>) -> Self {
@@ -100,15 +106,32 @@ impl TauriFeed {
       .on_before_exit(move || crate::process::release(&handle))
       .build()
       .map_err(|error| error.to_string());
-    Self(updater)
+    Self {
+      updater,
+      replaceable: replaceable(app),
+    }
   }
+}
+
+#[cfg(target_os = "linux")]
+fn replaceable<R: Runtime>(app: &AppHandle<R>) -> bool {
+  app.env().appimage.is_some()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn replaceable<R: Runtime>(_app: &AppHandle<R>) -> bool {
+  true
 }
 
 impl Feed for TauriFeed {
   type Release = Update;
 
+  fn replaces_the_running_app(&self) -> bool {
+    self.replaceable
+  }
+
   async fn check(&self) -> Result<Option<Update>, String> {
-    let updater = self.0.as_ref().map_err(Clone::clone)?;
+    let updater = self.updater.as_ref().map_err(Clone::clone)?;
     updater.check().await.map_err(|error| error.to_string())
   }
 
@@ -153,10 +176,15 @@ pub struct SelfUpdate<F: Feed> {
 
 impl<F: Feed> SelfUpdate<F> {
   pub fn new(feed: F, hints: Arc<dyn HintSink>, offer: impl Fn(Option<&str>) + Send + Sync + 'static) -> Arc<Self> {
+    let state = if feed.replaces_the_running_app() {
+      SelfUpdateState::Idle
+    } else {
+      SelfUpdateState::Managed
+    };
     Arc::new(Self {
       feed,
       held: Mutex::new(Held {
-        state: SelfUpdateState::Idle,
+        state,
         ready: None,
         offered: None,
       }),
@@ -179,6 +207,10 @@ impl<F: Feed> SelfUpdate<F> {
   }
 
   async fn run(self: Arc<Self>, mut online: watch::Receiver<bool>) {
+    if !self.feed.replaces_the_running_app() {
+      tracing::info!("the system package manager owns this install; desktop self-update stays off");
+      return;
+    }
     let mut due = SystemTime::now();
     let mut failures = 0u32;
     loop {
@@ -535,6 +567,7 @@ mod tests {
   }
 
   struct Script {
+    replaceable: bool,
     published: Mutex<Result<Option<String>, String>>,
     download: Mutex<Result<(), String>>,
     downloads: AtomicUsize,
@@ -546,7 +579,12 @@ mod tests {
 
   impl Fake {
     fn new() -> Self {
+      Self::installed(true)
+    }
+
+    fn installed(replaceable: bool) -> Self {
       Self(Arc::new(Script {
+        replaceable,
         published: Mutex::new(Ok(None)),
         download: Mutex::new(Ok(())),
         downloads: AtomicUsize::new(0),
@@ -569,6 +607,10 @@ mod tests {
 
   impl Feed for Fake {
     type Release = Build;
+
+    fn replaces_the_running_app(&self) -> bool {
+      self.0.replaceable
+    }
 
     async fn check(&self) -> Result<Option<Build>, String> {
       self.0.published.lock().unwrap().clone().map(|found| found.map(Build))
@@ -600,7 +642,10 @@ mod tests {
   type Offers = Arc<Mutex<Vec<Option<String>>>>;
 
   fn rig() -> (Fake, Arc<SelfUpdate<Fake>>, Offers) {
-    let feed = Fake::new();
+    rig_with(Fake::new())
+  }
+
+  fn rig_with(feed: Fake) -> (Fake, Arc<SelfUpdate<Fake>>, Offers) {
     let offers = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&offers);
     let updates = SelfUpdate::new(feed.clone(), Arc::new(Deaf), move |ready| {
@@ -791,6 +836,22 @@ mod tests {
 
     assert!(settles_on(&updates, |state| version(state) == Some("0.15.0")).await);
     assert_eq!(*offers.lock().unwrap(), vec![Some("0.15.0".to_owned())]);
+  }
+
+  #[tokio::test]
+  async fn a_package_manager_install_never_fetches_or_offers_a_build() {
+    let (feed, updates, offers) = rig_with(Fake::installed(false));
+    feed.publish("0.15.0");
+    let (_online, watching) = watch::channel(true);
+
+    tokio::spawn(Arc::clone(&updates).run(watching));
+    updates.check_now();
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    assert_eq!(updates.state(), SelfUpdateState::Managed);
+    assert_eq!(feed.downloads(), 0);
+    assert!(offers.lock().unwrap().is_empty());
+    assert!(!updates.apply().await);
   }
 
   #[tokio::test]
